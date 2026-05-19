@@ -141,11 +141,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package_plugin_ue55.ps1
 
 ---
 
-## 来源说明
+## 参考项目
 
-| 来源 | 影响范围 |
-|:-----|:-----|
-| **[`bunkerboy258/ue-blueprint-dumper`](https://github.com/bunkerboy258/ue-blueprint-dumper)** | 蓝图 CDO/默认值/组件检查和动画蓝图语义摘要功能的参考 |
+- **[`bunkerboy258/ue-blueprint-dumper`](https://github.com/bunkerboy258/ue-blueprint-dumper)** — 蓝图 CDO/默认值/组件检查和动画蓝图语义摘要功能的参考
 
 UE Node Nexus MCP 保持独立的运行时架构：固定类型化 MCP 工具 + UE C++ 编辑器桥接器，不依赖模型自行编写的 Python 脚本执行。
 
