@@ -1,4 +1,6 @@
-#include "UeNodeNexusBridgeWireGraph.h"
+﻿#include "UeNodeNexusBridgeWireGraph.h"
+
+#include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
 {
@@ -205,7 +207,7 @@ FString MakeWireGraphNodeLabel(const FString& ClassName, const FString& DisplayN
 
 TSharedPtr<FJsonObject> MakeWireGraphData(const FString& AssetPath, const FString& AssetClass, const FString& GraphName, const FString& GraphKind, const FString& Text)
 {
-    return MakeWireGraphData(AssetPath, AssetClass, GraphName, GraphKind, Text, TEXT("wires_text_v1"));
+    return MakeWireGraphData(AssetPath, AssetClass, GraphName, GraphKind, Text, TEXT("wires_text"));
 }
 
 TSharedPtr<FJsonObject> MakeWireGraphData(const FString& AssetPath, const FString& AssetClass, const FString& GraphName, const FString& GraphKind, const FString& Text, const FString& Format)
@@ -216,7 +218,7 @@ TSharedPtr<FJsonObject> MakeWireGraphData(const FString& AssetPath, const FStrin
     Data->SetStringField(TEXT("asset_class"), AssetClass);
     Data->SetStringField(TEXT("graph_name"), GraphName);
     Data->SetStringField(TEXT("graph_kind"), GraphKind);
-    Data->SetStringField(TEXT("text"), Text);
+    SetTextPayload(Data, Text);
     return Data;
 }
 }

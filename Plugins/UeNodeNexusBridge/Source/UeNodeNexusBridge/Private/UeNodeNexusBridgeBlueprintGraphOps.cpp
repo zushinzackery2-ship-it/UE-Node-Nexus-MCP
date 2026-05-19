@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeOperations.h"
+﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -215,7 +215,7 @@ static TSharedPtr<FJsonObject> BuildBlueprintWireGraphSnapshot(const FString& Op
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     const FString Text = bTiny ? Builder.BuildTinyText() : (bMin ? Builder.BuildMinText() : Builder.BuildText());
-    const FString OutputFormat = bTiny ? TEXT("wires_tiny_v1") : (bMin ? TEXT("wires_min_v1") : TEXT("wires_text_v1"));
+    const FString OutputFormat = bTiny ? TEXT("wires_tiny") : (bMin ? TEXT("wires_min") : TEXT("wires_text"));
     Response->SetObjectField(TEXT("data"), MakeWireGraphData(Blueprint->GetPathName(), Blueprint->GetClass()->GetPathName(), TargetGraph->GetName(), TEXT("blueprint"), Text, OutputFormat));
     return Response;
 }

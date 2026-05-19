@@ -41,13 +41,25 @@ static bool ApplyMaterialConnect(UMaterial* Material, const TSharedPtr<FJsonObje
 
     UMaterialExpression* FromExpression = FindMaterialExpression(Material, FromNodeId);
     UMaterialExpression* ToExpression = FindMaterialExpression(Material, ToNodeId);
-    if (FromExpression == nullptr || ToExpression == nullptr || FindMaterialInput(ToExpression, ToPinId) == nullptr)
+    bool bFromInput = false;
+    int32 FromOutputIndex = INDEX_NONE;
+    if (!ParseMaterialPinId(FromPinId, bFromInput, FromOutputIndex) || bFromInput)
+    {
+        return false;
+    }
+
+    FExpressionInput* ToInput = FindMaterialInput(ToExpression, ToPinId);
+    if (FromExpression == nullptr || ToInput == nullptr || !FromExpression->GetOutputs().IsValidIndex(FromOutputIndex))
     {
         return false;
     }
 
     AppendMaterialDiff(Diff, TEXT("links_added"), MakeMaterialLinkJson(FromExpression, FromPinId, ToExpression, ToPinId));
-    return bDryRun || UMaterialEditingLibrary::ConnectMaterialExpressions(FromExpression, FindMaterialOutputName(FromExpression, FromPinId), ToExpression, FindMaterialInputName(ToExpression, ToPinId));
+    if (!bDryRun)
+    {
+        ToInput->Connect(FromOutputIndex, FromExpression);
+    }
+    return true;
 }
 
 static bool ApplyMaterialDisconnect(UMaterial* Material, const TSharedPtr<FJsonObject>& Op, bool bDryRun, TSharedPtr<FJsonObject> Diff)
@@ -174,7 +186,7 @@ static bool ApplyMaterialOperation(UMaterial* Material, const TSharedPtr<FJsonOb
             return false;
         }
         FString OldValue;
-        Property->ExportText_InContainer(0, OldValue, Expression, nullptr, Expression, PPF_None);
+        Property->ExportTextItem_InContainer(OldValue, Expression, nullptr, Expression, PPF_None);
         AddMaterialParamChange(Diff, MaterialExpressionNodeId(Expression), Name, OldValue, Value);
         return bDryRun || Property->ImportText_InContainer(*Value, Expression, Expression, PPF_None) != nullptr;
     }

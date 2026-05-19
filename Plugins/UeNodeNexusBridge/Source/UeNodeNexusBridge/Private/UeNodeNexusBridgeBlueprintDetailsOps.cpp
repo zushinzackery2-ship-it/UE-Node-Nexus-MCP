@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeOperations.h"
+﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "Components/ActorComponent.h"
 #include "Dom/JsonValue.h"
@@ -270,7 +270,7 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
     Data->SetStringField(TEXT("generated_class"), GeneratedClass->GetPathName());
     if (bCompact)
     {
-        Data->SetStringField(TEXT("format"), TEXT("blueprint_details_compact_v1"));
+        Data->SetStringField(TEXT("format"), TEXT("blueprint_details_compact"));
         Data->SetArrayField(TEXT("variable_columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("type")), MakeShared<FJsonValueString>(TEXT("default")), MakeShared<FJsonValueString>(TEXT("category")) });
         Data->SetArrayField(TEXT("default_columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("value")) });
         Data->SetArrayField(TEXT("component_columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("class")), MakeShared<FJsonValueString>(TEXT("parent")), MakeShared<FJsonValueString>(TEXT("socket")), MakeShared<FJsonValueString>(TEXT("asset")) });

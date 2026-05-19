@@ -56,9 +56,41 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     {
         return HandleGraphSnapshotGet(Operation, RequestId, Payload);
     }
+    if (Operation == TEXT("graph_node_info_get"))
+    {
+        return HandleGraphNodeInfoGet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("graph_node_info_get_w_pos"))
+    {
+        return HandleGraphNodeInfoGet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("node_class_params_get"))
+    {
+        return HandleNodeClassParamsGet(Operation, RequestId, Payload);
+    }
     if (Operation == TEXT("graph_patch_apply"))
     {
         return HandleGraphPatchApply(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("node_info_get"))
+    {
+        return HandleNodeInfoGet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("node_create"))
+    {
+        return HandleNodeCreate(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("node_position_get"))
+    {
+        return HandleNodePositionGet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("node_position_set"))
+    {
+        return HandleNodePositionSet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("node_position_offset"))
+    {
+        return HandleNodePositionOffset(Operation, RequestId, Payload);
     }
     if (Operation == TEXT("node_params_get"))
     {

@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeOperations.h"
+﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
@@ -138,7 +138,7 @@ TSharedPtr<FJsonObject> HandleMaterialInstanceParamsGet(const FString& Operation
     Data->SetStringField(TEXT("asset_path"), Instance->GetPathName());
     if (bCompact)
     {
-        Data->SetStringField(TEXT("format"), TEXT("material_instance_params_compact_v1"));
+        Data->SetStringField(TEXT("format"), TEXT("material_instance_params_compact"));
         Data->SetArrayField(TEXT("columns"), {
             MakeShared<FJsonValueString>(TEXT("type")),
             MakeShared<FJsonValueString>(TEXT("name")),

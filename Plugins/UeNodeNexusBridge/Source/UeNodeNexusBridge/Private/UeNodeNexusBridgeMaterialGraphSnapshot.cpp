@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeMaterialGraphSnapshot.h"
+﻿#include "UeNodeNexusBridgeMaterialGraphSnapshot.h"
 
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
@@ -61,9 +61,9 @@ static TSharedPtr<FJsonObject> MaterialNodeToJson(UMaterialExpression* Expressio
     Node->SetObjectField(TEXT("position"), Position);
 
     TArray<TSharedPtr<FJsonValue>> Pins;
-    for (int32 Index = 0; FExpressionInput* Input = Expression->GetInput(Index); ++Index)
+    for (FExpressionInputIterator It{ Expression }; It; ++It)
     {
-        Pins.Add(MakeShared<FJsonValueObject>(MaterialPinToJson(FString::Printf(TEXT("%s:in:%d"), *NodeId, Index), Expression->GetInputName(Index).ToString(), TEXT("input"))));
+        Pins.Add(MakeShared<FJsonValueObject>(MaterialPinToJson(FString::Printf(TEXT("%s:in:%d"), *NodeId, It.Index), Expression->GetInputName(It.Index).ToString(), TEXT("input"))));
     }
     TArray<FExpressionOutput>& Outputs = Expression->GetOutputs();
     for (int32 Index = 0; Index < Outputs.Num(); ++Index)
@@ -80,8 +80,9 @@ static TSharedPtr<FJsonObject> MaterialNodeToJson(UMaterialExpression* Expressio
 static void AddMaterialLinks(UMaterialExpression* TargetExpression, TArray<TSharedPtr<FJsonValue>>& Links)
 {
     const FString TargetId = MaterialNodeId(TargetExpression);
-    for (int32 Index = 0; FExpressionInput* Input = TargetExpression->GetInput(Index); ++Index)
+    for (FExpressionInputIterator It{ TargetExpression }; It; ++It)
     {
+        FExpressionInput* Input = It.Input;
         if (Input == nullptr || Input->Expression == nullptr)
         {
             continue;
@@ -92,7 +93,7 @@ static void AddMaterialLinks(UMaterialExpression* TargetExpression, TArray<TShar
         Link->SetStringField(TEXT("from_node_id"), SourceId);
         Link->SetStringField(TEXT("from_pin_id"), FString::Printf(TEXT("%s:out:%d"), *SourceId, Input->OutputIndex));
         Link->SetStringField(TEXT("to_node_id"), TargetId);
-        Link->SetStringField(TEXT("to_pin_id"), FString::Printf(TEXT("%s:in:%d"), *TargetId, Index));
+        Link->SetStringField(TEXT("to_pin_id"), FString::Printf(TEXT("%s:in:%d"), *TargetId, It.Index));
         Links.Add(MakeShared<FJsonValueObject>(Link));
     }
 }
@@ -101,9 +102,9 @@ static void AppendMaterialCompactNode(FCompactGraphBuilder& Builder, UMaterialEx
 {
     const FString NodeId = MaterialNodeId(Expression);
     Builder.AddNode(NodeId, Expression->GetClass()->GetName(), Expression->GetName(), Expression->MaterialExpressionEditorX, Expression->MaterialExpressionEditorY);
-    for (int32 Index = 0; FExpressionInput* Input = Expression->GetInput(Index); ++Index)
+    for (FExpressionInputIterator It{ Expression }; It; ++It)
     {
-        Builder.AddPin(FString::Printf(TEXT("%s:in:%d"), *NodeId, Index), NodeId, TEXT("input"), Expression->GetInputName(Index).ToString(), TEXT("material"), FString());
+        Builder.AddPin(FString::Printf(TEXT("%s:in:%d"), *NodeId, It.Index), NodeId, TEXT("input"), Expression->GetInputName(It.Index).ToString(), TEXT("material"), FString());
     }
 
     TArray<FExpressionOutput>& Outputs = Expression->GetOutputs();
@@ -125,12 +126,13 @@ static void AppendMaterialCompactNode(FCompactGraphBuilder& Builder, UMaterialEx
 static void AddMaterialCompactLinks(FCompactGraphBuilder& Builder, UMaterialExpression* TargetExpression)
 {
     const FString TargetId = MaterialNodeId(TargetExpression);
-    for (int32 Index = 0; FExpressionInput* Input = TargetExpression->GetInput(Index); ++Index)
+    for (FExpressionInputIterator It{ TargetExpression }; It; ++It)
     {
+        FExpressionInput* Input = It.Input;
         if (Input != nullptr && Input->Expression != nullptr)
         {
             const FString SourceId = MaterialNodeId(Input->Expression);
-            Builder.AddLink(FString::Printf(TEXT("%s:out:%d"), *SourceId, Input->OutputIndex), FString::Printf(TEXT("%s:in:%d"), *TargetId, Index));
+            Builder.AddLink(FString::Printf(TEXT("%s:out:%d"), *SourceId, Input->OutputIndex), FString::Printf(TEXT("%s:in:%d"), *TargetId, It.Index));
         }
     }
 }
@@ -180,8 +182,9 @@ static TSharedPtr<FJsonObject> BuildMaterialWireSnapshot(const FString& Operatio
 
         const FString TargetId = MaterialNodeId(Expression);
         const FString TargetNode = MakeWireGraphNodeLabel(Expression->GetClass()->GetName(), MaterialExpressionDisplayName(Expression));
-        for (int32 Index = 0; FExpressionInput* Input = Expression->GetInput(Index); ++Index)
+        for (FExpressionInputIterator It{ Expression }; It; ++It)
         {
+            FExpressionInput* Input = It.Input;
             if (Input == nullptr || Input->Expression == nullptr)
             {
                 continue;
@@ -192,13 +195,13 @@ static TSharedPtr<FJsonObject> BuildMaterialWireSnapshot(const FString& Operatio
             const FString SourceNode = MakeWireGraphNodeLabel(SourceExpression->GetClass()->GetName(), MaterialExpressionDisplayName(SourceExpression));
             TArray<FExpressionOutput>& Outputs = SourceExpression->GetOutputs();
             const FString SourcePin = Outputs.IsValidIndex(Input->OutputIndex) && !Outputs[Input->OutputIndex].OutputName.IsNone() ? Outputs[Input->OutputIndex].OutputName.ToString() : FString::FromInt(Input->OutputIndex);
-            Builder.AddWire(SourceNode, SourcePin, SourceId, TargetNode, Expression->GetInputName(Index).ToString(), TargetId);
+            Builder.AddWire(SourceNode, SourcePin, SourceId, TargetNode, Expression->GetInputName(It.Index).ToString(), TargetId);
         }
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     const FString Text = bTiny ? Builder.BuildTinyText() : (bMin ? Builder.BuildMinText() : Builder.BuildText());
-    const FString OutputFormat = bTiny ? TEXT("wires_tiny_v1") : (bMin ? TEXT("wires_min_v1") : TEXT("wires_text_v1"));
+    const FString OutputFormat = bTiny ? TEXT("wires_tiny") : (bMin ? TEXT("wires_min") : TEXT("wires_text"));
     Response->SetObjectField(TEXT("data"), MakeWireGraphData(Material->GetPathName(), Material->GetClass()->GetPathName(), TEXT("MaterialGraph"), TEXT("material"), Text, OutputFormat));
     return Response;
 }

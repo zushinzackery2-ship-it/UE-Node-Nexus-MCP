@@ -7,6 +7,7 @@
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UObject/TextProperty.h"
 #include "UObject/UnrealType.h"
@@ -18,11 +19,12 @@ static bool IsEditableExpressionProperty(FProperty* Property)
     return Property != nullptr && Property->HasAnyPropertyFlags(CPF_Edit) && !Property->HasAnyPropertyFlags(CPF_DisableEditOnInstance);
 }
 
-static TSharedPtr<FJsonObject> PropertyToJson(UMaterialExpression* Expression, FProperty* Property)
+static TSharedPtr<FJsonObject> PropertyToJson(UMaterialExpression* Expression, FProperty* Property, int32 Index)
 {
     FString Value;
-    Property->ExportText_InContainer(0, Value, Expression, nullptr, Expression, PPF_None);
+    Property->ExportTextItem_InContainer(Value, Expression, nullptr, Expression, PPF_None);
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
+    Json->SetNumberField(TEXT("index"), Index);
     Json->SetStringField(TEXT("name"), Property->GetName());
     Json->SetStringField(TEXT("type"), Property->GetCPPType());
     Json->SetStringField(TEXT("value"), Value);
@@ -38,12 +40,13 @@ TArray<TSharedPtr<FJsonValue>> BuildMaterialExpressionParams(UMaterialExpression
         return Params;
     }
 
+    int32 Index = 0;
     for (TFieldIterator<FProperty> It(Expression->GetClass()); It; ++It)
     {
         FProperty* Property = *It;
         if (IsEditableExpressionProperty(Property))
         {
-            Params.Add(MakeShared<FJsonValueObject>(PropertyToJson(Expression, Property)));
+            Params.Add(MakeShared<FJsonValueObject>(PropertyToJson(Expression, Property, Index++)));
         }
     }
     return Params;
@@ -59,7 +62,7 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsGet(const FString& Operation, co
         return Response;
     }
 
-    UMaterialExpression* Expression = FindMaterialExpression(Material, NodeId);
+    UMaterialExpression* Expression = ResolveMaterialInterfaceNode(Material, NodeId);
     if (Expression == nullptr)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
@@ -71,6 +74,7 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsGet(const FString& Operation, co
     Data->SetStringField(TEXT("asset_path"), Material->GetPathName());
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Data->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
+    Data->SetStringField(TEXT("node_alias"), MaterialNodeAlias(Material, Expression));
     Data->SetArrayField(TEXT("params"), BuildMaterialExpressionParams(Expression));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
@@ -113,7 +117,7 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
         return Response;
     }
 
-    UMaterialExpression* Expression = FindMaterialExpression(Material, NodeId);
+    UMaterialExpression* Expression = ResolveMaterialInterfaceNode(Material, NodeId);
     if (Expression == nullptr)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
@@ -148,7 +152,7 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
         }
 
         FString OldValue;
-        Property->ExportText_InContainer(0, OldValue, Expression, nullptr, Expression, PPF_None);
+        Property->ExportTextItem_InContainer(OldValue, Expression, nullptr, Expression, PPF_None);
         AddMaterialParamChange(Diff, MaterialExpressionNodeId(Expression), Pair.Key, OldValue, NewValue);
         if (!bDryRun && Property->ImportText_InContainer(*NewValue, Expression, Expression, PPF_None) == nullptr)
         {

@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeOperations.h"
+﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -126,7 +126,7 @@ TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString&
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     if (bCompact)
     {
-        Data->SetStringField(TEXT("format"), TEXT("asset_list_compact_v1"));
+        Data->SetStringField(TEXT("format"), TEXT("asset_list_compact"));
         Data->SetArrayField(TEXT("columns"), {
             MakeShared<FJsonValueString>(TEXT("object_path")),
             MakeShared<FJsonValueString>(TEXT("class")),

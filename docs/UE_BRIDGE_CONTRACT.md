@@ -1,4 +1,4 @@
-# UE Bridge Contract
+﻿# UE Bridge Contract
 
 This document defines the editor-side contract consumed by the MCP server.
 
@@ -57,7 +57,7 @@ Tiny wire text snapshot:
 
 ```json
 {
-  "format": "wires_tiny_v1",
+  "format": "wires_tiny",
   "asset_path": "/Game/Materials/M_Example.M_Example",
   "asset_class": "/Script/Engine.Material",
   "graph_name": "MaterialGraph",
@@ -73,7 +73,7 @@ Wire text snapshot:
 
 ```json
 {
-  "format": "wires_text_v1",
+  "format": "wires_text",
   "asset_path": "/Game/Materials/M_Example.M_Example",
   "asset_class": "/Script/Engine.Material",
   "graph_name": "MaterialGraph",
@@ -89,7 +89,7 @@ Compact snapshot:
 
 ```json
 {
-  "format": "compact_graph_v1",
+  "format": "compact_graph",
   "asset_path": "/Game/Materials/M_Example.M_Example",
   "asset_class": "/Script/Engine.Material",
   "graph_name": "MaterialGraph",
@@ -175,7 +175,7 @@ for AI callers.
 
 ```json
 {
-  "format": "blueprint_details_compact_v1",
+  "format": "blueprint_details_compact",
   "asset_path": "/Game/BP/BP_Example.BP_Example",
   "parent_class": "/Script/Engine.Actor",
   "generated_class": "/Game/BP/BP_Example.BP_Example_C",
@@ -201,7 +201,7 @@ dumping every reflected property.
 
 ```json
 {
-  "format": "anim_blueprint_summary_compact_v1",
+  "format": "anim_blueprint_summary_compact",
   "asset_path": "/Game/ABP/ABP_Example.ABP_Example",
   "columns": ["node_id", "graph", "class", "title", "x", "y", "summary"],
   "items": [

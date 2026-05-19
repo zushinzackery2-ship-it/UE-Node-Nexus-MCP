@@ -46,24 +46,50 @@ bool ParseMaterialPinId(const FString& PinId, bool& bOutInput, int32& OutIndex)
 
 FExpressionInput* FindMaterialInput(UMaterialExpression* Expression, const FString& PinId)
 {
+    if (Expression == nullptr)
+    {
+        return nullptr;
+    }
+
     bool bInput = false;
     int32 Index = 0;
     if (!ParseMaterialPinId(PinId, bInput, Index) || !bInput)
     {
         return nullptr;
     }
-    return Expression->GetInput(Index);
+
+    for (FExpressionInputIterator It{ Expression }; It; ++It)
+    {
+        if (It.Index == Index)
+        {
+            return It.Input;
+        }
+    }
+    return nullptr;
 }
 
 FString FindMaterialInputName(UMaterialExpression* Expression, const FString& PinId)
 {
+    if (Expression == nullptr)
+    {
+        return FString();
+    }
+
     bool bInput = false;
     int32 Index = 0;
     if (!ParseMaterialPinId(PinId, bInput, Index) || !bInput)
     {
         return FString();
     }
-    return Expression->GetInputName(Index).ToString();
+
+    for (FExpressionInputIterator It{ Expression }; It; ++It)
+    {
+        if (It.Index == Index)
+        {
+            return Expression->GetInputName(Index).ToString();
+        }
+    }
+    return FString();
 }
 
 FString FindMaterialOutputName(UMaterialExpression* Expression, const FString& PinId)
@@ -129,8 +155,10 @@ TSharedPtr<FJsonObject> BuildMaterialPinIntegrity(UMaterial* Material)
     TArray<TSharedPtr<FJsonValue>> Broken;
     for (UMaterialExpression* Expression : Expressions)
     {
-        for (int32 Index = 0; FExpressionInput* Input = Expression->GetInput(Index); ++Index)
+        for (FExpressionInputIterator It{ Expression }; It; ++It)
         {
+            FExpressionInput* Input = It.Input;
+            const int32 Index = It.Index;
             if (Input->Expression != nullptr && !Expressions.Contains(Input->Expression))
             {
                 TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
@@ -138,8 +166,18 @@ TSharedPtr<FJsonObject> BuildMaterialPinIntegrity(UMaterial* Material)
                 Item->SetStringField(TEXT("pin_id"), FString::Printf(TEXT("%s:in:%d"), *MaterialExpressionNodeId(Expression), Index));
                 Missing.Add(MakeShared<FJsonValueObject>(Item));
             }
+            else if (Input->Expression != nullptr && !Input->Expression->GetOutputs().IsValidIndex(Input->OutputIndex))
+            {
+                TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
+                Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
+                Item->SetStringField(TEXT("pin_id"), FString::Printf(TEXT("%s:in:%d"), *MaterialExpressionNodeId(Expression), Index));
+                Item->SetStringField(TEXT("source_node_id"), MaterialExpressionNodeId(Input->Expression));
+                Item->SetNumberField(TEXT("output_index"), Input->OutputIndex);
+                Item->SetNumberField(TEXT("source_output_count"), Input->Expression->GetOutputs().Num());
+                Broken.Add(MakeShared<FJsonValueObject>(Item));
+            }
         }
     }
-    return MakePinIntegrity(Missing.Num() == 0, Broken, Missing);
+    return MakePinIntegrity(Missing.Num() == 0 && Broken.Num() == 0, Broken, Missing);
 }
 }

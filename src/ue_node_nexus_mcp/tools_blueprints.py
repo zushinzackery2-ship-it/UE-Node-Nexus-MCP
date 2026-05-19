@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from .contracts import require_non_empty_string
-from .server import _call, mcp
+from .runtime import call_bridge as _call
+from .runtime import mcp
 
 
 @mcp.tool()

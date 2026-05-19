@@ -30,8 +30,9 @@
 | **固定 MCP 工具** | Python MCP Server 暴露类型化操作，向 UE 桥接器转发经过校验的请求载荷 |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
+| **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张材质/蓝图的节点、参数和连线 |
 | **图安全写入** | `graph_patch_apply` 编辑蓝图引脚或材质表达式连线，返回差异、引脚完整性、编译状态和脏标记 |
-| **节点参数读写** | `node_params_get` 和 `node_params_set` 暴露蓝图输入引脚默认值和材质表达式可编辑属性 |
+| **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质实例参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
 | **蓝图摘要** | `blueprint_details_get` 读取类元数据、变量、CDO 默认值和组件模板 |
 | **动画蓝图摘要** | `anim_blueprint_summary_get` 提取常用 AnimGraph 节点的紧凑语义摘要 |
@@ -52,7 +53,15 @@
 | **蓝图** | `blueprint_details_get()` | 读取蓝图元数据、变量、CDO 默认值和组件 |
 | **蓝图** | `anim_blueprint_summary_get()` | 读取常用 AnimGraph 节点的紧凑语义摘要 |
 | **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny` |
+| **图** | `graph_node_info_get()` | 读取整张图的高密度节点信息，默认 `indexed` |
+| **图** | `graph_node_info_get_w_pos()` | 读取整张图的高密度节点信息并附带坐标表 |
 | **图** | `graph_patch_apply()` | 应用声明式图编辑，附带写后检查 |
+| **节点** | `node_info_get()` | 读取单个节点的紧凑编辑视图，可按 section/index 精确截取 |
+| **节点** | `node_create()` | 创建材质节点并返回完整节点编辑视图 |
+| **节点** | `node_position_get()` | 读取节点坐标 |
+| **节点** | `node_position_set()` | 设置节点坐标 |
+| **节点** | `node_position_offset()` | 按偏移量移动节点 |
+| **节点参数** | `node_class_params_get()` | 按节点类型读取可编辑参数模板 |
 | **节点参数** | `node_params_get()` | 读取单个图节点的可编辑参数 |
 | **节点参数** | `node_params_set()` | 写入节点参数，附带编译诊断 |
 | **材质实例** | `material_instance_params_get()` | 读取材质实例参数值 |
@@ -73,6 +82,14 @@
 | **`wires`** | 人类可读的水平连线表 |
 | **`compact`** | 列+行数组，带别名映射回真实 UE 节点和引脚标识符 |
 | **`full`** | 详细的一节点一对象格式，用于调试 |
+| **`indexed`** | 整图复刻包，使用 `T/P/N/V/E/X/R` 字典行压缩类型、参数名、节点、值、边、位置和真实 ID |
+| **`grouped`** | 人读整图包，按节点类型聚合；每个节点包含 `p[...]` 参数和 `i[...]` 输入连线 |
+| **`node_info_text`** | 单节点编辑视图，包含节点名、类、短 ID、真实 ID、位置、输入、参数和输出 |
+
+> [!NOTE]
+> **节点参数语义**
+>
+> 材质节点参数读取按 UE 可编辑属性表导出，保留默认值、枚举、布尔、FName、对象引用和空字符串。`node_info_get(..., section="param", index=N)` 的索引与 `node_class_params_get()` 的模板顺序一致。
 
 > [!IMPORTANT]
 > **写入安全**
@@ -88,9 +105,11 @@ UE-Node-Nexus-MCP/
 ├── Plugins/
 │   └── UeNodeNexusBridge/
 │       ├── Source/
+│       ├── Resources/
 │       └── UeNodeNexusBridge.uplugin
 ├── docs/
 │   ├── ARCHITECTURE.md
+│   ├── NODE_INFO_INTERFACE_DESIGN.md
 │   └── UE_BRIDGE_CONTRACT.md
 ├── scripts/
 │   ├── build_plugin_ue55.bat

@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeOperations.h"
+﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "Components/ActorComponent.h"
 #include "Editor.h"
@@ -157,7 +157,7 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     if (bCompact)
     {
-        Data->SetStringField(TEXT("format"), TEXT("level_actors_compact_v1"));
+        Data->SetStringField(TEXT("format"), TEXT("level_actors_compact"));
         Data->SetArrayField(TEXT("columns"), {
             MakeShared<FJsonValueString>(TEXT("actor_path")),
             MakeShared<FJsonValueString>(TEXT("label")),

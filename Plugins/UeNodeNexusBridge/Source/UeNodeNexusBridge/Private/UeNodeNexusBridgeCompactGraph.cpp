@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeCompactGraph.h"
+﻿#include "UeNodeNexusBridgeCompactGraph.h"
 
 #include "Dom/JsonValue.h"
 #include "EdGraph/EdGraphPin.h"
@@ -40,7 +40,7 @@ static TSharedPtr<FJsonObject> MakeCompactColumns()
 FCompactGraphBuilder::FCompactGraphBuilder()
 {
     Data = MakeShared<FJsonObject>();
-    Data->SetStringField(TEXT("format"), TEXT("compact_graph_v1"));
+    Data->SetStringField(TEXT("format"), TEXT("compact_graph"));
     Data->SetObjectField(TEXT("columns"), MakeCompactColumns());
 }
 

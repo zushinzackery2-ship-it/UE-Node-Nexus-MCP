@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeJson.h"
 
+#include "Containers/StringConv.h"
 #include "HttpServerResponse.h"
 #include "Serialization/JsonSerializer.h"
 #include "UObject/Package.h"
@@ -146,5 +147,37 @@ TSharedPtr<FJsonObject> MakeWriteData(bool bDryRun, bool bApplied, bool bChanged
     Data->SetObjectField(TEXT("diff"), Diff);
     Data->SetObjectField(TEXT("post_checks"), PostChecks);
     return Data;
+}
+
+static int32 CountTextLines(const FString& Text)
+{
+    if (Text.IsEmpty())
+    {
+        return 0;
+    }
+
+    int32 Lines = 1;
+    for (int32 Index = 0; Index < Text.Len(); ++Index)
+    {
+        if (Text[Index] == TEXT('\n'))
+        {
+            ++Lines;
+        }
+    }
+    if (Text.EndsWith(TEXT("\n")))
+    {
+        --Lines;
+    }
+    return Lines;
+}
+
+void SetTextPayload(const TSharedPtr<FJsonObject>& Data, const FString& Text)
+{
+    const FTCHARToUTF8 Utf8Text(*Text);
+    const int32 TextBytes = Utf8Text.Length();
+    Data->SetStringField(TEXT("text"), Text);
+    Data->SetNumberField(TEXT("text_bytes"), TextBytes);
+    Data->SetNumberField(TEXT("text_kib"), static_cast<double>(TextBytes) / 1024.0);
+    Data->SetNumberField(TEXT("text_lines"), CountTextLines(Text));
 }
 }

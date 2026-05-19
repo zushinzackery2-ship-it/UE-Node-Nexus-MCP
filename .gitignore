@@ -9,4 +9,41 @@ build/
 bin/
 obj/
 refApic/
+scripts/clean_specialagent.ps1
+scripts/clean_specialagent_and_install_ue55.bat
 *.egg-info/
+Task-Status.md
+Laffey.ico
+
+# Python caches
+*.py[cod]
+*$py.class
+
+# Local MCP / editor caches
+.codex/
+.idea/
+.vscode/
+
+# Unreal generated files
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+Plugins/**/Resources/*.ico
+*.opensdf
+*.sdf
+*.sln
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Packaged artifacts and local mirrors
+*.zip
+*.7z
+*.rar
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak

@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeOperations.h"
+﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "Animation/AnimBlueprint.h"
 #include "Dom/JsonValue.h"
@@ -260,7 +260,7 @@ TSharedPtr<FJsonObject> HandleAnimBlueprintSummaryGet(const FString& Operation, 
     Data->SetStringField(TEXT("asset_class"), AnimBlueprint->GetClass()->GetPathName());
     if (bCompact)
     {
-        Data->SetStringField(TEXT("format"), TEXT("anim_blueprint_summary_compact_v1"));
+        Data->SetStringField(TEXT("format"), TEXT("anim_blueprint_summary_compact"));
         Data->SetArrayField(TEXT("columns"), { MakeShared<FJsonValueString>(TEXT("node_id")), MakeShared<FJsonValueString>(TEXT("graph")), MakeShared<FJsonValueString>(TEXT("class")), MakeShared<FJsonValueString>(TEXT("title")), MakeShared<FJsonValueString>(TEXT("x")), MakeShared<FJsonValueString>(TEXT("y")), MakeShared<FJsonValueString>(TEXT("summary")) });
     }
     Data->SetArrayField(TEXT("items"), Items);
