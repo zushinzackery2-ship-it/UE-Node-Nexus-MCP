@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeHttpServer.h"
 
+#include "Async/Async.h"
 #include "HttpPath.h"
 #include "HttpServerModule.h"
 #include "HttpServerRequest.h"
@@ -17,9 +18,15 @@ static constexpr uint32 BridgePort = 8765;
 static const TCHAR* BridgeRoute = TEXT("/mcp");
 }
 
-static bool HandleMcpRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+static void CompleteJsonRequest(const FHttpResultCallback& OnComplete, const TSharedPtr<FJsonObject>& Response)
 {
-    const FString BodyString = UeNodeNexusBridge::BodyToString(Request.Body);
+    OnComplete(UeNodeNexusBridge::JsonResponse(Response));
+}
+
+static void HandleMcpRequestOnGameThread(const FString BodyString, const FHttpResultCallback OnComplete)
+{
+    UE_LOG(LogUeNodeNexusBridge, Verbose, TEXT("MCP request begin, body_chars=%d"), BodyString.Len());
+
     TSharedPtr<FJsonObject> RequestJson;
     const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(BodyString);
 
@@ -27,8 +34,9 @@ static bool HandleMcpRequest(const FHttpServerRequest& Request, const FHttpResul
     {
         TSharedPtr<FJsonObject> Response = UeNodeNexusBridge::MakeEnvelope(TEXT("unknown"), TEXT(""), false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_json"), TEXT("Request body is not valid JSON")));
-        OnComplete(UeNodeNexusBridge::JsonResponse(Response));
-        return true;
+        UE_LOG(LogUeNodeNexusBridge, Warning, TEXT("MCP request invalid_json"));
+        CompleteJsonRequest(OnComplete, Response);
+        return;
     }
 
     FString Operation;
@@ -40,11 +48,24 @@ static bool HandleMcpRequest(const FHttpServerRequest& Request, const FHttpResul
     {
         TSharedPtr<FJsonObject> Response = UeNodeNexusBridge::MakeEnvelope(Operation.IsEmpty() ? TEXT("unknown") : Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_envelope"), TEXT("Request must include operation, request_id, and payload object")));
-        OnComplete(UeNodeNexusBridge::JsonResponse(Response));
-        return true;
+        UE_LOG(LogUeNodeNexusBridge, Warning, TEXT("MCP request invalid_envelope operation=%s request_id=%s"), *Operation, *RequestId);
+        CompleteJsonRequest(OnComplete, Response);
+        return;
     }
 
-    OnComplete(UeNodeNexusBridge::JsonResponse(UeNodeNexusBridge::DispatchOperation(Operation, RequestId, Payload)));
+    UE_LOG(LogUeNodeNexusBridge, Verbose, TEXT("MCP operation begin operation=%s request_id=%s"), *Operation, *RequestId);
+    TSharedPtr<FJsonObject> Response = UeNodeNexusBridge::DispatchOperation(Operation, RequestId, Payload);
+    UE_LOG(LogUeNodeNexusBridge, Verbose, TEXT("MCP operation end operation=%s request_id=%s ok=%s"), *Operation, *RequestId, Response.IsValid() && Response->GetBoolField(TEXT("ok")) ? TEXT("true") : TEXT("false"));
+    CompleteJsonRequest(OnComplete, Response);
+}
+
+static bool HandleMcpRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+    const FString BodyString = UeNodeNexusBridge::BodyToString(Request.Body);
+    AsyncTask(ENamedThreads::GameThread, [BodyString, OnComplete]()
+    {
+        HandleMcpRequestOnGameThread(BodyString, OnComplete);
+    });
     return true;
 }
 
@@ -79,4 +100,3 @@ void FUeNodeNexusBridgeHttpServer::Stop()
 
     Router.Reset();
 }
-

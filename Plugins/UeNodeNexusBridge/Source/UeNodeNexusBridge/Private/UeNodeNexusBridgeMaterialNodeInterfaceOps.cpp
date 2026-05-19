@@ -75,6 +75,14 @@ static TArray<FString> MaterialOutputLines(UMaterial* Material, UMaterialExpress
                 }
             }
         }
+        for (EMaterialProperty Property : MaterialOutputProperties())
+        {
+            FExpressionInput* Input = Material->GetExpressionInputForProperty(Property);
+            if (Input != nullptr && Input->Expression == Expression && Input->OutputIndex == OutputIndex)
+            {
+                Targets.Add(FString::Printf(TEXT("MaterialOutput.inpin_%02d.%s"), MaterialOutputProperties().Find(Property), *MaterialOutputPropertyName(Property)));
+            }
+        }
         Lines.Add(FString::Printf(TEXT("outpin_%02d.%s > %s"), OutputIndex, *MaterialOutputName(Expression, OutputIndex), Targets.Num() == 0 ? TEXT("None") : *FString::Join(Targets, TEXT(";"))));
     }
     if (Lines.Num() == 0)
@@ -182,6 +190,13 @@ TSharedPtr<FJsonObject> HandleMaterialNodeInfoGet(const FString& Operation, cons
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_request"), TEXT("node_id is required")));
+        return Response;
+    }
+    if (IsMaterialOutputNodeId(NodeId))
+    {
+        TSharedPtr<FJsonObject> Data = BuildMaterialOutputInterfaceData(Material, Payload);
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Data->GetBoolField(TEXT("selection_ok")));
+        Response->SetObjectField(TEXT("data"), Data);
         return Response;
     }
     UMaterialExpression* Expression = ResolveMaterialInterfaceNode(Material, NodeId);

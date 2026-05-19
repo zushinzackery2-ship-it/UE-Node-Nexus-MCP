@@ -8,6 +8,7 @@
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 
@@ -18,12 +19,12 @@ bool IsMaterialPatchAsset(UObject* Asset)
     return Cast<UMaterial>(Asset) != nullptr;
 }
 
-static TSharedPtr<FJsonObject> MakeMaterialLinkJson(UMaterialExpression* FromExpression, const FString& FromPinId, UMaterialExpression* ToExpression, const FString& ToPinId)
+static TSharedPtr<FJsonObject> MakeMaterialLinkJsonFromIds(const FString& FromNodeId, const FString& FromPinId, const FString& ToNodeId, const FString& ToPinId)
 {
     TSharedPtr<FJsonObject> Link = MakeShared<FJsonObject>();
-    Link->SetStringField(TEXT("from_node_id"), MaterialExpressionNodeId(FromExpression));
+    Link->SetStringField(TEXT("from_node_id"), FromNodeId);
     Link->SetStringField(TEXT("from_pin_id"), FromPinId);
-    Link->SetStringField(TEXT("to_node_id"), MaterialExpressionNodeId(ToExpression));
+    Link->SetStringField(TEXT("to_node_id"), ToNodeId);
     Link->SetStringField(TEXT("to_pin_id"), ToPinId);
     return Link;
 }
@@ -39,22 +40,34 @@ static bool ApplyMaterialConnect(UMaterial* Material, const TSharedPtr<FJsonObje
         return false;
     }
 
-    UMaterialExpression* FromExpression = FindMaterialExpression(Material, FromNodeId);
-    UMaterialExpression* ToExpression = FindMaterialExpression(Material, ToNodeId);
+    UMaterialExpression* FromExpression = ResolveMaterialInterfaceNode(Material, FromNodeId);
     bool bFromInput = false;
     int32 FromOutputIndex = INDEX_NONE;
-    if (!ParseMaterialPinId(FromPinId, bFromInput, FromOutputIndex) || bFromInput)
+    if (!ResolveMaterialOutputPin(FromExpression, FromPinId, bFromInput, FromOutputIndex) || bFromInput)
     {
         return false;
     }
 
-    FExpressionInput* ToInput = FindMaterialInput(ToExpression, ToPinId);
+    UMaterialExpression* ToExpression = nullptr;
+    FExpressionInput* ToInput = nullptr;
+    FString ResolvedToNodeId;
+    if (IsMaterialOutputNodeId(ToNodeId))
+    {
+        ToInput = ResolveMaterialOutputInput(Material, ToPinId);
+        ResolvedToNodeId = MaterialOutputNodeId();
+    }
+    else
+    {
+        ToExpression = ResolveMaterialInterfaceNode(Material, ToNodeId);
+        ToInput = ResolveMaterialInputPin(ToExpression, ToPinId);
+        ResolvedToNodeId = MaterialExpressionNodeId(ToExpression);
+    }
     if (FromExpression == nullptr || ToInput == nullptr || !FromExpression->GetOutputs().IsValidIndex(FromOutputIndex))
     {
         return false;
     }
 
-    AppendMaterialDiff(Diff, TEXT("links_added"), MakeMaterialLinkJson(FromExpression, FromPinId, ToExpression, ToPinId));
+    AppendMaterialDiff(Diff, TEXT("links_added"), MakeMaterialLinkJsonFromIds(MaterialExpressionNodeId(FromExpression), FromPinId, ResolvedToNodeId, ToPinId));
     if (!bDryRun)
     {
         ToInput->Connect(FromOutputIndex, FromExpression);
@@ -73,8 +86,20 @@ static bool ApplyMaterialDisconnect(UMaterial* Material, const TSharedPtr<FJsonO
         return false;
     }
 
-    UMaterialExpression* ToExpression = FindMaterialExpression(Material, ToNodeId);
-    FExpressionInput* Input = FindMaterialInput(ToExpression, ToPinId);
+    UMaterialExpression* ToExpression = nullptr;
+    FExpressionInput* Input = nullptr;
+    FString ResolvedToNodeId;
+    if (IsMaterialOutputNodeId(ToNodeId))
+    {
+        Input = ResolveMaterialOutputInput(Material, ToPinId);
+        ResolvedToNodeId = MaterialOutputNodeId();
+    }
+    else
+    {
+        ToExpression = ResolveMaterialInterfaceNode(Material, ToNodeId);
+        Input = ResolveMaterialInputPin(ToExpression, ToPinId);
+        ResolvedToNodeId = MaterialExpressionNodeId(ToExpression);
+    }
     if (Input == nullptr || Input->Expression == nullptr)
     {
         return false;
@@ -83,7 +108,7 @@ static bool ApplyMaterialDisconnect(UMaterial* Material, const TSharedPtr<FJsonO
     UMaterialExpression* FromExpression = Input->Expression;
     FromNodeId = MaterialExpressionNodeId(FromExpression);
     FromPinId = FString::Printf(TEXT("%s:out:%d"), *FromNodeId, Input->OutputIndex);
-    AppendMaterialDiff(Diff, TEXT("links_removed"), MakeMaterialLinkJson(FromExpression, FromPinId, ToExpression, ToPinId));
+    AppendMaterialDiff(Diff, TEXT("links_removed"), MakeMaterialLinkJsonFromIds(FromNodeId, FromPinId, ResolvedToNodeId, ToPinId));
     if (!bDryRun)
     {
         Input->Expression = nullptr;
@@ -95,24 +120,51 @@ static bool ApplyMaterialDisconnect(UMaterial* Material, const TSharedPtr<FJsonO
 static bool ApplyMaterialCreateNode(UMaterial* Material, const TSharedPtr<FJsonObject>& Op, bool bDryRun, TSharedPtr<FJsonObject> Diff)
 {
     FString ClassPath;
+    FString NodeClass;
     int32 X = 0;
     int32 Y = 0;
-    if (!Op->TryGetStringField(TEXT("class_path"), ClassPath) || !ReadMaterialPosition(Op, X, Y))
+    if (!ReadMaterialPosition(Op, X, Y))
     {
         return false;
     }
-    UClass* ExpressionClass = LoadClass<UMaterialExpression>(nullptr, *ClassPath);
-    if (ExpressionClass == nullptr || !ExpressionClass->IsChildOf(UMaterialExpression::StaticClass()))
+    if (!Op->TryGetStringField(TEXT("class_path"), ClassPath))
+    {
+        Op->TryGetStringField(TEXT("node_class"), NodeClass);
+        ClassPath = NodeClass;
+    }
+    UClass* ExpressionClass = ResolveMaterialExpressionClass(ClassPath);
+    if (ExpressionClass == nullptr)
     {
         return false;
     }
 
     TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-    Item->SetStringField(TEXT("class_path"), ClassPath);
+    FString ClientId;
+    if (Op->TryGetStringField(TEXT("client_id"), ClientId))
+    {
+        Item->SetStringField(TEXT("client_id"), ClientId);
+    }
+    Item->SetStringField(TEXT("class_path"), ExpressionClass->GetPathName());
     if (!bDryRun)
     {
         UMaterialExpression* NewExpression = UMaterialEditingLibrary::CreateMaterialExpression(Material, ExpressionClass, X, Y);
+        const TSharedPtr<FJsonObject>* Params = nullptr;
+        if (NewExpression != nullptr && Op->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)
+        {
+            for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Params)->Values)
+            {
+                TSharedPtr<FJsonObject> Wrapper = MakeShared<FJsonObject>();
+                Wrapper->SetField(TEXT("value"), Pair.Value);
+                FString Value;
+                if (!ReadJsonScalarAsString(Wrapper, TEXT("value"), Value) || !ApplyMaterialExpressionParamValue(Material, NewExpression, Pair.Key, Value, false, Diff))
+                {
+                    return false;
+                }
+            }
+            NewExpression->PostEditChange();
+        }
         Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(NewExpression));
+        Item->SetStringField(TEXT("node_alias"), MaterialNodeAlias(Material, NewExpression));
     }
     AppendMaterialDiff(Diff, TEXT("nodes_created"), Item);
     return true;
@@ -139,7 +191,7 @@ static bool ApplyMaterialOperation(UMaterial* Material, const TSharedPtr<FJsonOb
     }
 
     FString NodeId;
-    UMaterialExpression* Expression = Op->TryGetStringField(TEXT("node_id"), NodeId) ? FindMaterialExpression(Material, NodeId) : nullptr;
+    UMaterialExpression* Expression = Op->TryGetStringField(TEXT("node_id"), NodeId) ? ResolveMaterialInterfaceNode(Material, NodeId) : nullptr;
     if (Expression == nullptr)
     {
         return false;
@@ -180,15 +232,7 @@ static bool ApplyMaterialOperation(UMaterial* Material, const TSharedPtr<FJsonOb
         {
             return false;
         }
-        FProperty* Property = Expression->GetClass()->FindPropertyByName(FName(*Name));
-        if (Property == nullptr || !Property->HasAnyPropertyFlags(CPF_Edit))
-        {
-            return false;
-        }
-        FString OldValue;
-        Property->ExportTextItem_InContainer(OldValue, Expression, nullptr, Expression, PPF_None);
-        AddMaterialParamChange(Diff, MaterialExpressionNodeId(Expression), Name, OldValue, Value);
-        return bDryRun || Property->ImportText_InContainer(*Value, Expression, Expression, PPF_None) != nullptr;
+        return ApplyMaterialExpressionParamValue(Material, Expression, Name, Value, bDryRun, Diff);
     }
     return false;
 }

@@ -155,7 +155,22 @@ TSharedPtr<FJsonObject> BuildMaterialGraphIndexedData(UMaterial* Material, const
         }
     }
 
-    FString Text = FString::Printf(TEXT("G:%s|material|MaterialGraph|%d\n"), *EscapeIndexedToken(Material->GetPathName()), AllExpressions.Num());
+    for (EMaterialProperty Property : MaterialOutputProperties())
+    {
+        FExpressionInput* Input = Material->GetExpressionInputForProperty(Property);
+        if (Input == nullptr || Input->Expression == nullptr)
+        {
+            continue;
+        }
+        const int32* SourceNodeIndex = NodeIndices.Find(Input->Expression);
+        if (SourceNodeIndex == nullptr)
+        {
+            continue;
+        }
+        EdgeRows.Add(FString::Printf(TEXT("%d.%s>MaterialOutput.%s"), *SourceNodeIndex, *MaterialPinToken(Input->Expression, false, Input->OutputIndex), *EscapeIndexedToken(MaterialOutputPropertyName(Property))));
+    }
+
+    FString Text = FString::Printf(TEXT("G:%s|material|MaterialGraph|%d\n"), *EscapeIndexedToken(Material->GetPathName()), AllExpressions.Num() + 1);
     Text += JoinDictionaryLine(TEXT("T:"), Types);
     Text += JoinDictionaryLine(TEXT("P:"), Params);
     Text += TEXT("N:") + FString::Join(NodeRows, TEXT(";")) + TEXT("\n");
@@ -175,8 +190,8 @@ TSharedPtr<FJsonObject> BuildMaterialGraphIndexedData(UMaterial* Material, const
     Data->SetStringField(TEXT("asset_path"), Material->GetPathName());
     Data->SetStringField(TEXT("graph_kind"), TEXT("material"));
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
-    Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num());
-    Data->SetNumberField(TEXT("returned_nodes"), Expressions.Num());
+    Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num() + 1);
+    Data->SetNumberField(TEXT("returned_nodes"), Expressions.Num() + 1);
     Data->SetBoolField(TEXT("truncated"), Expressions.Num() < AllExpressions.Num());
     SetTextPayload(Data, Text);
     return Data;

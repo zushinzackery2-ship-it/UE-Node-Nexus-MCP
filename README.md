@@ -34,6 +34,7 @@
 | **图安全写入** | `graph_patch_apply` 编辑蓝图引脚或材质表达式连线，返回差异、引脚完整性、编译状态和脏标记 |
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质实例参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
+| **复杂材质复刻** | 已验证可通过固定 MCP 接口读取整图、创建节点、回放参数、连接根输出、编译并保存 |
 | **蓝图摘要** | `blueprint_details_get` 读取类元数据、变量、CDO 默认值和组件模板 |
 | **动画蓝图摘要** | `anim_blueprint_summary_get` 提取常用 AnimGraph 节点的紧凑语义摘要 |
 | **资产创建** | `asset_create` 支持材质、材质实例常量和蓝图资产的固定创建流程 |
@@ -98,6 +99,28 @@
 
 ---
 
+## 复刻验证
+
+| 验证项 | 结果 |
+|:-----|:-----|
+| **源材质** | `/Game/YN/Material/大坝母材质.大坝母材质` |
+| **目标材质** | `/Game/YN/Material/大坝母材质MCPtest_full_1779212723.大坝母材质MCPtest_full_1779212723` |
+| **执行路径** | `asset_create`、`graph_node_info_get_w_pos(indexed)`、`graph_patch_apply(create_node)`、`node_params_set`、`graph_patch_apply(connect_pins)`、`asset_compile`、`asset_save` |
+| **真实表达式节点** | 源图 `85`，目标图 `85` |
+| **连线** | 源图 `110`，目标图 `110` |
+| **带参数节点** | 源图 `78`，目标图 `78` |
+| **根输出** | `MaterialOutput.MaterialAttributes` 已连接 |
+| **精确比对** | 节点类型、参数值、连线、位置按索引一致 |
+| **编译结果** | `0 error / 0 warning` |
+| **保存结果** | 目标材质显式保存成功 |
+
+> [!IMPORTANT]
+> **复刻边界**
+>
+> 该验证只使用固定 MCP 工具读取源图数据并在目标材质中重建节点、参数和连线；没有从源材质直接复制 `UMaterialExpression`、GraphNode 或 UObject 指针。
+
+---
+
 ## 目录结构
 
 ```
@@ -109,6 +132,7 @@ UE-Node-Nexus-MCP/
 │       └── UeNodeNexusBridge.uplugin
 ├── docs/
 │   ├── ARCHITECTURE.md
+│   ├── MATERIAL_REBUILD_EXECUTION.md
 │   ├── NODE_INFO_INTERFACE_DESIGN.md
 │   └── UE_BRIDGE_CONTRACT.md
 ├── scripts/

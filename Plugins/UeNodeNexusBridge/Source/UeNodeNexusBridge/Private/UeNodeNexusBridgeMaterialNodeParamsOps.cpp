@@ -4,6 +4,7 @@
 #include "MaterialEditingLibrary.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
+#include "Materials/MaterialExpressionNamedReroute.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
@@ -48,6 +49,16 @@ TArray<TSharedPtr<FJsonValue>> BuildMaterialExpressionParams(UMaterialExpression
         {
             Params.Add(MakeShared<FJsonValueObject>(PropertyToJson(Expression, Property, Index++)));
         }
+    }
+    if (UMaterialExpressionNamedRerouteUsage* Usage = Cast<UMaterialExpressionNamedRerouteUsage>(Expression))
+    {
+        TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
+        Json->SetNumberField(TEXT("index"), Index);
+        Json->SetStringField(TEXT("name"), TEXT("DeclarationName"));
+        Json->SetStringField(TEXT("type"), TEXT("FName"));
+        Json->SetStringField(TEXT("value"), Usage->Declaration ? Usage->Declaration->Name.ToString() : FString());
+        Json->SetBoolField(TEXT("editable"), true);
+        Params.Add(MakeShared<FJsonValueObject>(Json));
     }
     return Params;
 }
@@ -145,16 +156,14 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
     {
         FProperty* Property = Expression->GetClass()->FindPropertyByName(FName(*Pair.Key));
         FString NewValue;
-        if (!IsEditableExpressionProperty(Property) || !JsonValueToPropertyText(Pair.Value, NewValue))
+        if (!JsonValueToPropertyText(Pair.Value, NewValue))
         {
             Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_write_failed"), Pair.Key, Material->GetPathName(), TEXT("UeNodeNexusBridge"))));
             continue;
         }
 
         FString OldValue;
-        Property->ExportTextItem_InContainer(OldValue, Expression, nullptr, Expression, PPF_None);
-        AddMaterialParamChange(Diff, MaterialExpressionNodeId(Expression), Pair.Key, OldValue, NewValue);
-        if (!bDryRun && Property->ImportText_InContainer(*NewValue, Expression, Expression, PPF_None) == nullptr)
+        if (!ApplyMaterialExpressionParamValue(Material, Expression, Pair.Key, NewValue, bDryRun, Diff))
         {
             Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_import_failed"), Pair.Key, Material->GetPathName(), TEXT("UeNodeNexusBridge"))));
             continue;

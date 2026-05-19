@@ -17,13 +17,25 @@ namespace UeNodeNexusBridge
 {
 static bool ParseAssetPath(const FString& AssetPath, FString& OutPackageName, FString& OutAssetName, FText& OutReason)
 {
-    if (!FPackageName::IsValidObjectPath(AssetPath, &OutReason))
+    const int32 LastSlashIndex = AssetPath.Find(TEXT("/"), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+    const int32 LastDotIndex = AssetPath.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+    const bool bLooksLikeObjectPath = LastDotIndex > LastSlashIndex;
+
+    if (bLooksLikeObjectPath && FPackageName::IsValidObjectPath(AssetPath, &OutReason))
+    {
+        OutPackageName = FPackageName::ObjectPathToPackageName(AssetPath);
+        OutAssetName = FPackageName::ObjectPathToObjectName(AssetPath);
+    }
+    else if (FPackageName::IsValidLongPackageName(AssetPath, false, &OutReason))
+    {
+        OutPackageName = AssetPath;
+        OutAssetName = FPackageName::GetLongPackageAssetName(AssetPath);
+    }
+    else
     {
         return false;
     }
 
-    OutPackageName = FPackageName::ObjectPathToPackageName(AssetPath);
-    OutAssetName = FPackageName::ObjectPathToObjectName(AssetPath);
     if (!FPackageName::IsValidLongPackageName(OutPackageName, false, &OutReason) || OutAssetName.IsEmpty())
     {
         return false;
@@ -124,8 +136,9 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_asset_path"), Reason.ToString()));
         return Response;
     }
+    const FString ObjectPath = PackageName + TEXT(".") + AssetName;
 
-    if (FindObject<UObject>(nullptr, *AssetPath) != nullptr || FPackageName::DoesPackageExist(PackageName))
+    if (FindObject<UObject>(nullptr, *ObjectPath) != nullptr || FPackageName::DoesPackageExist(PackageName))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("asset_already_exists"), TEXT("Asset package already exists")));
@@ -140,7 +153,7 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
     if (bDryRun)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), MakeCreateData(AssetPath, AssetKind, nullptr, true, false));
+        Response->SetObjectField(TEXT("data"), MakeCreateData(ObjectPath, AssetKind, nullptr, true, false));
         return Response;
     }
 

@@ -4,7 +4,8 @@
 #include "MaterialExpressionIO.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
-#include "UeNodeNexusBridgeJson.h"
+#include "Materials/MaterialExpressionNamedReroute.h"
+#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 
 namespace UeNodeNexusBridge
 {
@@ -28,6 +29,65 @@ UMaterialExpression* FindMaterialExpression(UMaterial* Material, const FString& 
         }
     }
     return nullptr;
+}
+
+UClass* ResolveMaterialExpressionClass(const FString& NodeClass)
+{
+    if (UClass* Direct = LoadClass<UMaterialExpression>(nullptr, *NodeClass))
+    {
+        return Direct->IsChildOf(UMaterialExpression::StaticClass()) ? Direct : nullptr;
+    }
+    const FString ShortName = NodeClass.StartsWith(TEXT("MaterialExpression")) ? NodeClass : TEXT("MaterialExpression") + NodeClass;
+    return LoadClass<UMaterialExpression>(nullptr, *FString::Printf(TEXT("/Script/Engine.%s"), *ShortName));
+}
+
+static UMaterialExpressionNamedRerouteDeclaration* FindNamedRerouteDeclaration(UMaterial* Material, const FString& Value)
+{
+    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Material->GetExpressions())
+    {
+        UMaterialExpressionNamedRerouteDeclaration* Declaration = Cast<UMaterialExpressionNamedRerouteDeclaration>(ExpressionPtr.Get());
+        if (Declaration == nullptr)
+        {
+            continue;
+        }
+        if (MaterialNodeAlias(Material, Declaration).Equals(Value, ESearchCase::IgnoreCase)
+            || Declaration->Name.ToString().Equals(Value, ESearchCase::IgnoreCase)
+            || MaterialExpressionNodeId(Declaration).Equals(Value, ESearchCase::IgnoreCase))
+        {
+            return Declaration;
+        }
+    }
+    return nullptr;
+}
+
+bool TrySetMaterialSyntheticParam(UMaterial* Material, UMaterialExpression* Expression, const FString& Name, const FString& Value, bool bApply, FString& OutOldValue)
+{
+    UMaterialExpressionNamedRerouteUsage* Usage = Cast<UMaterialExpressionNamedRerouteUsage>(Expression);
+    if (Usage == nullptr)
+    {
+        return false;
+    }
+    if (!Name.Equals(TEXT("DeclarationName"), ESearchCase::IgnoreCase)
+        && !Name.Equals(TEXT("Declaration"), ESearchCase::IgnoreCase)
+        && !Name.Equals(TEXT("DeclarationAlias"), ESearchCase::IgnoreCase))
+    {
+        return false;
+    }
+
+    OutOldValue = Usage->Declaration ? Usage->Declaration->Name.ToString() : FString();
+    UMaterialExpressionNamedRerouteDeclaration* Declaration = FindNamedRerouteDeclaration(Material, Value);
+    if (Declaration == nullptr)
+    {
+        return false;
+    }
+
+    if (bApply)
+    {
+        Usage->Modify();
+        Usage->Declaration = Declaration;
+        Usage->DeclarationGuid = Declaration->VariableGuid;
+    }
+    return true;
 }
 
 bool ParseMaterialPinId(const FString& PinId, bool& bOutInput, int32& OutIndex)
@@ -66,6 +126,81 @@ FExpressionInput* FindMaterialInput(UMaterialExpression* Expression, const FStri
         }
     }
     return nullptr;
+}
+
+static FString NormalizeMaterialPinLabel(FString Value)
+{
+    Value.TrimStartAndEndInline();
+    return Value;
+}
+
+FExpressionInput* ResolveMaterialInputPin(UMaterialExpression* Expression, const FString& PinId)
+{
+    if (Expression == nullptr)
+    {
+        return nullptr;
+    }
+
+    if (FExpressionInput* Input = FindMaterialInput(Expression, PinId))
+    {
+        return Input;
+    }
+
+    if (PinId.IsNumeric())
+    {
+        const int32 TargetIndex = FCString::Atoi(*PinId);
+        for (FExpressionInputIterator It{ Expression }; It; ++It)
+        {
+            if (It.Index == TargetIndex)
+            {
+                return It.Input;
+            }
+        }
+    }
+
+    const FString TargetName = NormalizeMaterialPinLabel(PinId);
+    for (FExpressionInputIterator It{ Expression }; It; ++It)
+    {
+        if (Expression->GetInputName(It.Index).ToString().Equals(TargetName, ESearchCase::IgnoreCase))
+        {
+            return It.Input;
+        }
+    }
+    return nullptr;
+}
+
+bool ResolveMaterialOutputPin(UMaterialExpression* Expression, const FString& PinId, bool& bOutInput, int32& OutIndex)
+{
+    bOutInput = false;
+    OutIndex = INDEX_NONE;
+    if (Expression == nullptr)
+    {
+        return false;
+    }
+
+    if (ParseMaterialPinId(PinId, bOutInput, OutIndex))
+    {
+        return !bOutInput && Expression->GetOutputs().IsValidIndex(OutIndex);
+    }
+
+    if (PinId.IsNumeric())
+    {
+        OutIndex = FCString::Atoi(*PinId);
+        return Expression->GetOutputs().IsValidIndex(OutIndex);
+    }
+
+    const FString TargetName = NormalizeMaterialPinLabel(PinId);
+    TArray<FExpressionOutput>& Outputs = Expression->GetOutputs();
+    for (int32 Index = 0; Index < Outputs.Num(); ++Index)
+    {
+        const FString OutputName = Outputs[Index].OutputName.IsNone() ? FString::FromInt(Index) : Outputs[Index].OutputName.ToString();
+        if (OutputName.Equals(TargetName, ESearchCase::IgnoreCase))
+        {
+            OutIndex = Index;
+            return true;
+        }
+    }
+    return false;
 }
 
 FString FindMaterialInputName(UMaterialExpression* Expression, const FString& PinId)
@@ -140,44 +275,4 @@ void AddMaterialParamChange(TSharedPtr<FJsonObject> Diff, const FString& NodeId,
     AppendMaterialDiff(Diff, TEXT("params_changed"), Item);
 }
 
-TSharedPtr<FJsonObject> BuildMaterialPinIntegrity(UMaterial* Material)
-{
-    TArray<UMaterialExpression*> Expressions;
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Material->GetExpressions())
-    {
-        if (ExpressionPtr.Get() != nullptr)
-        {
-            Expressions.Add(ExpressionPtr.Get());
-        }
-    }
-
-    TArray<TSharedPtr<FJsonValue>> Missing;
-    TArray<TSharedPtr<FJsonValue>> Broken;
-    for (UMaterialExpression* Expression : Expressions)
-    {
-        for (FExpressionInputIterator It{ Expression }; It; ++It)
-        {
-            FExpressionInput* Input = It.Input;
-            const int32 Index = It.Index;
-            if (Input->Expression != nullptr && !Expressions.Contains(Input->Expression))
-            {
-                TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-                Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
-                Item->SetStringField(TEXT("pin_id"), FString::Printf(TEXT("%s:in:%d"), *MaterialExpressionNodeId(Expression), Index));
-                Missing.Add(MakeShared<FJsonValueObject>(Item));
-            }
-            else if (Input->Expression != nullptr && !Input->Expression->GetOutputs().IsValidIndex(Input->OutputIndex))
-            {
-                TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-                Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
-                Item->SetStringField(TEXT("pin_id"), FString::Printf(TEXT("%s:in:%d"), *MaterialExpressionNodeId(Expression), Index));
-                Item->SetStringField(TEXT("source_node_id"), MaterialExpressionNodeId(Input->Expression));
-                Item->SetNumberField(TEXT("output_index"), Input->OutputIndex);
-                Item->SetNumberField(TEXT("source_output_count"), Input->Expression->GetOutputs().Num());
-                Broken.Add(MakeShared<FJsonValueObject>(Item));
-            }
-        }
-    }
-    return MakePinIntegrity(Missing.Num() == 0 && Broken.Num() == 0, Broken, Missing);
-}
 }

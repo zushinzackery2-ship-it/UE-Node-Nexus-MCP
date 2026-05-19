@@ -113,17 +113,6 @@ TSharedPtr<FJsonObject> HandleMaterialNodePositionSet(const FString& Operation, 
     return Response;
 }
 
-static UClass* ResolveMaterialExpressionClass(const FString& NodeClass)
-{
-    if (UClass* Direct = LoadClass<UMaterialExpression>(nullptr, *NodeClass))
-    {
-        return Direct->IsChildOf(UMaterialExpression::StaticClass()) ? Direct : nullptr;
-    }
-    const FString ShortName = NodeClass.StartsWith(TEXT("MaterialExpression")) ? NodeClass : TEXT("MaterialExpression") + NodeClass;
-    const FString Path = FString::Printf(TEXT("/Script/Engine.%s"), *ShortName);
-    return LoadClass<UMaterialExpression>(nullptr, *Path);
-}
-
 TSharedPtr<FJsonObject> HandleMaterialNodeCreate(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
 {
     FString NodeClass;

@@ -65,6 +65,24 @@ static FString MaterialGroupedInputs(UMaterial* Material, UMaterialExpression* E
     return FString::Printf(TEXT("i[%s]"), *JoinOrNone(Inputs));
 }
 
+static FString MaterialOutputGroupedInputs(UMaterial* Material)
+{
+    TArray<FString> Inputs;
+    for (EMaterialProperty Property : MaterialOutputProperties())
+    {
+        FExpressionInput* Input = Material->GetExpressionInputForProperty(Property);
+        if (Input != nullptr && Input->Expression != nullptr)
+        {
+            Inputs.Add(FString::Printf(TEXT("%s<%s.%s"), *EscapeIndexedToken(MaterialOutputPropertyName(Property)), *EscapeIndexedToken(MaterialNodeAlias(Material, Input->Expression)), *EscapeIndexedToken(MaterialOutputName(Input->Expression, Input->OutputIndex))));
+        }
+        else
+        {
+            Inputs.Add(FString::Printf(TEXT("%s<None"), *EscapeIndexedToken(MaterialOutputPropertyName(Property))));
+        }
+    }
+    return FString::Printf(TEXT("i[%s]"), *JoinOrNone(Inputs));
+}
+
 static FString BlueprintGroupedInputs(UEdGraph* Graph, UEdGraphNode* Node)
 {
     TArray<FString> Inputs;
@@ -137,15 +155,21 @@ TSharedPtr<FJsonObject> BuildMaterialGraphGroupedData(UMaterial* Material, const
         ++ReturnedNodes;
     }
 
+    if (MaxNodes == 0 || ReturnedNodes < MaxNodes)
+    {
+        AddGroupedRow(Groups, Order, TEXT("MaterialOutput"), FString::Printf(TEXT("%s{p[none];%s}"), *MaterialOutputNodeId(), *MaterialOutputGroupedInputs(Material)));
+        ++ReturnedNodes;
+    }
+
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("format"), bWithPosition ? TEXT("graph_node_grouped_w_pos") : TEXT("graph_node_grouped"));
     Data->SetStringField(TEXT("asset_path"), Material->GetPathName());
     Data->SetStringField(TEXT("graph_kind"), TEXT("material"));
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
-    Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num());
+    Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num() + 1);
     Data->SetNumberField(TEXT("returned_nodes"), ReturnedNodes);
     Data->SetBoolField(TEXT("truncated"), ReturnedNodes < AllExpressions.Num());
-    SetTextPayload(Data, BuildGroupedText(FString::Printf(TEXT("G:%s|material|MaterialGraph|%d\n"), *EscapeIndexedToken(Material->GetPathName()), AllExpressions.Num()), Order, Groups));
+    SetTextPayload(Data, BuildGroupedText(FString::Printf(TEXT("G:%s|material|MaterialGraph|%d\n"), *EscapeIndexedToken(Material->GetPathName()), AllExpressions.Num() + 1), Order, Groups));
     return Data;
 }
 

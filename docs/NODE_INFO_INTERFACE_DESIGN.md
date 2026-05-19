@@ -278,6 +278,34 @@ node_delete(asset_path, node_id)
 - 连接方向错误。
 - 写入后 pin-integrity 异常。
 
+## 材质复刻写入边界
+
+复杂材质复刻必须走“读源图数据、在目标图重建”的路径，禁止直接复制源材质里的 UE 节点对象或表达式对象。
+
+允许的加速方式：
+
+- 从源材质读取 `graph_node_info_get_w_pos(format="indexed")` 或 `grouped` 输出，作为复刻蓝图。
+- 在目标材质里批量创建节点。
+- 在目标材质里批量设置参数。
+- 在目标材质里批量写入连线和 `MaterialOutput` 根输出。
+- 对目标材质中已经由 MCP 创建出的重复结构，允许在目标材质内部复制/复用，减少重复创建劳动。
+- 写入接口可以接收批量操作，但每个操作仍必须等价于显式的节点创建、参数写入、连线写入或位置写入。
+
+禁止的做法：
+
+- 禁止从源材质直接 `DuplicateObject` / `DuplicateMaterialExpression` 到目标材质。
+- 禁止把源材质表达式对象、GraphNode、内部指针原样搬到目标材质。
+- 禁止用“源对象复制成功”冒充 AI/MCP 手动复刻流程成功。
+- 禁止用 UE Python 或外部临时脚本绕过 MCP 固定接口。
+
+复刻验收标准：
+
+- 目标材质节点数量与源图一致，排除 `MaterialOutput` 伪节点时应与源材质真实表达式数一致。
+- 目标材质参数值与源图复刻包一致，包含 `ParameterName`、`Name`、`Group`、贴图引用、材质函数引用、枚举值和布尔值。
+- 目标材质输入视角连线与源图 `E` 段一致，包含 `MaterialOutput.MaterialAttributes` 等根输出连接。
+- Named Reroute 必须显式处理 declaration/usage 关系，不能只创建孤立 usage 节点。
+- 最终必须重新读取目标图比对，并显式 compile/save 后再宣称复刻完成。
+
 ## 节点创建接口
 
 ```text
