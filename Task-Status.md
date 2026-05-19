@@ -1,8 +1,8 @@
 # 当前任务/需求/待办清单（任务进度）
 
-- 新建 GitHub remote repository，并把当前 UE Node Nexus MCP 项目推送到 `main` 分支。
-- 推送前确认本地参考项目 `refApic/`、构建产物 `bin/`、`obj/`、缓存目录不会入库。
-- 推送完成后记录远端仓库地址、分支和提交哈希。
+- 远端仓库已创建并推送：`https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP`。
+- 远端仓库为 private，默认分支为 `main`。
+- 已确认本地参考项目 `refApic/`、构建产物 `bin/`、`obj/`、缓存目录不会入库。
 
 # 已解决问题/已完成需求（极简化记录）
 
@@ -20,6 +20,7 @@
 - 已完成 README 重排，遵循 `$readme-format`：居中标题、徽章、提示块、功能/API 表格、目录结构、构建命令、来源说明和页脚。
 - 已执行验证：`python -m pytest` 14 passed；`python -m compileall scripts src tests` passed；UE5.5 `BuildPlugin` passed。
 - 已生成可投放插件包并覆盖到 `G:\vdio\UEPlugins\MCP\UeNodeNexusBridge-UE5.5-Win64.zip`。
+- 已创建 GitHub remote repository 并推送 `main`：首个完整工具扩展提交为 `06f2708`。
 
 # 任务过程中的经验、教训、高价值发现/信息
 
