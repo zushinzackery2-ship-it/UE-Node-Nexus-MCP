@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 class FJsonObject;
+class FJsonValue;
 class UMaterial;
 class UMaterialExpression;
 struct FExpressionInput;
@@ -11,6 +12,7 @@ namespace UeNodeNexusBridge
 {
 FString MaterialExpressionNodeId(UMaterialExpression* Expression);
 UMaterialExpression* FindMaterialExpression(UMaterial* Material, const FString& NodeId);
+TArray<TSharedPtr<FJsonValue>> BuildMaterialExpressionParams(UMaterialExpression* Expression);
 bool ParseMaterialPinId(const FString& PinId, bool& bOutInput, int32& OutIndex);
 FExpressionInput* FindMaterialInput(UMaterialExpression* Expression, const FString& PinId);
 FString FindMaterialInputName(UMaterialExpression* Expression, const FString& PinId);

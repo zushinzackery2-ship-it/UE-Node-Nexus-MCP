@@ -23,6 +23,24 @@ static TSharedPtr<FJsonObject> PinParamToJson(UEdGraphPin* Pin)
     return Param;
 }
 
+TArray<TSharedPtr<FJsonValue>> BuildBlueprintNodeParams(UEdGraphNode* Node)
+{
+    TArray<TSharedPtr<FJsonValue>> Params;
+    if (Node == nullptr)
+    {
+        return Params;
+    }
+
+    for (UEdGraphPin* Pin : Node->Pins)
+    {
+        if (Pin != nullptr && Pin->Direction == EGPD_Input)
+        {
+            Params.Add(MakeShared<FJsonValueObject>(PinParamToJson(Pin)));
+        }
+    }
+    return Params;
+}
+
 TSharedPtr<FJsonObject> HandleBlueprintNodeParamsGet(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload)
 {
     FString GraphName;
@@ -44,20 +62,11 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeParamsGet(const FString& Operation, c
         return Response;
     }
 
-    TArray<TSharedPtr<FJsonValue>> Params;
-    for (UEdGraphPin* Pin : Node->Pins)
-    {
-        if (Pin != nullptr && Pin->Direction == EGPD_Input)
-        {
-            Params.Add(MakeShared<FJsonValueObject>(PinParamToJson(Pin)));
-        }
-    }
-
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("asset_path"), Blueprint->GetPathName());
     Data->SetStringField(TEXT("graph_name"), Graph ? Graph->GetName() : FString());
     Data->SetStringField(TEXT("node_id"), NodeId);
-    Data->SetArrayField(TEXT("params"), Params);
+    Data->SetArrayField(TEXT("params"), BuildBlueprintNodeParams(Node));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

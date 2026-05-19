@@ -30,6 +30,25 @@ static TSharedPtr<FJsonObject> PropertyToJson(UMaterialExpression* Expression, F
     return Json;
 }
 
+TArray<TSharedPtr<FJsonValue>> BuildMaterialExpressionParams(UMaterialExpression* Expression)
+{
+    TArray<TSharedPtr<FJsonValue>> Params;
+    if (Expression == nullptr)
+    {
+        return Params;
+    }
+
+    for (TFieldIterator<FProperty> It(Expression->GetClass()); It; ++It)
+    {
+        FProperty* Property = *It;
+        if (IsEditableExpressionProperty(Property))
+        {
+            Params.Add(MakeShared<FJsonValueObject>(PropertyToJson(Expression, Property)));
+        }
+    }
+    return Params;
+}
+
 TSharedPtr<FJsonObject> HandleMaterialNodeParamsGet(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
 {
     FString NodeId;
@@ -48,21 +67,11 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsGet(const FString& Operation, co
         return Response;
     }
 
-    TArray<TSharedPtr<FJsonValue>> Params;
-    for (TFieldIterator<FProperty> It(Expression->GetClass()); It; ++It)
-    {
-        FProperty* Property = *It;
-        if (IsEditableExpressionProperty(Property))
-        {
-            Params.Add(MakeShared<FJsonValueObject>(PropertyToJson(Expression, Property)));
-        }
-    }
-
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("asset_path"), Material->GetPathName());
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Data->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
-    Data->SetArrayField(TEXT("params"), Params);
+    Data->SetArrayField(TEXT("params"), BuildMaterialExpressionParams(Expression));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

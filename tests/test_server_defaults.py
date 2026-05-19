@@ -88,3 +88,117 @@ def test_node_params_get_forwards_graph_identity(monkeypatch: Any) -> None:
             },
         )
     ]
+
+
+def test_graph_snapshot_get_forwards_include_flags(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    monkeypatch.setattr(server, "bridge", recording_bridge)
+
+    server.graph_snapshot_get(
+        asset_path="/Game/Materials/M_Example.M_Example",
+        graph_kind="material",
+        format="full",
+        include_node_params=False,
+        include_links=False,
+    )
+
+    assert recording_bridge.calls == [
+        (
+            "graph_snapshot_get",
+            {
+                "asset_path": "/Game/Materials/M_Example.M_Example",
+                "graph_name": None,
+                "graph_kind": "material",
+                "format": "full",
+                "include_node_params": False,
+                "include_links": False,
+            },
+        )
+    ]
+
+
+def test_graph_snapshot_get_defaults_to_wires_tiny_without_params(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    monkeypatch.setattr(server, "bridge", recording_bridge)
+
+    server.graph_snapshot_get(asset_path="/Game/Materials/M_Example.M_Example")
+
+    assert recording_bridge.calls == [
+        (
+            "graph_snapshot_get",
+            {
+                "asset_path": "/Game/Materials/M_Example.M_Example",
+                "graph_name": None,
+                "graph_kind": "auto",
+                "format": "wires_tiny",
+                "include_node_params": False,
+                "include_links": True,
+            },
+        )
+    ]
+
+
+def test_read_list_tools_default_to_compact(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    monkeypatch.setattr(server, "bridge", recording_bridge)
+
+    server.asset_list()
+    server.level_actors_list()
+    server.material_instance_params_get("/Game/Materials/MI_Example.MI_Example")
+
+    assert recording_bridge.calls[0][1]["format"] == "compact"
+    assert recording_bridge.calls[1][1]["format"] == "compact"
+    assert recording_bridge.calls[2][1]["format"] == "compact"
+
+
+def test_asset_create_defaults_to_dry_run(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    monkeypatch.setattr(server, "bridge", recording_bridge)
+
+    server.asset_create(
+        asset_path="/Game/Materials/M_New.M_New",
+        asset_kind="material",
+    )
+
+    assert recording_bridge.calls == [
+        (
+            "asset_create",
+            {
+                "asset_path": "/Game/Materials/M_New.M_New",
+                "asset_kind": "material",
+                "parent_asset_path": None,
+                "parent_class_path": None,
+                "dry_run": True,
+                "save": False,
+            },
+        )
+    ]
+
+
+def test_blueprint_read_tools_default_to_compact(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    monkeypatch.setattr(server, "bridge", recording_bridge)
+
+    server.blueprint_details_get(asset_path="/Game/BP/BP_Example.BP_Example")
+    server.anim_blueprint_summary_get(asset_path="/Game/ABP/ABP_Example.ABP_Example")
+
+    assert recording_bridge.calls == [
+        (
+            "blueprint_details_get",
+            {
+                "asset_path": "/Game/BP/BP_Example.BP_Example",
+                "include_defaults": True,
+                "include_components": True,
+                "property_names": [],
+                "format": "compact",
+            },
+        ),
+        (
+            "anim_blueprint_summary_get",
+            {
+                "asset_path": "/Game/ABP/ABP_Example.ABP_Example",
+                "format": "compact",
+                "max_nodes": 200,
+            },
+        ),
+    ]

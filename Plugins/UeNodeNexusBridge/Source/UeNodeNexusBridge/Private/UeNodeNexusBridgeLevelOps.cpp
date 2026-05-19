@@ -89,6 +89,19 @@ static TSharedPtr<FJsonObject> ActorToJson(AActor* Actor, bool bIncludeComponent
     return ActorJson;
 }
 
+static TSharedPtr<FJsonValue> ActorToRow(AActor* Actor)
+{
+    const FVector Location = Actor->GetActorLocation();
+    TArray<TSharedPtr<FJsonValue>> Row;
+    Row.Add(MakeShared<FJsonValueString>(Actor->GetPathName()));
+    Row.Add(MakeShared<FJsonValueString>(Actor->GetActorLabel()));
+    Row.Add(MakeShared<FJsonValueString>(Actor->GetClass() ? Actor->GetClass()->GetName() : FString()));
+    Row.Add(MakeShared<FJsonValueNumber>(Location.X));
+    Row.Add(MakeShared<FJsonValueNumber>(Location.Y));
+    Row.Add(MakeShared<FJsonValueNumber>(Location.Z));
+    return MakeShared<FJsonValueArray>(Row);
+}
+
 TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     UEditorActorSubsystem* ActorSubsystem = GEditor ? GEditor->GetEditorSubsystem<UEditorActorSubsystem>() : nullptr;
@@ -104,6 +117,9 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
 
     bool bIncludeComponents = false;
     Payload->TryGetBoolField(TEXT("include_components"), bIncludeComponents);
+    FString Format = TEXT("compact");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    const bool bCompact = !Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
 
     const int32 Offset = ReadCursor(Payload);
     const int32 Limit = ReadLimit(Payload, 200, 2000);
@@ -128,10 +144,29 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
             bHasMore = true;
             break;
         }
-        Items.Add(MakeShared<FJsonValueObject>(ActorToJson(Actor, bIncludeComponents)));
+        if (bCompact)
+        {
+            Items.Add(ActorToRow(Actor));
+        }
+        else
+        {
+            Items.Add(MakeShared<FJsonValueObject>(ActorToJson(Actor, bIncludeComponents)));
+        }
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    if (bCompact)
+    {
+        Data->SetStringField(TEXT("format"), TEXT("level_actors_compact_v1"));
+        Data->SetArrayField(TEXT("columns"), {
+            MakeShared<FJsonValueString>(TEXT("actor_path")),
+            MakeShared<FJsonValueString>(TEXT("label")),
+            MakeShared<FJsonValueString>(TEXT("class")),
+            MakeShared<FJsonValueString>(TEXT("x")),
+            MakeShared<FJsonValueString>(TEXT("y")),
+            MakeShared<FJsonValueString>(TEXT("z"))
+        });
+    }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());
     Data->SetBoolField(TEXT("has_more"), bHasMore);
@@ -145,4 +180,3 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
     return Response;
 }
 }
-

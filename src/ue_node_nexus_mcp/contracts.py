@@ -7,6 +7,8 @@ READ_OPERATIONS = {
     "asset_get",
     "level_current_get",
     "level_actors_list",
+    "blueprint_details_get",
+    "anim_blueprint_summary_get",
     "graph_snapshot_get",
     "node_params_get",
     "material_instance_params_get",
@@ -14,6 +16,7 @@ READ_OPERATIONS = {
 }
 
 WRITE_OPERATIONS = {
+    "asset_create",
     "graph_patch_apply",
     "node_params_set",
     "material_instance_params_set",
@@ -41,4 +44,3 @@ def require_list(value: list[dict[str, Any]], field_name: str) -> None:
     for index, item in enumerate(value):
         if not isinstance(item, dict):
             raise ValueError(f"{field_name}[{index}] must be an object")
-

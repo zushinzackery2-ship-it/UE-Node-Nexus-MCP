@@ -7,11 +7,25 @@ set "PLUGIN_PATH=%PROJECT_ROOT%\Plugins\UeNodeNexusBridge\UeNodeNexusBridge.uplu
 set "PACKAGE_DIR=%PROJECT_ROOT%\bin\UeNodeNexusBridge"
 set "APPDATA=%PROJECT_ROOT%\obj\AppData\Roaming"
 set "LOCALAPPDATA=%PROJECT_ROOT%\obj\AppData\Local"
+set "PROGRAMDATA=%PROJECT_ROOT%\obj\ProgramData"
 set "uebp_LogFolder=%PROJECT_ROOT%\obj\UATLogs"
+set "UBT_CONFIG_DIR=%APPDATA%\Unreal Engine\UnrealBuildTool"
 
 if not exist "%APPDATA%" mkdir "%APPDATA%"
 if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%"
+if not exist "%PROGRAMDATA%" mkdir "%PROGRAMDATA%"
 if not exist "%uebp_LogFolder%" mkdir "%uebp_LogFolder%"
+if not exist "%UBT_CONFIG_DIR%" mkdir "%UBT_CONFIG_DIR%"
+
+(
+    echo ^<?xml version="1.0" encoding="utf-8"?^>
+    echo ^<Configuration xmlns="https://www.unrealengine.com/BuildConfiguration"^>
+    echo   ^<BuildConfiguration^>
+    echo     ^<bAllowUBAExecutor^>false^</bAllowUBAExecutor^>
+    echo     ^<bAllowUBALocalExecutor^>false^</bAllowUBALocalExecutor^>
+    echo   ^</BuildConfiguration^>
+    echo ^</Configuration^>
+) > "%UBT_CONFIG_DIR%\BuildConfiguration.xml"
 
 call "D:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
 

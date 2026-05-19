@@ -19,6 +19,16 @@ static TSharedPtr<FJsonObject> AssetDataToJson(const FAssetData& AssetData)
     return Json;
 }
 
+static TSharedPtr<FJsonValue> AssetDataToRow(const FAssetData& AssetData)
+{
+    TArray<TSharedPtr<FJsonValue>> Row;
+    Row.Add(MakeShared<FJsonValueString>(AssetData.GetObjectPathString()));
+    Row.Add(MakeShared<FJsonValueString>(AssetData.AssetClassPath.GetAssetName().ToString()));
+    Row.Add(MakeShared<FJsonValueBoolean>(AssetData.IsAssetLoaded()));
+    Row.Add(MakeShared<FJsonValueBoolean>(AssetData.IsRedirector()));
+    return MakeShared<FJsonValueArray>(Row);
+}
+
 static bool ClassMatches(const FAssetData& AssetData, const TArray<FString>& ClassNames)
 {
     if (ClassNames.Num() == 0)
@@ -77,6 +87,9 @@ TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString&
 
     const int32 Offset = ReadCursor(Payload);
     const int32 Limit = ReadLimit(Payload, 100, 1000);
+    FString Format = TEXT("compact");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    const bool bCompact = !Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
 
     TArray<FAssetData> Assets;
     FAssetRegistryModule::GetRegistry().GetAllAssets(Assets, true);
@@ -100,10 +113,27 @@ TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString&
             bHasMore = true;
             break;
         }
-        Items.Add(MakeShared<FJsonValueObject>(AssetDataToJson(AssetData)));
+        if (bCompact)
+        {
+            Items.Add(AssetDataToRow(AssetData));
+        }
+        else
+        {
+            Items.Add(MakeShared<FJsonValueObject>(AssetDataToJson(AssetData)));
+        }
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    if (bCompact)
+    {
+        Data->SetStringField(TEXT("format"), TEXT("asset_list_compact_v1"));
+        Data->SetArrayField(TEXT("columns"), {
+            MakeShared<FJsonValueString>(TEXT("object_path")),
+            MakeShared<FJsonValueString>(TEXT("class")),
+            MakeShared<FJsonValueString>(TEXT("loaded")),
+            MakeShared<FJsonValueString>(TEXT("redirector"))
+        });
+    }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());
     Data->SetBoolField(TEXT("has_more"), bHasMore);
@@ -144,4 +174,3 @@ TSharedPtr<FJsonObject> HandleAssetGet(const FString& Operation, const FString& 
     return Response;
 }
 }
-

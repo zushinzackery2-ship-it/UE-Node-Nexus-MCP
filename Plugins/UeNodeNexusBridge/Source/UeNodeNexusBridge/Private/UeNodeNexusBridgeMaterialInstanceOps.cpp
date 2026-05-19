@@ -39,37 +39,79 @@ static TSharedPtr<FJsonObject> VectorToJson(const FLinearColor& Value)
     return Json;
 }
 
-static TSharedPtr<FJsonObject> MakeParamJson(const FString& Type, const FName& Name)
+static TSharedPtr<FJsonValue> MakeParamValue(UMaterialInstanceConstant* Instance, const FString& Type, const FName& Name)
+{
+    if (Type == TEXT("scalar"))
+    {
+        const float Value = UMaterialEditingLibrary::GetMaterialInstanceScalarParameterValue(Instance, Name);
+        return MakeShared<FJsonValueNumber>(Value);
+    }
+    if (Type == TEXT("vector"))
+    {
+        const FLinearColor Value = UMaterialEditingLibrary::GetMaterialInstanceVectorParameterValue(Instance, Name);
+        return MakeShared<FJsonValueObject>(VectorToJson(Value));
+    }
+    if (Type == TEXT("texture"))
+    {
+        UTexture* Texture = UMaterialEditingLibrary::GetMaterialInstanceTextureParameterValue(Instance, Name);
+        return MakeShared<FJsonValueString>(Texture ? Texture->GetPathName() : FString());
+    }
+    if (Type == TEXT("static_switch"))
+    {
+        const bool bValue = UMaterialEditingLibrary::GetMaterialInstanceStaticSwitchParameterValue(Instance, Name);
+        return MakeShared<FJsonValueBoolean>(bValue);
+    }
+    return MakeShared<FJsonValueString>(FString());
+}
+
+static TSharedPtr<FJsonObject> MakeParamJson(UMaterialInstanceConstant* Instance, const FString& Type, const FName& Name)
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     Json->SetStringField(TEXT("name"), Name.ToString());
     Json->SetStringField(TEXT("type"), Type);
+    Json->SetField(TEXT("value"), MakeParamValue(Instance, Type, Name));
     return Json;
 }
 
-static void AddParameterNames(UMaterialInterface* Material, const FString& Type, TArray<TSharedPtr<FJsonValue>>& Items)
+static TSharedPtr<FJsonValue> MakeParamRow(UMaterialInstanceConstant* Instance, const FString& Type, const FName& Name)
+{
+    TArray<TSharedPtr<FJsonValue>> Row;
+    Row.Add(MakeShared<FJsonValueString>(Type));
+    Row.Add(MakeShared<FJsonValueString>(Name.ToString()));
+    Row.Add(MakeParamValue(Instance, Type, Name));
+    return MakeShared<FJsonValueArray>(Row);
+}
+
+static void AddParameterNames(UMaterialInstanceConstant* Instance, const FString& Type, bool bCompact, TArray<TSharedPtr<FJsonValue>>& Items)
 {
     TArray<FName> Names;
     if (Type == TEXT("scalar"))
     {
-        UMaterialEditingLibrary::GetScalarParameterNames(Material, Names);
+        UMaterialEditingLibrary::GetScalarParameterNames(Instance, Names);
     }
     else if (Type == TEXT("vector"))
     {
-        UMaterialEditingLibrary::GetVectorParameterNames(Material, Names);
+        UMaterialEditingLibrary::GetVectorParameterNames(Instance, Names);
     }
     else if (Type == TEXT("texture"))
     {
-        UMaterialEditingLibrary::GetTextureParameterNames(Material, Names);
+        UMaterialEditingLibrary::GetTextureParameterNames(Instance, Names);
     }
     else if (Type == TEXT("static_switch"))
     {
-        UMaterialEditingLibrary::GetStaticSwitchParameterNames(Material, Names);
+        UMaterialEditingLibrary::GetStaticSwitchParameterNames(Instance, Names);
     }
 
     for (const FName& Name : Names)
     {
-        Items.Add(MakeShared<FJsonValueObject>(MakeParamJson(Type, Name)));
+        if (bCompact)
+        {
+            Items.Add(MakeParamRow(Instance, Type, Name));
+        }
+        else
+        {
+            Items.Add(MakeShared<FJsonValueObject>(MakeParamJson(Instance, Type, Name)));
+        }
     }
 }
 
@@ -82,14 +124,27 @@ TSharedPtr<FJsonObject> HandleMaterialInstanceParamsGet(const FString& Operation
         return EarlyResponse;
     }
 
+    FString Format = TEXT("compact");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    const bool bCompact = !Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+
     TArray<TSharedPtr<FJsonValue>> Items;
-    AddParameterNames(Instance, TEXT("scalar"), Items);
-    AddParameterNames(Instance, TEXT("vector"), Items);
-    AddParameterNames(Instance, TEXT("texture"), Items);
-    AddParameterNames(Instance, TEXT("static_switch"), Items);
+    AddParameterNames(Instance, TEXT("scalar"), bCompact, Items);
+    AddParameterNames(Instance, TEXT("vector"), bCompact, Items);
+    AddParameterNames(Instance, TEXT("texture"), bCompact, Items);
+    AddParameterNames(Instance, TEXT("static_switch"), bCompact, Items);
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("asset_path"), Instance->GetPathName());
+    if (bCompact)
+    {
+        Data->SetStringField(TEXT("format"), TEXT("material_instance_params_compact_v1"));
+        Data->SetArrayField(TEXT("columns"), {
+            MakeShared<FJsonValueString>(TEXT("type")),
+            MakeShared<FJsonValueString>(TEXT("name")),
+            MakeShared<FJsonValueString>(TEXT("value"))
+        });
+    }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());
 

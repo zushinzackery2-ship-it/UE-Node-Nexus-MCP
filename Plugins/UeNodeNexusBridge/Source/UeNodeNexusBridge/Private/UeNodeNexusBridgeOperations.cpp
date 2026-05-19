@@ -32,6 +32,10 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     {
         return HandleAssetGet(Operation, RequestId, Payload);
     }
+    if (Operation == TEXT("asset_create"))
+    {
+        return HandleAssetCreate(Operation, RequestId, Payload);
+    }
     if (Operation == TEXT("level_current_get"))
     {
         return HandleLevelCurrentGet(Operation, RequestId);
@@ -39,6 +43,14 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     if (Operation == TEXT("level_actors_list"))
     {
         return HandleLevelActorsList(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("blueprint_details_get"))
+    {
+        return HandleBlueprintDetailsGet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("anim_blueprint_summary_get"))
+    {
+        return HandleAnimBlueprintSummaryGet(Operation, RequestId, Payload);
     }
     if (Operation == TEXT("graph_snapshot_get"))
     {

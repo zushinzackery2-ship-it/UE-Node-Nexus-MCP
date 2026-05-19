@@ -46,7 +46,81 @@ Unreal Editor plugin, editor subsystem, or trusted local editor service.
 }
 ```
 
-## Stable Graph Snapshot Shape
+## Graph Snapshot Shape
+
+`graph_snapshot_get` defaults to `format="wires_tiny"` and
+`include_node_params=false`. This is the normal mode for AI callers because it
+returns a node dictionary plus compact edge table instead of JSON node and pin
+objects.
+
+Tiny wire text snapshot:
+
+```json
+{
+  "format": "wires_tiny_v1",
+  "asset_path": "/Game/Materials/M_Example.M_Example",
+  "asset_class": "/Script/Engine.Material",
+  "graph_name": "MaterialGraph",
+  "graph_kind": "material",
+  "text": "W2\nN:0=SP:Roughness;1=Mul\nE:0.o>1.B\nT:SP1,Mul1\n"
+}
+```
+
+Use `format="wires_min"` for a less abbreviated node dictionary and edge table.
+Use `format="wires"` for a more human-readable horizontal wire table.
+
+Wire text snapshot:
+
+```json
+{
+  "format": "wires_text_v1",
+  "asset_path": "/Game/Materials/M_Example.M_Example",
+  "asset_class": "/Script/Engine.Material",
+  "graph_name": "MaterialGraph",
+  "graph_kind": "material",
+  "text": "========================================================================\n  Wire graph - 3 wires\n========================================================================\n  ScalarParameter(Roughness).0 (N0) -> Multiply.B (N1)\n\n------------------------------------------------------------------------\n  Node type stats:\n    ScalarParameter x 1\n    Multiply x 1\n"
+}
+```
+
+Use `format="compact"` when a caller needs node/pin aliases plus the real UE id
+map for later write tools.
+
+Compact snapshot:
+
+```json
+{
+  "format": "compact_graph_v1",
+  "asset_path": "/Game/Materials/M_Example.M_Example",
+  "asset_class": "/Script/Engine.Material",
+  "graph_name": "MaterialGraph",
+  "graph_kind": "material",
+  "columns": {
+    "nodes": ["id", "class", "name", "x", "y"],
+    "pins": ["id", "node", "dir", "name", "type", "default"],
+    "links": ["from_pin", "to_pin"],
+    "params": ["node", "name", "type", "value", "editable"]
+  },
+  "nodes": [
+    ["n0", "MaterialExpressionScalarParameter", "Roughness", 0, 0]
+  ],
+  "pins": [
+    ["p0", "n0", "output", "0", "material", ""]
+  ],
+  "links": [
+    ["p0", "p3"]
+  ],
+  "params": [],
+  "ids": {
+    "nodes": { "n0": "real-node-guid" },
+    "pins": { "p0": "real-pin-id" }
+  }
+}
+```
+
+Use `ids.nodes` and `ids.pins` to translate compact aliases back to the stable
+node and pin identifiers required by write tools.
+
+Set `format="full"` for the legacy verbose shape:
 
 ```json
 {
@@ -69,7 +143,14 @@ Unreal Editor plugin, editor subsystem, or trusted local editor service.
           "linked_to": []
         }
       ],
-      "params": {}
+      "params": [
+        {
+          "name": "ParameterName",
+          "type": "float",
+          "value": "1.0",
+          "editable": true
+        }
+      ]
     }
   ],
   "links": [
@@ -85,6 +166,81 @@ Unreal Editor plugin, editor subsystem, or trusted local editor service.
 ```
 
 ## Patch Operation Shape
+
+## Blueprint Detail Shape
+
+`blueprint_details_get` is a read-only Blueprint summary. It defaults to
+`format="compact"` and returns row arrays to keep CDO/default inspection cheap
+for AI callers.
+
+```json
+{
+  "format": "blueprint_details_compact_v1",
+  "asset_path": "/Game/BP/BP_Example.BP_Example",
+  "parent_class": "/Script/Engine.Actor",
+  "generated_class": "/Game/BP/BP_Example.BP_Example_C",
+  "variable_columns": ["name", "type", "default", "category"],
+  "variables": [["Health", "real", "100", "Stats"]],
+  "default_columns": ["name", "value"],
+  "defaults": [["Health", "100.0"]],
+  "component_columns": ["name", "class", "parent", "socket", "asset"],
+  "components": [["Mesh", "SkeletalMeshComponent", "", "", "/Game/Characters/SK.SK"]],
+  "missing_defaults": [],
+  "elapsed_ms": 2.1
+}
+```
+
+When `property_names` is empty, defaults are limited to Blueprint-authored
+variables. Pass explicit property names to inspect specific CDO values.
+
+## AnimBlueprint Summary Shape
+
+`anim_blueprint_summary_get` is a read-only semantic pass over common AnimGraph
+nodes. It intentionally extracts a fixed allowlist of useful fields instead of
+dumping every reflected property.
+
+```json
+{
+  "format": "anim_blueprint_summary_compact_v1",
+  "asset_path": "/Game/ABP/ABP_Example.ABP_Example",
+  "columns": ["node_id", "graph", "class", "title", "x", "y", "summary"],
+  "items": [
+    ["guid", "AnimGraph", "AnimGraphNode_TwoBoneIK", "Two Bone IK", 0, 0, "alpha=1;ik_bone=hand_r"]
+  ],
+  "type_counts": [["AnimGraphNode_TwoBoneIK", 1]],
+  "returned_count": 1,
+  "total_count": 1,
+  "truncated": false,
+  "elapsed_ms": 3.4
+}
+```
+
+## Asset Creation Shape
+
+`asset_create` creates only fixed supported asset kinds. It does not expose
+arbitrary factories or Python execution.
+
+```json
+{
+  "asset_path": "/Game/Materials/M_New.M_New",
+  "asset_kind": "material",
+  "dry_run": true,
+  "save": false
+}
+```
+
+Supported `asset_kind` values:
+
+- `material`
+- `material_instance`
+- `blueprint`
+
+For `material_instance`, `parent_asset_path` may point to a material or material
+instance parent. For `blueprint`, `parent_class_path` may point to a Blueprintable
+UClass path; it defaults to Actor.
+
+Creation defaults to `dry_run=true`. A real create returns the normal write
+response shape with `diff.assets_created`, dirty state, and optional save status.
 
 ```json
 {
@@ -143,9 +299,15 @@ expression property:
 }
 ```
 
+`graph_snapshot_get` returns the same node `params` array when
+`include_node_params=true`. Keep the default `false` for topology-first reads
+and call `node_params_get` for specific nodes that need values. `include_links=false`
+suppresses link population while preserving node and pin identity.
+
 `node_params_get` returns editable Blueprint input pin defaults or editable
-Material expression properties. `node_params_set` accepts a flat object keyed by
-parameter name and returns the same write response shape as graph patches.
+Material expression properties for one node. `node_params_set` accepts a flat
+object keyed by parameter name and returns the same write response shape as graph
+patches.
 
 ## Write Response Shape
 
