@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from .contracts import require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import advanced_tool, default_tool
+from .runtime import default_tool, hidden_tool
 
 
 @default_tool()
@@ -14,7 +14,7 @@ def auto_index_enable(root_path: str = "/Game", rebuild: bool = True) -> dict[st
     return _call("auto_index_enable", {"root_path": root_path, "rebuild": rebuild})
 
 
-@advanced_tool()
+@hidden_tool()
 def auto_index_disable() -> dict[str, Any]:
     """Disable Auto-Index listeners while keeping the persisted index file."""
     return _call("auto_index_disable", {})
@@ -33,13 +33,13 @@ def auto_index_rebuild(root_path: str = "/Game") -> dict[str, Any]:
     return _call("auto_index_rebuild", {"root_path": root_path})
 
 
-@advanced_tool()
+@hidden_tool()
 def auto_index_flush() -> dict[str, Any]:
     """Flush the in-memory Auto-Index table to Saved/UeNodeNexusBridge/AutoIndex.json."""
     return _call("auto_index_flush", {})
 
 
-@advanced_tool()
+@hidden_tool()
 def auto_index_clear(delete_file: bool = False) -> dict[str, Any]:
     """Clear Auto-Index memory state and optionally delete the persisted index file."""
     return _call("auto_index_clear", {"delete_file": delete_file})
@@ -108,7 +108,7 @@ def auto_index_resolve_path(
     return _call("auto_index_resolve_path", {"path": path, "limit": limit, "format": format})
 
 
-@advanced_tool()
+@hidden_tool()
 def auto_index_diff_registry(format: Literal["indexed", "full"] = "indexed") -> dict[str, Any]:
     """Compare Auto-Index with the live AssetRegistry and report drift in compact text form."""
     return _call("auto_index_diff_registry", {"format": format})

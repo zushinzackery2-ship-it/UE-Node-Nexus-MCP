@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
 from typing import Any
 
@@ -13,6 +12,7 @@ from .contracts import DEFAULT_FEATURE_GROUPS, DEFAULT_HIDDEN_OPERATIONS, FEATUR
 mcp = FastMCP("UE Node Nexus MCP")
 bridge = UeBridgeClient()
 _enabled_features = None
+_remaining_errors_count = 0
 
 
 def _parse_bool(value: str) -> bool:
@@ -146,7 +146,9 @@ def default_tool(feature: str | None = None):
     return decorator
 
 
-def advanced_tool(feature: str | None = None):
+def hidden_tool(feature: str | None = None):
+    """Validate hidden compatibility tools without registering them in MCP list_tools."""
+
     def decorator(func):
         if func.__name__ not in DEFAULT_HIDDEN_OPERATIONS:
             raise ValueError(f"{func.__name__} is not declared as a default-hidden operation")
@@ -158,20 +160,6 @@ def advanced_tool(feature: str | None = None):
     return decorator
 
 
-def _read_remaining_errors() -> int:
-    for parent in Path(__file__).resolve().parents:
-        status_path = parent / "Task-Status.md"
-        if not status_path.exists():
-            continue
-        for line in status_path.read_text(encoding="utf-8", errors="replace").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("- remaining_errors:"):
-                return _parse_remaining_errors_count(stripped.removeprefix("- remaining_errors:").strip())
-            if stripped.startswith("remaining_errors:"):
-                return _parse_remaining_errors_count(stripped.removeprefix("remaining_errors:").strip())
-    return 0
-
-
 def _parse_remaining_errors_count(value: str) -> int:
     try:
         return max(0, int(value.strip()))
@@ -179,8 +167,20 @@ def _parse_remaining_errors_count(value: str) -> int:
         return 1
 
 
+def set_remaining_errors_count(count: int) -> None:
+    global _remaining_errors_count
+    _remaining_errors_count = max(0, int(count))
+
+
+def remaining_errors_count() -> int:
+    configured = os.getenv("UE_NEXUS_REMAINING_ERRORS")
+    if configured is not None:
+        return _parse_remaining_errors_count(configured)
+    return _remaining_errors_count
+
+
 def _with_remaining_errors(response: dict[str, Any]) -> dict[str, Any]:
-    response.setdefault("remaining_errors", _read_remaining_errors())
+    response.setdefault("remaining_errors", remaining_errors_count())
     return response
 
 

@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from .contracts import require_mapping, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import advanced_tool, default_tool
+from .runtime import default_tool, hidden_tool
 from .tools_graph_writes import graph_build_apply, graph_patch_apply  # noqa: F401
 
 
@@ -59,7 +59,7 @@ def graph_node_info_get(
     )
 
 
-@advanced_tool()
+@hidden_tool()
 def graph_node_info_get_w_pos(
     asset_path: str,
     graph_name: str | None = None,
@@ -198,7 +198,7 @@ def node_position_set(
     )
 
 
-@advanced_tool()
+@hidden_tool()
 def node_position_offset(
     asset_path: str,
     node_id: str,
