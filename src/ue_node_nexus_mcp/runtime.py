@@ -11,7 +11,7 @@ mcp = FastMCP("UE Node Nexus MCP")
 bridge = UeBridgeClient()
 
 
-def _read_remaining_errors() -> str:
+def _read_remaining_errors() -> int:
     for parent in Path(__file__).resolve().parents:
         status_path = parent / "Task-Status.md"
         if not status_path.exists():
@@ -19,10 +19,17 @@ def _read_remaining_errors() -> str:
         for line in status_path.read_text(encoding="utf-8", errors="replace").splitlines():
             stripped = line.strip()
             if stripped.startswith("- remaining_errors:"):
-                return stripped.removeprefix("- remaining_errors:").strip()
+                return _parse_remaining_errors_count(stripped.removeprefix("- remaining_errors:").strip())
             if stripped.startswith("remaining_errors:"):
-                return stripped.removeprefix("remaining_errors:").strip()
-    return ""
+                return _parse_remaining_errors_count(stripped.removeprefix("remaining_errors:").strip())
+    return 0
+
+
+def _parse_remaining_errors_count(value: str) -> int:
+    try:
+        return max(0, int(value.strip()))
+    except ValueError:
+        return 1
 
 
 def _with_remaining_errors(response: dict[str, Any]) -> dict[str, Any]:

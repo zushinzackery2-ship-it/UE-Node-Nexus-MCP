@@ -38,13 +38,19 @@ def test_read_list_tools_default_to_indexed_where_available(monkeypatch: Any) ->
     server.material_instance_params_get("/Game/Materials/MI_Example.MI_Example")
 
     assert "remaining_errors" in response
-    assert isinstance(response["remaining_errors"], str)
+    assert isinstance(response["remaining_errors"], int)
     assert recording_bridge.calls[0][1]["format"] == "indexed"
     assert recording_bridge.calls[1][1]["format"] == "indexed"
     assert recording_bridge.calls[2][1]["format"] == "indexed"
     assert recording_bridge.calls[3][1]["format"] == "indexed"
     assert recording_bridge.calls[3][1]["include_params"] is False
     assert recording_bridge.calls[4][1]["format"] == "compact"
+
+
+def test_remaining_errors_parser_returns_integer_count() -> None:
+    assert runtime._parse_remaining_errors_count("0") == 0
+    assert runtime._parse_remaining_errors_count("3") == 3
+    assert runtime._parse_remaining_errors_count("legacy text") == 1
 
 
 def test_auto_index_tools_forward_indexed_payloads(monkeypatch: Any) -> None:
