@@ -133,22 +133,6 @@ TSharedPtr<FJsonObject> MakeCompilePostCheck(bool bRequested, bool bRan, bool bO
     return Compile;
 }
 
-TSharedPtr<FJsonObject> MakeWriteData(bool bDryRun, bool bApplied, bool bChanged, const TSharedPtr<FJsonObject>& Diff, const TSharedPtr<FJsonObject>& PinIntegrity, const TSharedPtr<FJsonObject>& Compile, const TSharedPtr<FJsonObject>& DirtyState)
-{
-    TSharedPtr<FJsonObject> PostChecks = MakeShared<FJsonObject>();
-    PostChecks->SetObjectField(TEXT("pin_integrity"), PinIntegrity);
-    PostChecks->SetObjectField(TEXT("compile"), Compile);
-    PostChecks->SetObjectField(TEXT("dirty_state"), DirtyState);
-
-    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
-    Data->SetBoolField(TEXT("dry_run"), bDryRun);
-    Data->SetBoolField(TEXT("applied"), bApplied);
-    Data->SetBoolField(TEXT("changed"), bChanged);
-    Data->SetObjectField(TEXT("diff"), Diff);
-    Data->SetObjectField(TEXT("post_checks"), PostChecks);
-    return Data;
-}
-
 static int32 CountTextLines(const FString& Text)
 {
     if (Text.IsEmpty())
@@ -169,6 +153,72 @@ static int32 CountTextLines(const FString& Text)
         --Lines;
     }
     return Lines;
+}
+
+static int32 CountDiffArrayField(const TSharedPtr<FJsonObject>& Diff, const FString& FieldName)
+{
+    const TArray<TSharedPtr<FJsonValue>>* Items = nullptr;
+    if (Diff.IsValid() && Diff->TryGetArrayField(FieldName, Items) && Items != nullptr)
+    {
+        return Items->Num();
+    }
+    return 0;
+}
+
+static TSharedPtr<FJsonObject> MakeCompactDiff(const TSharedPtr<FJsonObject>& Diff)
+{
+    static const FString FieldNames[] = {
+        TEXT("nodes_created"),
+        TEXT("nodes_deleted"),
+        TEXT("links_added"),
+        TEXT("links_removed"),
+        TEXT("params_changed"),
+        TEXT("assets_created"),
+        TEXT("assets_deleted"),
+        TEXT("assets_moved"),
+        TEXT("assets_renamed"),
+        TEXT("folders_created"),
+        TEXT("folders_deleted"),
+        TEXT("redirectors_fixed"),
+    };
+
+    TSharedPtr<FJsonObject> Compact = MakeShared<FJsonObject>();
+    Compact->SetStringField(TEXT("format"), TEXT("compact"));
+
+    int32 TotalChanges = 0;
+    FString Text(TEXT("D:"));
+    for (const FString& FieldName : FieldNames)
+    {
+        const int32 Count = CountDiffArrayField(Diff, FieldName);
+        TotalChanges += Count;
+        Compact->SetNumberField(FieldName + TEXT("_count"), Count);
+        Text += FString::Printf(TEXT("%s=%d|"), *FieldName, Count);
+    }
+    Compact->SetNumberField(TEXT("total_changes"), TotalChanges);
+    Text += FString::Printf(TEXT("total=%d"), TotalChanges);
+    SetTextPayload(Compact, Text);
+    return Compact;
+}
+
+TSharedPtr<FJsonObject> MakeWriteData(bool bDryRun, bool bApplied, bool bChanged, const TSharedPtr<FJsonObject>& Diff, const TSharedPtr<FJsonObject>& PinIntegrity, const TSharedPtr<FJsonObject>& Compile, const TSharedPtr<FJsonObject>& DirtyState)
+{
+    return MakeWriteDataWithDiffFormat(bDryRun, bApplied, bChanged, Diff, PinIntegrity, Compile, DirtyState, TEXT("full"));
+}
+
+TSharedPtr<FJsonObject> MakeWriteDataWithDiffFormat(bool bDryRun, bool bApplied, bool bChanged, const TSharedPtr<FJsonObject>& Diff, const TSharedPtr<FJsonObject>& PinIntegrity, const TSharedPtr<FJsonObject>& Compile, const TSharedPtr<FJsonObject>& DirtyState, const FString& DiffFormat)
+{
+    TSharedPtr<FJsonObject> PostChecks = MakeShared<FJsonObject>();
+    PostChecks->SetObjectField(TEXT("pin_integrity"), PinIntegrity);
+    PostChecks->SetObjectField(TEXT("compile"), Compile);
+    PostChecks->SetObjectField(TEXT("dirty_state"), DirtyState);
+
+    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    Data->SetBoolField(TEXT("dry_run"), bDryRun);
+    Data->SetBoolField(TEXT("applied"), bApplied);
+    Data->SetBoolField(TEXT("changed"), bChanged);
+    Data->SetObjectField(TEXT("diff"), DiffFormat.Equals(TEXT("full"), ESearchCase::IgnoreCase) ? Diff : MakeCompactDiff(Diff));
+    Data->SetObjectField(TEXT("post_checks"), PostChecks);
+    return Data;
 }
 
 void SetTextPayload(const TSharedPtr<FJsonObject>& Data, const FString& Text)

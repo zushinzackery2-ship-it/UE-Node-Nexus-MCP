@@ -2,6 +2,7 @@
 
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNodeInterfaceOps.h"
 
@@ -52,6 +53,23 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
         return HandleMaterialNodePositionSet(Operation, RequestId, Material, Payload, bOffset);
     }
 
+    if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        if (Operation == TEXT("node_info_get"))
+        {
+            return HandleMaterialFunctionNodeInfoGet(Operation, RequestId, Function, Payload);
+        }
+        if (Operation == TEXT("node_position_get"))
+        {
+            return HandleMaterialFunctionNodePositionGet(Operation, RequestId, Function, Payload);
+        }
+        if (Operation == TEXT("node_create"))
+        {
+            return HandleMaterialFunctionNodeCreate(Operation, RequestId, Function, Payload);
+        }
+        return HandleMaterialFunctionNodePositionSet(Operation, RequestId, Function, Payload, bOffset);
+    }
+
     if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
     {
         if (Operation == TEXT("node_info_get"))
@@ -70,7 +88,7 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("unsupported_asset_class"), TEXT("Node interface supports Material and Blueprint assets")));
+    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("unsupported_asset_class"), TEXT("Node interface supports Material, MaterialFunction, and Blueprint assets")));
     return Response;
 }
 

@@ -1,16 +1,43 @@
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
+#include "EdGraph/EdGraphNode.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialAttributeDefinitionMap.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialExpressionMaterialFunctionCall.h"
 #include "Materials/MaterialExpressionSetMaterialAttributes.h"
 #include "Materials/MaterialFunctionInterface.h"
-#include "UObject/UnrealType.h"
+#include "UeNodeNexusBridgeMaterialCustomParamApply.h"
+#include "UeNodeNexusBridgeMaterialPropertySchema.h"
 
 namespace UeNodeNexusBridge
 {
+static bool JsonValueToPropertyText(const TSharedPtr<FJsonValue>& Value, FString& OutText)
+{
+    if (!Value.IsValid() || Value->Type == EJson::Null)
+    {
+        return false;
+    }
+    if (Value->Type == EJson::String)
+    {
+        OutText = Value->AsString();
+        return true;
+    }
+    if (Value->Type == EJson::Boolean)
+    {
+        OutText = Value->AsBool() ? TEXT("True") : TEXT("False");
+        return true;
+    }
+    if (Value->Type == EJson::Number)
+    {
+        OutText = FString::SanitizeFloat(Value->AsNumber());
+        return true;
+    }
+    return false;
+}
+
 static bool ApplyMaterialFunctionCallParam(UMaterialExpression* Expression, const FString& Name, const FString& Value, bool bDryRun, FString& OutOldValue)
 {
     UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(Expression);
@@ -59,7 +86,7 @@ static bool ApplyMaterialFunctionCallParam(UMaterialExpression* Expression, cons
 static void RefreshSetMaterialAttributesInputs(UMaterial* Material, UMaterialExpression* Expression, const FString& Name)
 {
     UMaterialExpressionSetMaterialAttributes* SetAttributes = Cast<UMaterialExpressionSetMaterialAttributes>(Expression);
-    if (SetAttributes == nullptr || !Name.Equals(TEXT("AttributeSetTypes"), ESearchCase::IgnoreCase))
+    if (Material == nullptr || SetAttributes == nullptr || !Name.Equals(TEXT("AttributeSetTypes"), ESearchCase::IgnoreCase))
     {
         return;
     }
@@ -89,23 +116,68 @@ bool ApplyMaterialExpressionParamValue(UMaterial* Material, UMaterialExpression*
         return true;
     }
 
-    FProperty* Property = Expression->GetClass()->FindPropertyByName(FName(*Name));
-    if (Property != nullptr && Property->HasAnyPropertyFlags(CPF_Edit))
+    if (ImportMaterialExpressionPropertyText(Expression, Name, Value, bDryRun, OldValue))
     {
-        Property->ExportTextItem_InContainer(OldValue, Expression, nullptr, Expression, PPF_None);
         AddMaterialParamChange(Diff, MaterialExpressionNodeId(Expression), Name, OldValue, Value);
-        const bool bImported = bDryRun || Property->ImportText_InContainer(*Value, Expression, Expression, PPF_None) != nullptr;
-        if (bImported && !bDryRun)
+        if (!bDryRun)
         {
             RefreshSetMaterialAttributesInputs(Material, Expression, Name);
         }
-        return bImported;
+        return true;
     }
-    if (TrySetMaterialSyntheticParam(Material, Expression, Name, Value, !bDryRun, OldValue))
+    if (Material != nullptr && TrySetMaterialSyntheticParam(Material, Expression, Name, Value, !bDryRun, OldValue))
     {
         AddMaterialParamChange(Diff, MaterialExpressionNodeId(Expression), Name, OldValue, Value);
         return true;
     }
+    return false;
+}
+
+bool ApplyMaterialExpressionParamJsonValue(UMaterial* Material, UMaterialExpression* Expression, const FString& Name, const TSharedPtr<FJsonValue>& Value, bool bDryRun, TSharedPtr<FJsonObject> Diff, FString& OutFailureReason)
+{
+    if (Expression == nullptr)
+    {
+        OutFailureReason = TEXT("Expression is null");
+        return false;
+    }
+
+    if (Value.IsValid() && (Value->Type == EJson::Array || Value->Type == EJson::Object))
+    {
+        if (ApplyMaterialCustomJsonParam(Material, Expression, Name, Value, bDryRun, Diff, OutFailureReason))
+        {
+            return true;
+        }
+
+        FString StructuredTextValue;
+        FString StructuredError;
+        if (MaterialExpressionJsonValueToPropertyText(Expression, Name, Value, StructuredTextValue, StructuredError))
+        {
+            if (ApplyMaterialExpressionParamValue(Material, Expression, Name, StructuredTextValue, bDryRun, Diff))
+            {
+                return true;
+            }
+            OutFailureReason = FString::Printf(TEXT("Could not import parameter %s from structured JSON value"), *Name);
+            return false;
+        }
+        if (!StructuredError.IsEmpty())
+        {
+            OutFailureReason = FString::Printf(TEXT("Parameter %s structured value rejected: %s"), *Name, *StructuredError);
+            return false;
+        }
+    }
+
+    FString TextValue;
+    if (!JsonValueToPropertyText(Value, TextValue))
+    {
+        OutFailureReason = FString::Printf(TEXT("Parameter %s expects a scalar value or a supported structured Custom node value"), *Name);
+        return false;
+    }
+    if (ApplyMaterialExpressionParamValue(Material, Expression, Name, TextValue, bDryRun, Diff))
+    {
+        return true;
+    }
+
+    OutFailureReason = FString::Printf(TEXT("Could not import parameter %s"), *Name);
     return false;
 }
 }

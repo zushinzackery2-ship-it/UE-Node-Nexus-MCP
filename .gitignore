@@ -44,6 +44,7 @@ Plugins/**/Resources/*.ico
 *.rar
 
 # Logs and temporary files
+logs/
 *.log
 *.tmp
 *.bak

@@ -2,15 +2,17 @@
 
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
+#include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeCompactGraph.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeMaterialGraphSnapshotShared.h"
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeWireGraph.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
 {
-static FString MaterialNodeId(const UMaterialExpression* Expression)
+FString MaterialSnapshotNodeId(const UMaterialExpression* Expression)
 {
     return Expression ? const_cast<UMaterialExpression*>(Expression)->GetMaterialExpressionId().ToString(EGuidFormats::DigitsWithHyphens) : FString();
 }
@@ -47,10 +49,27 @@ static FString MaterialExpressionDisplayName(UMaterialExpression* Expression)
     return !ParameterName.IsEmpty() && !ParameterName.Equals(TEXT("None"), ESearchCase::IgnoreCase) ? ParameterName : FString();
 }
 
-static TSharedPtr<FJsonObject> MaterialNodeToJson(UMaterialExpression* Expression, bool bIncludeNodeParams)
+FString MaterialSnapshotFunctionExpressionDisplayName(UMaterialExpression* Expression)
+{
+    const FString InputName = ReadExpressionPropertyText(Expression, TEXT("InputName"));
+    if (!InputName.IsEmpty() && !InputName.Equals(TEXT("None"), ESearchCase::IgnoreCase))
+    {
+        return InputName;
+    }
+
+    const FString OutputName = ReadExpressionPropertyText(Expression, TEXT("OutputName"));
+    if (!OutputName.IsEmpty() && !OutputName.Equals(TEXT("None"), ESearchCase::IgnoreCase))
+    {
+        return OutputName;
+    }
+
+    return MaterialExpressionDisplayName(Expression);
+}
+
+TSharedPtr<FJsonObject> MaterialSnapshotNodeToJson(UMaterialExpression* Expression, bool bIncludeNodeParams)
 {
     TSharedPtr<FJsonObject> Node = MakeShared<FJsonObject>();
-    const FString NodeId = MaterialNodeId(Expression);
+    const FString NodeId = MaterialSnapshotNodeId(Expression);
     Node->SetStringField(TEXT("node_id"), NodeId);
     Node->SetStringField(TEXT("class_name"), Expression->GetClass()->GetPathName());
     Node->SetStringField(TEXT("display_name"), Expression->GetName());
@@ -77,9 +96,9 @@ static TSharedPtr<FJsonObject> MaterialNodeToJson(UMaterialExpression* Expressio
     return Node;
 }
 
-static void AddMaterialLinks(UMaterialExpression* TargetExpression, TArray<TSharedPtr<FJsonValue>>& Links)
+void AddMaterialSnapshotLinks(UMaterialExpression* TargetExpression, TArray<TSharedPtr<FJsonValue>>& Links)
 {
-    const FString TargetId = MaterialNodeId(TargetExpression);
+    const FString TargetId = MaterialSnapshotNodeId(TargetExpression);
     for (FExpressionInputIterator It{ TargetExpression }; It; ++It)
     {
         FExpressionInput* Input = It.Input;
@@ -88,7 +107,7 @@ static void AddMaterialLinks(UMaterialExpression* TargetExpression, TArray<TShar
             continue;
         }
 
-        const FString SourceId = MaterialNodeId(Input->Expression);
+        const FString SourceId = MaterialSnapshotNodeId(Input->Expression);
         TSharedPtr<FJsonObject> Link = MakeShared<FJsonObject>();
         Link->SetStringField(TEXT("from_node_id"), SourceId);
         Link->SetStringField(TEXT("from_pin_id"), FString::Printf(TEXT("%s:out:%d"), *SourceId, Input->OutputIndex));
@@ -98,9 +117,9 @@ static void AddMaterialLinks(UMaterialExpression* TargetExpression, TArray<TShar
     }
 }
 
-static void AppendMaterialCompactNode(FCompactGraphBuilder& Builder, UMaterialExpression* Expression, bool bIncludeNodeParams)
+void AppendMaterialSnapshotCompactNode(FCompactGraphBuilder& Builder, UMaterialExpression* Expression, bool bIncludeNodeParams)
 {
-    const FString NodeId = MaterialNodeId(Expression);
+    const FString NodeId = MaterialSnapshotNodeId(Expression);
     Builder.AddNode(NodeId, Expression->GetClass()->GetName(), Expression->GetName(), Expression->MaterialExpressionEditorX, Expression->MaterialExpressionEditorY);
     for (FExpressionInputIterator It{ Expression }; It; ++It)
     {
@@ -123,15 +142,15 @@ static void AppendMaterialCompactNode(FCompactGraphBuilder& Builder, UMaterialEx
     }
 }
 
-static void AddMaterialCompactLinks(FCompactGraphBuilder& Builder, UMaterialExpression* TargetExpression)
+void AddMaterialSnapshotCompactLinks(FCompactGraphBuilder& Builder, UMaterialExpression* TargetExpression)
 {
-    const FString TargetId = MaterialNodeId(TargetExpression);
+    const FString TargetId = MaterialSnapshotNodeId(TargetExpression);
     for (FExpressionInputIterator It{ TargetExpression }; It; ++It)
     {
         FExpressionInput* Input = It.Input;
         if (Input != nullptr && Input->Expression != nullptr)
         {
-            const FString SourceId = MaterialNodeId(Input->Expression);
+            const FString SourceId = MaterialSnapshotNodeId(Input->Expression);
             Builder.AddLink(FString::Printf(TEXT("%s:out:%d"), *SourceId, Input->OutputIndex), FString::Printf(TEXT("%s:in:%d"), *TargetId, It.Index));
         }
     }
@@ -149,10 +168,10 @@ static TSharedPtr<FJsonObject> BuildMaterialCompactSnapshot(const FString& Opera
     {
         if (UMaterialExpression* Expression = ExpressionPtr.Get())
         {
-            AppendMaterialCompactNode(Builder, Expression, bIncludeNodeParams);
+            AppendMaterialSnapshotCompactNode(Builder, Expression, bIncludeNodeParams);
             if (bIncludeLinks)
             {
-                AddMaterialCompactLinks(Builder, Expression);
+                AddMaterialSnapshotCompactLinks(Builder, Expression);
             }
         }
     }
@@ -180,7 +199,7 @@ static TSharedPtr<FJsonObject> BuildMaterialWireSnapshot(const FString& Operatio
             continue;
         }
 
-        const FString TargetId = MaterialNodeId(Expression);
+        const FString TargetId = MaterialSnapshotNodeId(Expression);
         const FString TargetNode = MakeWireGraphNodeLabel(Expression->GetClass()->GetName(), MaterialExpressionDisplayName(Expression));
         for (FExpressionInputIterator It{ Expression }; It; ++It)
         {
@@ -191,7 +210,7 @@ static TSharedPtr<FJsonObject> BuildMaterialWireSnapshot(const FString& Operatio
             }
 
             UMaterialExpression* SourceExpression = Input->Expression;
-            const FString SourceId = MaterialNodeId(SourceExpression);
+            const FString SourceId = MaterialSnapshotNodeId(SourceExpression);
             const FString SourceNode = MakeWireGraphNodeLabel(SourceExpression->GetClass()->GetName(), MaterialExpressionDisplayName(SourceExpression));
             TArray<FExpressionOutput>& Outputs = SourceExpression->GetOutputs();
             const FString SourcePin = Outputs.IsValidIndex(Input->OutputIndex) && !Outputs[Input->OutputIndex].OutputName.IsNone() ? Outputs[Input->OutputIndex].OutputName.ToString() : FString::FromInt(Input->OutputIndex);
@@ -214,10 +233,10 @@ static TSharedPtr<FJsonObject> BuildMaterialFullSnapshot(const FString& Operatio
     {
         if (UMaterialExpression* Expression = ExpressionPtr.Get())
         {
-            Nodes.Add(MakeShared<FJsonValueObject>(MaterialNodeToJson(Expression, bIncludeNodeParams)));
+            Nodes.Add(MakeShared<FJsonValueObject>(MaterialSnapshotNodeToJson(Expression, bIncludeNodeParams)));
             if (bIncludeLinks)
             {
-                AddMaterialLinks(Expression, Links);
+                AddMaterialSnapshotLinks(Expression, Links);
             }
         }
     }
@@ -247,4 +266,5 @@ TSharedPtr<FJsonObject> BuildMaterialGraphSnapshot(const FString& Operation, con
     }
     return BuildMaterialFullSnapshot(Operation, RequestId, Material, bIncludeNodeParams, bIncludeLinks);
 }
+
 }

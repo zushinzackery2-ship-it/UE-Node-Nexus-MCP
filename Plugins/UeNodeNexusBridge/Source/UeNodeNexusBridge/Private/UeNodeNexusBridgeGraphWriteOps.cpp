@@ -2,6 +2,7 @@
 
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeBlueprintPatchOps.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialPatchOps.h"
@@ -44,9 +45,35 @@ TSharedPtr<FJsonObject> HandleGraphPatchApply(const FString& Operation, const FS
     {
         return HandleMaterialGraphPatch(Operation, RequestId, Material, Payload);
     }
+    if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        return HandleMaterialFunctionGraphPatch(Operation, RequestId, Function, Payload);
+    }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("graph_patch_apply supports Blueprint and Material assets")));
+    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("graph_patch_apply supports Blueprint, Material, and MaterialFunction assets")));
+    return Response;
+}
+
+TSharedPtr<FJsonObject> HandleGraphBuildApply(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+{
+    TSharedPtr<FJsonObject> EarlyResponse;
+    UObject* Asset = LoadGraphAsset(Payload, EarlyResponse, Operation, RequestId);
+    if (Asset == nullptr)
+    {
+        return EarlyResponse;
+    }
+    if (UMaterial* Material = Cast<UMaterial>(Asset))
+    {
+        return HandleMaterialGraphBuild(Operation, RequestId, Material, Payload);
+    }
+    if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        return HandleMaterialFunctionGraphBuild(Operation, RequestId, Function, Payload);
+    }
+
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("graph_build_apply supports Material and MaterialFunction assets")));
     return Response;
 }
 
@@ -66,9 +93,13 @@ TSharedPtr<FJsonObject> HandleNodeParamsGet(const FString& Operation, const FStr
     {
         return HandleMaterialNodeParamsGet(Operation, RequestId, Material, Payload);
     }
+    if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        return HandleMaterialFunctionNodeParamsGet(Operation, RequestId, Function, Payload);
+    }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("node_params_get supports Blueprint and Material assets")));
+    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("node_params_get supports Blueprint, Material, and MaterialFunction assets")));
     return Response;
 }
 
@@ -88,9 +119,13 @@ TSharedPtr<FJsonObject> HandleNodeParamsSet(const FString& Operation, const FStr
     {
         return HandleMaterialNodeParamsSet(Operation, RequestId, Material, Payload);
     }
+    if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        return HandleMaterialFunctionNodeParamsSet(Operation, RequestId, Function, Payload);
+    }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("node_params_set supports Blueprint and Material assets")));
+    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("node_params_set supports Blueprint, Material, and MaterialFunction assets")));
     return Response;
 }
 }

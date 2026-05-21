@@ -2,6 +2,7 @@
 
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialGraphSnapshot.h"
 
@@ -58,9 +59,13 @@ TSharedPtr<FJsonObject> HandleGraphSnapshotGet(const FString& Operation, const F
     {
         return BuildMaterialGraphSnapshot(Operation, RequestId, Material, bIncludeNodeParams, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny);
     }
+    if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        return BuildMaterialFunctionGraphSnapshot(Operation, RequestId, Function, bIncludeNodeParams, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny);
+    }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("graph_snapshot_get supports Blueprint and Material assets")));
+    Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("graph_snapshot_get supports Blueprint, Material, and MaterialFunction assets")));
     return Response;
 }
 }

@@ -5,7 +5,11 @@
 #include "Kismet2/CompilerResultsLog.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Logging/TokenizedMessage.h"
+#include "MaterialEditingLibrary.h"
+#include "MaterialShared.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialFunction.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -73,6 +77,37 @@ static TSharedPtr<FJsonObject> MakeCompileData(bool bRequested, bool bRan, bool 
     return Compile;
 }
 
+static void AddMaterialCompileDiagnostics(const TArray<FString>& CompileErrors, const FString& AssetPath, TArray<TSharedPtr<FJsonValue>>& Diagnostics)
+{
+    for (const FString& CompileError : CompileErrors)
+    {
+        TSharedPtr<FJsonObject> Diagnostic = MakeDiagnostic(TEXT("error"), TEXT("material_compile_error"), CompileError, AssetPath, TEXT("Unreal.MaterialCompiler"));
+        Diagnostic->SetStringField(TEXT("raw"), CompileError);
+        Diagnostics.Add(MakeShared<FJsonValueObject>(Diagnostic));
+    }
+}
+
+static TArray<FString> CollectMaterialCompileErrors(UMaterialInterface* MaterialInterface)
+{
+    TArray<FString> CompileErrors;
+    if (MaterialInterface == nullptr)
+    {
+        return CompileErrors;
+    }
+
+    FMaterialResource* MaterialResource = MaterialInterface->GetMaterialResource(ERHIFeatureLevel::SM6);
+    if (MaterialResource == nullptr)
+    {
+        return CompileErrors;
+    }
+
+    for (const FString& CompileError : MaterialResource->GetCompileErrors())
+    {
+        CompileErrors.AddUnique(CompileError);
+    }
+    return CompileErrors;
+}
+
 TSharedPtr<FJsonObject> HandleAssetCompile(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     TSharedPtr<FJsonObject> EarlyResponse;
@@ -104,12 +139,30 @@ TSharedPtr<FJsonObject> HandleAssetCompile(const FString& Operation, const FStri
     {
         Material->ForceRecompileForRendering();
         Material->MarkPackageDirty();
-        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, true, true, 0, 0));
+        const TArray<FString> CompileErrors = CollectMaterialCompileErrors(Material);
+        const bool bOk = CompileErrors.Num() == 0;
+        TArray<TSharedPtr<FJsonValue>> Diagnostics;
+        AddMaterialCompileDiagnostics(CompileErrors, AssetPath, Diagnostics);
+        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, true, bOk, CompileErrors.Num(), 0));
+        Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
+        Response->SetBoolField(TEXT("ok"), bOk);
+    }
+    else if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        UMaterialEditingLibrary::UpdateMaterialFunction(Function, nullptr);
+        UMaterialInterface* PreviewMaterial = Function->GetPreviewMaterial();
+        const TArray<FString> CompileErrors = CollectMaterialCompileErrors(PreviewMaterial);
+        const bool bOk = CompileErrors.Num() == 0;
+        TArray<TSharedPtr<FJsonValue>> Diagnostics;
+        AddMaterialCompileDiagnostics(CompileErrors, AssetPath, Diagnostics);
+        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, true, bOk, CompileErrors.Num(), 0));
+        Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
+        Response->SetBoolField(TEXT("ok"), bOk);
     }
     else
     {
         Response->SetBoolField(TEXT("ok"), false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("Only Blueprint and Material assets support compile")));
+        Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("Only Blueprint, Material, and MaterialFunction assets support compile")));
         Data->SetObjectField(TEXT("compile"), MakeCompileData(true, false, false, 0, 0));
     }
 

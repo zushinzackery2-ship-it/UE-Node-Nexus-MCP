@@ -102,6 +102,20 @@ static TSharedPtr<FJsonValue> ActorToRow(AActor* Actor)
     return MakeShared<FJsonValueArray>(Row);
 }
 
+static void AppendActorIndexedLine(FString& Text, int32 Index, AActor* Actor)
+{
+    const FVector Location = Actor->GetActorLocation();
+    Text += FString::Printf(
+        TEXT("A:%d:%s;l=%s;c=%s;p=(%.1f,%.1f,%.1f)\n"),
+        Index,
+        *Actor->GetPathName(),
+        *Actor->GetActorLabel().Replace(TEXT("\n"), TEXT(" ")),
+        Actor->GetClass() ? *Actor->GetClass()->GetName() : TEXT(""),
+        Location.X,
+        Location.Y,
+        Location.Z);
+}
+
 TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     UEditorActorSubsystem* ActorSubsystem = GEditor ? GEditor->GetEditorSubsystem<UEditorActorSubsystem>() : nullptr;
@@ -119,14 +133,18 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
     Payload->TryGetBoolField(TEXT("include_components"), bIncludeComponents);
     FString Format = TEXT("compact");
     Payload->TryGetStringField(TEXT("format"), Format);
-    const bool bCompact = !Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+    const bool bFull = Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+    const bool bIndexed = Format.Equals(TEXT("indexed"), ESearchCase::IgnoreCase);
+    const bool bCompact = !bFull && !bIndexed;
 
     const int32 Offset = ReadCursor(Payload);
     const int32 Limit = ReadLimit(Payload, 200, 2000);
     const TArray<AActor*> Actors = ActorSubsystem->GetAllLevelActors();
 
     TArray<TSharedPtr<FJsonValue>> Items;
+    FString Text;
     int32 MatchedIndex = 0;
+    int32 ReturnedCount = 0;
     bool bHasMore = false;
 
     for (AActor* Actor : Actors)
@@ -144,18 +162,35 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
             bHasMore = true;
             break;
         }
-        if (bCompact)
+        if (bIndexed && ReturnedCount >= Limit)
+        {
+            bHasMore = true;
+            break;
+        }
+        if (bIndexed)
+        {
+            AppendActorIndexedLine(Text, MatchedIndex - 1, Actor);
+            ++ReturnedCount;
+        }
+        else if (bCompact)
         {
             Items.Add(ActorToRow(Actor));
+            ++ReturnedCount;
         }
         else
         {
             Items.Add(MakeShared<FJsonValueObject>(ActorToJson(Actor, bIncludeComponents)));
+            ++ReturnedCount;
         }
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
-    if (bCompact)
+    if (bIndexed)
+    {
+        Data->SetStringField(TEXT("format"), TEXT("level_actors_indexed"));
+        SetTextPayload(Data, Text);
+    }
+    else if (bCompact)
     {
         Data->SetStringField(TEXT("format"), TEXT("level_actors_compact"));
         Data->SetArrayField(TEXT("columns"), {
@@ -167,12 +202,15 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
             MakeShared<FJsonValueString>(TEXT("z"))
         });
     }
-    Data->SetArrayField(TEXT("items"), Items);
-    Data->SetNumberField(TEXT("count"), Items.Num());
+    if (!bIndexed)
+    {
+        Data->SetArrayField(TEXT("items"), Items);
+    }
+    Data->SetNumberField(TEXT("count"), ReturnedCount);
     Data->SetBoolField(TEXT("has_more"), bHasMore);
     if (bHasMore)
     {
-        Data->SetStringField(TEXT("next_cursor"), FString::FromInt(Offset + Items.Num()));
+        Data->SetStringField(TEXT("next_cursor"), FString::FromInt(Offset + ReturnedCount));
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);

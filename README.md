@@ -33,7 +33,11 @@
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张材质/蓝图的节点、参数和连线 |
 | **图安全写入** | `graph_patch_apply` 编辑蓝图引脚或材质表达式连线，返回差异、引脚完整性、编译状态和脏标记 |
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
+| **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
 | **材质实例参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
+| **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
+| **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖内容浏览器清理闭环 |
+| **Level 材质实例** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、材质槽、MI 参数和材质使用点 |
 | **复杂材质复刻** | 已验证可通过固定 MCP 接口读取整图、创建节点、回放参数、连接根输出、编译并保存 |
 | **蓝图摘要** | `blueprint_details_get` 读取类元数据、变量、CDO 默认值和组件模板 |
 | **动画蓝图摘要** | `anim_blueprint_summary_get` 提取常用 AnimGraph 节点的紧凑语义摘要 |
@@ -49,14 +53,36 @@
 | **资产** | `asset_list()` | 列出 Unreal 资产，支持紧凑和完整格式 |
 | **资产** | `asset_get()` | 读取单个资产的元数据 |
 | **资产** | `asset_create()` | 创建材质、材质实例或蓝图资产，支持试运行 |
+| **资产** | `asset_delete()` | 删除资产并可清理删除后的 registry/disk 状态 |
+| **资产** | `asset_move()` / `asset_rename()` | 移动或重命名单个资产，可保存并修复 redirector |
+| **资产** | `asset_move_batch()` / `asset_rename_batch()` | 批量移动或重命名，支持逐项结果和 `continue_on_error` |
+| **资产** | `asset_duplicate()` | 复制资产到目标 object path |
+| **资产** | `folder_create()` / `folder_delete()` | 创建或删除 Content Browser 文件夹 |
+| **资产** | `asset_redirectors_fixup()` | 修复指定文件夹下 redirector |
+| **AutoIndex** | `auto_index_enable()` / `auto_index_disable()` | 开启或关闭 UE 内持久资产索引监听 |
+| **AutoIndex** | `auto_index_status()` / `auto_index_rebuild()` | 查看索引状态或按 root 重建索引 |
+| **AutoIndex** | `auto_index_overview()` / `auto_index_tree_get()` | 低上下文查看资产分类统计和文件夹树 |
+| **AutoIndex** | `auto_index_query()` / `auto_index_get()` | 按文本、class、路径查询资产或读取单个索引记录 |
+| **AutoIndex** | `auto_index_resolve_path()` | 用短名、包路径或 object path 解析资产 |
+| **AutoIndex** | `auto_index_diff_registry()` | 对比 AutoIndex 与 AssetRegistry 的漂移 |
+| **AutoIndex** | `auto_index_flush()` / `auto_index_clear()` | 持久化或清空索引 |
 | **关卡** | `level_current_get()` | 读取当前编辑器关卡标识和脏标记状态 |
 | **关卡** | `level_actors_list()` | 列出当前关卡的 Actor，可选包含组件行 |
+| **关卡** | `level_actor_get()` | 读取当前 Level 内 Actor 类型、路径、label、组件摘要 |
+| **关卡** | `level_actor_transform_get()` / `level_actor_transform_set()` | 读取或写入 Actor 世界 transform |
+| **关卡** | `object_properties_get()` / `object_properties_set()` | 读取或写入 UObject 属性，默认只写可编辑属性 |
+| **关卡材质** | `level_mesh_instances_list()` | 枚举当前 Level 网格实例、组件路径和材质槽摘要 |
+| **关卡材质** | `component_materials_get()` / `component_materials_set()` | 读取或替换网格组件材质槽 |
+| **关卡材质** | `material_interface_resolve()` | 解析材质接口、材质实例父链和 root material |
+| **关卡材质** | `material_usage_find()` | 查找当前 Level 或资产中材质使用点 |
+| **关卡材质** | `component_material_instance_params_get()` / `component_material_instance_params_set()` | 读写组件材质槽上的 MID/MI 参数 |
 | **蓝图** | `blueprint_details_get()` | 读取蓝图元数据、变量、CDO 默认值和组件 |
 | **蓝图** | `anim_blueprint_summary_get()` | 读取常用 AnimGraph 节点的紧凑语义摘要 |
 | **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny` |
 | **图** | `graph_node_info_get()` | 读取整张图的高密度节点信息，默认 `indexed` |
 | **图** | `graph_node_info_get_w_pos()` | 读取整张图的高密度节点信息并附带坐标表 |
 | **图** | `graph_patch_apply()` | 应用声明式图编辑，附带写后检查 |
+| **图** | `graph_build_apply()` | 用 `nodes`、`links`、`material_outputs` 一次创建节点、写参数、连线并编译 |
 | **节点** | `node_info_get()` | 读取单个节点的紧凑编辑视图，可按 section/index 精确截取 |
 | **节点** | `node_create()` | 创建材质节点并返回完整节点编辑视图 |
 | **节点** | `node_position_get()` | 读取节点坐标 |
@@ -65,6 +91,7 @@
 | **节点参数** | `node_class_params_get()` | 按节点类型读取可编辑参数模板 |
 | **节点参数** | `node_params_get()` | 读取单个图节点的可编辑参数 |
 | **节点参数** | `node_params_set()` | 写入节点参数，附带编译诊断 |
+| **材质节点类** | `material_expression_classes_list()` | 枚举材质表达式节点类及其可编辑属性 schema 数量 |
 | **材质实例** | `material_instance_params_get()` | 读取材质实例参数值 |
 | **材质实例** | `material_instance_params_set()` | 写入材质实例参数，附带类型校验 |
 | **诊断** | `asset_compile()` | 编译蓝图或材质资产，返回诊断信息 |
@@ -87,10 +114,17 @@
 | **`grouped`** | 人读整图包，按节点类型聚合；每个节点包含 `p[...]` 参数和 `i[...]` 输入连线 |
 | **`node_info_text`** | 单节点编辑视图，包含节点名、类、短 ID、真实 ID、位置、输入、参数和输出 |
 
+所有 MCP 响应根对象会附带一行 `remaining_errors` 字符串，用于提示当前仓库收口状态；为空表示当前没有登记的剩余工程错误。
+
 > [!NOTE]
 > **节点参数语义**
 >
-> 材质节点参数读取按 UE 可编辑属性表导出，保留默认值、枚举、布尔、FName、对象引用和空字符串。`node_info_get(..., section="param", index=N)` 的索引与 `node_class_params_get()` 的模板顺序一致。
+> 材质节点参数读取按 UE 可编辑属性表导出，保留默认值、枚举、布尔、FName、对象引用和空字符串。`node_info_get(..., section="param", index=N)` 的索引与 `node_class_params_get()` 的模板顺序一致。当前运行时 all-class schema 验证覆盖 UE 5.5 已加载的 `329/329` 个非抽象、非废弃 `UMaterialExpression` 子类。
+
+> [!NOTE]
+> **graph_build_apply 紧凑写图**
+>
+> `graph_build_apply` 支持紧凑 spec：`nodes` 里用 `id`、`class_path`/`node_class`、`x/y`、`params` 声明节点；`links` 里可用 `from/to` 的 `node.pin` 简写，例如 `base_color.RGB -> MaterialOutput.BaseColor`；`params` 可直接传结构化 JSON 值。Vector 输出支持 `RGB/RGBA/Color/Vector/R/G/B/A/X/Y/Z/W` 别名，标量输出支持 `Value/Out/Output/Result` 别名；无效 pin 诊断会返回可用输出候选。
 
 > [!IMPORTANT]
 > **写入安全**
@@ -139,6 +173,7 @@ UE-Node-Nexus-MCP/
 │   ├── build_plugin_ue55.bat
 │   ├── install_ue55_plugin.bat
 │   ├── package_plugin_ue55.ps1
+│   ├── ue_bridge_smoke.py
 │   └── run_mcp_server.py
 ├── src/
 │   └── ue_node_nexus_mcp/
@@ -162,6 +197,37 @@ python -m ue_node_nexus_mcp.server
 
 ---
 
+## 直连验证
+
+```bash
+python .\scripts\ue_bridge_smoke.py --write
+```
+
+| 模式 | 命令 | 说明 |
+|:-----|:-----|:-----|
+| **只读冒烟** | `python .\scripts\ue_bridge_smoke.py` | 等待 `127.0.0.1:8765/mcp`，读取关卡、诊断和资产列表 |
+| **写入矩阵** | `python .\scripts\ue_bridge_smoke.py --write` | 创建扩展资产、写入 Blueprint 节点、编译保存、删除测试资产并检查磁盘残留 |
+| **蓝图写入矩阵** | `python .\scripts\ue_bridge_smoke.py --blueprint-write-matrix --package-root /Game/MCPBlueprintWrite` | 创建临时 Blueprint，真实写入节点、连线、pin 默认值、位置，编译保存回读后清理 |
+| **材质节点类矩阵** | `python .\scripts\ue_material_expression_class_matrix.py` | 单次 bridge 调用枚举所有已加载材质表达式类，校验嵌入属性 schema |
+| **启动编辑器** | `python .\scripts\ue_bridge_smoke.py --launch-editor --write` | 启动测试项目后等待 bridge 就绪再执行写入矩阵 |
+| **保留资产** | `python .\scripts\ue_bridge_smoke.py --write --keep-assets` | 保留本轮测试资产用于人工检查 |
+
+| 参数 | 默认值 | 说明 |
+|:-----|:-----|:-----|
+| **`--bridge-url`** | `http://127.0.0.1:8765` | UE bridge HTTP 端点 |
+| **`--project`** | `D:\Users\Administrator\Documents\Unreal Projects\我的项目2\我的项目2.uproject` | 用于启动、查 UE 日志和检查磁盘残留的项目 |
+| **`--package-root`** | `/Game/MCPWriteSmoke` | 写入矩阵的测试资产根目录 |
+| **`--log`** | `logs\ue_bridge_smoke_*.jsonl` | 请求、响应、失败取证和汇总输出 |
+
+`ue_material_expression_class_matrix.py` 默认 `--timeout 10 --wait-timeout 10`，避免逐类 HTTP 回查造成长时间等待；需要深度交叉校验时再显式加 `--cross-check-node-class-params`。
+
+> [!IMPORTANT]
+> **失败取证**
+>
+> 脚本失败时会记录最后一次 HTTP 响应、AssetRegistry 回读、磁盘残留、UE 日志尾部、`git status` 和 `git diff --stat`，用于定位第一个失败点。
+
+---
+
 ## 构建
 
 ```bat
@@ -180,6 +246,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package_plugin_ue55.ps1
 |:-----|:-----|
 | **`scripts/build_plugin_ue55.bat`** | 使用 RunUAT 打包 UE 5.5 桥接插件 |
 | **`scripts/install_ue55_plugin.bat`** | 将打包好的插件复制到 `UE_5.5\Engine\Plugins\Marketplace` |
+| **`scripts/update_plugin_and_smoke_ue55.py`** | 保存并正常关闭 UE、等待进程退出、构建/安装插件、重启项目、执行短 smoke；bridge/UE 等待默认 10 秒，UBT 构建使用独立 `--build-timeout` |
 | **`scripts/package_plugin_ue55.ps1`** | 创建 `bin\dist\UeNodeNexusBridge-UE5.5-Win64.zip` 并镜像到 `G:\vdio\UEPlugins\MCP` |
 
 ---

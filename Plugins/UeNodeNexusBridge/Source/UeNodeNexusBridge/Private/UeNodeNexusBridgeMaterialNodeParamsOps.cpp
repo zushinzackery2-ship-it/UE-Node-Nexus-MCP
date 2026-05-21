@@ -4,65 +4,14 @@
 #include "MaterialEditingLibrary.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
-#include "Materials/MaterialExpressionNamedReroute.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
-#include "UObject/TextProperty.h"
-#include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
 {
-static bool IsEditableExpressionProperty(FProperty* Property)
-{
-    return Property != nullptr && Property->HasAnyPropertyFlags(CPF_Edit) && !Property->HasAnyPropertyFlags(CPF_DisableEditOnInstance);
-}
-
-static TSharedPtr<FJsonObject> PropertyToJson(UMaterialExpression* Expression, FProperty* Property, int32 Index)
-{
-    FString Value;
-    Property->ExportTextItem_InContainer(Value, Expression, nullptr, Expression, PPF_None);
-    TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
-    Json->SetNumberField(TEXT("index"), Index);
-    Json->SetStringField(TEXT("name"), Property->GetName());
-    Json->SetStringField(TEXT("type"), Property->GetCPPType());
-    Json->SetStringField(TEXT("value"), Value);
-    Json->SetBoolField(TEXT("editable"), true);
-    return Json;
-}
-
-TArray<TSharedPtr<FJsonValue>> BuildMaterialExpressionParams(UMaterialExpression* Expression)
-{
-    TArray<TSharedPtr<FJsonValue>> Params;
-    if (Expression == nullptr)
-    {
-        return Params;
-    }
-
-    int32 Index = 0;
-    for (TFieldIterator<FProperty> It(Expression->GetClass()); It; ++It)
-    {
-        FProperty* Property = *It;
-        if (IsEditableExpressionProperty(Property))
-        {
-            Params.Add(MakeShared<FJsonValueObject>(PropertyToJson(Expression, Property, Index++)));
-        }
-    }
-    if (UMaterialExpressionNamedRerouteUsage* Usage = Cast<UMaterialExpressionNamedRerouteUsage>(Expression))
-    {
-        TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
-        Json->SetNumberField(TEXT("index"), Index);
-        Json->SetStringField(TEXT("name"), TEXT("DeclarationName"));
-        Json->SetStringField(TEXT("type"), TEXT("FName"));
-        Json->SetStringField(TEXT("value"), Usage->Declaration ? Usage->Declaration->Name.ToString() : FString());
-        Json->SetBoolField(TEXT("editable"), true);
-        Params.Add(MakeShared<FJsonValueObject>(Json));
-    }
-    return Params;
-}
-
 TSharedPtr<FJsonObject> HandleMaterialNodeParamsGet(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
 {
     FString NodeId;
@@ -70,6 +19,20 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsGet(const FString& Operation, co
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("node_id is required")));
+        return Response;
+    }
+
+    if (IsMaterialOutputNodeId(NodeId))
+    {
+        TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+        Data->SetStringField(TEXT("asset_path"), Material->GetPathName());
+        Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
+        Data->SetStringField(TEXT("node_id"), MaterialOutputNodeId());
+        Data->SetStringField(TEXT("node_alias"), MaterialOutputNodeId());
+        Data->SetArrayField(TEXT("params"), BuildMaterialOutputParams(Material));
+
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+        Response->SetObjectField(TEXT("data"), Data);
         return Response;
     }
 
@@ -128,8 +91,9 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
         return Response;
     }
 
-    UMaterialExpression* Expression = ResolveMaterialInterfaceNode(Material, NodeId);
-    if (Expression == nullptr)
+    const bool bMaterialOutput = IsMaterialOutputNodeId(NodeId);
+    UMaterialExpression* Expression = bMaterialOutput ? nullptr : ResolveMaterialInterfaceNode(Material, NodeId);
+    if (!bMaterialOutput && Expression == nullptr)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), MakeError(TEXT("node_not_found"), TEXT("Material expression was not found")));
@@ -149,12 +113,14 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
     {
         Transaction = MakeUnique<FScopedTransaction>(FText::FromString(TEXT("UE Node Nexus Material Node Params")));
         Material->Modify();
-        Expression->Modify();
+        if (Expression != nullptr)
+        {
+            Expression->Modify();
+        }
     }
 
     for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Params)->Values)
     {
-        FProperty* Property = Expression->GetClass()->FindPropertyByName(FName(*Pair.Key));
         FString NewValue;
         if (!JsonValueToPropertyText(Pair.Value, NewValue))
         {
@@ -162,8 +128,10 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
             continue;
         }
 
-        FString OldValue;
-        if (!ApplyMaterialExpressionParamValue(Material, Expression, Pair.Key, NewValue, bDryRun, Diff))
+        const bool bApplied = bMaterialOutput
+            ? ApplyMaterialOutputParamValue(Material, Pair.Key, NewValue, bDryRun, Diff)
+            : ApplyMaterialExpressionParamValue(Material, Expression, Pair.Key, NewValue, bDryRun, Diff);
+        if (!bApplied)
         {
             Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_import_failed"), Pair.Key, Material->GetPathName(), TEXT("UeNodeNexusBridge"))));
             continue;

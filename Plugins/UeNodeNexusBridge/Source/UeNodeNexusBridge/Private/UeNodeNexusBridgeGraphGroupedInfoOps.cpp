@@ -9,6 +9,7 @@
 #include "MaterialExpressionIO.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
+#include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
@@ -56,6 +57,24 @@ static FString MaterialGroupedInputs(UMaterial* Material, UMaterialExpression* E
         if (It.Input != nullptr && It.Input->Expression != nullptr)
         {
             Inputs.Add(FString::Printf(TEXT("%s<%s.%s"), *InputName, *EscapeIndexedToken(MaterialNodeAlias(Material, It.Input->Expression)), *EscapeIndexedToken(MaterialOutputName(It.Input->Expression, It.Input->OutputIndex))));
+        }
+        else
+        {
+            Inputs.Add(FString::Printf(TEXT("%s<None"), *InputName));
+        }
+    }
+    return FString::Printf(TEXT("i[%s]"), *JoinOrNone(Inputs));
+}
+
+static FString MaterialFunctionGroupedInputs(UMaterialFunction* Function, UMaterialExpression* Expression)
+{
+    TArray<FString> Inputs;
+    for (FExpressionInputIterator It{ Expression }; It; ++It)
+    {
+        const FString InputName = EscapeIndexedToken(Expression->GetInputName(It.Index).ToString());
+        if (It.Input != nullptr && It.Input->Expression != nullptr)
+        {
+            Inputs.Add(FString::Printf(TEXT("%s<%s.%s"), *InputName, *EscapeIndexedToken(MaterialNodeAlias(Function, It.Input->Expression)), *EscapeIndexedToken(MaterialOutputName(It.Input->Expression, It.Input->OutputIndex))));
         }
         else
         {
@@ -125,7 +144,7 @@ TSharedPtr<FJsonObject> BuildMaterialGraphGroupedData(UMaterial* Material, const
 {
     const int32 MaxNodes = ReadIndexedMaxNodes(Payload);
     const bool bRealIds = WantsRealIds(Payload);
-    const TArrayView<const TObjectPtr<UMaterialExpression>> AllExpressions = Material->GetExpressions();
+    const TConstArrayView<TObjectPtr<UMaterialExpression>> AllExpressions = Material->GetExpressions();
     TMap<FString, TArray<FString>> Groups;
     TArray<FString> Order;
     int32 ReturnedNodes = 0;
@@ -170,6 +189,52 @@ TSharedPtr<FJsonObject> BuildMaterialGraphGroupedData(UMaterial* Material, const
     Data->SetNumberField(TEXT("returned_nodes"), ReturnedNodes);
     Data->SetBoolField(TEXT("truncated"), ReturnedNodes < AllExpressions.Num());
     SetTextPayload(Data, BuildGroupedText(FString::Printf(TEXT("G:%s|material|MaterialGraph|%d\n"), *EscapeIndexedToken(Material->GetPathName()), AllExpressions.Num() + 1), Order, Groups));
+    return Data;
+}
+
+TSharedPtr<FJsonObject> BuildMaterialFunctionGraphGroupedData(UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload, bool bWithPosition)
+{
+    const int32 MaxNodes = ReadIndexedMaxNodes(Payload);
+    const bool bRealIds = WantsRealIds(Payload);
+    const TConstArrayView<TObjectPtr<UMaterialExpression>> AllExpressions = Function->GetExpressions();
+    TMap<FString, TArray<FString>> Groups;
+    TArray<FString> Order;
+    int32 ReturnedNodes = 0;
+
+    for (TObjectPtr<UMaterialExpression> ExpressionPtr : AllExpressions)
+    {
+        UMaterialExpression* Expression = ExpressionPtr.Get();
+        if (Expression == nullptr || (MaxNodes > 0 && ReturnedNodes >= MaxNodes))
+        {
+            continue;
+        }
+
+        TArray<FString> Parts = {
+            GroupedParamText(BuildMaterialExpressionParams(Expression), TEXT("value")),
+            MaterialFunctionGroupedInputs(Function, Expression)
+        };
+        if (bWithPosition)
+        {
+            Parts.Add(FString::Printf(TEXT("x[%d,%d]"), Expression->MaterialExpressionEditorX, Expression->MaterialExpressionEditorY));
+        }
+        if (bRealIds)
+        {
+            Parts.Add(FString::Printf(TEXT("r[%s]"), *MaterialExpressionNodeId(Expression)));
+        }
+
+        AddGroupedRow(Groups, Order, ShortMaterialExpressionClass(Expression), FString::Printf(TEXT("%s{%s}"), *EscapeIndexedToken(MaterialNodeAlias(Function, Expression)), *FString::Join(Parts, TEXT(";"))));
+        ++ReturnedNodes;
+    }
+
+    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    Data->SetStringField(TEXT("format"), bWithPosition ? TEXT("graph_node_grouped_w_pos") : TEXT("graph_node_grouped"));
+    Data->SetStringField(TEXT("asset_path"), Function->GetPathName());
+    Data->SetStringField(TEXT("graph_kind"), TEXT("material_function"));
+    Data->SetStringField(TEXT("graph_name"), TEXT("MaterialFunctionGraph"));
+    Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num());
+    Data->SetNumberField(TEXT("returned_nodes"), ReturnedNodes);
+    Data->SetBoolField(TEXT("truncated"), ReturnedNodes < AllExpressions.Num());
+    SetTextPayload(Data, BuildGroupedText(FString::Printf(TEXT("G:%s|material_function|MaterialFunctionGraph|%d\n"), *EscapeIndexedToken(Function->GetPathName()), AllExpressions.Num()), Order, Groups));
     return Data;
 }
 

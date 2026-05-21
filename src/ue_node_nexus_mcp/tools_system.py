@@ -19,7 +19,7 @@ def level_actors_list(
     class_names: list[str] | None = None,
     limit: int = 200,
     cursor: str | None = None,
-    format: Literal["compact", "full"] = "compact",
+    format: Literal["indexed", "compact", "full"] = "indexed",
 ) -> dict[str, Any]:
     """List actors in the current editor level."""
     return _call(
@@ -62,6 +62,36 @@ def asset_save(
             "asset_path": asset_path,
             "only_if_dirty": only_if_dirty,
             "fail_if_open_editor_conflict": fail_if_open_editor_conflict,
+        },
+    )
+
+
+@mcp.tool()
+def editor_save_all(
+    save_map_packages: bool = True,
+    save_content_packages: bool = True,
+) -> dict[str, Any]:
+    """Save all dirty editor packages and report remaining dirty packages."""
+    return _call(
+        "editor_save_all",
+        {
+            "save_map_packages": save_map_packages,
+            "save_content_packages": save_content_packages,
+        },
+    )
+
+
+@mcp.tool()
+def editor_request_exit(
+    save_before_exit: bool = True,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Request a normal Unreal Editor exit, optionally saving dirty packages first."""
+    return _call(
+        "editor_request_exit",
+        {
+            "save_before_exit": save_before_exit,
+            "force": force,
         },
     )
 

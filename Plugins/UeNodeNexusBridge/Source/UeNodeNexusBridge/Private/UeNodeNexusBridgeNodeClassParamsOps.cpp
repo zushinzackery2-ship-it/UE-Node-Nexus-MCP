@@ -3,20 +3,11 @@
 #include "EdGraph/EdGraphNode.h"
 #include "Materials/MaterialExpression.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UObject/UnrealType.h"
+#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "UeNodeNexusBridgeMaterialPropertySchema.h"
 
 namespace UeNodeNexusBridge
 {
-static UClass* ResolveMaterialExpressionClass(const FString& NodeClass)
-{
-    if (UClass* Direct = LoadClass<UMaterialExpression>(nullptr, *NodeClass))
-    {
-        return Direct->IsChildOf(UMaterialExpression::StaticClass()) ? Direct : nullptr;
-    }
-    const FString ShortName = NodeClass.StartsWith(TEXT("MaterialExpression")) ? NodeClass : TEXT("MaterialExpression") + NodeClass;
-    return LoadClass<UMaterialExpression>(nullptr, *FString::Printf(TEXT("/Script/Engine.%s"), *ShortName));
-}
-
 static UClass* ResolveBlueprintNodeClass(const FString& NodeClass)
 {
     if (UClass* Direct = LoadClass<UEdGraphNode>(nullptr, *NodeClass))
@@ -32,14 +23,14 @@ static UClass* ResolveBlueprintNodeClass(const FString& NodeClass)
     return LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/Engine.%s"), *NodeClass));
 }
 
-static bool IsEditableTemplateProperty(FProperty* Property)
+static bool IsEditableBlueprintTemplateProperty(FProperty* Property)
 {
     return Property != nullptr
         && Property->HasAnyPropertyFlags(CPF_Edit)
         && !Property->HasAnyPropertyFlags(CPF_DisableEditOnInstance);
 }
 
-static TSharedPtr<FJsonObject> MakeTemplateParam(FProperty* Property, int32 Index)
+static TSharedPtr<FJsonObject> MakeBlueprintTemplateParam(FProperty* Property, int32 Index)
 {
     TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
     Param->SetNumberField(TEXT("index"), Index);
@@ -49,7 +40,7 @@ static TSharedPtr<FJsonObject> MakeTemplateParam(FProperty* Property, int32 Inde
     return Param;
 }
 
-static TArray<TSharedPtr<FJsonValue>> BuildClassParams(UClass* Class)
+static TArray<TSharedPtr<FJsonValue>> BuildBlueprintClassParams(UClass* Class)
 {
     TArray<TSharedPtr<FJsonValue>> Params;
     if (Class == nullptr)
@@ -61,9 +52,9 @@ static TArray<TSharedPtr<FJsonValue>> BuildClassParams(UClass* Class)
     for (TFieldIterator<FProperty> It(Class); It; ++It)
     {
         FProperty* Property = *It;
-        if (IsEditableTemplateProperty(Property))
+        if (IsEditableBlueprintTemplateProperty(Property))
         {
-            Params.Add(MakeShared<FJsonValueObject>(MakeTemplateParam(Property, Index++)));
+            Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintTemplateParam(Property, Index++)));
         }
     }
     return Params;
@@ -98,7 +89,8 @@ TSharedPtr<FJsonObject> HandleNodeClassParamsGet(const FString& Operation, const
     }
 
     UClass* Class = nullptr;
-    if (GraphKind.Equals(TEXT("material"), ESearchCase::IgnoreCase))
+    if (GraphKind.Equals(TEXT("material"), ESearchCase::IgnoreCase)
+        || GraphKind.Equals(TEXT("material_function"), ESearchCase::IgnoreCase))
     {
         Class = ResolveMaterialExpressionClass(NodeClass);
     }
@@ -114,7 +106,10 @@ TSharedPtr<FJsonObject> HandleNodeClassParamsGet(const FString& Operation, const
         return Response;
     }
 
-    const TArray<TSharedPtr<FJsonValue>> Params = BuildClassParams(Class);
+    const TArray<TSharedPtr<FJsonValue>> Params = GraphKind.Equals(TEXT("material"), ESearchCase::IgnoreCase)
+            || GraphKind.Equals(TEXT("material_function"), ESearchCase::IgnoreCase)
+        ? BuildMaterialExpressionClassParams(Class)
+        : BuildBlueprintClassParams(Class);
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("format"), TEXT("node_class_params"));
     Data->SetStringField(TEXT("graph_kind"), GraphKind);

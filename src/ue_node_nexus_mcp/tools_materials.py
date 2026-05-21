@@ -8,6 +8,29 @@ from .runtime import mcp
 
 
 @mcp.tool()
+def material_expression_classes_list(
+    include_abstract: bool = False,
+    include_deprecated: bool = False,
+    include_params: bool = False,
+    limit: int = 500,
+    cursor: str | None = None,
+    format: Literal["indexed", "compact", "full"] = "indexed",
+) -> dict[str, Any]:
+    """List loaded UMaterialExpression classes and their editable property schema counts."""
+    return _call(
+        "material_expression_classes_list",
+        {
+            "include_abstract": include_abstract,
+            "include_deprecated": include_deprecated,
+            "include_params": include_params,
+            "limit": limit,
+            "cursor": cursor,
+            "format": format,
+        },
+    )
+
+
+@mcp.tool()
 def material_instance_params_get(asset_path: str, format: Literal["compact", "full"] = "compact") -> dict[str, Any]:
     """Return scalar, vector, texture, and static parameters for a material instance."""
     require_non_empty_string(asset_path, "asset_path")

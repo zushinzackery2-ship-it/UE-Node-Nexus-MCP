@@ -2,6 +2,7 @@
 
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
+#include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UObject/UnrealType.h"
 
@@ -27,10 +28,33 @@ FString ReadObjectPropertyText(UObject* Object, const FName& Name)
     return Value;
 }
 
-FString MaterialNodeAlias(UMaterial* Material, UMaterialExpression* Target)
+static FString MaterialExpressionAliasBase(UMaterialExpression* Expression)
+{
+    const FString ParamName = ReadObjectPropertyText(Expression, TEXT("ParameterName"));
+    if (!ParamName.IsEmpty() && !ParamName.Equals(TEXT("None"), ESearchCase::IgnoreCase))
+    {
+        return ParamName;
+    }
+
+    const FString InputName = ReadObjectPropertyText(Expression, TEXT("InputName"));
+    if (!InputName.IsEmpty() && !InputName.Equals(TEXT("None"), ESearchCase::IgnoreCase))
+    {
+        return InputName;
+    }
+
+    const FString OutputName = ReadObjectPropertyText(Expression, TEXT("OutputName"));
+    if (!OutputName.IsEmpty() && !OutputName.Equals(TEXT("None"), ESearchCase::IgnoreCase))
+    {
+        return OutputName;
+    }
+
+    return ShortMaterialExpressionClass(Expression);
+}
+
+static FString MaterialNodeAliasFromExpressions(TConstArrayView<TObjectPtr<UMaterialExpression>> Expressions, UMaterialExpression* Target)
 {
     TMap<FString, int32> Counts;
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Material->GetExpressions())
+    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Expressions)
     {
         UMaterialExpression* Expression = ExpressionPtr.Get();
         if (Expression == nullptr)
@@ -38,11 +62,9 @@ FString MaterialNodeAlias(UMaterial* Material, UMaterialExpression* Target)
             continue;
         }
 
-        const FString ParamName = ReadObjectPropertyText(Expression, TEXT("ParameterName"));
-        const bool bNamedParam = !ParamName.IsEmpty() && !ParamName.Equals(TEXT("None"), ESearchCase::IgnoreCase);
-        const FString Base = bNamedParam ? ParamName : ShortMaterialExpressionClass(Expression);
+        const FString Base = MaterialExpressionAliasBase(Expression);
         const int32 Index = Counts.FindOrAdd(Base)++;
-        const FString Alias = bNamedParam && Index == 0 ? Base : FString::Printf(TEXT("%s_%02d"), *Base, Index);
+        const FString Alias = Index == 0 && Base != ShortMaterialExpressionClass(Expression) ? Base : FString::Printf(TEXT("%s_%02d"), *Base, Index);
         if (Expression == Target)
         {
             return Alias;
@@ -51,21 +73,58 @@ FString MaterialNodeAlias(UMaterial* Material, UMaterialExpression* Target)
     return FString();
 }
 
-UMaterialExpression* ResolveMaterialInterfaceNode(UMaterial* Material, const FString& NodeId)
+FString MaterialNodeAlias(UMaterial* Material, UMaterialExpression* Target)
 {
-    if (UMaterialExpression* Found = FindMaterialExpression(Material, NodeId))
-    {
-        return Found;
-    }
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Material->GetExpressions())
+    return Material != nullptr ? MaterialNodeAliasFromExpressions(Material->GetExpressions(), Target) : FString();
+}
+
+FString MaterialNodeAlias(UMaterialFunction* Function, UMaterialExpression* Target)
+{
+    return Function != nullptr ? MaterialNodeAliasFromExpressions(Function->GetExpressions(), Target) : FString();
+}
+
+static UMaterialExpression* ResolveMaterialInterfaceNodeFromExpressions(TConstArrayView<TObjectPtr<UMaterialExpression>> Expressions, const FString& NodeId, TFunctionRef<FString(UMaterialExpression*)> AliasFor)
+{
+    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Expressions)
     {
         UMaterialExpression* Expression = ExpressionPtr.Get();
-        if (Expression != nullptr && (MaterialNodeAlias(Material, Expression).Equals(NodeId, ESearchCase::IgnoreCase) || Expression->GetName().Equals(NodeId, ESearchCase::IgnoreCase)))
+        if (Expression == nullptr)
+        {
+            continue;
+        }
+        if (MaterialExpressionNodeId(Expression).Equals(NodeId, ESearchCase::IgnoreCase)
+            || Expression->GetPathName().Equals(NodeId, ESearchCase::IgnoreCase)
+            || Expression->GetName().Equals(NodeId, ESearchCase::IgnoreCase)
+            || AliasFor(Expression).Equals(NodeId, ESearchCase::IgnoreCase))
         {
             return Expression;
         }
     }
     return nullptr;
+}
+
+UMaterialExpression* ResolveMaterialInterfaceNode(UMaterial* Material, const FString& NodeId)
+{
+    if (Material == nullptr)
+    {
+        return nullptr;
+    }
+    return ResolveMaterialInterfaceNodeFromExpressions(Material->GetExpressions(), NodeId, [Material](UMaterialExpression* Expression)
+    {
+        return MaterialNodeAlias(Material, Expression);
+    });
+}
+
+UMaterialExpression* ResolveMaterialInterfaceNode(UMaterialFunction* Function, const FString& NodeId)
+{
+    if (Function == nullptr)
+    {
+        return nullptr;
+    }
+    return ResolveMaterialInterfaceNodeFromExpressions(Function->GetExpressions(), NodeId, [Function](UMaterialExpression* Expression)
+    {
+        return MaterialNodeAlias(Function, Expression);
+    });
 }
 
 FString MaterialOutputName(UMaterialExpression* Expression, int32 Index)

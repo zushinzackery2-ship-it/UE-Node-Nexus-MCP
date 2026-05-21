@@ -1,121 +1,15 @@
 #include "UeNodeNexusBridgeOperations.h"
 
+#include "UeNodeNexusBridgeAssetCreateHelpers.h"
+
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "Engine/Blueprint.h"
-#include "Factories/MaterialFactoryNew.h"
-#include "Factories/MaterialInstanceConstantFactoryNew.h"
 #include "FileHelpers.h"
-#include "GameFramework/Actor.h"
-#include "Kismet2/KismetEditorUtilities.h"
-#include "Materials/Material.h"
-#include "Materials/MaterialInstanceConstant.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UObject/Package.h"
 
 namespace UeNodeNexusBridge
 {
-static bool ParseAssetPath(const FString& AssetPath, FString& OutPackageName, FString& OutAssetName, FText& OutReason)
-{
-    const int32 LastSlashIndex = AssetPath.Find(TEXT("/"), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
-    const int32 LastDotIndex = AssetPath.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
-    const bool bLooksLikeObjectPath = LastDotIndex > LastSlashIndex;
-
-    if (bLooksLikeObjectPath && FPackageName::IsValidObjectPath(AssetPath, &OutReason))
-    {
-        OutPackageName = FPackageName::ObjectPathToPackageName(AssetPath);
-        OutAssetName = FPackageName::ObjectPathToObjectName(AssetPath);
-    }
-    else if (FPackageName::IsValidLongPackageName(AssetPath, false, &OutReason))
-    {
-        OutPackageName = AssetPath;
-        OutAssetName = FPackageName::GetLongPackageAssetName(AssetPath);
-    }
-    else
-    {
-        return false;
-    }
-
-    if (!FPackageName::IsValidLongPackageName(OutPackageName, false, &OutReason) || OutAssetName.IsEmpty())
-    {
-        return false;
-    }
-    return true;
-}
-
-static TSharedPtr<FJsonObject> MakeCreateDiff(const FString& AssetPath, const FString& AssetKind, const FString& AssetClass)
-{
-    TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-    Item->SetStringField(TEXT("asset_path"), AssetPath);
-    Item->SetStringField(TEXT("asset_kind"), AssetKind);
-    Item->SetStringField(TEXT("asset_class"), AssetClass);
-
-    TSharedPtr<FJsonObject> Diff = MakeEmptyDiff();
-    Diff->SetArrayField(TEXT("assets_created"), { MakeShared<FJsonValueObject>(Item) });
-    return Diff;
-}
-
-static TSharedPtr<FJsonObject> MakeCreateData(const FString& AssetPath, const FString& AssetKind, UObject* Asset, bool bDryRun, bool bSaved)
-{
-    const FString AssetClass = Asset ? Asset->GetClass()->GetPathName() : FString();
-    TSharedPtr<FJsonObject> Data = MakeWriteData(
-        bDryRun,
-        !bDryRun && Asset != nullptr,
-        !bDryRun && Asset != nullptr,
-        MakeCreateDiff(AssetPath, AssetKind, AssetClass),
-        MakePinIntegrity(true, {}, {}),
-        MakeCompilePostCheck(false, false, true, 0, 0),
-        MakeDirtyState(Asset));
-
-    Data->SetStringField(TEXT("asset_path"), AssetPath);
-    Data->SetStringField(TEXT("asset_kind"), AssetKind);
-    Data->SetStringField(TEXT("asset_class"), AssetClass);
-    const TSharedPtr<FJsonObject>* PostChecks = nullptr;
-    if (Data->TryGetObjectField(TEXT("post_checks"), PostChecks) && PostChecks != nullptr)
-    {
-        const TSharedPtr<FJsonObject>* DirtyState = nullptr;
-        if ((*PostChecks)->TryGetObjectField(TEXT("dirty_state"), DirtyState) && DirtyState != nullptr)
-        {
-            (*DirtyState)->SetBoolField(TEXT("saved"), bSaved);
-        }
-    }
-    return Data;
-}
-
-static UObject* CreateMaterialAsset(UPackage* Package, const FName AssetName)
-{
-    UMaterialFactoryNew* Factory = NewObject<UMaterialFactoryNew>();
-    return Factory->FactoryCreateNew(UMaterial::StaticClass(), Package, AssetName, RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn);
-}
-
-static UObject* CreateMaterialInstanceAsset(UPackage* Package, const FName AssetName, const FString& ParentAssetPath)
-{
-    UMaterialInstanceConstantFactoryNew* Factory = NewObject<UMaterialInstanceConstantFactoryNew>();
-    if (!ParentAssetPath.IsEmpty())
-    {
-        Factory->InitialParent = LoadObject<UMaterialInterface>(nullptr, *ParentAssetPath);
-        if (Factory->InitialParent == nullptr)
-        {
-            return nullptr;
-        }
-    }
-    return Factory->FactoryCreateNew(UMaterialInstanceConstant::StaticClass(), Package, AssetName, RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn);
-}
-
-static UObject* CreateBlueprintAsset(UPackage* Package, const FName AssetName, const FString& ParentClassPath)
-{
-    UClass* ParentClass = AActor::StaticClass();
-    if (!ParentClassPath.IsEmpty())
-    {
-        ParentClass = LoadObject<UClass>(nullptr, *ParentClassPath);
-    }
-    if (ParentClass == nullptr || !FKismetEditorUtilities::CanCreateBlueprintOfClass(ParentClass))
-    {
-        return nullptr;
-    }
-    return FKismetEditorUtilities::CreateBlueprint(ParentClass, Package, AssetName, BPTYPE_Normal);
-}
-
 TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     FString AssetPath;
@@ -138,10 +32,25 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
     }
     const FString ObjectPath = PackageName + TEXT(".") + AssetName;
 
-    if (FindObject<UObject>(nullptr, *ObjectPath) != nullptr || FPackageName::DoesPackageExist(PackageName))
+    UObject* ExistingObject = FindObject<UObject>(nullptr, *ObjectPath);
+    FString PackageFilename;
+    bool bPackageExists = FPackageName::DoesPackageExist(PackageName, &PackageFilename);
+    if (ExistingObject != nullptr && !bPackageExists && IsDiscardedAssetObject(ExistingObject))
+    {
+        const bool bReleasedObjectPath = ReleaseDiscardedAssetObject(ObjectPath);
+        ExistingObject = FindObject<UObject>(nullptr, *ObjectPath);
+        bPackageExists = FPackageName::DoesPackageExist(PackageName, &PackageFilename);
+        if (!bReleasedObjectPath && ExistingObject != nullptr && IsDiscardedAssetObject(ExistingObject))
+        {
+            ExistingObject = nullptr;
+        }
+    }
+
+    if (ExistingObject != nullptr || bPackageExists)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("asset_already_exists"), TEXT("Asset package already exists")));
+        Response->SetObjectField(TEXT("data"), BuildAssetCreateConflictData(PackageName, ObjectPath, ExistingObject, bPackageExists, PackageFilename));
         return Response;
     }
 
@@ -175,6 +84,18 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
     else if (AssetKind.Equals(TEXT("blueprint"), ESearchCase::IgnoreCase))
     {
         Asset = CreateBlueprintAsset(Package, FName(*AssetName), ParentClassPath);
+    }
+    else if (AssetKind.Equals(TEXT("material_function"), ESearchCase::IgnoreCase))
+    {
+        Asset = CreateMaterialFunctionAsset(Package, FName(*AssetName));
+    }
+    else if (AssetKind.Equals(TEXT("data_asset"), ESearchCase::IgnoreCase))
+    {
+        Asset = CreateDataAsset(Package, FName(*AssetName), ParentClassPath);
+    }
+    else if (AssetKind.Equals(TEXT("texture_render_target_2d"), ESearchCase::IgnoreCase))
+    {
+        Asset = CreateTextureRenderTarget2DAsset(Package, FName(*AssetName));
     }
 
     if (Asset == nullptr)

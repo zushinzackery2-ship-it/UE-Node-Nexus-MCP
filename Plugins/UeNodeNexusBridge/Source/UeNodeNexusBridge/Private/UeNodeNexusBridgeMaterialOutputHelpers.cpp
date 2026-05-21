@@ -88,13 +88,24 @@ FExpressionInput* ResolveMaterialOutputInput(UMaterial* Material, const FString&
         return nullptr;
     }
 
+    EMaterialProperty Property = MP_MAX;
+    return ResolveMaterialOutputProperty(PinId, Property) ? Material->GetExpressionInputForProperty(Property) : nullptr;
+}
+
+bool ResolveMaterialOutputProperty(const FString& PinId, EMaterialProperty& OutProperty)
+{
     FString Target = PinId;
     Target.TrimStartAndEndInline();
     if (Target.IsNumeric())
     {
         const TArray<EMaterialProperty> Properties = MaterialOutputProperties();
         const int32 Index = FCString::Atoi(*Target);
-        return Properties.IsValidIndex(Index) ? Material->GetExpressionInputForProperty(Properties[Index]) : nullptr;
+        if (Properties.IsValidIndex(Index))
+        {
+            OutProperty = Properties[Index];
+            return true;
+        }
+        return false;
     }
 
     Target.RemoveFromStart(TEXT("MP_"), ESearchCase::IgnoreCase);
@@ -107,9 +118,10 @@ FExpressionInput* ResolveMaterialOutputInput(UMaterial* Material, const FString&
         NormalizedName.ReplaceInline(TEXT("_"), TEXT(""));
         if (NormalizedName.Equals(Target, ESearchCase::IgnoreCase))
         {
-            return Material->GetExpressionInputForProperty(Property);
+            OutProperty = Property;
+            return true;
         }
     }
-    return nullptr;
+    return false;
 }
 }

@@ -5,6 +5,7 @@
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
+#include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeGraphGroupedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNodeInterfaceOps.h"
@@ -91,6 +92,53 @@ static TSharedPtr<FJsonObject> BuildMaterialGraphNodeInfo(const FString& Operati
     return Response;
 }
 
+static TSharedPtr<FJsonObject> BuildMaterialFunctionGraphNodeInfo(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload)
+{
+    FString Format = TEXT("indexed");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (Format.Equals(TEXT("grouped"), ESearchCase::IgnoreCase))
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+        Response->SetObjectField(TEXT("data"), BuildMaterialFunctionGraphGroupedData(Function, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        return Response;
+    }
+    if (!Format.Equals(TEXT("text"), ESearchCase::IgnoreCase))
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+        Response->SetObjectField(TEXT("data"), BuildMaterialFunctionGraphIndexedData(Function, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        return Response;
+    }
+
+    const int32 MaxNodes = ReadGraphNodeInfoMaxNodes(Payload);
+    const TSharedPtr<FJsonObject> NodePayload = MakeGraphNodeInfoPayload(Payload);
+    const TConstArrayView<TObjectPtr<UMaterialExpression>> Expressions = Function->GetExpressions();
+
+    FString Text = FString::Printf(TEXT("Graph.Asset = %s\nGraph.Kind = material_function\nGraph.Name = MaterialFunctionGraph\nGraph.Nodes = %d\n\n"), *Function->GetPathName(), Expressions.Num());
+    int32 ReturnedNodes = 0;
+    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Expressions)
+    {
+        UMaterialExpression* Expression = ExpressionPtr.Get();
+        if (Expression == nullptr)
+        {
+            continue;
+        }
+        if (MaxNodes > 0 && ReturnedNodes >= MaxNodes)
+        {
+            break;
+        }
+
+        TSharedPtr<FJsonObject> NodeData = BuildMaterialFunctionNodeInterfaceData(Function, Expression, NodePayload, FString());
+        Text += FString::Printf(TEXT("--- node_%02d ---\n"), ReturnedNodes);
+        Text += NodeData->GetStringField(TEXT("text"));
+        Text += TEXT("\n");
+        ++ReturnedNodes;
+    }
+
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+    Response->SetObjectField(TEXT("data"), MakeGraphNodeInfoData(Function->GetPathName(), TEXT("material_function"), TEXT("MaterialFunctionGraph"), Expressions.Num(), ReturnedNodes, Text));
+    return Response;
+}
+
 static TSharedPtr<FJsonObject> BuildBlueprintGraphNodeInfo(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload)
 {
     UEdGraph* Graph = ResolveBlueprintNodeInterfaceGraph(Blueprint, Payload);
@@ -159,13 +207,17 @@ TSharedPtr<FJsonObject> HandleGraphNodeInfoGet(const FString& Operation, const F
     {
         return BuildMaterialGraphNodeInfo(Operation, RequestId, Material, Payload);
     }
+    if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
+    {
+        return BuildMaterialFunctionGraphNodeInfo(Operation, RequestId, Function, Payload);
+    }
     if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
     {
         return BuildBlueprintGraphNodeInfo(Operation, RequestId, Blueprint, Payload);
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("unsupported_asset_class"), TEXT("graph_node_info_get supports Blueprint and Material assets")));
+    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("unsupported_asset_class"), TEXT("graph_node_info_get supports Blueprint, Material, and MaterialFunction assets")));
     return Response;
 }
 }

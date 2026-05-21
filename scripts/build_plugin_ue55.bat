@@ -100,7 +100,9 @@ if not exist "%UBT_CONFIG_DIR%" mkdir "%UBT_CONFIG_DIR%"
     echo     ^<bAllowUBAExecutor^>false^</bAllowUBAExecutor^>
     echo     ^<bAllowUBALocalExecutor^>false^</bAllowUBALocalExecutor^>
     echo     ^<bAllowHotReloadFromIDE^>false^</bAllowHotReloadFromIDE^>
-    echo   ^</BuildConfiguration^>
+    echo     ^<bUsePrecompiled^>true^</bUsePrecompiled^>
+    echo     ^<bSkipRulesCompile^>true^</bSkipRulesCompile^>
+  echo   ^</BuildConfiguration^>
     echo ^</Configuration^>
 ) > "%UBT_CONFIG_DIR%\BuildConfiguration.xml"
 

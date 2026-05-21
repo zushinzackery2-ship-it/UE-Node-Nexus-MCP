@@ -2,6 +2,7 @@
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
@@ -27,6 +28,53 @@ static TSharedPtr<FJsonValue> AssetDataToRow(const FAssetData& AssetData)
     Row.Add(MakeShared<FJsonValueBoolean>(AssetData.IsAssetLoaded()));
     Row.Add(MakeShared<FJsonValueBoolean>(AssetData.IsRedirector()));
     return MakeShared<FJsonValueArray>(Row);
+}
+
+static TSharedPtr<FJsonObject> BuildAssetListIndexedData(
+    const TArray<FAssetData>& Assets,
+    int32 Offset,
+    int32 Limit,
+    bool bHasMore,
+    int32 TotalMatches)
+{
+    TMap<FString, int32> ClassDict;
+    TArray<FString> Classes;
+    TMap<FString, int32> FolderDict;
+    TArray<FString> Folders;
+    TArray<FString> Rows;
+
+    for (int32 Index = 0; Index < Assets.Num(); ++Index)
+    {
+        const FAssetData& AssetData = Assets[Index];
+        const int32 ClassIndex = DictIndex(ClassDict, Classes, AssetData.AssetClassPath.GetAssetName().ToString());
+        const int32 FolderIndex = DictIndex(FolderDict, Folders, AssetData.PackagePath.ToString());
+        Rows.Add(FString::Printf(
+            TEXT("%d:%s;c=%d;f=%d;n=%s;l=%d;r=%d"),
+            Offset + Index,
+            *EscapeIndexedToken(AssetData.GetObjectPathString()),
+            ClassIndex,
+            FolderIndex,
+            *EscapeIndexedToken(AssetData.AssetName.ToString()),
+            AssetData.IsAssetLoaded() ? 1 : 0,
+            AssetData.IsRedirector() ? 1 : 0));
+    }
+
+    FString Text = FString::Printf(TEXT("L:count=%d|total=%d|cursor=%d|limit=%d\n"), Assets.Num(), TotalMatches, Offset, Limit);
+    Text += JoinDictionaryLine(TEXT("C:"), Classes);
+    Text += JoinDictionaryLine(TEXT("F:"), Folders);
+    Text += TEXT("A:") + FString::Join(Rows, TEXT("|")) + TEXT("\n");
+
+    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    Data->SetStringField(TEXT("format"), TEXT("asset_list_indexed"));
+    Data->SetNumberField(TEXT("count"), Assets.Num());
+    Data->SetNumberField(TEXT("total"), TotalMatches);
+    Data->SetBoolField(TEXT("has_more"), bHasMore);
+    if (bHasMore)
+    {
+        Data->SetStringField(TEXT("next_cursor"), FString::FromInt(Offset + Assets.Num()));
+    }
+    SetTextPayload(Data, Text);
+    return Data;
 }
 
 static bool ClassMatches(const FAssetData& AssetData, const TArray<FString>& ClassNames)
@@ -89,12 +137,15 @@ TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString&
     const int32 Limit = ReadLimit(Payload, 100, 1000);
     FString Format = TEXT("compact");
     Payload->TryGetStringField(TEXT("format"), Format);
-    const bool bCompact = !Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+    const bool bFull = Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+    const bool bIndexed = Format.Equals(TEXT("indexed"), ESearchCase::IgnoreCase);
+    const bool bCompact = !bFull && !bIndexed;
 
     TArray<FAssetData> Assets;
     FAssetRegistryModule::GetRegistry().GetAllAssets(Assets, true);
 
     TArray<TSharedPtr<FJsonValue>> Items;
+    TArray<FAssetData> IndexedItems;
     int32 MatchedIndex = 0;
     bool bHasMore = false;
 
@@ -108,12 +159,17 @@ TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString&
         {
             continue;
         }
-        if (Items.Num() >= Limit)
+        const int32 ReturnedCount = bIndexed ? IndexedItems.Num() : Items.Num();
+        if (ReturnedCount >= Limit)
         {
             bHasMore = true;
-            break;
+            continue;
         }
-        if (bCompact)
+        if (bIndexed)
+        {
+            IndexedItems.Add(AssetData);
+        }
+        else if (bCompact)
         {
             Items.Add(AssetDataToRow(AssetData));
         }
@@ -121,6 +177,13 @@ TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString&
         {
             Items.Add(MakeShared<FJsonValueObject>(AssetDataToJson(AssetData)));
         }
+    }
+
+    if (bIndexed)
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+        Response->SetObjectField(TEXT("data"), BuildAssetListIndexedData(IndexedItems, Offset, Limit, bHasMore, MatchedIndex));
+        return Response;
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();

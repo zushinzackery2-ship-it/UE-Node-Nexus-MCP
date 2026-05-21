@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "MaterialExpressionIO.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
@@ -56,6 +57,30 @@ static bool AppendSelected(FString& Text, const TArray<FString>& Lines, const TS
     return true;
 }
 
+static TArray<FString> MaterialOutputParamLines(UMaterial* Material)
+{
+    TArray<FString> Lines;
+    for (const TSharedPtr<FJsonValue>& Value : BuildMaterialOutputParams(Material))
+    {
+        TSharedPtr<FJsonObject> Object = Value->AsObject();
+        if (!Object.IsValid())
+        {
+            continue;
+        }
+
+        FString Name;
+        FString ParamValue;
+        Object->TryGetStringField(TEXT("name"), Name);
+        Object->TryGetStringField(TEXT("value"), ParamValue);
+        Lines.Add(FString::Printf(TEXT("- %s=%s"), *Name, *ParamValue));
+    }
+    if (Lines.Num() == 0)
+    {
+        Lines.Add(TEXT("none_nodeparam"));
+    }
+    return Lines;
+}
+
 TSharedPtr<FJsonObject> BuildMaterialOutputInterfaceData(UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
 {
     TArray<FString> Header = {
@@ -66,7 +91,7 @@ TSharedPtr<FJsonObject> BuildMaterialOutputInterfaceData(UMaterial* Material, co
         TEXT("Node.Pos = 0,0")
     };
     TArray<FString> Inputs = MaterialRootInputLines(Material);
-    TArray<FString> Params = { TEXT("none_nodeparam") };
+    TArray<FString> Params = MaterialOutputParamLines(Material);
     TArray<FString> Outputs = { TEXT("none_outpin") };
 
     FString Section = TEXT("all");

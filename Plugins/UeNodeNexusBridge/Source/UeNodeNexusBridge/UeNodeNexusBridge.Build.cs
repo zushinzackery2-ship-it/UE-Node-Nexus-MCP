@@ -9,15 +9,18 @@ public class UeNodeNexusBridge : ModuleRules
 
         PublicDependencyModuleNames.AddRange(new string[]
         {
-            "Core"
+            "Core",
+            "CoreUObject",
+            "Engine"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
             "AssetRegistry",
-            "CoreUObject",
-            "Engine",
+            "AssetTools",
+            "BlueprintGraph",
             "HTTPServer",
+            "InputCore",
             "Json",
             "JsonUtilities",
             "MaterialEditor",

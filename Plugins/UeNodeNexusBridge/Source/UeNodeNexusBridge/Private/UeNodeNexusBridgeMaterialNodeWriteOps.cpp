@@ -10,7 +10,6 @@
 #include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
-#include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
 {
@@ -145,17 +144,20 @@ TSharedPtr<FJsonObject> HandleMaterialNodeCreate(const FString& Operation, const
         const TSharedPtr<FJsonObject>* Params = nullptr;
         if (Payload->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)
         {
+            TSharedPtr<FJsonObject> Diff = MakeEmptyDiff();
             for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Params)->Values)
             {
-                FProperty* Property = Expression->GetClass()->FindPropertyByName(FName(*Pair.Key));
                 FString Value;
                 TSharedPtr<FJsonObject> Wrapper = MakeShared<FJsonObject>();
                 Wrapper->SetField(TEXT("value"), Pair.Value);
-                if (Property != nullptr && Property->HasAnyPropertyFlags(CPF_Edit) && ReadJsonScalarAsString(Wrapper, TEXT("value"), Value))
+                if (!ReadJsonScalarAsString(Wrapper, TEXT("value"), Value) || !ApplyMaterialExpressionParamValue(Material, Expression, Pair.Key, Value, false, Diff))
                 {
-                    Property->ImportText_InContainer(*Value, Expression, Expression, PPF_None);
+                    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+                    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("param_import_failed"), Pair.Key));
+                    return Response;
                 }
             }
+            Expression->PostEditChange();
         }
         Material->MarkPackageDirty();
     }
