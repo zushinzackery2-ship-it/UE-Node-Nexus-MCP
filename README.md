@@ -212,6 +212,12 @@ UE-Node-Nexus-MCP/
 
 ## 运行
 
+先安装 Python server：
+
+```bash
+pip install .
+```
+
 ```bash
 python -m ue_node_nexus_mcp.server
 ```
@@ -226,6 +232,73 @@ ue-node-nexus-mcp
 |:-----|:-----|:-----|
 | **`UE_NEXUS_BRIDGE_URL`** | `http://127.0.0.1:8765` | UE 桥接器端点 |
 | **`UE_NEXUS_TIMEOUT_SECONDS`** | `30` | 桥接器 HTTP 超时时间（秒） |
+
+---
+
+## MCP Client 配置
+
+启动 UE 项目并启用 `UeNodeNexusBridge` 插件后，把 MCP client 配成 stdio 启动 Python server：
+
+```json
+{
+  "mcpServers": {
+    "ue-node-nexus": {
+      "command": "ue-node-nexus-mcp",
+      "env": {
+        "UE_NEXUS_BRIDGE_URL": "http://127.0.0.1:8765",
+        "UE_NEXUS_TIMEOUT_SECONDS": "30"
+      }
+    }
+  }
+}
+```
+
+如果没有安装 console entry，也可以直接用模块入口：
+
+```json
+{
+  "mcpServers": {
+    "ue-node-nexus": {
+      "command": "python",
+      "args": ["-m", "ue_node_nexus_mcp.server"],
+      "env": {
+        "UE_NEXUS_BRIDGE_URL": "http://127.0.0.1:8765"
+      }
+    }
+  }
+}
+```
+
+连接链路为 `MCP Client -> Python MCP Server -> UE Editor Plugin`。UE 未打开、插件未启用或端口不通时，工具会返回桥接器连接错误。
+
+---
+
+## UE 5.5 Release 安装
+
+下载 `UeNodeNexusBridge_UE55_Win64.zip` 后解压，最终目录应为：
+
+```
+UE_5.5/
+└── Engine/
+    └── Plugins/
+        └── UeNodeNexusBridge/
+            ├── Binaries/
+            ├── Source/
+            ├── Config/
+            ├── Resources/
+            └── UeNodeNexusBridge.uplugin
+```
+
+也可以放到项目目录：
+
+```
+YourProject/
+└── Plugins/
+    └── UeNodeNexusBridge/
+        └── UeNodeNexusBridge.uplugin
+```
+
+Release 包的 Win64 二进制只针对 UE 5.5 Launcher Windows x64 验证；其他 UE 5.x 版本请保留 `Source` 并让目标引擎重新编译。
 
 ---
 
