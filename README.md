@@ -23,6 +23,22 @@
 
 ---
 
+## 测试边界
+
+| 项目 | 说明 |
+|:-----|:-----|
+| **实测引擎** | UE 5.5 Launcher Windows x64 |
+| **源码兼容预期** | UE 5.x 同类编辑器环境通常只需要放入目标引擎/项目后重新编译 |
+| **二进制边界** | 预编译插件不承诺跨 UE 小版本通用；更换 UE 版本后应重新编译插件 |
+| **验证范围** | MCP 工具注册、AutoIndex、资产/文件夹管理、材质/蓝图图读写、材质实例参数、Level 材质实例、UE 5.5 插件构建 |
+
+> [!IMPORTANT]
+> **跨版本使用**
+>
+> Unreal 插件二进制与引擎版本、编译器和模块 ABI 绑定。跨 UE 版本使用时请优先按源码重新编译；若 UE API 在目标版本发生变化，需要按编译错误调整插件源码。
+
+---
+
 ## 功能概览
 
 | 功能 | 说明 |
@@ -210,6 +226,23 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package_plugin_ue55.ps1
 | **`scripts/build_plugin_ue55.bat`** | 使用 RunUAT 打包 UE 5.5 桥接插件 |
 | **`scripts/install_ue55_plugin.bat`** | 将打包好的插件复制到 `UE_5.5\Engine\Plugins\Marketplace` |
 | **`scripts/package_plugin_ue55.ps1`** | 创建 `bin\dist\UeNodeNexusBridge-UE5.5-Win64.zip` |
+
+---
+
+## 项目内安装
+
+也可以把源码插件直接放到项目目录，让 Unreal Build Tool 随项目编译：
+
+```
+YourProject/
+└── Plugins/
+    └── UeNodeNexusBridge/
+        ├── Source/
+        ├── Resources/
+        └── UeNodeNexusBridge.uplugin
+```
+
+然后右键 `.uproject` 生成项目文件，或直接打开项目触发 UE 的插件编译提示。该方式适合不同 UE 5.x 项目各自编译自己的插件二进制。
 
 ---
 
