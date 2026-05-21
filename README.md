@@ -146,7 +146,7 @@
 | **`grouped`** | 人读整图包，按节点类型聚合；每个节点包含 `p[...]` 参数和 `i[...]` 输入连线 |
 | **`node_info_text`** | 单节点编辑视图，包含节点名、类、短 ID、真实 ID、位置、输入、参数和输出 |
 
-所有 MCP 响应根对象会附带一个整数 `remaining_errors`，默认 `0`。进程内可通过运行时状态设置；外部进程可用 `UE_NEXUS_REMAINING_ERRORS` 覆盖该值。
+所有 MCP 响应根对象末端会附带一个整数 `remaining_errors`，默认 `0`。该值由当前响应实时计算：结构化 `error`、`error/fatal` 级 diagnostics、嵌套 `error_count`/`remaining_errors` 会计入总数。
 
 > [!NOTE]
 > **节点参数语义**

@@ -12,7 +12,6 @@ from .contracts import DEFAULT_FEATURE_GROUPS, DEFAULT_HIDDEN_OPERATIONS, FEATUR
 mcp = FastMCP("UE Node Nexus MCP")
 bridge = UeBridgeClient()
 _enabled_features = None
-_remaining_errors_count = 0
 
 
 def _parse_bool(value: str) -> bool:
@@ -160,27 +159,57 @@ def hidden_tool(feature: str | None = None):
     return decorator
 
 
-def _parse_remaining_errors_count(value: str) -> int:
+def _coerce_error_count(value: Any) -> int:
     try:
-        return max(0, int(value.strip()))
-    except ValueError:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _count_diagnostic_errors(items: Any) -> int:
+    if not isinstance(items, list):
+        return 0
+    total = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        severity = str(item.get("severity", "")).strip().lower()
+        if severity in {"error", "fatal"}:
+            total += 1
+    return total
+
+
+def _count_nested_errors(value: Any) -> int:
+    if isinstance(value, list):
+        return sum(_count_nested_errors(item) for item in value)
+    if not isinstance(value, dict):
+        return 0
+
+    total = 0
+    for key, child in value.items():
+        if key == "diagnostics":
+            total += _count_diagnostic_errors(child)
+            continue
+        if key in {"remaining_errors", "error_count"}:
+            total += _coerce_error_count(child)
+            continue
+        if key == "error" and isinstance(child, dict):
+            total += 1
+            continue
+        total += _count_nested_errors(child)
+    return total
+
+
+def _count_response_errors(response: dict[str, Any]) -> int:
+    total = _count_nested_errors(response)
+    if response.get("ok") is False and total == 0:
         return 1
-
-
-def set_remaining_errors_count(count: int) -> None:
-    global _remaining_errors_count
-    _remaining_errors_count = max(0, int(count))
-
-
-def remaining_errors_count() -> int:
-    configured = os.getenv("UE_NEXUS_REMAINING_ERRORS")
-    if configured is not None:
-        return _parse_remaining_errors_count(configured)
-    return _remaining_errors_count
+    return total
 
 
 def _with_remaining_errors(response: dict[str, Any]) -> dict[str, Any]:
-    response.setdefault("remaining_errors", remaining_errors_count())
+    response.pop("remaining_errors", None)
+    response["remaining_errors"] = _count_response_errors(response)
     return response
 
 
