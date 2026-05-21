@@ -2,7 +2,7 @@
 
 # UE Node Nexus MCP
 
-**Unreal Engine 材质与蓝图图编辑工作流的 MCP 桥接工具**
+**Unreal Engine Material 与 Blueprint Graph 工作流的 MCP 桥接工具**
 
 *类型安全、紧凑、编译感知的固定工具集，无需模型自行编写 Python 脚本*
 
@@ -19,7 +19,7 @@
 > [!NOTE]
 > **仓库边界**
 >
-> 本项目是 Unreal Editor 的节点图 MCP 桥接器，聚焦于资产发现、材质/蓝图图结构检查与编辑、编译诊断、材质实例参数读写以及安全的包保存流程。不包含场景布局自动化和任意 Python 执行功能。
+> 本项目是 Unreal Editor 的 node graph MCP 桥接器，聚焦于 asset discovery、Material/Blueprint graph 检查与编辑、compile diagnostics、Material Instance 参数读写以及安全的 package save 流程。不包含场景布局自动化和任意 Python 执行功能。
 
 ---
 
@@ -30,7 +30,7 @@
 | **实测引擎** | UE 5.5 Launcher Windows x64 |
 | **源码兼容预期** | UE 5.x 同类编辑器环境通常只需要放入目标引擎/项目后重新编译 |
 | **二进制边界** | 预编译插件不承诺跨 UE 小版本通用；更换 UE 版本后应重新编译插件 |
-| **验证范围** | MCP 工具注册、AutoIndex、资产/文件夹管理、材质/蓝图图读写、材质实例参数、Level 材质实例、UE 5.5 插件构建 |
+| **验证范围** | MCP 工具注册、AutoIndex、asset/folder 管理、Material/Blueprint graph 读写、Material Instance 参数、Level material usage、UE 5.5 插件构建 |
 
 > [!IMPORTANT]
 > **跨版本使用**
@@ -46,18 +46,18 @@
 | **固定 MCP 工具** | Python MCP Server 默认暴露 56 个类型化工具，向 UE 桥接器转发经过校验的请求载荷 |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
-| **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张材质/蓝图的节点、参数和连线 |
-| **图安全写入** | `graph_patch_apply` 编辑蓝图引脚或材质表达式连线，返回差异、引脚完整性、编译状态和脏标记 |
+| **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
+| **图安全写入** | `graph_patch_apply` 编辑 Blueprint pin 或 Material Expression 连线，返回差异、引脚完整性、编译状态和脏标记 |
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
-| **材质实例参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
+| **Material Instance 参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
 | **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
-| **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖内容浏览器清理闭环 |
-| **Level 材质实例** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、材质槽、MI 参数和材质使用点 |
+| **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖 Content Browser 清理闭环 |
+| **Level material usage** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、material slot、Material Instance 参数和材质使用点 |
 | **复杂材质复刻** | 已验证可通过固定 MCP 接口读取整图、创建节点、回放参数、连接根输出、编译并保存 |
 | **蓝图摘要** | `blueprint_details_get` 读取类元数据、变量、CDO 默认值和组件模板 |
 | **动画蓝图摘要** | `anim_blueprint_summary_get` 提取常用 AnimGraph 节点的紧凑语义摘要 |
-| **资产创建** | `asset_create` 支持材质、材质实例常量和蓝图资产的固定创建流程 |
+| **资产创建** | `asset_create` 支持 Material、Material Instance Constant 和 Blueprint 资产的固定创建流程 |
 | **编译与保存** | `asset_compile`、`asset_validate`、`asset_save` 返回结构化诊断和包状态 |
 
 ---
@@ -68,7 +68,7 @@
 |:-----|:----|:-----|
 | **资产** | `asset_list()` | 列出 Unreal 资产，支持紧凑和完整格式 |
 | **资产** | `asset_get()` | 读取单个资产的元数据 |
-| **资产** | `asset_create()` | 创建材质、材质实例或蓝图资产，支持试运行 |
+| **资产** | `asset_create()` | 创建 Material、Material Instance 或 Blueprint 资产，支持试运行 |
 | **资产** | `asset_delete()` | 删除资产并可清理删除后的 registry/disk 状态 |
 | **资产** | `asset_move()` / `asset_rename()` | 移动或重命名单个资产，可保存并修复 redirector |
 | **资产** | `asset_move_batch()` / `asset_rename_batch()` | 批量移动或重命名，支持逐项结果和 `continue_on_error` |
@@ -86,10 +86,10 @@
 | **关卡** | `level_actor_transform_get()` / `level_actor_transform_set()` | 读取或写入 Actor 世界 transform |
 | **关卡** | `object_properties_get()` / `object_properties_set()` | 读取或写入 UObject 属性，默认只写可编辑属性 |
 | **关卡材质** | `level_mesh_instances_list()` | 枚举当前 Level 网格实例、组件路径和材质槽摘要 |
-| **关卡材质** | `component_materials_get()` / `component_materials_set()` | 读取或替换网格组件材质槽 |
-| **关卡材质** | `material_interface_resolve()` | 解析材质接口、材质实例父链和 root material |
-| **关卡材质** | `material_usage_find()` | 查找当前 Level 或资产中材质使用点 |
-| **关卡材质** | `component_material_instance_params_get()` / `component_material_instance_params_set()` | 读写组件材质槽上的 MID/MI 参数 |
+| **关卡材质** | `component_materials_get()` / `component_materials_set()` | 读取或替换网格组件 material slot |
+| **关卡材质** | `material_interface_resolve()` | 解析 Material Interface、Material Instance parent chain 和 root material |
+| **关卡材质** | `material_usage_find()` | 查找当前 Level 或资产中的 material usage |
+| **关卡材质** | `component_material_instance_params_get()` / `component_material_instance_params_set()` | 读写组件 material slot 上的 MID/MI 参数 |
 | **蓝图** | `blueprint_details_get()` | 读取蓝图元数据、变量、CDO 默认值和组件 |
 | **蓝图** | `anim_blueprint_summary_get()` | 读取常用 AnimGraph 节点的紧凑语义摘要 |
 | **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny` |
@@ -104,8 +104,8 @@
 | **节点参数** | `node_params_get()` | 读取单个图节点的可编辑参数 |
 | **节点参数** | `node_params_set()` | 写入节点参数，附带编译诊断 |
 | **材质节点类** | `material_expression_classes_list()` | 枚举材质表达式节点类及其可编辑属性 schema 数量 |
-| **材质实例** | `material_instance_params_get()` | 读取材质实例参数值 |
-| **材质实例** | `material_instance_params_set()` | 写入材质实例参数，附带类型校验 |
+| **Material Instance** | `material_instance_params_get()` | 读取 Material Instance 参数值 |
+| **Material Instance** | `material_instance_params_set()` | 写入 Material Instance 参数，附带类型校验 |
 | **诊断** | `asset_compile()` | 编译蓝图或材质资产，返回诊断信息 |
 | **诊断** | `asset_validate()` | 校验资产，返回机器可读的结果 |
 | **诊断** | `diagnostics_get()` | 读取最近的桥接器诊断信息 |
@@ -208,9 +208,9 @@ ue-node-nexus-mcp
 
 ---
 
-## 插件编译
+## Plugin 编译
 
-把源码插件直接放到项目目录，让 Unreal Build Tool 随项目编译：
+把源码插件作为 Project Plugin 放到项目目录，让 Unreal Build Tool 随项目编译：
 
 ```
 YourProject/
@@ -223,7 +223,7 @@ YourProject/
 
 然后右键 `.uproject` 生成项目文件，或直接打开项目触发 UE 的插件编译提示。该方式适合不同 UE 5.x 项目各自编译自己的插件二进制。
 
-也可以把同一目录放到目标引擎的 `Engine/Plugins/Marketplace/UeNodeNexusBridge/` 下，再用该引擎重新编译插件。
+也可以把同一目录作为 Engine Plugin 放到目标引擎的 `Engine/Plugins/Marketplace/UeNodeNexusBridge/` 下，再用该引擎重新编译插件。
 
 ---
 
