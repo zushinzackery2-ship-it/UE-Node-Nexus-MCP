@@ -181,11 +181,6 @@ UE-Node-Nexus-MCP/
 │       ├── Source/
 │       ├── Resources/
 │       └── UeNodeNexusBridge.uplugin
-├── scripts/
-│   ├── build_plugin_ue55.bat
-│   ├── install_ue55_plugin.bat
-│   ├── package_plugin_ue55.ps1
-│   └── run_mcp_server.py
 ├── src/
 │   └── ue_node_nexus_mcp/
 ├── pyproject.toml
@@ -200,6 +195,12 @@ UE-Node-Nexus-MCP/
 python -m ue_node_nexus_mcp.server
 ```
 
+安装为 Python 包后也可以使用 console entry：
+
+```bash
+ue-node-nexus-mcp
+```
+
 | 环境变量 | 默认值 | 说明 |
 |:-----|:-----|:-----|
 | **`UE_NEXUS_BRIDGE_URL`** | `http://127.0.0.1:8765` | UE 桥接器端点 |
@@ -207,31 +208,9 @@ python -m ue_node_nexus_mcp.server
 
 ---
 
-## 构建
+## 插件编译
 
-```bat
-.\scripts\build_plugin_ue55.bat
-```
-
-```bat
-.\scripts\install_ue55_plugin.bat
-```
-
-```bash
-powershell -ExecutionPolicy Bypass -File .\scripts\package_plugin_ue55.ps1
-```
-
-| 脚本 | 说明 |
-|:-----|:-----|
-| **`scripts/build_plugin_ue55.bat`** | 使用 RunUAT 打包 UE 5.5 桥接插件 |
-| **`scripts/install_ue55_plugin.bat`** | 将打包好的插件复制到 `UE_5.5\Engine\Plugins\Marketplace` |
-| **`scripts/package_plugin_ue55.ps1`** | 创建 `bin\dist\UeNodeNexusBridge-UE5.5-Win64.zip` |
-
----
-
-## 项目内安装
-
-也可以把源码插件直接放到项目目录，让 Unreal Build Tool 随项目编译：
+把源码插件直接放到项目目录，让 Unreal Build Tool 随项目编译：
 
 ```
 YourProject/
@@ -243,6 +222,8 @@ YourProject/
 ```
 
 然后右键 `.uproject` 生成项目文件，或直接打开项目触发 UE 的插件编译提示。该方式适合不同 UE 5.x 项目各自编译自己的插件二进制。
+
+也可以把同一目录放到目标引擎的 `Engine/Plugins/Marketplace/UeNodeNexusBridge/` 下，再用该引擎重新编译插件。
 
 ---
 
