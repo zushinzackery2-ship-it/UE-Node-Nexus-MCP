@@ -207,7 +207,7 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
     Data->SetNumberField(TEXT("emitter_count"), System->GetEmitterHandles().Num());
     Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
-    Data->SetNumberField(TEXT("remaining_errors"), System->IsReadyToRun() && NiagaraSystemHasEmitterStack(System) ? 0 : 1);
+    Data->SetNumberField(TEXT("readiness_issue_count"), System->IsReadyToRun() && NiagaraSystemHasEmitterStack(System) ? 0 : 1);
     Data->SetBoolField(TEXT("saved"), bSaved);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);

@@ -115,7 +115,7 @@
 | **Niagara** | `niagara_system_summary_get()` / `niagara_emitters_list()` | 读取 Niagara System、Emitter、Renderer 和 User 参数数量摘要 |
 | **Niagara** | `niagara_user_params_get()` / `niagara_user_params_set()` | 读取或写入 Niagara User 参数，支持 float/int/bool/vector/color/material |
 | **Niagara** | `niagara_materials_get()` / `niagara_materials_set()` | 读取或替换 Sprite、Ribbon、Mesh Renderer 材质 |
-| **Niagara** | `niagara_compile()` | 请求 Niagara System 编译并返回 ready/needs_compile/remaining_errors |
+| **Niagara** | `niagara_compile()` | 请求 Niagara System 编译并返回 ready/needs_compile/readiness_issue_count |
 | **诊断** | `asset_compile()` | 编译蓝图或材质资产，返回诊断信息 |
 | **诊断** | `asset_validate()` | 校验资产，返回机器可读的结果 |
 | **诊断** | `diagnostics_get()` | 读取最近的桥接器诊断信息 |
@@ -146,7 +146,7 @@
 | **`grouped`** | 人读整图包，按节点类型聚合；每个节点包含 `p[...]` 参数和 `i[...]` 输入连线 |
 | **`node_info_text`** | 单节点编辑视图，包含节点名、类、短 ID、真实 ID、位置、输入、参数和输出 |
 
-所有 MCP 响应根对象末端会附带一个整数 `remaining_errors`，默认 `0`。该值由当前响应实时计算：结构化 `error`、`error/fatal` 级 diagnostics、嵌套 `error_count`/`remaining_errors` 会计入总数。
+所有 MCP 响应根对象末端会附带一个整数 `remaining_errors`，默认 `0`。该值由当前响应实时计算：结构化 `error`、`error/fatal` 级 diagnostics、嵌套 `error_count` 会计入总数。`remaining_errors` 是根级保留字段，嵌套同名字段会被 wrapper 移除，避免业务 data 与全局错误汇总混用。
 
 > [!NOTE]
 > **节点参数语义**
@@ -319,7 +319,7 @@ ue-node-nexus-mcp --features core,asset,material --niagara-support=false
 
 ## UE 5.5 Release 安装
 
-下载 `UeNodeNexusBridge_UE55_Win64.zip` 后解压，最终目录应为：
+下载 `UeNodeNexusBridge-UE5.5-Win64.zip` 后解压，最终目录应为：
 
 ```
 UE_5.5/
@@ -361,7 +361,7 @@ YourProject/
 
 然后右键 `.uproject` 生成项目文件，或直接打开项目触发 UE 的插件编译提示。该方式适合不同 UE 5.x 项目各自编译自己的插件二进制。
 
-也可以把同一目录作为 Engine Plugin 放到目标引擎的 `Engine/Plugins/Marketplace/UeNodeNexusBridge/` 下，再用该引擎重新编译插件。
+也可以把同一目录作为 Engine Plugin 放到目标引擎的 `Engine/Plugins/UeNodeNexusBridge/` 下，再用该引擎重新编译插件。
 
 ---
 

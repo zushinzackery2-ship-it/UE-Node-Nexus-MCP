@@ -190,7 +190,7 @@ def _count_nested_errors(value: Any) -> int:
         if key == "diagnostics":
             total += _count_diagnostic_errors(child)
             continue
-        if key in {"remaining_errors", "error_count"}:
+        if key == "error_count":
             total += _coerce_error_count(child)
             continue
         if key == "error" and isinstance(child, dict):
@@ -198,6 +198,21 @@ def _count_nested_errors(value: Any) -> int:
             continue
         total += _count_nested_errors(child)
     return total
+
+
+def _strip_nested_remaining_errors(value: Any) -> None:
+    if isinstance(value, list):
+        for item in value:
+            _strip_nested_remaining_errors(item)
+        return
+    if not isinstance(value, dict):
+        return
+
+    for key in list(value):
+        if key == "remaining_errors":
+            value.pop(key, None)
+            continue
+        _strip_nested_remaining_errors(value[key])
 
 
 def _count_response_errors(response: dict[str, Any]) -> int:
@@ -209,6 +224,7 @@ def _count_response_errors(response: dict[str, Any]) -> int:
 
 def _with_remaining_errors(response: dict[str, Any]) -> dict[str, Any]:
     response.pop("remaining_errors", None)
+    _strip_nested_remaining_errors(response)
     response["remaining_errors"] = _count_response_errors(response)
     return response
 
