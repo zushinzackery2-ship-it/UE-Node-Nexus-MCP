@@ -196,10 +196,14 @@ TSharedPtr<FJsonObject> HandleObjectPropertiesSet(const FString& Operation, cons
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     bool bAllowNonEditable = false;
     Payload->TryGetBoolField(TEXT("allow_non_editable"), bAllowNonEditable);
+    bool bSaveConfig = false;
+    Payload->TryGetBoolField(TEXT("save_config"), bSaveConfig);
 
     TArray<TSharedPtr<FJsonValue>> Results;
     int32 Planned = 0;
     int32 Changed = 0;
+    bool bConfigSaved = false;
+    FString ConfigFile;
     for (const TSharedPtr<FJsonValue>& ParamValue : *Params)
     {
         TSharedPtr<FJsonObject> Param = ParamValue->AsObject();
@@ -265,11 +269,18 @@ TSharedPtr<FJsonObject> HandleObjectPropertiesSet(const FString& Operation, cons
         Result->SetStringField(TEXT("error"), Error);
         Results.Add(MakeShared<FJsonValueObject>(Result));
     }
+    if (!bDryRun && bSaveConfig && Changed > 0)
+    {
+        bConfigSaved = SaveObjectConfig(Object, ConfigFile);
+    }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     AddObjectIdentity(Object, Data);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("allow_non_editable"), bAllowNonEditable);
+    Data->SetBoolField(TEXT("save_config"), bSaveConfig);
+    Data->SetBoolField(TEXT("config_saved"), bConfigSaved);
+    Data->SetStringField(TEXT("config_file"), ConfigFile);
     Data->SetBoolField(TEXT("applied"), !bDryRun);
     Data->SetBoolField(TEXT("changed"), Changed > 0);
     Data->SetNumberField(TEXT("planned_count"), Planned);

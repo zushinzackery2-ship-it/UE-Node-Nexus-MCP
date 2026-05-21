@@ -71,6 +71,7 @@ def object_properties_set(
     params: list[dict[str, Any]],
     dry_run: bool = True,
     allow_non_editable: bool = False,
+    save_config: bool = False,
 ) -> dict[str, Any]:
     """Set reflected UObject properties using value, structured value objects, or Unreal value_text."""
     require_non_empty_string(object_path, "object_path")
@@ -82,6 +83,7 @@ def object_properties_set(
             "params": params,
             "dry_run": dry_run,
             "allow_non_editable": allow_non_editable,
+            "save_config": save_config,
         },
     )
 

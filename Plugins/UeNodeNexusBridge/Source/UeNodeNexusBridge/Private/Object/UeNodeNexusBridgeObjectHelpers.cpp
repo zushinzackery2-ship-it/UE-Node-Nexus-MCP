@@ -2,6 +2,7 @@
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "Misc/ConfigCacheIni.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
@@ -185,5 +186,28 @@ FString JsonValueToImportText(const TSharedPtr<FJsonValue>& Value)
         return bBool ? TEXT("True") : TEXT("False");
     }
     return FString();
+}
+
+bool SaveObjectConfig(UObject* Object, FString& OutConfigFile)
+{
+    OutConfigFile.Reset();
+    if (Object == nullptr || Object->GetClass() == nullptr || !Object->GetClass()->HasAnyClassFlags(CLASS_Config))
+    {
+        return false;
+    }
+
+    Object->SaveConfig();
+    if (Object->GetClass()->HasAnyClassFlags(CLASS_DefaultConfig))
+    {
+        OutConfigFile = Object->GetDefaultConfigFilename();
+        return Object->TryUpdateDefaultConfigFile(OutConfigFile);
+    }
+
+    OutConfigFile = Object->GetClass()->ClassConfigName.ToString();
+    if (GConfig != nullptr)
+    {
+        GConfig->Flush(false, *OutConfigFile);
+    }
+    return true;
 }
 }

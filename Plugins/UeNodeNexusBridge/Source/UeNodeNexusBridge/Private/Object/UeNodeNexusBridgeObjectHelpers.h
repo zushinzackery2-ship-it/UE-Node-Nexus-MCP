@@ -20,4 +20,5 @@ bool ApplyPropertyText(UObject* Object, FProperty* Property, const FString& Valu
 bool JsonValueToPropertyImportText(FProperty* Property, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError);
 bool ApplyPropertyJsonValue(UObject* Object, FProperty* Property, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError);
 FString JsonValueToImportText(const TSharedPtr<FJsonValue>& Value);
+bool SaveObjectConfig(UObject* Object, FString& OutConfigFile);
 }

@@ -180,13 +180,16 @@
 
 | 验证项 | 结果 |
 |:-----|:-----|
-| **测试资产** | `/Game/MCP_3C/BP_MCP_3CCharacter.BP_MCP_3CCharacter` |
+| **Character** | `/Game/MCP_3C/BP_MCP_3CCharacter.BP_MCP_3CCharacter` |
+| **PlayerController** | `/Game/MCP_3C/BP_MCP_3CPlayerController.BP_MCP_3CPlayerController` |
+| **GameMode** | `/Game/MCP_3C/BP_MCP_3CGameMode.BP_MCP_3CGameMode` |
+| **GameMode 配置** | `Config/DefaultEngine.ini` 中 `GlobalDefaultGameMode` 指向 `BP_MCP_3CGameMode_C` |
 | **组件链路** | `Character` native root 下添加 `SpringArmComponent` 和 `CameraComponent` |
-| **输入配置** | `MoveForward`、`MoveRight`、`Turn`、`LookUp` axis mappings 和 `Jump` action mapping 已通过 MCP 写入 |
+| **输入配置** | `MoveForward`、`MoveRight`、`Turn`、`LookUp` axis mappings 和 `Jump` action mapping 已通过 MCP 写入 `Config/DefaultInput.ini` |
 | **图链路** | 轴输入驱动移动/视角，空格键驱动 `Jump` / `StopJumping` |
 | **整图读回** | `graph_node_info_get(include_position=true)` 返回 16 个节点、12 条关键连线 |
-| **编译结果** | `0 error / 0 warning` |
-| **保存结果** | Blueprint asset 显式保存成功 |
+| **编译结果** | Character、PlayerController、GameMode 均为 `0 error / 0 warning` |
+| **保存结果** | Blueprint assets 和项目 config 均通过 MCP 保存/落盘 |
 
 ---
 

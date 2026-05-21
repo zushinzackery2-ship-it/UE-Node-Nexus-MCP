@@ -4,6 +4,7 @@
 #include "GameFramework/InputSettings.h"
 #include "InputCoreTypes.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeObjectHelpers.h"
 
 namespace UeNodeNexusBridge
 {
@@ -235,6 +236,9 @@ TSharedPtr<FJsonObject> HandleProjectInputMappingsPatch(const FString& Operation
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("applied"), !bDryRun);
+    Data->SetBoolField(TEXT("save_config"), bSaveConfig);
+    Data->SetBoolField(TEXT("config_saved"), false);
+    Data->SetStringField(TEXT("config_file"), FString());
     Data->SetNumberField(TEXT("axis_added"), 0);
     Data->SetNumberField(TEXT("axis_removed"), 0);
     Data->SetNumberField(TEXT("actions_added"), 0);
@@ -258,7 +262,10 @@ TSharedPtr<FJsonObject> HandleProjectInputMappingsPatch(const FString& Operation
         if (bSaveConfig)
         {
             Settings->SaveKeyMappings();
-            Settings->SaveConfig();
+            FString ConfigFile;
+            const bool bConfigSaved = SaveObjectConfig(Settings, ConfigFile);
+            Data->SetBoolField(TEXT("config_saved"), bConfigSaved);
+            Data->SetStringField(TEXT("config_file"), ConfigFile);
         }
     }
     Data->SetObjectField(TEXT("mappings"), MakeMappingsData(Settings, Format));
