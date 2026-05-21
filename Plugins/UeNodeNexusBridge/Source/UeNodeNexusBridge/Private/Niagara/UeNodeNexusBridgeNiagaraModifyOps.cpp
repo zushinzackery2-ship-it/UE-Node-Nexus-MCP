@@ -62,9 +62,23 @@ TSharedPtr<FJsonObject> HandleNiagaraMaterialsGet(const FString& Operation, cons
     });
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());
+    Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    AppendNiagaraEmptySystemWarning(System, Warnings);
+    if (Items.Num() == 0)
+    {
+        Warnings.Add(MakeShared<FJsonValueObject>(MakeNiagaraBoundaryWarning(
+            System,
+            TEXT("niagara_no_renderer_materials"),
+            TEXT("No sprite, ribbon, or mesh renderers expose material slots. Use an existing authored Niagara system when renderer material editing is required."))));
+    }
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     return Response;
 }
 
@@ -144,9 +158,23 @@ TSharedPtr<FJsonObject> HandleNiagaraMaterialsSet(const FString& Operation, cons
     Data->SetNumberField(TEXT("planned_count"), Planned);
     Data->SetNumberField(TEXT("changed_count"), Changed);
     Data->SetBoolField(TEXT("saved"), bSaved);
+    AddNiagaraToolBoundary(Data);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    AppendNiagaraEmptySystemWarning(System, Warnings);
+    if (Planned == 0)
+    {
+        Warnings.Add(MakeShared<FJsonValueObject>(MakeNiagaraBoundaryWarning(
+            System,
+            TEXT("niagara_no_matching_renderers"),
+            TEXT("No matching Niagara renderers were found for material assignment. Current MCP cannot create emitters or renderers."))));
+    }
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     return Response;
 }
 
@@ -176,11 +204,27 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     Data->SetBoolField(TEXT("waited"), bWait);
     Data->SetBoolField(TEXT("ready_to_run"), System->IsReadyToRun());
     Data->SetBoolField(TEXT("needs_compile"), System->NeedsRequestCompile());
-    Data->SetNumberField(TEXT("remaining_errors"), System->IsReadyToRun() ? 0 : 1);
+    Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
+    Data->SetNumberField(TEXT("emitter_count"), System->GetEmitterHandles().Num());
+    Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
+    Data->SetNumberField(TEXT("remaining_errors"), System->IsReadyToRun() && NiagaraSystemHasEmitterStack(System) ? 0 : 1);
     Data->SetBoolField(TEXT("saved"), bSaved);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    AppendNiagaraEmptySystemWarning(System, Warnings);
+    if (!System->IsReadyToRun())
+    {
+        Warnings.Add(MakeShared<FJsonValueObject>(MakeNiagaraBoundaryWarning(
+            System,
+            TEXT("niagara_compile_not_ready"),
+            TEXT("Niagara system is not ready to run after compile."))));
+    }
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     return Response;
 }
 }

@@ -28,6 +28,10 @@ static TSharedPtr<FJsonObject> MakeCreateResponseData(UNiagaraSystem* System, co
     Data->SetStringField(TEXT("asset_path"), System ? System->GetPathName() : AssetPath);
     Data->SetStringField(TEXT("asset_kind"), TEXT("niagara_system"));
     Data->SetStringField(TEXT("asset_class"), System ? System->GetClass()->GetPathName() : FString());
+    Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
+    Data->SetNumberField(TEXT("emitter_count"), System ? System->GetEmitterHandles().Num() : 0);
+    Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
+    AddNiagaraToolBoundary(Data);
     const TSharedPtr<FJsonObject>* PostChecks = nullptr;
     if (Data->TryGetObjectField(TEXT("post_checks"), PostChecks) && PostChecks != nullptr)
     {
@@ -44,7 +48,7 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     const FString& Operation,
     const FString& RequestId,
     const FString& AssetPath,
-    const FString& TemplateAssetPath,
+    const FString& SourceAssetPath,
     bool bCreateDefaultNodes,
     bool bDryRun,
     bool bSave)
@@ -68,14 +72,14 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
         return Response;
     }
 
-    UNiagaraSystem* Template = nullptr;
-    if (!TemplateAssetPath.IsEmpty())
+    UNiagaraSystem* SourceSystem = nullptr;
+    if (!SourceAssetPath.IsEmpty())
     {
-        Template = LoadObject<UNiagaraSystem>(nullptr, *TemplateAssetPath);
-        if (Template == nullptr)
+        SourceSystem = LoadObject<UNiagaraSystem>(nullptr, *SourceAssetPath);
+        if (SourceSystem == nullptr)
         {
             TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-            Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("template_not_found"), TEXT("Template Niagara system could not be loaded")));
+            Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("source_not_found"), TEXT("Source Niagara system could not be loaded")));
             return Response;
         }
     }
@@ -88,8 +92,8 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     }
 
     UPackage* Package = CreatePackage(*PackageName);
-    UNiagaraSystem* System = Template != nullptr
-        ? Cast<UNiagaraSystem>(StaticDuplicateObject(Template, Package, FName(*AssetName), RF_Public | RF_Standalone | RF_Transactional))
+    UNiagaraSystem* System = SourceSystem != nullptr
+        ? Cast<UNiagaraSystem>(StaticDuplicateObject(SourceSystem, Package, FName(*AssetName), RF_Public | RF_Standalone | RF_Transactional))
         : NewObject<UNiagaraSystem>(Package, FName(*AssetName), RF_Public | RF_Standalone | RF_Transactional);
     if (System == nullptr)
     {
@@ -98,7 +102,7 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
         return Response;
     }
 
-    if (Template == nullptr)
+    if (SourceSystem == nullptr)
     {
         UNiagaraSystemFactoryNew::InitializeSystem(System, bCreateDefaultNodes);
     }
@@ -109,6 +113,15 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     const bool bSaved = bSave && SaveAssetPackage(System);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, !bSave || bSaved);
     Response->SetObjectField(TEXT("data"), MakeCreateResponseData(System, ObjectPath, false, bSaved));
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    if (SourceSystem == nullptr)
+    {
+        AppendNiagaraEmptySystemWarning(System, Warnings);
+    }
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     if (bSave && !bSaved)
     {
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("save_failed"), TEXT("Niagara system was created but package save failed")));
@@ -127,17 +140,23 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemCreate(const FString& Operation, cons
     }
 
     FString TemplateAssetPath;
+    FString SourceAssetPath;
     bool bCreateDefaultNodes = true;
     bool bDryRun = true;
     bool bSave = false;
     Payload->TryGetStringField(TEXT("template_asset_path"), TemplateAssetPath);
+    Payload->TryGetStringField(TEXT("source_asset_path"), SourceAssetPath);
+    if (SourceAssetPath.IsEmpty())
+    {
+        SourceAssetPath = TemplateAssetPath;
+    }
     Payload->TryGetBoolField(TEXT("create_default_nodes"), bCreateDefaultNodes);
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     Payload->TryGetBoolField(TEXT("save"), bSave);
-    return CreateNiagaraSystemAsset(Operation, RequestId, AssetPath, TemplateAssetPath, bCreateDefaultNodes, bDryRun, bSave);
+    return CreateNiagaraSystemAsset(Operation, RequestId, AssetPath, SourceAssetPath, bCreateDefaultNodes, bDryRun, bSave);
 }
 
-TSharedPtr<FJsonObject> HandleNiagaraTemplateDuplicate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+TSharedPtr<FJsonObject> HandleNiagaraSystemDuplicate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     FString SourceAssetPath;
     FString DestinationAssetPath;
@@ -153,5 +172,10 @@ TSharedPtr<FJsonObject> HandleNiagaraTemplateDuplicate(const FString& Operation,
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     Payload->TryGetBoolField(TEXT("save"), bSave);
     return CreateNiagaraSystemAsset(Operation, RequestId, DestinationAssetPath, SourceAssetPath, true, bDryRun, bSave);
+}
+
+TSharedPtr<FJsonObject> HandleNiagaraTemplateDuplicate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+{
+    return HandleNiagaraSystemDuplicate(Operation, RequestId, Payload);
 }
 }

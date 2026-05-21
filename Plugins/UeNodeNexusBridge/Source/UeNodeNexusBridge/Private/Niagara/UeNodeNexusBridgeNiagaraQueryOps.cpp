@@ -126,13 +126,10 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemSummaryGet(const FString& Operation, 
         return EarlyResponse;
     }
 
-    int32 RendererCount = 0;
     TArray<TSharedPtr<FJsonValue>> Emitters;
     for (int32 Index = 0; Index < System->GetEmitterHandles().Num(); ++Index)
     {
         Emitters.Add(MakeNiagaraEmitterRow(System, Index));
-        const FVersionedNiagaraEmitterData* EmitterData = System->GetEmitterHandles()[Index].GetEmitterData();
-        RendererCount += EmitterData ? EmitterData->GetRenderers().Num() : 0;
     }
 
     TArray<FNiagaraVariable> Params;
@@ -140,8 +137,9 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemSummaryGet(const FString& Operation, 
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
     Data->SetNumberField(TEXT("emitter_count"), System->GetEmitterHandles().Num());
-    Data->SetNumberField(TEXT("renderer_count"), RendererCount);
+    Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
     Data->SetNumberField(TEXT("user_param_count"), Params.Num());
+    Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
     Data->SetBoolField(TEXT("ready_to_run"), System->IsReadyToRun());
     Data->SetBoolField(TEXT("needs_compile"), System->NeedsRequestCompile());
     Data->SetStringField(TEXT("format"), TEXT("niagara_system_summary_compact"));
@@ -150,6 +148,12 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemSummaryGet(const FString& Operation, 
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    AppendNiagaraEmptySystemWarning(System, Warnings);
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     return Response;
 }
 
@@ -180,9 +184,16 @@ TSharedPtr<FJsonObject> HandleNiagaraEmittersList(const FString& Operation, cons
     }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());
+    Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    AppendNiagaraEmptySystemWarning(System, Warnings);
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     return Response;
 }
 
@@ -215,9 +226,16 @@ TSharedPtr<FJsonObject> HandleNiagaraUserParamsGet(const FString& Operation, con
     }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());
+    Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    AppendNiagaraEmptySystemWarning(System, Warnings);
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     return Response;
 }
 }

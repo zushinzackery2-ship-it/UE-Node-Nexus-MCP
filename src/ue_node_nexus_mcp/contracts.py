@@ -65,6 +65,7 @@ WRITE_OPERATIONS = {
     "node_params_set",
     "material_instance_params_set",
     "niagara_system_create",
+    "niagara_system_duplicate",
     "niagara_template_duplicate",
     "niagara_user_params_set",
     "niagara_materials_set",
@@ -90,6 +91,7 @@ DEFAULT_HIDDEN_OPERATIONS = {
     "auto_index_disable",
     "auto_index_flush",
     "graph_node_info_get_w_pos",
+    "niagara_template_duplicate",
     "node_position_offset",
 }
 
@@ -105,7 +107,7 @@ FEATURE_GROUPS = {
     "niagara",
 }
 
-DEFAULT_FEATURE_GROUPS = FEATURE_GROUPS - {"niagara"}
+DEFAULT_FEATURE_GROUPS = set(FEATURE_GROUPS)
 
 OPERATION_FEATURES = {
     "asset_list": "asset",
@@ -168,6 +170,7 @@ OPERATION_FEATURES = {
     "material_instance_params_get": "material",
     "material_instance_params_set": "material",
     "niagara_system_create": "niagara",
+    "niagara_system_duplicate": "niagara",
     "niagara_template_duplicate": "niagara",
     "niagara_system_summary_get": "niagara",
     "niagara_emitters_list": "niagara",

@@ -43,7 +43,7 @@
 
 | 功能 | 说明 |
 |:-----|:-----|
-| **固定 MCP 工具** | Python MCP Server 默认暴露 59 个类型化工具，向 UE 桥接器转发经过校验的请求载荷 |
+| **固定 MCP 工具** | Python MCP Server 默认暴露 68 个类型化工具，向 UE 桥接器转发经过校验的请求载荷 |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
@@ -51,7 +51,7 @@
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
 | **Material Instance 参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
-| **Niagara 可选工具组** | `UE_NEXUS_NIAGARA_SUPPORT=true` 后暴露 Niagara System 创建/复制、摘要、Emitter、User 参数、Renderer 材质和编译工具 |
+| **Niagara 工具组** | 默认暴露 Niagara System 创建/复制、摘要、Emitter、User 参数、Renderer 材质和编译工具 |
 | **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
 | **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖 Content Browser 清理闭环 |
 | **Level material usage** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、material slot、Material Instance 参数和材质使用点 |
@@ -111,7 +111,7 @@
 | **材质节点类** | `material_expression_classes_list()` | 枚举材质表达式节点类及其可编辑属性 schema 数量 |
 | **Material Instance** | `material_instance_params_get()` | 读取 Material Instance 参数值 |
 | **Material Instance** | `material_instance_params_set()` | 写入 Material Instance 参数，附带类型校验 |
-| **Niagara** | `niagara_system_create()` / `niagara_template_duplicate()` | 创建空 Niagara System 或复制模板 System |
+| **Niagara** | `niagara_system_create()` / `niagara_system_duplicate()` | 创建空 Niagara System 或复制已有 System |
 | **Niagara** | `niagara_system_summary_get()` / `niagara_emitters_list()` | 读取 Niagara System、Emitter、Renderer 和 User 参数数量摘要 |
 | **Niagara** | `niagara_user_params_get()` / `niagara_user_params_set()` | 读取或写入 Niagara User 参数，支持 float/int/bool/vector/color/material |
 | **Niagara** | `niagara_materials_get()` / `niagara_materials_set()` | 读取或替换 Sprite、Ribbon、Mesh Renderer 材质 |
@@ -122,9 +122,14 @@
 | **保存** | `asset_save()` | 保存单个资产包，报告脏标记/只读/编辑器冲突状态 |
 
 > [!NOTE]
+> **Niagara 通用边界**
+>
+> Niagara MCP 工具面用于创建空 System、复制已有 System、读取 emitter/renderer/User 参数、替换已有 renderer 材质、写入 User 参数和编译保存。当前不提供 emitter stack authoring，也不创建 emitter renderer；空 Niagara System 不是可运行 VFX。相关返回会带 `capabilities`、`limitations`、`has_emitter_stack` 和机器可读 `warnings`，用于阻止 Agent 把空 System 当成完整效果。
+
+> [!NOTE]
 > **默认工具面**
 >
-> 代码层保留 74 个固定 operation；默认 MCP 工具面注册 59 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。`niagara` 是默认关闭工具组，开启后工具面为 68 个。
+> 代码层保留 75 个固定 operation；默认 MCP 工具面注册 68 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset`、`niagara_template_duplicate` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。`niagara` 默认进入工具面，可用 feature 开关显式关闭。
 
 ---
 
@@ -279,14 +284,14 @@ ue-node-nexus-mcp
 
 ### Tool Feature 开关
 
-默认注册 `core,asset,auto_index,graph,material,blueprint,level,project_input` 工具组；`niagara` 默认关闭。关闭某组时，对应工具不会进入 MCP tool list。
+默认注册 `core,asset,auto_index,graph,material,blueprint,level,project_input,niagara` 工具组。关闭某组时，对应工具不会进入 MCP tool list。
 
 | 配置 | 说明 |
 |:-----|:-----|
 | **`UE_NEXUS_FEATURES`** | 显式指定工具组，例如 `core,asset,material` |
 | **`UE_NEXUS_ENABLE_FEATURES`** | 在默认或显式工具组上追加工具组 |
 | **`UE_NEXUS_DISABLE_FEATURES`** | 从当前工具组中移除工具组 |
-| **`UE_NEXUS_NIAGARA_SUPPORT`** | `true`/`false`，等价于启用或关闭 `niagara` 工具组 |
+| **`UE_NEXUS_NIAGARA_SUPPORT`** | `true`/`false`，等价于显式启用或关闭 `niagara` 工具组；默认开启 |
 
 示例：只暴露资产、材质和核心诊断工具：
 

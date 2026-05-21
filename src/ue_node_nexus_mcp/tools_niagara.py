@@ -10,18 +10,18 @@ from .runtime import default_tool
 @default_tool("niagara")
 def niagara_system_create(
     asset_path: str,
-    template_asset_path: str | None = None,
+    source_asset_path: str | None = None,
     create_default_nodes: bool = True,
     dry_run: bool = True,
     save: bool = False,
 ) -> dict[str, Any]:
-    """Create a Niagara system, optionally by copying an existing system template."""
+    """Create an empty Niagara system or copy an existing system; does not author emitters or renderers."""
     require_non_empty_string(asset_path, "asset_path")
     return _call(
         "niagara_system_create",
         {
             "asset_path": asset_path,
-            "template_asset_path": template_asset_path,
+            "source_asset_path": source_asset_path,
             "create_default_nodes": create_default_nodes,
             "dry_run": dry_run,
             "save": save,
@@ -30,17 +30,17 @@ def niagara_system_create(
 
 
 @default_tool("niagara")
-def niagara_template_duplicate(
+def niagara_system_duplicate(
     source_asset_path: str,
     destination_asset_path: str,
     dry_run: bool = True,
     save: bool = False,
 ) -> dict[str, Any]:
-    """Duplicate a Niagara system template to a destination asset path."""
+    """Duplicate an existing Niagara system to preserve authored emitter stacks and renderers."""
     require_non_empty_string(source_asset_path, "source_asset_path")
     require_non_empty_string(destination_asset_path, "destination_asset_path")
     return _call(
-        "niagara_template_duplicate",
+        "niagara_system_duplicate",
         {
             "source_asset_path": source_asset_path,
             "destination_asset_path": destination_asset_path,
@@ -50,16 +50,26 @@ def niagara_template_duplicate(
     )
 
 
+def niagara_template_duplicate(
+    source_asset_path: str,
+    destination_asset_path: str,
+    dry_run: bool = True,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Compatibility alias for older clients; use niagara_system_duplicate."""
+    return niagara_system_duplicate(source_asset_path, destination_asset_path, dry_run, save)
+
+
 @default_tool("niagara")
 def niagara_system_summary_get(asset_path: str, format: Literal["compact", "full"] = "compact") -> dict[str, Any]:
-    """Return a compact Niagara system summary with emitter, renderer, and user-parameter counts."""
+    """Return system counts plus generic Niagara MCP capabilities and authoring limitations."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("niagara_system_summary_get", {"asset_path": asset_path, "format": format})
 
 
 @default_tool("niagara")
 def niagara_emitters_list(asset_path: str, format: Literal["compact", "full"] = "compact") -> dict[str, Any]:
-    """List emitters in a Niagara system using a low-context row format by default."""
+    """List existing emitters; empty results mean MCP has no emitter stack to edit."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("niagara_emitters_list", {"asset_path": asset_path, "format": format})
 
@@ -86,7 +96,7 @@ def niagara_user_params_set(
 
 @default_tool("niagara")
 def niagara_materials_get(asset_path: str, format: Literal["compact", "full"] = "compact") -> dict[str, Any]:
-    """List materials assigned to Niagara sprite, ribbon, and mesh renderers."""
+    """List materials on existing sprite/ribbon/mesh renderers; this tool cannot create renderers."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("niagara_materials_get", {"asset_path": asset_path, "format": format})
 
@@ -100,7 +110,7 @@ def niagara_materials_set(
     dry_run: bool = True,
     save: bool = False,
 ) -> dict[str, Any]:
-    """Assign a material to matching Niagara sprite, ribbon, or mesh renderers."""
+    """Assign a material to existing sprite/ribbon/mesh renderers; no-op when no matching renderer exists."""
     require_non_empty_string(asset_path, "asset_path")
     require_non_empty_string(material_path, "material_path")
     return _call(
@@ -118,6 +128,6 @@ def niagara_materials_set(
 
 @default_tool("niagara")
 def niagara_compile(asset_path: str, wait: bool = True, save: bool = False) -> dict[str, Any]:
-    """Request a Niagara system compile and return readiness diagnostics."""
+    """Compile a Niagara system and report readiness plus empty-system/runtime-VFX warnings."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("niagara_compile", {"asset_path": asset_path, "wait": wait, "save": save})

@@ -41,7 +41,77 @@ TSharedPtr<FJsonObject> MakeNiagaraAssetData(UNiagaraSystem* System)
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("asset_path"), System ? System->GetPathName() : FString());
     Data->SetStringField(TEXT("asset_class"), System ? System->GetClass()->GetPathName() : FString());
+    AddNiagaraToolBoundary(Data);
     return Data;
+}
+
+static TSharedPtr<FJsonValue> MakeStringValue(const FString& Value)
+{
+    return MakeShared<FJsonValueString>(Value);
+}
+
+void AddNiagaraToolBoundary(TSharedPtr<FJsonObject> Data)
+{
+    if (!Data.IsValid())
+    {
+        return;
+    }
+
+    TSharedPtr<FJsonObject> Capabilities = MakeShared<FJsonObject>();
+    Capabilities->SetBoolField(TEXT("create_empty_system"), true);
+    Capabilities->SetBoolField(TEXT("duplicate_existing_system"), true);
+    Capabilities->SetBoolField(TEXT("read_emitters"), true);
+    Capabilities->SetBoolField(TEXT("read_write_user_parameters"), true);
+    Capabilities->SetBoolField(TEXT("read_write_renderer_materials"), true);
+    Capabilities->SetBoolField(TEXT("compile_system"), true);
+    Capabilities->SetBoolField(TEXT("author_emitters"), false);
+    Capabilities->SetBoolField(TEXT("author_emitter_stack"), false);
+    Capabilities->SetBoolField(TEXT("create_renderers"), false);
+    Data->SetObjectField(TEXT("capabilities"), Capabilities);
+
+    Data->SetArrayField(TEXT("limitations"), {
+        MakeStringValue(TEXT("empty_system_is_not_a_runtime_vfx")),
+        MakeStringValue(TEXT("emitter_stack_authoring_is_not_supported")),
+        MakeStringValue(TEXT("use_existing_systems_for_effect_structure_then_edit_user_params_or_renderer_materials"))
+    });
+    Data->SetStringField(TEXT("recommended_generic_workflow"), TEXT("duplicate_existing_niagara_system_or_create_empty_for_manual_editor_authoring; then use MCP to inspect emitters, set user parameters, set renderer materials, compile, and save"));
+}
+
+bool NiagaraSystemHasEmitterStack(UNiagaraSystem* System)
+{
+    return System != nullptr && System->GetEmitterHandles().Num() > 0;
+}
+
+int32 CountNiagaraRenderers(UNiagaraSystem* System)
+{
+    int32 RendererCount = 0;
+    if (System == nullptr)
+    {
+        return RendererCount;
+    }
+    for (const FNiagaraEmitterHandle& Handle : System->GetEmitterHandles())
+    {
+        const FVersionedNiagaraEmitterData* EmitterData = Handle.GetEmitterData();
+        RendererCount += EmitterData ? EmitterData->GetRenderers().Num() : 0;
+    }
+    return RendererCount;
+}
+
+TSharedPtr<FJsonObject> MakeNiagaraBoundaryWarning(UNiagaraSystem* System, const FString& Code, const FString& Message)
+{
+    return MakeDiagnostic(TEXT("warning"), Code, Message, System ? System->GetPathName() : FString(), TEXT("UeNodeNexusBridge.Niagara"));
+}
+
+void AppendNiagaraEmptySystemWarning(UNiagaraSystem* System, TArray<TSharedPtr<FJsonValue>>& Warnings)
+{
+    if (NiagaraSystemHasEmitterStack(System))
+    {
+        return;
+    }
+    Warnings.Add(MakeShared<FJsonValueObject>(MakeNiagaraBoundaryWarning(
+        System,
+        TEXT("niagara_empty_system_not_runtime_vfx"),
+        TEXT("Niagara system has no emitters. Current MCP can create empty systems or duplicate existing systems and edit user parameters/materials, but cannot author emitter stacks or create renderers."))));
 }
 
 TSharedPtr<FJsonObject> MakeNiagaraEmitterJson(UNiagaraSystem* System, int32 EmitterIndex)

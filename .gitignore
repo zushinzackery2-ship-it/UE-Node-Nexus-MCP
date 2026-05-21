@@ -24,6 +24,7 @@ docs/
 *$py.class
 
 # Local MCP / editor caches
+.auto-index-mcp/
 .codex/
 .idea/
 .vscode/

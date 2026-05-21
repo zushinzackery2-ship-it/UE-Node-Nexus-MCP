@@ -204,9 +204,16 @@ TSharedPtr<FJsonObject> HandleNiagaraUserParamsSet(const FString& Operation, con
     Data->SetNumberField(TEXT("planned_count"), Planned);
     Data->SetNumberField(TEXT("changed_count"), Changed);
     Data->SetBoolField(TEXT("saved"), bSaved);
+    AddNiagaraToolBoundary(Data);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    TArray<TSharedPtr<FJsonValue>> Warnings;
+    AppendNiagaraEmptySystemWarning(System, Warnings);
+    if (Warnings.Num() > 0)
+    {
+        Response->SetArrayField(TEXT("warnings"), Warnings);
+    }
     return Response;
 }
 }

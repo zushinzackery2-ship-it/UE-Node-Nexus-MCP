@@ -216,6 +216,10 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     {
         return HandleNiagaraSystemCreate(Operation, RequestId, Payload);
     }
+    if (Operation == TEXT("niagara_system_duplicate"))
+    {
+        return HandleNiagaraSystemDuplicate(Operation, RequestId, Payload);
+    }
     if (Operation == TEXT("niagara_template_duplicate"))
     {
         return HandleNiagaraTemplateDuplicate(Operation, RequestId, Payload);
