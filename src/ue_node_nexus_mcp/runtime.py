@@ -6,9 +6,23 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .bridge import BridgeError, UeBridgeClient
+from .contracts import DEFAULT_HIDDEN_OPERATIONS
 
 mcp = FastMCP("UE Node Nexus MCP")
 bridge = UeBridgeClient()
+
+
+def default_tool():
+    return mcp.tool()
+
+
+def advanced_tool():
+    def decorator(func):
+        if func.__name__ not in DEFAULT_HIDDEN_OPERATIONS:
+            raise ValueError(f"{func.__name__} is not declared as a default-hidden operation")
+        return func
+
+    return decorator
 
 
 def _read_remaining_errors() -> int:

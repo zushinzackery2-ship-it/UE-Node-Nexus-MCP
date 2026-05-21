@@ -15,6 +15,33 @@ scripts/clean_specialagent_and_install_ue55.bat
 Task-Status.md
 Laffey.ico
 
+# Internal development material kept local only
+.clangd
+tests/
+docs/
+docs/ARCHITECTURE.md
+docs/MATERIAL_REBUILD_EXECUTION.md
+docs/NODE_INFO_INTERFACE_DESIGN.md
+docs/UE_BRIDGE_CONTRACT.md
+scripts/create_six_face_mapping_material.py
+scripts/rebuild_six_face_dam_material.py
+scripts/replicate_dam_master_material.py
+scripts/ue_asset_recreate_matrix.py
+scripts/ue_asset_smoke_matrix.py
+scripts/ue_auto_index_empty_folder_probe.py
+scripts/ue_auto_index_matrix.py
+scripts/ue_blueprint_write_matrix.py
+scripts/ue_bridge_smoke.py
+scripts/ue_demo_try.py
+scripts/ue_graph_build_custom_matrix.py
+scripts/ue_level_material_matrix.py
+scripts/ue_material_attribute_link_matrix.py
+scripts/ue_material_expression_class_matrix.py
+scripts/ue_material_function_graph_matrix.py
+scripts/ue_material_function_node_matrix.py
+scripts/ue_material_property_matrix.py
+scripts/update_plugin_and_smoke_ue55.py
+
 # Python caches
 *.py[cod]
 *$py.class

@@ -1,3 +1,5 @@
 \Intermediate\
 \Saved\
 \.vs\
+\Laffey.ico
+*.ico

@@ -72,6 +72,17 @@ WRITE_OPERATIONS = {
 
 ALL_OPERATIONS = READ_OPERATIONS | WRITE_OPERATIONS
 
+DEFAULT_HIDDEN_OPERATIONS = {
+    "auto_index_clear",
+    "auto_index_diff_registry",
+    "auto_index_disable",
+    "auto_index_flush",
+    "graph_node_info_get_w_pos",
+    "node_position_offset",
+}
+
+DEFAULT_EXPOSED_OPERATIONS = ALL_OPERATIONS - DEFAULT_HIDDEN_OPERATIONS
+
 
 def require_non_empty_string(value: str, field_name: str) -> None:
     if not isinstance(value, str) or not value.strip():

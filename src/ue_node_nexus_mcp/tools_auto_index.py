@@ -4,54 +4,54 @@ from typing import Any, Literal
 
 from .contracts import require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import advanced_tool, default_tool
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_enable(root_path: str = "/Game", rebuild: bool = True) -> dict[str, Any]:
     """Enable persistent UE asset/folder auto-indexing and optionally rebuild immediately."""
     require_non_empty_string(root_path, "root_path")
     return _call("auto_index_enable", {"root_path": root_path, "rebuild": rebuild})
 
 
-@mcp.tool()
+@advanced_tool()
 def auto_index_disable() -> dict[str, Any]:
     """Disable Auto-Index listeners while keeping the persisted index file."""
     return _call("auto_index_disable", {})
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_status(format: Literal["indexed", "full"] = "indexed") -> dict[str, Any]:
     """Return Auto-Index status, counts, freshness, and persisted index location."""
     return _call("auto_index_status", {"format": format})
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_rebuild(root_path: str = "/Game") -> dict[str, Any]:
     """Force a full Auto-Index rebuild from Unreal AssetRegistry."""
     require_non_empty_string(root_path, "root_path")
     return _call("auto_index_rebuild", {"root_path": root_path})
 
 
-@mcp.tool()
+@advanced_tool()
 def auto_index_flush() -> dict[str, Any]:
     """Flush the in-memory Auto-Index table to Saved/UeNodeNexusBridge/AutoIndex.json."""
     return _call("auto_index_flush", {})
 
 
-@mcp.tool()
+@advanced_tool()
 def auto_index_clear(delete_file: bool = False) -> dict[str, Any]:
     """Clear Auto-Index memory state and optionally delete the persisted index file."""
     return _call("auto_index_clear", {"delete_file": delete_file})
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_overview(limit: int = 30, format: Literal["indexed", "full"] = "indexed") -> dict[str, Any]:
     """Return a low-cost indexed project asset map for first-pass MCP context gathering."""
     return _call("auto_index_overview", {"limit": limit, "format": format})
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_tree_get(
     root_path: str = "/Game",
     depth: int = 2,
@@ -63,7 +63,7 @@ def auto_index_tree_get(
     return _call("auto_index_tree_get", {"root_path": root_path, "depth": depth, "limit": limit, "format": format})
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_query(
     text: str = "",
     class_names: list[str] | None = None,
@@ -90,14 +90,14 @@ def auto_index_query(
     )
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_get(asset_path: str) -> dict[str, Any]:
     """Return one asset record from Auto-Index."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("auto_index_get", {"asset_path": asset_path})
 
 
-@mcp.tool()
+@default_tool()
 def auto_index_resolve_path(
     path: str,
     limit: int = 20,
@@ -108,7 +108,7 @@ def auto_index_resolve_path(
     return _call("auto_index_resolve_path", {"path": path, "limit": limit, "format": format})
 
 
-@mcp.tool()
+@advanced_tool()
 def auto_index_diff_registry(format: Literal["indexed", "full"] = "indexed") -> dict[str, Any]:
     """Compare Auto-Index with the live AssetRegistry and report drift in compact text form."""
     return _call("auto_index_diff_registry", {"format": format})

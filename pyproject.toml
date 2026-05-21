@@ -15,9 +15,5 @@ dependencies = [
 [project.scripts]
 ue-node-nexus-mcp = "ue_node_nexus_mcp.server:main"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
-
 [tool.setuptools.packages.find]
 where = ["src"]

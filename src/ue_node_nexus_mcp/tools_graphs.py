@@ -4,11 +4,11 @@ from typing import Any, Literal
 
 from .contracts import require_mapping, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import advanced_tool, default_tool
 from .tools_graph_writes import graph_build_apply, graph_patch_apply  # noqa: F401
 
 
-@mcp.tool()
+@default_tool()
 def graph_snapshot_get(
     asset_path: str,
     graph_name: str | None = None,
@@ -31,7 +31,7 @@ def graph_snapshot_get(
         },
     )
 
-@mcp.tool()
+@default_tool()
 def graph_node_info_get(
     asset_path: str,
     graph_name: str | None = None,
@@ -40,11 +40,13 @@ def graph_node_info_get(
     max_nodes: int | None = None,
     format: Literal["indexed", "grouped", "text"] = "indexed",
     id_mode: Literal["alias", "real", "both"] = "alias",
+    include_position: bool = False,
 ) -> dict[str, Any]:
     """Return a whole graph in dense indexed form; grouped is readable by node type."""
     require_non_empty_string(asset_path, "asset_path")
+    operation = "graph_node_info_get_w_pos" if include_position else "graph_node_info_get"
     return _call(
-        "graph_node_info_get",
+        operation,
         {
             "asset_path": asset_path,
             "graph_name": graph_name,
@@ -57,7 +59,7 @@ def graph_node_info_get(
     )
 
 
-@mcp.tool()
+@advanced_tool()
 def graph_node_info_get_w_pos(
     asset_path: str,
     graph_name: str | None = None,
@@ -83,7 +85,7 @@ def graph_node_info_get_w_pos(
     )
 
 
-@mcp.tool()
+@default_tool()
 def node_class_params_get(
     graph_kind: Literal["material", "material_function", "blueprint"],
     node_class: str,
@@ -100,7 +102,7 @@ def node_class_params_get(
     )
 
 
-@mcp.tool()
+@default_tool()
 def node_params_get(
     asset_path: str,
     node_id: str,
@@ -121,7 +123,7 @@ def node_params_get(
     )
 
 
-@mcp.tool()
+@default_tool()
 def node_info_get(
     asset_path: str,
     node_id: str,
@@ -148,7 +150,7 @@ def node_info_get(
     )
 
 
-@mcp.tool()
+@default_tool()
 def node_position_get(
     asset_path: str,
     node_id: str,
@@ -169,7 +171,7 @@ def node_position_get(
     )
 
 
-@mcp.tool()
+@default_tool()
 def node_position_set(
     asset_path: str,
     node_id: str,
@@ -196,7 +198,7 @@ def node_position_set(
     )
 
 
-@mcp.tool()
+@advanced_tool()
 def node_position_offset(
     asset_path: str,
     node_id: str,
@@ -223,7 +225,7 @@ def node_position_offset(
     )
 
 
-@mcp.tool()
+@default_tool()
 def node_create(
     asset_path: str,
     node_class: str,
@@ -256,7 +258,7 @@ def node_create(
     )
 
 
-@mcp.tool()
+@default_tool()
 def node_params_set(
     asset_path: str,
     node_id: str,
