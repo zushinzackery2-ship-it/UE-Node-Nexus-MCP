@@ -4,10 +4,10 @@ from typing import Any, Literal
 
 from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import default_tool
 
 
-@mcp.tool()
+@default_tool()
 def blueprint_details_get(
     asset_path: str,
     include_defaults: bool = True,
@@ -29,7 +29,7 @@ def blueprint_details_get(
     )
 
 
-@mcp.tool()
+@default_tool()
 def blueprint_components_patch(
     asset_path: str,
     operations: list[dict[str, Any]],
@@ -52,7 +52,7 @@ def blueprint_components_patch(
     )
 
 
-@mcp.tool()
+@default_tool()
 def anim_blueprint_summary_get(
     asset_path: str,
     format: Literal["compact", "full"] = "compact",

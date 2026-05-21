@@ -271,6 +271,39 @@ ue-node-nexus-mcp
 
 连接链路为 `MCP Client -> Python MCP Server -> UE Editor Plugin`。UE 未打开、插件未启用或端口不通时，工具会返回桥接器连接错误。
 
+### Tool Feature 开关
+
+默认注册 `core,asset,auto_index,graph,material,blueprint,level,project_input` 工具组；`niagara` 默认关闭。关闭某组时，对应工具不会进入 MCP tool list。
+
+| 配置 | 说明 |
+|:-----|:-----|
+| **`UE_NEXUS_FEATURES`** | 显式指定工具组，例如 `core,asset,material` |
+| **`UE_NEXUS_ENABLE_FEATURES`** | 在默认或显式工具组上追加工具组 |
+| **`UE_NEXUS_DISABLE_FEATURES`** | 从当前工具组中移除工具组 |
+| **`UE_NEXUS_NIAGARA_SUPPORT`** | `true`/`false`，等价于启用或关闭 `niagara` 工具组 |
+
+示例：只暴露资产、材质和核心诊断工具：
+
+```json
+{
+  "mcpServers": {
+    "ue-node-nexus": {
+      "command": "ue-node-nexus-mcp",
+      "env": {
+        "UE_NEXUS_FEATURES": "core,asset,material",
+        "UE_NEXUS_NIAGARA_SUPPORT": "false"
+      }
+    }
+  }
+}
+```
+
+CLI 也支持同样的开关：
+
+```bash
+ue-node-nexus-mcp --features core,asset,material --niagara-support=false
+```
+
 ---
 
 ## UE 5.5 Release 安装

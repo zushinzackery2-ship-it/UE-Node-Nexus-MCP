@@ -4,10 +4,10 @@ from typing import Any, Literal
 
 from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import default_tool
 
 
-@mcp.tool()
+@default_tool()
 def asset_list(
     class_names: list[str] | None = None,
     package_paths: list[str] | None = None,
@@ -30,14 +30,14 @@ def asset_list(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_get(asset_path: str) -> dict[str, Any]:
     """Return metadata for one Unreal asset."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("asset_get", {"asset_path": asset_path})
 
 
-@mcp.tool()
+@default_tool()
 def asset_create(
     asset_path: str,
     asset_kind: Literal[
@@ -69,7 +69,7 @@ def asset_create(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_delete(
     asset_path: str,
     dry_run: bool = True,
@@ -89,7 +89,7 @@ def asset_delete(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_move(
     source_asset_path: str,
     destination_asset_path: str,
@@ -112,7 +112,7 @@ def asset_move(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_rename(
     source_asset_path: str,
     destination_asset_path: str,
@@ -135,7 +135,7 @@ def asset_rename(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_move_batch(
     items: list[dict[str, Any]],
     dry_run: bool = True,
@@ -157,7 +157,7 @@ def asset_move_batch(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_rename_batch(
     items: list[dict[str, Any]],
     dry_run: bool = True,
@@ -179,7 +179,7 @@ def asset_rename_batch(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_duplicate(
     source_asset_path: str,
     destination_asset_path: str,
@@ -200,7 +200,7 @@ def asset_duplicate(
     )
 
 
-@mcp.tool()
+@default_tool()
 def folder_create(
     folder_path: str,
     dry_run: bool = True,
@@ -216,7 +216,7 @@ def folder_create(
     )
 
 
-@mcp.tool()
+@default_tool()
 def folder_delete(
     folder_path: str,
     dry_run: bool = True,
@@ -234,7 +234,7 @@ def folder_delete(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_redirectors_fixup(
     folder_path: str = "/Game",
     dry_run: bool = True,

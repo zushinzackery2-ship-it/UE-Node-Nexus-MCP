@@ -4,10 +4,10 @@ from typing import Any, Literal
 
 from .contracts import require_list
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import default_tool
 
 
-@mcp.tool()
+@default_tool()
 def project_input_mappings_get(
     format: Literal["compact", "full"] = "compact",
 ) -> dict[str, Any]:
@@ -20,7 +20,7 @@ def project_input_mappings_get(
     )
 
 
-@mcp.tool()
+@default_tool()
 def project_input_mappings_patch(
     operations: list[dict[str, Any]],
     dry_run: bool = True,

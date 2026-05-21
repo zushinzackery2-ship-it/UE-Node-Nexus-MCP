@@ -4,10 +4,10 @@ from typing import Any, Literal
 
 from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import default_tool
 
 
-@mcp.tool()
+@default_tool()
 def material_expression_classes_list(
     include_abstract: bool = False,
     include_deprecated: bool = False,
@@ -30,14 +30,14 @@ def material_expression_classes_list(
     )
 
 
-@mcp.tool()
+@default_tool()
 def material_instance_params_get(asset_path: str, format: Literal["compact", "full"] = "compact") -> dict[str, Any]:
     """Return scalar, vector, texture, and static parameters for a material instance."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("material_instance_params_get", {"asset_path": asset_path, "format": format})
 
 
-@mcp.tool()
+@default_tool()
 def material_instance_params_set(
     asset_path: str,
     params: list[dict[str, Any]],

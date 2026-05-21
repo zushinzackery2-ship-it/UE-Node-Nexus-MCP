@@ -4,16 +4,16 @@ from typing import Any, Literal
 
 from .contracts import require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import default_tool
 
 
-@mcp.tool()
+@default_tool()
 def level_current_get() -> dict[str, Any]:
     """Return the current editor level identity and dirty state."""
     return _call("level_current_get", {})
 
 
-@mcp.tool()
+@default_tool()
 def level_actors_list(
     include_components: bool = False,
     class_names: list[str] | None = None,
@@ -34,21 +34,21 @@ def level_actors_list(
     )
 
 
-@mcp.tool()
+@default_tool()
 def asset_compile(asset_path: str) -> dict[str, Any]:
     """Compile or recompile a Blueprint or material asset and return structured diagnostics."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("asset_compile", {"asset_path": asset_path})
 
 
-@mcp.tool()
+@default_tool()
 def asset_validate(asset_path: str) -> dict[str, Any]:
     """Validate an asset and return machine-readable diagnostics."""
     require_non_empty_string(asset_path, "asset_path")
     return _call("asset_validate", {"asset_path": asset_path})
 
 
-@mcp.tool()
+@default_tool()
 def asset_save(
     asset_path: str,
     only_if_dirty: bool = True,
@@ -66,7 +66,7 @@ def asset_save(
     )
 
 
-@mcp.tool()
+@default_tool()
 def editor_save_all(
     save_map_packages: bool = True,
     save_content_packages: bool = True,
@@ -81,7 +81,7 @@ def editor_save_all(
     )
 
 
-@mcp.tool()
+@default_tool()
 def editor_request_exit(
     save_before_exit: bool = True,
     force: bool = False,
@@ -96,7 +96,7 @@ def editor_request_exit(
     )
 
 
-@mcp.tool()
+@default_tool()
 def diagnostics_get(
     asset_path: str | None = None,
     severity: Literal["info", "warning", "error", "all"] = "all",

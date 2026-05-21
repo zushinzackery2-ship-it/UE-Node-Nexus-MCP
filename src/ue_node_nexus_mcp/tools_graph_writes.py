@@ -4,10 +4,10 @@ from typing import Any, Literal
 
 from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import default_tool
 
 
-@mcp.tool()
+@default_tool()
 def graph_patch_apply(
     asset_path: str,
     operations: list[dict[str, Any]],
@@ -34,7 +34,7 @@ def graph_patch_apply(
     )
 
 
-@mcp.tool()
+@default_tool()
 def graph_build_apply(
     asset_path: str,
     nodes: list[dict[str, Any]],

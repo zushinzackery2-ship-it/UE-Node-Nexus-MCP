@@ -4,24 +4,24 @@ from typing import Any, Literal
 
 from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import mcp
+from .runtime import default_tool
 
 
-@mcp.tool()
+@default_tool()
 def level_actor_get(actor_path: str, include_components: bool = True) -> dict[str, Any]:
     """Return one placed actor's identity, transform, and optional component list."""
     require_non_empty_string(actor_path, "actor_path")
     return _call("level_actor_get", {"actor_path": actor_path, "include_components": include_components})
 
 
-@mcp.tool()
+@default_tool()
 def level_actor_transform_get(actor_path: str) -> dict[str, Any]:
     """Return one placed actor's world transform."""
     require_non_empty_string(actor_path, "actor_path")
     return _call("level_actor_transform_get", {"actor_path": actor_path})
 
 
-@mcp.tool()
+@default_tool()
 def level_actor_transform_set(
     actor_path: str,
     location: dict[str, float] | None = None,
@@ -45,7 +45,7 @@ def level_actor_transform_set(
     )
 
 
-@mcp.tool()
+@default_tool()
 def object_properties_get(
     object_path: str,
     property_names: list[str] | None = None,
@@ -65,7 +65,7 @@ def object_properties_get(
     )
 
 
-@mcp.tool()
+@default_tool()
 def object_properties_set(
     object_path: str,
     params: list[dict[str, Any]],
@@ -88,7 +88,7 @@ def object_properties_set(
     )
 
 
-@mcp.tool()
+@default_tool()
 def level_mesh_instances_list(
     include_materials: bool = False,
     class_names: list[str] | None = None,
@@ -109,14 +109,14 @@ def level_mesh_instances_list(
     )
 
 
-@mcp.tool()
+@default_tool()
 def component_materials_get(component_path: str) -> dict[str, Any]:
     """Return material slots for a mesh component, including MI/root material identity."""
     require_non_empty_string(component_path, "component_path")
     return _call("component_materials_get", {"component_path": component_path})
 
 
-@mcp.tool()
+@default_tool()
 def component_materials_set(component_path: str, slot_index: int, material_path: str, dry_run: bool = True) -> dict[str, Any]:
     """Set one mesh component material slot."""
     require_non_empty_string(component_path, "component_path")
@@ -127,7 +127,7 @@ def component_materials_set(component_path: str, slot_index: int, material_path:
     )
 
 
-@mcp.tool()
+@default_tool()
 def material_interface_resolve(
     asset_path: str | None = None,
     material_path: str | None = None,
@@ -148,7 +148,7 @@ def material_interface_resolve(
     )
 
 
-@mcp.tool()
+@default_tool()
 def material_usage_find(
     asset_path: str | None = None,
     material_path: str | None = None,
@@ -163,14 +163,14 @@ def material_usage_find(
     )
 
 
-@mcp.tool()
+@default_tool()
 def component_material_instance_params_get(component_path: str, slot_index: int) -> dict[str, Any]:
     """Read effective scalar/vector/texture/static parameters for one component material slot."""
     require_non_empty_string(component_path, "component_path")
     return _call("component_material_instance_params_get", {"component_path": component_path, "slot_index": slot_index})
 
 
-@mcp.tool()
+@default_tool()
 def component_material_instance_params_set(
     component_path: str,
     slot_index: int,
