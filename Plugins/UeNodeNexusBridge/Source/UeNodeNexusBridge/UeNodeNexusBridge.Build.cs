@@ -19,6 +19,7 @@ public class UeNodeNexusBridge : ModuleRules
             System.IO.Path.Combine(ModuleDirectory, "Private", "Level"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Material"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Module"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Object"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Transport")
         });
@@ -40,6 +41,9 @@ public class UeNodeNexusBridge : ModuleRules
             "Json",
             "JsonUtilities",
             "MaterialEditor",
+            "Niagara",
+            "NiagaraCore",
+            "NiagaraEditor",
             "UnrealEd"
         });
     }

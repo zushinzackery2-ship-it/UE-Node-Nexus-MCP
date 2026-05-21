@@ -34,6 +34,10 @@ READ_OPERATIONS = {
     "node_params_get",
     "material_expression_classes_list",
     "material_instance_params_get",
+    "niagara_system_summary_get",
+    "niagara_emitters_list",
+    "niagara_user_params_get",
+    "niagara_materials_get",
     "diagnostics_get",
 }
 
@@ -60,6 +64,11 @@ WRITE_OPERATIONS = {
     "node_position_offset",
     "node_params_set",
     "material_instance_params_set",
+    "niagara_system_create",
+    "niagara_template_duplicate",
+    "niagara_user_params_set",
+    "niagara_materials_set",
+    "niagara_compile",
     "object_properties_set",
     "level_actor_transform_set",
     "component_materials_set",
@@ -83,8 +92,6 @@ DEFAULT_HIDDEN_OPERATIONS = {
     "graph_node_info_get_w_pos",
     "node_position_offset",
 }
-
-DEFAULT_EXPOSED_OPERATIONS = ALL_OPERATIONS - DEFAULT_HIDDEN_OPERATIONS
 
 FEATURE_GROUPS = {
     "core",
@@ -160,12 +167,27 @@ OPERATION_FEATURES = {
     "material_expression_classes_list": "material",
     "material_instance_params_get": "material",
     "material_instance_params_set": "material",
+    "niagara_system_create": "niagara",
+    "niagara_template_duplicate": "niagara",
+    "niagara_system_summary_get": "niagara",
+    "niagara_emitters_list": "niagara",
+    "niagara_user_params_get": "niagara",
+    "niagara_user_params_set": "niagara",
+    "niagara_materials_get": "niagara",
+    "niagara_materials_set": "niagara",
+    "niagara_compile": "niagara",
     "asset_compile": "core",
     "asset_validate": "core",
     "asset_save": "core",
     "diagnostics_get": "core",
     "editor_save_all": "core",
     "editor_request_exit": "core",
+}
+
+DEFAULT_EXPOSED_OPERATIONS = {
+    operation
+    for operation in ALL_OPERATIONS - DEFAULT_HIDDEN_OPERATIONS
+    if OPERATION_FEATURES[operation] in DEFAULT_FEATURE_GROUPS
 }
 
 

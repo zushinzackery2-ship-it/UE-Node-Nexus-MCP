@@ -30,7 +30,7 @@
 | **实测引擎** | UE 5.5 Launcher Windows x64 |
 | **源码兼容预期** | UE 5.x 同类编辑器环境通常只需要放入目标引擎/项目后重新编译 |
 | **二进制边界** | 预编译插件不承诺跨 UE 小版本通用；更换 UE 版本后应重新编译插件 |
-| **验证范围** | MCP 工具注册、AutoIndex、asset/folder 管理、Project Input mappings、Material/Blueprint graph 读写、Blueprint components、Material Instance 参数、Level material usage、UE 5.5 插件构建 |
+| **验证范围** | MCP 工具注册、AutoIndex、asset/folder 管理、Project Input mappings、Material/Blueprint graph 读写、Blueprint components、Material Instance 参数、Level material usage、Niagara 系统基础读写、UE 5.5 插件构建 |
 
 > [!IMPORTANT]
 > **跨版本使用**
@@ -51,6 +51,7 @@
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
 | **Material Instance 参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
+| **Niagara 可选工具组** | `UE_NEXUS_NIAGARA_SUPPORT=true` 后暴露 Niagara System 创建/复制、摘要、Emitter、User 参数、Renderer 材质和编译工具 |
 | **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
 | **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖 Content Browser 清理闭环 |
 | **Level material usage** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、material slot、Material Instance 参数和材质使用点 |
@@ -110,6 +111,11 @@
 | **材质节点类** | `material_expression_classes_list()` | 枚举材质表达式节点类及其可编辑属性 schema 数量 |
 | **Material Instance** | `material_instance_params_get()` | 读取 Material Instance 参数值 |
 | **Material Instance** | `material_instance_params_set()` | 写入 Material Instance 参数，附带类型校验 |
+| **Niagara** | `niagara_system_create()` / `niagara_template_duplicate()` | 创建空 Niagara System 或复制模板 System |
+| **Niagara** | `niagara_system_summary_get()` / `niagara_emitters_list()` | 读取 Niagara System、Emitter、Renderer 和 User 参数数量摘要 |
+| **Niagara** | `niagara_user_params_get()` / `niagara_user_params_set()` | 读取或写入 Niagara User 参数，支持 float/int/bool/vector/color/material |
+| **Niagara** | `niagara_materials_get()` / `niagara_materials_set()` | 读取或替换 Sprite、Ribbon、Mesh Renderer 材质 |
+| **Niagara** | `niagara_compile()` | 请求 Niagara System 编译并返回 ready/needs_compile/remaining_errors |
 | **诊断** | `asset_compile()` | 编译蓝图或材质资产，返回诊断信息 |
 | **诊断** | `asset_validate()` | 校验资产，返回机器可读的结果 |
 | **诊断** | `diagnostics_get()` | 读取最近的桥接器诊断信息 |
@@ -118,7 +124,7 @@
 > [!NOTE]
 > **默认工具面**
 >
-> 代码层保留 65 个固定 operation；默认 MCP 工具面注册 59 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。
+> 代码层保留 74 个固定 operation；默认 MCP 工具面注册 59 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。`niagara` 是默认关闭工具组，开启后工具面为 68 个。
 
 ---
 

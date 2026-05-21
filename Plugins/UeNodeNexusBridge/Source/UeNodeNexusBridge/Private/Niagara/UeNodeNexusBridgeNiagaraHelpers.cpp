@@ -1,0 +1,152 @@
+#include "UeNodeNexusBridgeNiagaraHelpers.h"
+
+#include "FileHelpers.h"
+#include "NiagaraEmitter.h"
+#include "NiagaraEmitterHandle.h"
+#include "NiagaraMeshRendererProperties.h"
+#include "NiagaraRendererProperties.h"
+#include "NiagaraRibbonRendererProperties.h"
+#include "NiagaraSpriteRendererProperties.h"
+#include "NiagaraSystem.h"
+#include "UeNodeNexusBridgeJson.h"
+
+namespace UeNodeNexusBridge
+{
+UNiagaraSystem* LoadNiagaraSystemFromPayload(
+    const TSharedPtr<FJsonObject>& Payload,
+    const FString& Operation,
+    const FString& RequestId,
+    TSharedPtr<FJsonObject>& OutResponse)
+{
+    FString AssetPath;
+    if (!Payload->TryGetStringField(TEXT("asset_path"), AssetPath) || AssetPath.IsEmpty())
+    {
+        OutResponse = MakeEnvelope(Operation, RequestId, false);
+        OutResponse->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_request"), TEXT("asset_path is required")));
+        return nullptr;
+    }
+
+    UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *AssetPath);
+    if (System == nullptr)
+    {
+        OutResponse = MakeEnvelope(Operation, RequestId, false);
+        OutResponse->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("asset_not_found"), TEXT("Niagara system could not be loaded")));
+        return nullptr;
+    }
+    return System;
+}
+
+TSharedPtr<FJsonObject> MakeNiagaraAssetData(UNiagaraSystem* System)
+{
+    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    Data->SetStringField(TEXT("asset_path"), System ? System->GetPathName() : FString());
+    Data->SetStringField(TEXT("asset_class"), System ? System->GetClass()->GetPathName() : FString());
+    return Data;
+}
+
+TSharedPtr<FJsonObject> MakeNiagaraEmitterJson(UNiagaraSystem* System, int32 EmitterIndex)
+{
+    const FNiagaraEmitterHandle& Handle = System->GetEmitterHandles()[EmitterIndex];
+    const FVersionedNiagaraEmitterData* EmitterData = Handle.GetEmitterData();
+    const int32 RendererCount = EmitterData ? EmitterData->GetRenderers().Num() : 0;
+
+    TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
+    Json->SetNumberField(TEXT("index"), EmitterIndex);
+    Json->SetStringField(TEXT("name"), Handle.GetName().ToString());
+    Json->SetBoolField(TEXT("enabled"), Handle.GetIsEnabled());
+    Json->SetNumberField(TEXT("renderer_count"), RendererCount);
+    return Json;
+}
+
+TSharedPtr<FJsonValue> MakeNiagaraEmitterRow(UNiagaraSystem* System, int32 EmitterIndex)
+{
+    const FNiagaraEmitterHandle& Handle = System->GetEmitterHandles()[EmitterIndex];
+    const FVersionedNiagaraEmitterData* EmitterData = Handle.GetEmitterData();
+    const int32 RendererCount = EmitterData ? EmitterData->GetRenderers().Num() : 0;
+
+    TArray<TSharedPtr<FJsonValue>> Row;
+    Row.Add(MakeShared<FJsonValueNumber>(EmitterIndex));
+    Row.Add(MakeShared<FJsonValueString>(Handle.GetName().ToString()));
+    Row.Add(MakeShared<FJsonValueBoolean>(Handle.GetIsEnabled()));
+    Row.Add(MakeShared<FJsonValueNumber>(RendererCount));
+    return MakeShared<FJsonValueArray>(Row);
+}
+
+FString GetRendererMaterialPath(UNiagaraRendererProperties* Renderer, int32 MaterialIndex)
+{
+    if (UNiagaraSpriteRendererProperties* Sprite = Cast<UNiagaraSpriteRendererProperties>(Renderer))
+    {
+        return Sprite->Material ? Sprite->Material->GetPathName() : FString();
+    }
+    if (UNiagaraRibbonRendererProperties* Ribbon = Cast<UNiagaraRibbonRendererProperties>(Renderer))
+    {
+        return Ribbon->Material ? Ribbon->Material->GetPathName() : FString();
+    }
+    if (UNiagaraMeshRendererProperties* Mesh = Cast<UNiagaraMeshRendererProperties>(Renderer))
+    {
+        if (Mesh->OverrideMaterials.IsValidIndex(MaterialIndex))
+        {
+            UMaterialInterface* Material = Mesh->OverrideMaterials[MaterialIndex].ExplicitMat;
+            return Material ? Material->GetPathName() : FString();
+        }
+    }
+    return FString();
+}
+
+bool SetRendererMaterial(UNiagaraRendererProperties* Renderer, UMaterialInterface* Material, int32 MaterialIndex)
+{
+    if (UNiagaraSpriteRendererProperties* Sprite = Cast<UNiagaraSpriteRendererProperties>(Renderer))
+    {
+        Sprite->Modify();
+        Sprite->Material = Material;
+        return true;
+    }
+    if (UNiagaraRibbonRendererProperties* Ribbon = Cast<UNiagaraRibbonRendererProperties>(Renderer))
+    {
+        Ribbon->Modify();
+        Ribbon->Material = Material;
+        return true;
+    }
+    if (UNiagaraMeshRendererProperties* Mesh = Cast<UNiagaraMeshRendererProperties>(Renderer))
+    {
+        Mesh->Modify();
+        Mesh->bOverrideMaterials = true;
+        const int32 TargetIndex = FMath::Max(0, MaterialIndex);
+        while (Mesh->OverrideMaterials.Num() <= TargetIndex)
+        {
+            Mesh->OverrideMaterials.AddDefaulted();
+        }
+        Mesh->OverrideMaterials[TargetIndex].ExplicitMat = Material;
+        return true;
+    }
+    return false;
+}
+
+TSharedPtr<FJsonObject> MakeNiagaraMaterialJson(int32 EmitterIndex, int32 RendererIndex, UNiagaraRendererProperties* Renderer, int32 MaterialIndex)
+{
+    TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
+    Json->SetNumberField(TEXT("emitter_index"), EmitterIndex);
+    Json->SetNumberField(TEXT("renderer_index"), RendererIndex);
+    Json->SetNumberField(TEXT("material_index"), MaterialIndex);
+    Json->SetStringField(TEXT("renderer_class"), Renderer ? Renderer->GetClass()->GetName() : FString());
+    Json->SetStringField(TEXT("material_path"), GetRendererMaterialPath(Renderer, MaterialIndex));
+    return Json;
+}
+
+TSharedPtr<FJsonValue> MakeNiagaraMaterialRow(int32 EmitterIndex, int32 RendererIndex, UNiagaraRendererProperties* Renderer, int32 MaterialIndex)
+{
+    TArray<TSharedPtr<FJsonValue>> Row;
+    Row.Add(MakeShared<FJsonValueNumber>(EmitterIndex));
+    Row.Add(MakeShared<FJsonValueNumber>(RendererIndex));
+    Row.Add(MakeShared<FJsonValueNumber>(MaterialIndex));
+    Row.Add(MakeShared<FJsonValueString>(Renderer ? Renderer->GetClass()->GetName() : FString()));
+    Row.Add(MakeShared<FJsonValueString>(GetRendererMaterialPath(Renderer, MaterialIndex)));
+    return MakeShared<FJsonValueArray>(Row);
+}
+
+bool SaveAssetPackage(UObject* Asset)
+{
+    UPackage* Package = Asset ? Asset->GetOutermost() : nullptr;
+    return Package != nullptr && UEditorLoadingAndSavingUtils::SavePackages({ Package }, false);
+}
+}
