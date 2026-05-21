@@ -30,7 +30,7 @@
 | **实测引擎** | UE 5.5 Launcher Windows x64 |
 | **源码兼容预期** | UE 5.x 同类编辑器环境通常只需要放入目标引擎/项目后重新编译 |
 | **二进制边界** | 预编译插件不承诺跨 UE 小版本通用；更换 UE 版本后应重新编译插件 |
-| **验证范围** | MCP 工具注册、AutoIndex、asset/folder 管理、Material/Blueprint graph 读写、Material Instance 参数、Level material usage、UE 5.5 插件构建 |
+| **验证范围** | MCP 工具注册、AutoIndex、asset/folder 管理、Project Input mappings、Material/Blueprint graph 读写、Blueprint components、Material Instance 参数、Level material usage、UE 5.5 插件构建 |
 
 > [!IMPORTANT]
 > **跨版本使用**
@@ -43,7 +43,7 @@
 
 | 功能 | 说明 |
 |:-----|:-----|
-| **固定 MCP 工具** | Python MCP Server 默认暴露 56 个类型化工具，向 UE 桥接器转发经过校验的请求载荷 |
+| **固定 MCP 工具** | Python MCP Server 默认暴露 59 个类型化工具，向 UE 桥接器转发经过校验的请求载荷 |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
@@ -54,8 +54,9 @@
 | **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
 | **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖 Content Browser 清理闭环 |
 | **Level material usage** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、material slot、Material Instance 参数和材质使用点 |
+| **Project Input** | 读写 legacy Project Settings action/axis mappings，用于 Blueprint 输入链路验证 |
 | **复杂材质复刻** | 已验证可通过固定 MCP 接口读取整图、创建节点、回放参数、连接根输出、编译并保存 |
-| **蓝图摘要** | `blueprint_details_get` 读取类元数据、变量、CDO 默认值和组件模板 |
+| **蓝图摘要/组件** | `blueprint_details_get` 读取类元数据、变量、CDO 默认值和组件模板；`blueprint_components_patch` 写入 Blueprint SCS 组件树 |
 | **动画蓝图摘要** | `anim_blueprint_summary_get` 提取常用 AnimGraph 节点的紧凑语义摘要 |
 | **资产创建** | `asset_create` 支持 Material、Material Instance Constant 和 Blueprint 资产的固定创建流程 |
 | **编译与保存** | `asset_compile`、`asset_validate`、`asset_save` 返回结构化诊断和包状态 |
@@ -90,7 +91,10 @@
 | **关卡材质** | `material_interface_resolve()` | 解析 Material Interface、Material Instance parent chain 和 root material |
 | **关卡材质** | `material_usage_find()` | 查找当前 Level 或资产中的 material usage |
 | **关卡材质** | `component_material_instance_params_get()` / `component_material_instance_params_set()` | 读写组件 material slot 上的 MID/MI 参数 |
+| **Project Input** | `project_input_mappings_get()` | 读取 legacy Project Settings action/axis mappings |
+| **Project Input** | `project_input_mappings_patch()` | 批量添加或移除 legacy action/axis mappings，可保存配置 |
 | **蓝图** | `blueprint_details_get()` | 读取蓝图元数据、变量、CDO 默认值和组件 |
+| **蓝图** | `blueprint_components_patch()` | 批量添加或移除 Blueprint SCS 组件并可编译检查 |
 | **蓝图** | `anim_blueprint_summary_get()` | 读取常用 AnimGraph 节点的紧凑语义摘要 |
 | **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny` |
 | **图** | `graph_node_info_get()` | 读取整张图的高密度节点信息，默认 `indexed`，可用 `include_position=true` 附带坐标表 |
@@ -114,7 +118,7 @@
 > [!NOTE]
 > **默认工具面**
 >
-> 代码层保留 62 个固定 operation；默认 MCP 工具面注册 56 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。
+> 代码层保留 65 个固定 operation；默认 MCP 工具面注册 59 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。
 
 ---
 
@@ -169,6 +173,20 @@
 > **复刻边界**
 >
 > 该验证只使用固定 MCP 工具读取源图数据并在目标材质中重建节点、参数和连线；没有从源材质直接复制 `UMaterialExpression`、GraphNode 或 UObject 指针。
+
+---
+
+## Blueprint 3C 验证
+
+| 验证项 | 结果 |
+|:-----|:-----|
+| **测试资产** | `/Game/MCP_3C/BP_MCP_3CCharacter.BP_MCP_3CCharacter` |
+| **组件链路** | `Character` native root 下添加 `SpringArmComponent` 和 `CameraComponent` |
+| **输入配置** | `MoveForward`、`MoveRight`、`Turn`、`LookUp` axis mappings 和 `Jump` action mapping 已通过 MCP 写入 |
+| **图链路** | 轴输入驱动移动/视角，空格键驱动 `Jump` / `StopJumping` |
+| **整图读回** | `graph_node_info_get(include_position=true)` 返回 16 个节点、12 条关键连线 |
+| **编译结果** | `0 error / 0 warning` |
+| **保存结果** | Blueprint asset 显式保存成功 |
 
 ---
 

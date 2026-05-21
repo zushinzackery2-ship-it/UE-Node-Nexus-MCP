@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .contracts import require_non_empty_string
+from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
 from .runtime import mcp
 
@@ -24,6 +24,29 @@ def blueprint_details_get(
             "include_defaults": include_defaults,
             "include_components": include_components,
             "property_names": property_names or [],
+            "format": format,
+        },
+    )
+
+
+@mcp.tool()
+def blueprint_components_patch(
+    asset_path: str,
+    operations: list[dict[str, Any]],
+    dry_run: bool = True,
+    compile_after: bool = True,
+    format: Literal["compact", "full"] = "compact",
+) -> dict[str, Any]:
+    """Add or remove Blueprint SCS components with one structural patch request."""
+    require_non_empty_string(asset_path, "asset_path")
+    require_list(operations, "operations")
+    return _call(
+        "blueprint_components_patch",
+        {
+            "asset_path": asset_path,
+            "operations": operations,
+            "dry_run": dry_run,
+            "compile_after": compile_after,
             "format": format,
         },
     )

@@ -100,6 +100,8 @@ TSharedPtr<FJsonObject> MakeEmptyDiff()
     Diff->SetArrayField(TEXT("links_added"), TArray<TSharedPtr<FJsonValue>>());
     Diff->SetArrayField(TEXT("links_removed"), TArray<TSharedPtr<FJsonValue>>());
     Diff->SetArrayField(TEXT("params_changed"), TArray<TSharedPtr<FJsonValue>>());
+    Diff->SetArrayField(TEXT("components_added"), TArray<TSharedPtr<FJsonValue>>());
+    Diff->SetArrayField(TEXT("components_removed"), TArray<TSharedPtr<FJsonValue>>());
     return Diff;
 }
 
@@ -173,6 +175,8 @@ static TSharedPtr<FJsonObject> MakeCompactDiff(const TSharedPtr<FJsonObject>& Di
         TEXT("links_added"),
         TEXT("links_removed"),
         TEXT("params_changed"),
+        TEXT("components_added"),
+        TEXT("components_removed"),
         TEXT("assets_created"),
         TEXT("assets_deleted"),
         TEXT("assets_moved"),

@@ -128,9 +128,21 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     {
         return HandleComponentMaterialInstanceParamsSet(Operation, RequestId, Payload);
     }
+    if (Operation == TEXT("project_input_mappings_get"))
+    {
+        return HandleProjectInputMappingsGet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("project_input_mappings_patch"))
+    {
+        return HandleProjectInputMappingsPatch(Operation, RequestId, Payload);
+    }
     if (Operation == TEXT("blueprint_details_get"))
     {
         return HandleBlueprintDetailsGet(Operation, RequestId, Payload);
+    }
+    if (Operation == TEXT("blueprint_components_patch"))
+    {
+        return HandleBlueprintComponentsPatch(Operation, RequestId, Payload);
     }
     if (Operation == TEXT("anim_blueprint_summary_get"))
     {
