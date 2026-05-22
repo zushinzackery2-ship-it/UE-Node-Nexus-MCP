@@ -30,7 +30,7 @@
 | **实测引擎** | UE 5.5 Launcher Windows x64 |
 | **源码兼容预期** | UE 5.x 同类编辑器环境通常只需要放入目标引擎/项目后重新编译 |
 | **二进制边界** | 预编译插件不承诺跨 UE 小版本通用；更换 UE 版本后应重新编译插件 |
-| **验证范围** | MCP 工具注册、AutoIndex、asset/folder 管理、Project Input mappings、Material/Blueprint graph 读写、Blueprint components、Material Instance 参数、Level material usage、Niagara 系统基础读写、UE 5.5 插件构建 |
+| **验证范围** | MCP 工具注册、AutoIndex、asset/folder 管理、Project Input mappings、Material/Blueprint graph 读写、Blueprint components、Material Instance 参数、Level material usage、可选 Niagara 插件基础读写、UE 5.5 插件构建 |
 
 > [!IMPORTANT]
 > **跨版本使用**
@@ -43,7 +43,7 @@
 
 | 功能 | 说明 |
 |:-----|:-----|
-| **固定 MCP 工具** | Python MCP Server 默认暴露 68 个类型化工具，向 UE 桥接器转发经过校验的请求载荷 |
+| **固定 MCP 工具** | Python MCP Server 默认暴露 59 个类型化工具，向 UE 桥接器转发经过校验的请求载荷 |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
@@ -51,7 +51,7 @@
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
 | **Material Instance 参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
-| **Niagara 工具组** | 默认暴露 Niagara System 创建/复制、摘要、Emitter、User 参数、Renderer 材质和编译工具 |
+| **Niagara 工具组** | 由可选 `UeNodeNexusNiagaraBridge` 插件承载；启用 `UE_NEXUS_NIAGARA_SUPPORT=true` 后暴露 Niagara System 创建/复制、摘要、Emitter、User 参数、Renderer 材质和编译工具 |
 | **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
 | **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖 Content Browser 清理闭环 |
 | **Level material usage** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、material slot、Material Instance 参数和材质使用点 |
@@ -124,12 +124,12 @@
 > [!NOTE]
 > **Niagara 通用边界**
 >
-> Niagara MCP 工具面用于创建空 System、复制已有 System、读取 emitter/renderer/User 参数、替换已有 renderer 材质、写入 User 参数和编译保存。当前不提供 emitter stack authoring，也不创建 emitter renderer；空 Niagara System 不是可运行 VFX。相关返回会带 `capabilities`、`limitations`、`has_emitter_stack` 和机器可读 `warnings`，用于阻止 Agent 把空 System 当成完整效果。
+> Niagara MCP 工具由独立 UE 插件 `UeNodeNexusNiagaraBridge` 提供。未启用该 UE 插件或未设置 `UE_NEXUS_NIAGARA_SUPPORT=true` 时，Python MCP 不注册 `niagara_*` tools。当前 Niagara 工具面用于创建空 System、复制已有 System、读取 emitter/renderer/User 参数、替换已有 renderer 材质、写入 User 参数和编译保存；不提供 emitter stack authoring，也不创建 emitter renderer。空 Niagara System 不是可运行 VFX。相关返回会带 `capabilities`、`limitations`、`has_emitter_stack` 和机器可读 `warnings`。
 
 > [!NOTE]
 > **默认工具面**
 >
-> 代码层保留 75 个固定 operation；默认 MCP 工具面注册 68 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset`、`niagara_template_duplicate` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。`niagara` 默认进入工具面，可用 feature 开关显式关闭。
+> 代码层保留固定 operation；默认 MCP 工具面注册 59 个。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`graph_node_info_get_w_pos`、`node_position_offset`、`niagara_template_duplicate` 作为高级/兼容入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。`niagara` 默认不进入工具面，需要显式开启。
 
 ---
 
@@ -213,6 +213,9 @@ UE-Node-Nexus-MCP/
 │       ├── Source/
 │       ├── Resources/
 │       └── UeNodeNexusBridge.uplugin
+│   └── UeNodeNexusNiagaraBridge/
+│       ├── Source/
+│       └── UeNodeNexusNiagaraBridge.uplugin
 ├── src/
 │   └── ue_node_nexus_mcp/
 ├── pyproject.toml
@@ -284,14 +287,14 @@ ue-node-nexus-mcp
 
 ### Tool Feature 开关
 
-默认注册 `core,asset,auto_index,graph,material,blueprint,level,project_input,niagara` 工具组。关闭某组时，对应工具不会进入 MCP tool list。
+默认注册 `core,asset,auto_index,graph,material,blueprint,level,project_input` 工具组。关闭某组时，对应工具不会进入 MCP tool list。Niagara 是可选工具组，需要同时启用 UE 插件 `UeNodeNexusNiagaraBridge` 和 MCP 配置 `UE_NEXUS_NIAGARA_SUPPORT=true`。
 
 | 配置 | 说明 |
 |:-----|:-----|
 | **`UE_NEXUS_FEATURES`** | 显式指定工具组，例如 `core,asset,material` |
 | **`UE_NEXUS_ENABLE_FEATURES`** | 在默认或显式工具组上追加工具组 |
 | **`UE_NEXUS_DISABLE_FEATURES`** | 从当前工具组中移除工具组 |
-| **`UE_NEXUS_NIAGARA_SUPPORT`** | `true`/`false`，等价于显式启用或关闭 `niagara` 工具组；默认开启 |
+| **`UE_NEXUS_NIAGARA_SUPPORT`** | `true`/`false`，等价于显式启用或关闭 `niagara` 工具组；默认关闭 |
 
 示例：只暴露资产、材质和核心诊断工具：
 
@@ -301,8 +304,7 @@ ue-node-nexus-mcp
     "ue-node-nexus": {
       "command": "ue-node-nexus-mcp",
       "env": {
-        "UE_NEXUS_FEATURES": "core,asset,material",
-        "UE_NEXUS_NIAGARA_SUPPORT": "false"
+        "UE_NEXUS_FEATURES": "core,asset,material"
       }
     }
   }
@@ -312,7 +314,17 @@ ue-node-nexus-mcp
 CLI 也支持同样的开关：
 
 ```bash
-ue-node-nexus-mcp --features core,asset,material --niagara-support=false
+ue-node-nexus-mcp --features core,asset,material
+```
+
+启用 Niagara 工具时，UE 项目需要同时启用 `UeNodeNexusBridge`、`UeNodeNexusNiagaraBridge` 和 UE 官方 `Niagara` 插件，并在 MCP 配置中加入：
+
+```json
+{
+  "env": {
+    "UE_NEXUS_NIAGARA_SUPPORT": "true"
+  }
+}
 ```
 
 ---
@@ -325,12 +337,16 @@ ue-node-nexus-mcp --features core,asset,material --niagara-support=false
 UE_5.5/
 └── Engine/
     └── Plugins/
-        └── UeNodeNexusBridge/
+        ├── UeNodeNexusBridge/
             ├── Binaries/
             ├── Source/
             ├── Config/
             ├── Resources/
             └── UeNodeNexusBridge.uplugin
+        └── UeNodeNexusNiagaraBridge/
+            ├── Binaries/
+            ├── Source/
+            └── UeNodeNexusNiagaraBridge.uplugin
 ```
 
 也可以放到项目目录：
@@ -338,8 +354,10 @@ UE_5.5/
 ```
 YourProject/
 └── Plugins/
-    └── UeNodeNexusBridge/
+    ├── UeNodeNexusBridge/
         └── UeNodeNexusBridge.uplugin
+    └── UeNodeNexusNiagaraBridge/
+        └── UeNodeNexusNiagaraBridge.uplugin
 ```
 
 Release 包的 Win64 二进制只针对 UE 5.5 Launcher Windows x64 验证；其他 UE 5.x 版本请保留 `Source` 并让目标引擎重新编译。
@@ -353,15 +371,18 @@ Release 包的 Win64 二进制只针对 UE 5.5 Launcher Windows x64 验证；其
 ```
 YourProject/
 └── Plugins/
-    └── UeNodeNexusBridge/
+    ├── UeNodeNexusBridge/
         ├── Source/
         ├── Resources/
         └── UeNodeNexusBridge.uplugin
+    └── UeNodeNexusNiagaraBridge/
+        ├── Source/
+        └── UeNodeNexusNiagaraBridge.uplugin
 ```
 
 然后右键 `.uproject` 生成项目文件，或直接打开项目触发 UE 的插件编译提示。该方式适合不同 UE 5.x 项目各自编译自己的插件二进制。
 
-也可以把同一目录作为 Engine Plugin 放到目标引擎的 `Engine/Plugins/UeNodeNexusBridge/` 下，再用该引擎重新编译插件。
+也可以把两个插件目录作为 Engine Plugin 放到目标引擎的 `Engine/Plugins/` 下，再用该引擎重新编译插件。只需要核心能力时，可以不启用 `UeNodeNexusNiagaraBridge`。
 
 ---
 

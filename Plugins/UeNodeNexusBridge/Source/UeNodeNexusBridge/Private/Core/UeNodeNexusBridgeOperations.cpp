@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeOperations.h"
 
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeOperationRegistry.h"
 
 namespace UeNodeNexusBridge
 {
@@ -212,46 +213,6 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     {
         return HandleMaterialInstanceParamsSet(Operation, RequestId, Payload);
     }
-    if (Operation == TEXT("niagara_system_create"))
-    {
-        return HandleNiagaraSystemCreate(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_system_duplicate"))
-    {
-        return HandleNiagaraSystemDuplicate(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_template_duplicate"))
-    {
-        return HandleNiagaraTemplateDuplicate(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_system_summary_get"))
-    {
-        return HandleNiagaraSystemSummaryGet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_emitters_list"))
-    {
-        return HandleNiagaraEmittersList(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_user_params_get"))
-    {
-        return HandleNiagaraUserParamsGet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_user_params_set"))
-    {
-        return HandleNiagaraUserParamsSet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_materials_get"))
-    {
-        return HandleNiagaraMaterialsGet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_materials_set"))
-    {
-        return HandleNiagaraMaterialsSet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("niagara_compile"))
-    {
-        return HandleNiagaraCompile(Operation, RequestId, Payload);
-    }
     if (Operation == TEXT("diagnostics_get"))
     {
         return HandleDiagnosticsGet(Operation, RequestId);
@@ -280,6 +241,12 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     if (TSharedPtr<FJsonObject> AutoIndexResponse = DispatchAutoIndexOperation(Operation, RequestId, Payload))
     {
         return AutoIndexResponse;
+    }
+
+    TSharedPtr<FJsonObject> RegisteredResponse;
+    if (DispatchRegisteredOperation(Operation, RequestId, Payload, RegisteredResponse))
+    {
+        return RegisteredResponse;
     }
 
     return UnsupportedOperation(Operation, RequestId);

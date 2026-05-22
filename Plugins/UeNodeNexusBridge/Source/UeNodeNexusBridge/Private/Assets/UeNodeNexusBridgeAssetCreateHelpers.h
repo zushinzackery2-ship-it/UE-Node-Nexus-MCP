@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UeNodeNexusBridgeAssetPaths.h"
 
 class UObject;
 class UPackage;
@@ -8,8 +9,6 @@ class FJsonObject;
 
 namespace UeNodeNexusBridge
 {
-bool ParseAssetPath(const FString& AssetPath, FString& OutPackageName, FString& OutAssetName, FText& OutReason);
-
 TSharedPtr<FJsonObject> MakeCreateData(const FString& AssetPath, const FString& AssetKind, UObject* Asset, bool bDryRun, bool bSaved);
 
 UObject* CreateMaterialAsset(UPackage* Package, FName AssetName);

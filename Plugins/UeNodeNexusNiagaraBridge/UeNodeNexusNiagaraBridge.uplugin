@@ -2,8 +2,8 @@
   "FileVersion": 3,
   "Version": 1,
   "VersionName": "0.1.0",
-  "FriendlyName": "UE Node Nexus Bridge",
-  "Description": "Editor bridge for UE Node Nexus MCP fixed graph and asset operations.",
+  "FriendlyName": "UE Node Nexus Niagara Bridge",
+  "Description": "Optional Niagara operation provider for UE Node Nexus MCP.",
   "Category": "Editor",
   "CreatedBy": "Vernal",
   "CanContainContent": false,
@@ -12,9 +12,19 @@
   "Installed": false,
   "Modules": [
     {
-      "Name": "UeNodeNexusBridge",
+      "Name": "UeNodeNexusNiagaraBridge",
       "Type": "Editor",
       "LoadingPhase": "PostEngineInit"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "UeNodeNexusBridge",
+      "Enabled": true
+    },
+    {
+      "Name": "Niagara",
+      "Enabled": true
     }
   ]
 }

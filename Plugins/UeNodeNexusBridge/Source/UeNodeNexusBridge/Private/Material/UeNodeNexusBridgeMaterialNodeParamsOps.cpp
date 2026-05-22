@@ -6,6 +6,7 @@
 #include "Materials/MaterialExpression.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
+#include "UeNodeNexusBridgeGraphPatchShared.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "UeNodeNexusBridgeMaterialPatchHelpers.h"
@@ -56,30 +57,6 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsGet(const FString& Operation, co
     return Response;
 }
 
-static bool JsonValueToPropertyText(const TSharedPtr<FJsonValue>& Value, FString& OutText)
-{
-    if (!Value.IsValid() || Value->Type == EJson::Null)
-    {
-        return false;
-    }
-    if (Value->Type == EJson::String)
-    {
-        OutText = Value->AsString();
-        return true;
-    }
-    if (Value->Type == EJson::Boolean)
-    {
-        OutText = Value->AsBool() ? TEXT("True") : TEXT("False");
-        return true;
-    }
-    if (Value->Type == EJson::Number)
-    {
-        OutText = FString::SanitizeFloat(Value->AsNumber());
-        return true;
-    }
-    return false;
-}
-
 TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
 {
     FString NodeId;
@@ -121,19 +98,25 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
 
     for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Params)->Values)
     {
-        FString NewValue;
-        if (!JsonValueToPropertyText(Pair.Value, NewValue))
+        bool bApplied = false;
+        FString FailureReason;
+        if (bMaterialOutput)
         {
-            Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_write_failed"), Pair.Key, Material->GetPathName(), TEXT("UeNodeNexusBridge"))));
-            continue;
+            FString NewValue;
+            if (!ReadJsonScalarAsString(*Params, Pair.Key, NewValue))
+            {
+                Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_write_failed"), Pair.Key, Material->GetPathName(), TEXT("UeNodeNexusBridge"))));
+                continue;
+            }
+            bApplied = ApplyMaterialOutputParamValue(Material, Pair.Key, NewValue, bDryRun, Diff);
         }
-
-        const bool bApplied = bMaterialOutput
-            ? ApplyMaterialOutputParamValue(Material, Pair.Key, NewValue, bDryRun, Diff)
-            : ApplyMaterialExpressionParamValue(Material, Expression, Pair.Key, NewValue, bDryRun, Diff);
+        else
+        {
+            bApplied = ApplyMaterialExpressionParamJsonValue(Material, Expression, Pair.Key, Pair.Value, bDryRun, Diff, FailureReason);
+        }
         if (!bApplied)
         {
-            Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_import_failed"), Pair.Key, Material->GetPathName(), TEXT("UeNodeNexusBridge"))));
+            Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_import_failed"), FailureReason.IsEmpty() ? Pair.Key : FailureReason, Material->GetPathName(), TEXT("UeNodeNexusBridge"))));
             continue;
         }
         bChanged = true;

@@ -107,7 +107,7 @@ FEATURE_GROUPS = {
     "niagara",
 }
 
-DEFAULT_FEATURE_GROUPS = set(FEATURE_GROUPS)
+DEFAULT_FEATURE_GROUPS = set(FEATURE_GROUPS) - {"niagara"}
 
 OPERATION_FEATURES = {
     "asset_list": "asset",

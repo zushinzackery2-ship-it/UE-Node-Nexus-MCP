@@ -1,6 +1,6 @@
-#include "UeNodeNexusBridgeOperations.h"
+#include "UeNodeNexusNiagaraOps.h"
 
-#include "UeNodeNexusBridgeAssetCreateHelpers.h"
+#include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
