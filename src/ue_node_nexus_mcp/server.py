@@ -15,7 +15,8 @@ from .tools_graphs import graph_build_apply, graph_node_info_get, graph_node_inf
 from .tools_project import project_input_mappings_get, project_input_mappings_patch  # noqa: E402,F401
 from .tools_level_materials import component_material_instance_params_get, component_material_instance_params_set, component_materials_get, component_materials_set, level_actor_get, level_actor_transform_get, level_actor_transform_set, level_mesh_instances_list, material_interface_resolve, material_usage_find, object_properties_get, object_properties_set  # noqa: E402,F401
 from .tools_materials import material_expression_classes_list, material_instance_params_get, material_instance_params_set  # noqa: E402,F401
-from .tools_niagara import niagara_compile, niagara_emitters_list, niagara_materials_get, niagara_materials_set, niagara_system_create, niagara_system_duplicate, niagara_system_summary_get, niagara_template_duplicate, niagara_user_params_get, niagara_user_params_set  # noqa: E402,F401
+from .tools_niagara import niagara_compile, niagara_emitter_create, niagara_emitter_properties_get, niagara_emitter_properties_set, niagara_emitters_list, niagara_materials_get, niagara_materials_set, niagara_renderer_create, niagara_renderer_properties_get, niagara_renderer_properties_set, niagara_renderers_list, niagara_system_create, niagara_system_duplicate, niagara_system_properties_get, niagara_system_properties_set, niagara_system_summary_get, niagara_template_duplicate, niagara_user_params_get, niagara_user_params_set  # noqa: E402,F401
+from .tools_niagara_modules import niagara_module_add, niagara_module_remove, niagara_module_set_enabled, niagara_modules_list  # noqa: E402,F401
 from .tools_system import asset_compile, asset_save, asset_validate, diagnostics_get, editor_request_exit, editor_save_all, level_actors_list, level_current_get  # noqa: E402,F401
 
 

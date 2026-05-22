@@ -127,6 +127,167 @@ def niagara_materials_set(
 
 
 @default_tool("niagara")
+def niagara_system_properties_get(
+    asset_path: str,
+    property_names: list[str] | None = None,
+    include_non_editable: bool = False,
+    format: Literal["compact", "full"] = "compact",
+) -> dict[str, Any]:
+    """Read editable Niagara system UObject properties in compact or full form."""
+    require_non_empty_string(asset_path, "asset_path")
+    return _call(
+        "niagara_system_properties_get",
+        {
+            "asset_path": asset_path,
+            "property_names": property_names,
+            "include_non_editable": include_non_editable,
+            "format": format,
+        },
+    )
+
+
+@default_tool("niagara")
+def niagara_system_properties_set(
+    asset_path: str,
+    params: list[dict[str, Any]],
+    dry_run: bool = True,
+    allow_non_editable: bool = False,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Patch editable Niagara system UObject properties."""
+    require_non_empty_string(asset_path, "asset_path")
+    require_list(params, "params")
+    return _call(
+        "niagara_system_properties_set",
+        {
+            "asset_path": asset_path,
+            "params": params,
+            "dry_run": dry_run,
+            "allow_non_editable": allow_non_editable,
+            "save": save,
+        },
+    )
+
+
+@default_tool("niagara")
+def niagara_emitter_create(
+    asset_path: str,
+    mode: Literal["default", "empty", "from_asset"] = "default",
+    source_emitter_path: str | None = None,
+    name: str | None = None,
+    dry_run: bool = True,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Add a generic empty/default emitter or copy an emitter asset into a Niagara system."""
+    require_non_empty_string(asset_path, "asset_path")
+    return _call(
+        "niagara_emitter_create",
+        {
+            "asset_path": asset_path,
+            "mode": mode,
+            "source_emitter_path": source_emitter_path,
+            "name": name,
+            "dry_run": dry_run,
+            "save": save,
+        },
+    )
+
+
+@default_tool("niagara")
+def niagara_emitter_properties_get(asset_path: str, emitter_index: int) -> dict[str, Any]:
+    """Read compact editable handle/emitter settings for one Niagara emitter."""
+    require_non_empty_string(asset_path, "asset_path")
+    return _call("niagara_emitter_properties_get", {"asset_path": asset_path, "emitter_index": emitter_index})
+
+
+@default_tool("niagara")
+def niagara_emitter_properties_set(
+    asset_path: str,
+    emitter_index: int,
+    params: list[dict[str, Any]],
+    dry_run: bool = True,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Patch compact emitter settings: name, enabled, local_space, determinism, random_seed, sim_target."""
+    require_non_empty_string(asset_path, "asset_path")
+    require_list(params, "params")
+    return _call(
+        "niagara_emitter_properties_set",
+        {"asset_path": asset_path, "emitter_index": emitter_index, "params": params, "dry_run": dry_run, "save": save},
+    )
+
+
+@default_tool("niagara")
+def niagara_renderers_list(asset_path: str, format: Literal["compact", "full"] = "compact") -> dict[str, Any]:
+    """List all Niagara renderers with indexes and primary material paths."""
+    require_non_empty_string(asset_path, "asset_path")
+    return _call("niagara_renderers_list", {"asset_path": asset_path, "format": format})
+
+
+@default_tool("niagara")
+def niagara_renderer_create(
+    asset_path: str,
+    emitter_index: int,
+    renderer_type: Literal["sprite", "ribbon", "mesh", "light", "component", "decal", "volume"] = "sprite",
+    dry_run: bool = True,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Add a generic Niagara renderer to an existing emitter."""
+    require_non_empty_string(asset_path, "asset_path")
+    return _call(
+        "niagara_renderer_create",
+        {
+            "asset_path": asset_path,
+            "emitter_index": emitter_index,
+            "renderer_type": renderer_type,
+            "dry_run": dry_run,
+            "save": save,
+        },
+    )
+
+
+@default_tool("niagara")
+def niagara_renderer_properties_get(
+    asset_path: str,
+    emitter_index: int,
+    renderer_index: int,
+    property_names: list[str] | None = None,
+    include_non_editable: bool = False,
+    format: Literal["compact", "full"] = "compact",
+) -> dict[str, Any]:
+    """Read editable UObject properties for a Niagara renderer."""
+    require_non_empty_string(asset_path, "asset_path")
+    return _call(
+        "niagara_renderer_properties_get",
+        {
+            "asset_path": asset_path,
+            "emitter_index": emitter_index,
+            "renderer_index": renderer_index,
+            "property_names": property_names,
+            "include_non_editable": include_non_editable,
+            "format": format,
+        },
+    )
+
+
+@default_tool("niagara")
+def niagara_renderer_properties_set(
+    asset_path: str,
+    emitter_index: int,
+    renderer_index: int,
+    params: list[dict[str, Any]],
+    dry_run: bool = True,
+    allow_non_editable: bool = False,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Patch editable UObject properties for a Niagara renderer."""
+    require_non_empty_string(asset_path, "asset_path")
+    require_list(params, "params")
+    payload = {"asset_path": asset_path, "emitter_index": emitter_index, "renderer_index": renderer_index, "params": params, "dry_run": dry_run, "allow_non_editable": allow_non_editable, "save": save}
+    return _call("niagara_renderer_properties_set", payload)
+
+
+@default_tool("niagara")
 def niagara_compile(asset_path: str, wait: bool = True, save: bool = False) -> dict[str, Any]:
     """Compile a Niagara system and report readiness plus empty-system/runtime-VFX warnings."""
     require_non_empty_string(asset_path, "asset_path")

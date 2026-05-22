@@ -64,17 +64,20 @@ void AddNiagaraToolBoundary(TSharedPtr<FJsonObject> Data)
     Capabilities->SetBoolField(TEXT("read_write_user_parameters"), true);
     Capabilities->SetBoolField(TEXT("read_write_renderer_materials"), true);
     Capabilities->SetBoolField(TEXT("compile_system"), true);
-    Capabilities->SetBoolField(TEXT("author_emitters"), false);
-    Capabilities->SetBoolField(TEXT("author_emitter_stack"), false);
-    Capabilities->SetBoolField(TEXT("create_renderers"), false);
+    Capabilities->SetBoolField(TEXT("read_write_system_properties"), true);
+    Capabilities->SetBoolField(TEXT("author_emitters"), true);
+    Capabilities->SetBoolField(TEXT("read_write_emitter_properties"), true);
+    Capabilities->SetBoolField(TEXT("create_renderers"), true);
+    Capabilities->SetBoolField(TEXT("read_write_renderer_properties"), true);
+    Capabilities->SetBoolField(TEXT("author_emitter_stack_modules"), true);
+    Capabilities->SetBoolField(TEXT("read_write_module_inputs"), false);
     Data->SetObjectField(TEXT("capabilities"), Capabilities);
 
     Data->SetArrayField(TEXT("limitations"), {
-        MakeStringValue(TEXT("empty_system_is_not_a_runtime_vfx")),
-        MakeStringValue(TEXT("emitter_stack_authoring_is_not_supported")),
-        MakeStringValue(TEXT("use_existing_systems_for_effect_structure_then_edit_user_params_or_renderer_materials"))
+        MakeStringValue(TEXT("module_stack_input_authoring_is_not_exposed_as_a_public_tool")),
+        MakeStringValue(TEXT("add_existing_module_scripts_then_edit_system_emitter_renderer_properties_user_params_renderer_materials"))
     });
-    Data->SetStringField(TEXT("recommended_generic_workflow"), TEXT("duplicate_existing_niagara_system_or_create_empty_for_manual_editor_authoring; then use MCP to inspect emitters, set user parameters, set renderer materials, compile, and save"));
+    Data->SetStringField(TEXT("recommended_generic_workflow"), TEXT("create_or_duplicate_system; add default/minimal emitters; add existing module scripts; add sprite/ribbon/mesh/light renderers; edit properties/user params/materials; compile and save"));
 }
 
 bool NiagaraSystemHasEmitterStack(UNiagaraSystem* System)
@@ -111,7 +114,7 @@ void AppendNiagaraEmptySystemWarning(UNiagaraSystem* System, TArray<TSharedPtr<F
     Warnings.Add(MakeShared<FJsonValueObject>(MakeNiagaraBoundaryWarning(
         System,
         TEXT("niagara_empty_system_not_runtime_vfx"),
-        TEXT("Niagara system has no emitters. Current MCP can create empty systems or duplicate existing systems and edit user parameters/materials, but cannot author emitter stacks or create renderers."))));
+        TEXT("Niagara system has no emitters. Add an emitter before treating the system as a runtime VFX."))));
 }
 
 TSharedPtr<FJsonObject> MakeNiagaraEmitterJson(UNiagaraSystem* System, int32 EmitterIndex)

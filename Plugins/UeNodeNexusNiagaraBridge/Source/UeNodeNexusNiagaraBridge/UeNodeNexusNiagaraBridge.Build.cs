@@ -29,6 +29,7 @@ public class UeNodeNexusNiagaraBridge : ModuleRules
             "Niagara",
             "NiagaraCore",
             "NiagaraEditor",
+            "Sequencer",
             "UnrealEd"
         });
     }

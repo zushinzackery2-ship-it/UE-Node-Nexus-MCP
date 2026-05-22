@@ -9,6 +9,7 @@ build/
 bin/
 obj/
 refApic/
+/Resources/
 scripts/
 *.egg-info/
 Task-Status.md
