@@ -12,12 +12,15 @@ public class UeNodeNexusBridge : ModuleRules
             System.IO.Path.Combine(ModuleDirectory, "Private", "Assets"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "AutoIndex"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Blueprint"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Blueprint", "NodeInterface"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Core"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Dispatch"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Graph"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Input"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Level"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Material"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Material", "NodeInterface"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Material", "Patch"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Module"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Object"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Transport")
@@ -27,7 +30,8 @@ public class UeNodeNexusBridge : ModuleRules
         {
             "Core",
             "CoreUObject",
-            "Engine"
+            "Engine",
+            "Json"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
@@ -37,9 +41,9 @@ public class UeNodeNexusBridge : ModuleRules
             "BlueprintGraph",
             "HTTPServer",
             "InputCore",
-            "Json",
             "JsonUtilities",
             "MaterialEditor",
+            "Projects",
             "UnrealEd"
         });
     }

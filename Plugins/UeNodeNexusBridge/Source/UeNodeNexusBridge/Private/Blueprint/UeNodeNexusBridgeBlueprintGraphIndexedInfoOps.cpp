@@ -1,4 +1,4 @@
-﻿#include "UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
+﻿#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"

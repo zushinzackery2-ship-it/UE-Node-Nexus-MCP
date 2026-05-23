@@ -2,9 +2,51 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .contracts import require_non_empty_string
+from .contracts import BRIDGE_OPERATIONS, DEFAULT_HIDDEN_OPERATIONS, OPERATION_FEATURES, require_non_empty_string
 from .runtime import call_bridge as _call
 from .runtime import default_tool
+from .runtime import enabled_features
+from .runtime import hidden_tool
+
+
+@default_tool()
+def bridge_capabilities_get() -> dict[str, Any]:
+    """Return operations actually supported by the loaded Unreal bridge modules."""
+    return _call("bridge_capabilities_get", {})
+
+
+def _enabled_contract_operations() -> set[str]:
+    features = enabled_features()
+    return {operation for operation, feature in OPERATION_FEATURES.items() if operation in BRIDGE_OPERATIONS and feature in features}
+
+
+def _default_exposed_contract_operations() -> set[str]:
+    return _enabled_contract_operations() - DEFAULT_HIDDEN_OPERATIONS
+
+
+@default_tool()
+def bridge_contract_check(
+    mode: Literal["exposed", "enabled", "all"] = "enabled",
+) -> dict[str, Any]:
+    """Compare local MCP operation contract with operations loaded in the Unreal bridge."""
+    if mode == "all":
+        expected_operations = set(BRIDGE_OPERATIONS)
+        allowed_extra_operations: set[str] = set()
+    elif mode == "exposed":
+        expected_operations = _default_exposed_contract_operations()
+        allowed_extra_operations = set(BRIDGE_OPERATIONS) - expected_operations
+    else:
+        expected_operations = _enabled_contract_operations()
+        allowed_extra_operations = set(BRIDGE_OPERATIONS) - expected_operations
+
+    return _call(
+        "bridge_capabilities_get",
+        {
+            "expected_operations": sorted(expected_operations),
+            "allowed_extra_operations": sorted(allowed_extra_operations),
+            "mode": mode,
+        },
+    )
 
 
 @default_tool()
@@ -66,7 +108,7 @@ def asset_save(
     )
 
 
-@default_tool()
+@hidden_tool()
 def editor_save_all(
     save_map_packages: bool = True,
     save_content_packages: bool = True,
@@ -81,7 +123,7 @@ def editor_save_all(
     )
 
 
-@default_tool()
+@hidden_tool()
 def editor_request_exit(
     save_before_exit: bool = True,
     force: bool = False,

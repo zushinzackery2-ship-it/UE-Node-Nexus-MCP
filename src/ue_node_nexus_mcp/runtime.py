@@ -7,96 +7,37 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .bridge import BridgeError, UeBridgeClient
-from .contracts import DEFAULT_FEATURE_GROUPS, DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
+from .contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
+from .features import consume_feature_args, read_feature_env, resolve_enabled_features
 
 mcp = FastMCP("UE Node Nexus MCP")
 bridge = UeBridgeClient()
 _enabled_features = None
+_CAPABILITY_PROBE_TIMEOUT_SECONDS = 1.0
 
 
-def _parse_bool(value: str) -> bool:
-    normalized = value.strip().lower()
-    if normalized in {"1", "true", "yes", "on", "enable", "enabled"}:
-        return True
-    if normalized in {"0", "false", "no", "off", "disable", "disabled"}:
+def _bridge_niagara_available() -> bool:
+    try:
+        response = bridge.call(
+            "bridge_capabilities_get",
+            {},
+            timeout_seconds=_CAPABILITY_PROBE_TIMEOUT_SECONDS,
+        )
+    except (BridgeError, OSError, TimeoutError, ValueError):
         return False
-    raise ValueError(f"invalid boolean value: {value}")
 
-
-def _parse_feature_list(value: str) -> set[str]:
-    features = {part.strip().lower() for part in value.replace(";", ",").split(",") if part.strip()}
-    unknown = features - FEATURE_GROUPS
-    if unknown:
-        raise ValueError(f"unknown feature group(s): {', '.join(sorted(unknown))}")
-    return features
-
-
-def _consume_feature_args(argv: list[str]) -> tuple[set[str] | None, set[str], set[str], bool | None, list[str]]:
-    explicit_features = None
-    enable_features: set[str] = set()
-    disable_features: set[str] = set()
-    niagara_support = None
-    remaining = [argv[0]]
-    index = 1
-    while index < len(argv):
-        arg = argv[index]
-        if arg == "--features":
-            index += 1
-            if index >= len(argv):
-                raise ValueError("--features requires a comma-separated feature list")
-            explicit_features = _parse_feature_list(argv[index])
-        elif arg.startswith("--features="):
-            explicit_features = _parse_feature_list(arg.split("=", 1)[1])
-        elif arg == "--enable-feature":
-            index += 1
-            if index >= len(argv):
-                raise ValueError("--enable-feature requires a feature name")
-            enable_features |= _parse_feature_list(argv[index])
-        elif arg.startswith("--enable-feature="):
-            enable_features |= _parse_feature_list(arg.split("=", 1)[1])
-        elif arg == "--disable-feature":
-            index += 1
-            if index >= len(argv):
-                raise ValueError("--disable-feature requires a feature name")
-            disable_features |= _parse_feature_list(argv[index])
-        elif arg.startswith("--disable-feature="):
-            disable_features |= _parse_feature_list(arg.split("=", 1)[1])
-        elif arg == "--niagara-support":
-            index += 1
-            if index >= len(argv):
-                raise ValueError("--niagara-support requires true or false")
-            niagara_support = _parse_bool(argv[index])
-        elif arg.startswith("--niagara-support="):
-            niagara_support = _parse_bool(arg.split("=", 1)[1])
-        else:
-            remaining.append(arg)
-        index += 1
-    return explicit_features, enable_features, disable_features, niagara_support, remaining
+    data = response.get("data")
+    if not isinstance(data, dict):
+        return False
+    modules = data.get("modules")
+    if not isinstance(modules, dict):
+        return False
+    return modules.get("niagara_available") is True
 
 
 def _read_enabled_features() -> set[str]:
-    explicit_features = None
-    enable_features: set[str] = set()
-    disable_features: set[str] = set()
-    niagara_support = None
-
-    env_features = os.getenv("UE_NEXUS_FEATURES")
-    if env_features:
-        explicit_features = _parse_feature_list(env_features)
-
-    env_enable = os.getenv("UE_NEXUS_ENABLE_FEATURES")
-    if env_enable:
-        enable_features |= _parse_feature_list(env_enable)
-
-    env_disable = os.getenv("UE_NEXUS_DISABLE_FEATURES")
-    if env_disable:
-        disable_features |= _parse_feature_list(env_disable)
-
-    env_niagara = os.getenv("UE_NEXUS_NIAGARA_SUPPORT")
-    if env_niagara:
-        niagara_support = _parse_bool(env_niagara)
-
-    arg_features, arg_enable, arg_disable, arg_niagara, remaining = _consume_feature_args(sys.argv)
+    explicit_features, enable_features, disable_features, niagara_support = read_feature_env(dict(os.environ))
+    arg_features, arg_enable, arg_disable, arg_niagara, remaining = consume_feature_args(sys.argv)
     sys.argv[:] = remaining
     if arg_features is not None:
         explicit_features = arg_features
@@ -105,12 +46,8 @@ def _read_enabled_features() -> set[str]:
     if arg_niagara is not None:
         niagara_support = arg_niagara
 
-    features = set(explicit_features if explicit_features is not None else DEFAULT_FEATURE_GROUPS)
-    features |= enable_features
-    features -= disable_features
-    if niagara_support is True:
-        features.add("niagara")
-    elif niagara_support is False:
+    features = resolve_enabled_features(explicit_features, enable_features, disable_features, niagara_support)
+    if "niagara" in features and not _bridge_niagara_available():
         features.discard("niagara")
     return features
 

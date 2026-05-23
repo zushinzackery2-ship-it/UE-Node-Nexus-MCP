@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Materials/MaterialExpressionCustom.h"
 
+class FJsonObject;
 class FJsonValue;
 
 namespace UeNodeNexusBridge

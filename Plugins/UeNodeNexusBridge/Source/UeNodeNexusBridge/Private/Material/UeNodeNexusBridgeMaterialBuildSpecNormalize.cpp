@@ -4,7 +4,7 @@
 #include "Dom/JsonValue.h"
 #include "Materials/Material.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {

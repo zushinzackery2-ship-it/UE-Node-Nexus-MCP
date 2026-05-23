@@ -3,7 +3,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "Materials/MaterialExpression.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeMaterialPropertySchema.h"
 
 namespace UeNodeNexusBridge

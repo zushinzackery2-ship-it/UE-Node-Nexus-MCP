@@ -8,6 +8,9 @@ namespace UeNodeNexusBridge
 {
 TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> DispatchAutoIndexOperation(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TArray<FString> GetCoreOperationNames();
+TArray<FString> GetAutoIndexOperationNames();
+TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleAssetGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
@@ -24,9 +27,7 @@ TSharedPtr<FJsonObject> HandleLevelCurrentGet(const FString& Operation, const FS
 TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleLevelActorGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleLevelActorTransformGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> HandleLevelActorTransformSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleObjectPropertiesGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> HandleObjectPropertiesSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleLevelMeshInstancesList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleComponentMaterialsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleComponentMaterialsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
@@ -36,6 +37,7 @@ TSharedPtr<FJsonObject> HandleComponentMaterialInstanceParamsGet(const FString& 
 TSharedPtr<FJsonObject> HandleComponentMaterialInstanceParamsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleProjectInputMappingsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleProjectInputMappingsPatch(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleProjectContextGet(const FString& Operation, const FString& RequestId);
 TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleBlueprintComponentsPatch(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleAnimBlueprintSummaryGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
@@ -66,7 +68,6 @@ TSharedPtr<FJsonObject> HandleNodeInfoGet(const FString& Operation, const FStrin
 TSharedPtr<FJsonObject> HandleNodeCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNodePositionGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNodePositionSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> HandleNodePositionOffset(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNodeParamsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNodeParamsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleMaterialExpressionClassesList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);

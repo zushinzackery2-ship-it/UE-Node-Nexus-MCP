@@ -10,13 +10,13 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {

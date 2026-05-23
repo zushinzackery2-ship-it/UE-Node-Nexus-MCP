@@ -8,7 +8,7 @@ from .runtime import default_tool
 
 
 @default_tool()
-def level_actor_get(actor_path: str, include_components: bool = True) -> dict[str, Any]:
+def level_actor_get(actor_path: str, include_components: bool = False) -> dict[str, Any]:
     """Return one placed actor's identity, transform, and optional component list."""
     require_non_empty_string(actor_path, "actor_path")
     return _call("level_actor_get", {"actor_path": actor_path, "include_components": include_components})
@@ -19,30 +19,6 @@ def level_actor_transform_get(actor_path: str) -> dict[str, Any]:
     """Return one placed actor's world transform."""
     require_non_empty_string(actor_path, "actor_path")
     return _call("level_actor_transform_get", {"actor_path": actor_path})
-
-
-@default_tool()
-def level_actor_transform_set(
-    actor_path: str,
-    location: dict[str, float] | None = None,
-    rotation: dict[str, float] | None = None,
-    scale: dict[str, float] | None = None,
-    dry_run: bool = True,
-    mark_dirty: bool = True,
-) -> dict[str, Any]:
-    """Set one placed actor's world transform. Omitted fields keep their current values."""
-    require_non_empty_string(actor_path, "actor_path")
-    return _call(
-        "level_actor_transform_set",
-        {
-            "actor_path": actor_path,
-            "location": location,
-            "rotation": rotation,
-            "scale": scale,
-            "dry_run": dry_run,
-            "mark_dirty": mark_dirty,
-        },
-    )
 
 
 @default_tool()
@@ -61,29 +37,6 @@ def object_properties_get(
             "property_names": property_names or [],
             "include_non_editable": include_non_editable,
             "format": format,
-        },
-    )
-
-
-@default_tool()
-def object_properties_set(
-    object_path: str,
-    params: list[dict[str, Any]],
-    dry_run: bool = True,
-    allow_non_editable: bool = False,
-    save_config: bool = False,
-) -> dict[str, Any]:
-    """Set reflected UObject properties using value, structured value objects, or Unreal value_text."""
-    require_non_empty_string(object_path, "object_path")
-    require_list(params, "params")
-    return _call(
-        "object_properties_set",
-        {
-            "object_path": object_path,
-            "params": params,
-            "dry_run": dry_run,
-            "allow_non_editable": allow_non_editable,
-            "save_config": save_config,
         },
     )
 

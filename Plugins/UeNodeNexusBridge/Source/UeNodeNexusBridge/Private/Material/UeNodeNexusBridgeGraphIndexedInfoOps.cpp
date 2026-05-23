@@ -1,4 +1,4 @@
-﻿#include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
+#include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -10,9 +10,9 @@
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
 
 namespace UeNodeNexusBridge
 {

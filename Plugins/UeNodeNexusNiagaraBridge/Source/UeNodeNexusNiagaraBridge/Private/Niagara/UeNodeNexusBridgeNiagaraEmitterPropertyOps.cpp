@@ -132,7 +132,7 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterPropertiesGet(const FString& Operati
         return EarlyResponse;
     }
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     AddEmitterDataFields(Handle, Data);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
@@ -187,7 +187,7 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterPropertiesSet(const FString& Operati
     }
     const bool bSaved = bSave && Changed > 0 && SaveAssetPackage(System);
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("applied"), !bDryRun);
     Data->SetBoolField(TEXT("changed"), Changed > 0);

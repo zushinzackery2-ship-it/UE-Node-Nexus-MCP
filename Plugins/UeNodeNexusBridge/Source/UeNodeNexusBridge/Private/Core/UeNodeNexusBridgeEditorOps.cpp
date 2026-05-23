@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeOperations.h"
 
+#include "Engine/World.h"
 #include "FileHelpers.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UObject/UObjectIterator.h"

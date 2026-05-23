@@ -4,7 +4,7 @@
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialExpressionCustom.h"
 #include "UeNodeNexusBridgeMaterialCustomParamOps.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {

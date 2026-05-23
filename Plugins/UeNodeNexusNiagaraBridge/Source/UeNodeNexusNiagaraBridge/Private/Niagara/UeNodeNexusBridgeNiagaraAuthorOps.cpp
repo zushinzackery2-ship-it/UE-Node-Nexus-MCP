@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "Formats/UeNodeNexusBridgeNiagaraListFormats.h"
 
 #include "Dom/JsonValue.h"
 #include "NiagaraComponentRendererProperties.h"
@@ -89,29 +90,6 @@ static UNiagaraRendererProperties* NewRendererForType(UObject* Outer, const FStr
     return nullptr;
 }
 
-static TSharedPtr<FJsonObject> RendererToJson(int32 EmitterIndex, int32 RendererIndex, UNiagaraRendererProperties* Renderer)
-{
-    TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
-    Json->SetNumberField(TEXT("emitter_index"), EmitterIndex);
-    Json->SetNumberField(TEXT("renderer_index"), RendererIndex);
-    Json->SetStringField(TEXT("object_path"), Renderer ? Renderer->GetPathName() : FString());
-    Json->SetStringField(TEXT("class"), Renderer ? Renderer->GetClass()->GetName() : FString());
-    Json->SetBoolField(TEXT("enabled"), Renderer ? Renderer->GetIsEnabled() : false);
-    Json->SetStringField(TEXT("material_path"), GetRendererMaterialPath(Renderer, 0));
-    return Json;
-}
-
-static TSharedPtr<FJsonValue> RendererToRow(int32 EmitterIndex, int32 RendererIndex, UNiagaraRendererProperties* Renderer)
-{
-    TArray<TSharedPtr<FJsonValue>> Row;
-    Row.Add(MakeShared<FJsonValueNumber>(EmitterIndex));
-    Row.Add(MakeShared<FJsonValueNumber>(RendererIndex));
-    Row.Add(MakeShared<FJsonValueString>(Renderer ? Renderer->GetClass()->GetName() : FString()));
-    Row.Add(MakeShared<FJsonValueBoolean>(Renderer ? Renderer->GetIsEnabled() : false));
-    Row.Add(MakeShared<FJsonValueString>(GetRendererMaterialPath(Renderer, 0)));
-    return MakeShared<FJsonValueArray>(Row);
-}
-
 TSharedPtr<FJsonObject> HandleNiagaraEmitterCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     TSharedPtr<FJsonObject> EarlyResponse;
@@ -134,7 +112,7 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterCreate(const FString& Operation, con
 
     if (bDryRun)
     {
-        TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+        TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
         Data->SetBoolField(TEXT("dry_run"), true);
         Data->SetBoolField(TEXT("changed"), false);
         Data->SetStringField(TEXT("mode"), Mode);
@@ -176,13 +154,15 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterCreate(const FString& Operation, con
     System->PostEditChange();
     const bool bSaved = bSave && SaveAssetPackage(System);
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), false);
     Data->SetBoolField(TEXT("changed"), Handle != nullptr);
     Data->SetBoolField(TEXT("saved"), bSaved);
     Data->SetStringField(TEXT("handle_id"), HandleId.ToString(EGuidFormats::DigitsWithHyphens));
     Data->SetNumberField(TEXT("emitter_count"), System->GetEmitterHandles().Num());
+    Data->SetNumberField(TEXT("enabled_emitter_count"), CountEnabledNiagaraEmitters(System));
     Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
+    Data->SetNumberField(TEXT("enabled_renderer_count"), CountEnabledNiagaraRenderers(System));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Handle != nullptr);
     Response->SetObjectField(TEXT("data"), Data);
     if (Handle == nullptr)
@@ -201,40 +181,15 @@ TSharedPtr<FJsonObject> HandleNiagaraRenderersList(const FString& Operation, con
         return EarlyResponse;
     }
 
-    FString Format = TEXT("compact");
+    FString Format = TEXT("indexed");
     Payload->TryGetStringField(TEXT("format"), Format);
-    const bool bCompact = !Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
-    TArray<TSharedPtr<FJsonValue>> Items;
-    for (int32 EmitterIndex = 0; EmitterIndex < System->GetEmitterHandles().Num(); ++EmitterIndex)
+    if (!NiagaraListFormats::IsSupportedFormat(Format))
     {
-        FVersionedNiagaraEmitterData* EmitterData = System->GetEmitterHandles()[EmitterIndex].GetEmitterData();
-        if (EmitterData == nullptr)
-        {
-            continue;
-        }
-        const TArray<UNiagaraRendererProperties*>& Renderers = EmitterData->GetRenderers();
-        for (int32 RendererIndex = 0; RendererIndex < Renderers.Num(); ++RendererIndex)
-        {
-            Items.Add(bCompact ? RendererToRow(EmitterIndex, RendererIndex, Renderers[RendererIndex]) : MakeShared<FJsonValueObject>(RendererToJson(EmitterIndex, RendererIndex, Renderers[RendererIndex])));
-        }
+        return NiagaraListFormats::MakeInvalidFormatResponse(Operation, RequestId, Format);
     }
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
-    Data->SetStringField(TEXT("format"), bCompact ? TEXT("niagara_renderers_compact") : TEXT("full"));
-    if (bCompact)
-    {
-        Data->SetArrayField(TEXT("columns"), {
-            MakeShared<FJsonValueString>(TEXT("emitter_index")),
-            MakeShared<FJsonValueString>(TEXT("renderer_index")),
-            MakeShared<FJsonValueString>(TEXT("class")),
-            MakeShared<FJsonValueString>(TEXT("enabled")),
-            MakeShared<FJsonValueString>(TEXT("material_path"))
-        });
-    }
-    Data->SetArrayField(TEXT("items"), Items);
-    Data->SetNumberField(TEXT("count"), Items.Num());
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), Data);
+    Response->SetObjectField(TEXT("data"), NiagaraListFormats::BuildRenderersListData(System, Format));
     return Response;
 }
 
@@ -287,12 +242,14 @@ TSharedPtr<FJsonObject> HandleNiagaraRendererCreate(const FString& Operation, co
     const int32 AfterCount = EmitterData->GetRenderers().Num();
     const bool bSaved = bSave && AfterCount > BeforeCount && SaveAssetPackage(System);
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("changed"), AfterCount > BeforeCount);
     Data->SetBoolField(TEXT("saved"), bSaved);
     Data->SetNumberField(TEXT("renderer_count_before"), BeforeCount);
     Data->SetNumberField(TEXT("renderer_count_after"), AfterCount);
+    Data->SetNumberField(TEXT("enabled_emitter_count"), CountEnabledNiagaraEmitters(System));
+    Data->SetNumberField(TEXT("enabled_renderer_count"), CountEnabledNiagaraRenderers(System));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
     return Response;

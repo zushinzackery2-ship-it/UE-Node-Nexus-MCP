@@ -5,6 +5,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
+#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeCompactJson.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -106,52 +107,6 @@ static TArray<FString> BlueprintPinLines(UEdGraph* Graph, UEdGraphNode* Node, EE
         Lines.Add(Direction == EGPD_Input ? TEXT("none_inpin") : TEXT("none_outpin"));
     }
     return Lines;
-}
-
-static TSharedPtr<FJsonObject> MakeBlueprintPinJson(UEdGraph* Graph, UEdGraphPin* Pin)
-{
-    TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
-    Json->SetStringField(TEXT("pin_id"), Pin->PinId.ToString(EGuidFormats::DigitsWithHyphens));
-    Json->SetStringField(TEXT("name"), Pin->PinName.ToString());
-    Json->SetStringField(TEXT("direction"), Pin->Direction == EGPD_Input ? TEXT("input") : TEXT("output"));
-    Json->SetNumberField(TEXT("local_index"), BlueprintPinLocalIndex(Pin));
-    Json->SetStringField(TEXT("default_value"), Pin->DefaultValue);
-    Json->SetStringField(TEXT("default_object"), Pin->DefaultObject ? Pin->DefaultObject->GetPathName() : FString());
-    Json->SetStringField(TEXT("type_category"), Pin->PinType.PinCategory.ToString());
-    Json->SetStringField(TEXT("type_subcategory"), Pin->PinType.PinSubCategory.ToString());
-    Json->SetStringField(TEXT("type_subcategory_object"), Pin->PinType.PinSubCategoryObject.Get() ? Pin->PinType.PinSubCategoryObject->GetPathName() : FString());
-
-    TArray<TSharedPtr<FJsonValue>> Links;
-    for (UEdGraphPin* Linked : Pin->LinkedTo)
-    {
-        UEdGraphNode* LinkedNode = Linked ? Linked->GetOwningNode() : nullptr;
-        if (LinkedNode == nullptr)
-        {
-            continue;
-        }
-
-        TSharedPtr<FJsonObject> Link = MakeShared<FJsonObject>();
-        Link->SetStringField(TEXT("node_id"), LinkedNode->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
-        Link->SetStringField(TEXT("node_alias"), BlueprintNodeAlias(Graph, LinkedNode));
-        Link->SetStringField(TEXT("pin_id"), Linked->PinId.ToString(EGuidFormats::DigitsWithHyphens));
-        Link->SetStringField(TEXT("pin_name"), Linked->PinName.ToString());
-        Links.Add(MakeShared<FJsonValueObject>(Link));
-    }
-    Json->SetArrayField(TEXT("links"), Links);
-    return Json;
-}
-
-static TArray<TSharedPtr<FJsonValue>> BuildBlueprintPins(UEdGraph* Graph, UEdGraphNode* Node)
-{
-    TArray<TSharedPtr<FJsonValue>> Pins;
-    for (UEdGraphPin* Pin : Node->Pins)
-    {
-        if (Pin != nullptr)
-        {
-            Pins.Add(MakeShared<FJsonValueObject>(MakeBlueprintPinJson(Graph, Pin)));
-        }
-    }
-    return Pins;
 }
 
 static TArray<FString> BlueprintParamLines(UEdGraphNode* Node)
@@ -256,8 +211,13 @@ static TSharedPtr<FJsonObject> MakeBlueprintNodeData(UBlueprint* Blueprint, UEdG
     Data->SetStringField(TEXT("graph_name"), Graph->GetName());
     Data->SetStringField(TEXT("node_id"), Node->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
     Data->SetStringField(TEXT("node_alias"), Alias);
-    Data->SetArrayField(TEXT("pins"), BuildBlueprintPins(Graph, Node));
-    Data->SetArrayField(TEXT("params"), BuildBlueprintNodeParams(Node));
+    if (Format.Equals(TEXT("compact_json"), ESearchCase::IgnoreCase))
+    {
+        Data->SetStringField(TEXT("format"), TEXT("node_info_compact_json"));
+        Data->SetArrayField(TEXT("input"), BuildBlueprintCompactInputRows(Graph, Node));
+        Data->SetArrayField(TEXT("param"), BuildBlueprintCompactParamRows(Node));
+        Data->SetArrayField(TEXT("output"), BuildBlueprintCompactOutputRows(Graph, Node));
+    }
     SetTextPayload(Data, bValid ? Text : TEXT("index_out_of_range"));
     Data->SetBoolField(TEXT("selection_ok"), bValid);
     return Data;

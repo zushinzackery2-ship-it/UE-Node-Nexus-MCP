@@ -1,8 +1,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 
-class FJsonObject;
 class UMaterialInterface;
 class UNiagaraRendererProperties;
 class UNiagaraSystem;
@@ -16,9 +17,12 @@ UNiagaraSystem* LoadNiagaraSystemFromPayload(
     TSharedPtr<FJsonObject>& OutResponse);
 
 TSharedPtr<FJsonObject> MakeNiagaraAssetData(UNiagaraSystem* System);
-void AddNiagaraToolBoundary(TSharedPtr<FJsonObject> Data);
+TSharedPtr<FJsonObject> MakeNiagaraAssetSummaryData(UNiagaraSystem* System);
 bool NiagaraSystemHasEmitterStack(UNiagaraSystem* System);
 int32 CountNiagaraRenderers(UNiagaraSystem* System);
+int32 CountEnabledNiagaraEmitters(UNiagaraSystem* System);
+int32 CountEnabledNiagaraRenderers(UNiagaraSystem* System);
+int32 CountNiagaraReadinessIssues(UNiagaraSystem* System);
 TSharedPtr<FJsonObject> MakeNiagaraBoundaryWarning(UNiagaraSystem* System, const FString& Code, const FString& Message);
 void AppendNiagaraEmptySystemWarning(UNiagaraSystem* System, TArray<TSharedPtr<FJsonValue>>& Warnings);
 TSharedPtr<FJsonObject> MakeNiagaraEmitterJson(UNiagaraSystem* System, int32 EmitterIndex);

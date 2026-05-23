@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeMaterialPatchOps.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchOps.h"
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
@@ -7,8 +7,8 @@
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {

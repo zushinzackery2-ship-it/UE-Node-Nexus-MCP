@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeMaterialPropertySchema.h"
 
+#include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialExpressionNamedReroute.h"

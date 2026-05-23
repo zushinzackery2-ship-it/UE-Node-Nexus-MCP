@@ -1,4 +1,4 @@
-﻿#include "UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
@@ -10,7 +10,7 @@
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
@@ -179,6 +179,15 @@ TSharedPtr<FJsonObject> BuildMaterialNodeInterfaceData(UMaterial* Material, UMat
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Data->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
     Data->SetStringField(TEXT("node_alias"), Alias);
+    FString Format = TEXT("text");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (Format.Equals(TEXT("compact_json"), ESearchCase::IgnoreCase))
+    {
+        Data->SetStringField(TEXT("format"), TEXT("node_info_compact_json"));
+        Data->SetArrayField(TEXT("input"), BuildMaterialCompactInputRows(Material, Expression));
+        Data->SetArrayField(TEXT("param"), BuildCompactParamRows(BuildMaterialExpressionParams(Expression), TEXT("value")));
+        Data->SetArrayField(TEXT("output"), BuildMaterialCompactOutputRows(Material, Expression));
+    }
     SetTextPayload(Data, bValid ? Text : TEXT("index_out_of_range"));
     Data->SetBoolField(TEXT("selection_ok"), bValid);
     return Data;

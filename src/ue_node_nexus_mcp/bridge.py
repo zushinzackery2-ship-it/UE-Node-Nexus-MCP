@@ -8,7 +8,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .contracts import ALL_OPERATIONS
+from .contracts import BRIDGE_OPERATIONS
 
 
 class BridgeError(RuntimeError):
@@ -32,8 +32,8 @@ class UeBridgeClient:
     def __init__(self, config: BridgeConfig | None = None) -> None:
         self._config = config or BridgeConfig.from_environment()
 
-    def call(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if operation not in ALL_OPERATIONS:
+    def call(self, operation: str, payload: dict[str, Any], timeout_seconds: float | None = None) -> dict[str, Any]:
+        if operation not in BRIDGE_OPERATIONS:
             raise ValueError(f"Unsupported operation: {operation}")
 
         request_id = str(uuid.uuid4())
@@ -42,7 +42,7 @@ class UeBridgeClient:
             "request_id": request_id,
             "payload": payload,
         }
-        response = self._post_json("/mcp", envelope)
+        response = self._post_json("/mcp", envelope, timeout_seconds=timeout_seconds)
 
         if not isinstance(response, dict):
             raise BridgeError("Bridge returned a non-object response")
@@ -53,9 +53,10 @@ class UeBridgeClient:
         response.setdefault("warnings", [])
         return response
 
-    def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    def _post_json(self, path: str, body: dict[str, Any], timeout_seconds: float | None = None) -> dict[str, Any]:
         url = f"{self._config.base_url}{path}"
         data = json.dumps(body, separators=(",", ":")).encode("utf-8")
+        timeout = self._config.timeout_seconds if timeout_seconds is None else timeout_seconds
         request = Request(
             url,
             data=data,
@@ -64,7 +65,7 @@ class UeBridgeClient:
         )
 
         try:
-            with urlopen(request, timeout=self._config.timeout_seconds) as response:
+            with urlopen(request, timeout=timeout) as response:
                 raw = response.read().decode("utf-8")
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
@@ -80,4 +81,3 @@ class UeBridgeClient:
         if not isinstance(decoded, dict):
             raise BridgeError("Bridge returned JSON that is not an object")
         return decoded
-

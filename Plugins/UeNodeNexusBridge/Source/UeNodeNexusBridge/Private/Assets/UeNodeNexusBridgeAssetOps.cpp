@@ -2,6 +2,7 @@
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -122,6 +123,38 @@ static bool PathMatches(const FAssetData& AssetData, const TArray<FString>& Pack
     return false;
 }
 
+static void ScanRequestedAssetPaths(const TArray<FString>& PackagePaths)
+{
+    TArray<FString> ValidPaths;
+    for (const FString& PackagePath : PackagePaths)
+    {
+        if (PackagePath.StartsWith(TEXT("/")) && !PackagePath.Contains(TEXT(".")))
+        {
+            ValidPaths.Add(PackagePath);
+        }
+    }
+    if (ValidPaths.Num() > 0)
+    {
+        FAssetRegistryModule::GetRegistry().ScanPathsSynchronous(ValidPaths, true);
+    }
+}
+
+static FString NormalizeAssetObjectPath(const FString& AssetPath)
+{
+    FText Reason;
+    const int32 LastSlashIndex = AssetPath.Find(TEXT("/"), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+    const int32 LastDotIndex = AssetPath.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+    if (LastDotIndex > LastSlashIndex && FPackageName::IsValidObjectPath(AssetPath, &Reason))
+    {
+        return AssetPath;
+    }
+    if (FPackageName::IsValidLongPackageName(AssetPath, false, &Reason))
+    {
+        return AssetPath + TEXT(".") + FPackageName::GetLongPackageAssetName(AssetPath);
+    }
+    return AssetPath;
+}
+
 TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     TArray<FString> ClassNames;
@@ -140,6 +173,8 @@ TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString&
     const bool bFull = Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
     const bool bIndexed = Format.Equals(TEXT("indexed"), ESearchCase::IgnoreCase);
     const bool bCompact = !bFull && !bIndexed;
+
+    ScanRequestedAssetPaths(PackagePaths);
 
     TArray<FAssetData> Assets;
     FAssetRegistryModule::GetRegistry().GetAllAssets(Assets, true);
@@ -220,11 +255,16 @@ TSharedPtr<FJsonObject> HandleAssetGet(const FString& Operation, const FString& 
         return Response;
     }
 
+    const FString NormalizedAssetPath = NormalizeAssetObjectPath(AssetPath);
+    const FString PackageName = FPackageName::ObjectPathToPackageName(NormalizedAssetPath);
+    const FString PackagePath = FPackageName::GetLongPackagePath(PackageName);
+    ScanRequestedAssetPaths({ PackagePath });
+
     TArray<FAssetData> Assets;
     FAssetRegistryModule::GetRegistry().GetAllAssets(Assets, true);
     for (const FAssetData& AssetData : Assets)
     {
-        if (AssetData.GetObjectPathString().Equals(AssetPath, ESearchCase::IgnoreCase))
+        if (AssetData.GetObjectPathString().Equals(NormalizedAssetPath, ESearchCase::IgnoreCase))
         {
             TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
             Response->SetObjectField(TEXT("data"), AssetDataToJson(AssetData));

@@ -14,7 +14,20 @@
 
 namespace UeNodeNexusBridge
 {
-static TSharedPtr<FJsonObject> MakeCreateResponseData(UNiagaraSystem* System, const FString& AssetPath, bool bDryRun, bool bSaved)
+static bool IsCreateFormatSupported(const FString& Format)
+{
+    return Format.Equals(TEXT("summary"), ESearchCase::IgnoreCase)
+        || Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+}
+
+static TSharedPtr<FJsonObject> MakeInvalidCreateFormatResponse(const FString& Operation, const FString& RequestId, const FString& Format)
+{
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_format"), FString::Printf(TEXT("Unsupported Niagara create format: %s"), *Format)));
+    return Response;
+}
+
+static TSharedPtr<FJsonObject> MakeCreateFullResponseData(UNiagaraSystem* System, const FString& AssetPath, bool bDryRun, bool bSaved)
 {
     TSharedPtr<FJsonObject> Data = MakeWriteData(
         bDryRun,
@@ -25,13 +38,15 @@ static TSharedPtr<FJsonObject> MakeCreateResponseData(UNiagaraSystem* System, co
         MakeCompilePostCheck(false, false, true, 0, 0),
         MakeDirtyState(System));
 
+    Data->SetStringField(TEXT("format"), TEXT("niagara_system_create_full"));
     Data->SetStringField(TEXT("asset_path"), System ? System->GetPathName() : AssetPath);
     Data->SetStringField(TEXT("asset_kind"), TEXT("niagara_system"));
     Data->SetStringField(TEXT("asset_class"), System ? System->GetClass()->GetPathName() : FString());
     Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
     Data->SetNumberField(TEXT("emitter_count"), System ? System->GetEmitterHandles().Num() : 0);
+    Data->SetNumberField(TEXT("enabled_emitter_count"), CountEnabledNiagaraEmitters(System));
     Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
-    AddNiagaraToolBoundary(Data);
+    Data->SetNumberField(TEXT("enabled_renderer_count"), CountEnabledNiagaraRenderers(System));
     const TSharedPtr<FJsonObject>* PostChecks = nullptr;
     if (Data->TryGetObjectField(TEXT("post_checks"), PostChecks) && PostChecks != nullptr)
     {
@@ -44,6 +59,33 @@ static TSharedPtr<FJsonObject> MakeCreateResponseData(UNiagaraSystem* System, co
     return Data;
 }
 
+static TSharedPtr<FJsonObject> MakeCreateSummaryResponseData(UNiagaraSystem* System, const FString& AssetPath, bool bDryRun, bool bSaved)
+{
+    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    Data->SetStringField(TEXT("format"), TEXT("niagara_system_create_summary"));
+    Data->SetBoolField(TEXT("dry_run"), bDryRun);
+    Data->SetBoolField(TEXT("applied"), !bDryRun && System != nullptr);
+    Data->SetBoolField(TEXT("changed"), !bDryRun && System != nullptr);
+    Data->SetBoolField(TEXT("saved"), bSaved);
+    Data->SetStringField(TEXT("asset_path"), System ? System->GetPathName() : AssetPath);
+    Data->SetStringField(TEXT("asset_kind"), TEXT("niagara_system"));
+    Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
+    Data->SetNumberField(TEXT("emitter_count"), System ? System->GetEmitterHandles().Num() : 0);
+    Data->SetNumberField(TEXT("enabled_emitter_count"), CountEnabledNiagaraEmitters(System));
+    Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
+    Data->SetNumberField(TEXT("enabled_renderer_count"), CountEnabledNiagaraRenderers(System));
+    return Data;
+}
+
+static TSharedPtr<FJsonObject> MakeCreateResponseData(UNiagaraSystem* System, const FString& AssetPath, bool bDryRun, bool bSaved, const FString& Format)
+{
+    if (Format.Equals(TEXT("full"), ESearchCase::IgnoreCase))
+    {
+        return MakeCreateFullResponseData(System, AssetPath, bDryRun, bSaved);
+    }
+    return MakeCreateSummaryResponseData(System, AssetPath, bDryRun, bSaved);
+}
+
 static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     const FString& Operation,
     const FString& RequestId,
@@ -51,7 +93,8 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     const FString& SourceAssetPath,
     bool bCreateDefaultNodes,
     bool bDryRun,
-    bool bSave)
+    bool bSave,
+    const FString& Format)
 {
     FString PackageName;
     FString AssetName;
@@ -87,7 +130,7 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     if (bDryRun)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), MakeCreateResponseData(nullptr, ObjectPath, true, false));
+        Response->SetObjectField(TEXT("data"), MakeCreateResponseData(nullptr, ObjectPath, true, false, Format));
         return Response;
     }
 
@@ -112,7 +155,7 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
 
     const bool bSaved = bSave && SaveAssetPackage(System);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, !bSave || bSaved);
-    Response->SetObjectField(TEXT("data"), MakeCreateResponseData(System, ObjectPath, false, bSaved));
+    Response->SetObjectField(TEXT("data"), MakeCreateResponseData(System, ObjectPath, false, bSaved, Format));
     TArray<TSharedPtr<FJsonValue>> Warnings;
     if (SourceSystem == nullptr)
     {
@@ -144,6 +187,7 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemCreate(const FString& Operation, cons
     bool bCreateDefaultNodes = true;
     bool bDryRun = true;
     bool bSave = false;
+    FString Format = TEXT("summary");
     Payload->TryGetStringField(TEXT("template_asset_path"), TemplateAssetPath);
     Payload->TryGetStringField(TEXT("source_asset_path"), SourceAssetPath);
     if (SourceAssetPath.IsEmpty())
@@ -153,7 +197,12 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemCreate(const FString& Operation, cons
     Payload->TryGetBoolField(TEXT("create_default_nodes"), bCreateDefaultNodes);
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     Payload->TryGetBoolField(TEXT("save"), bSave);
-    return CreateNiagaraSystemAsset(Operation, RequestId, AssetPath, SourceAssetPath, bCreateDefaultNodes, bDryRun, bSave);
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (!IsCreateFormatSupported(Format))
+    {
+        return MakeInvalidCreateFormatResponse(Operation, RequestId, Format);
+    }
+    return CreateNiagaraSystemAsset(Operation, RequestId, AssetPath, SourceAssetPath, bCreateDefaultNodes, bDryRun, bSave, Format);
 }
 
 TSharedPtr<FJsonObject> HandleNiagaraSystemDuplicate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
@@ -169,13 +218,15 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemDuplicate(const FString& Operation, c
 
     bool bDryRun = true;
     bool bSave = false;
+    FString Format = TEXT("summary");
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     Payload->TryGetBoolField(TEXT("save"), bSave);
-    return CreateNiagaraSystemAsset(Operation, RequestId, DestinationAssetPath, SourceAssetPath, true, bDryRun, bSave);
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (!IsCreateFormatSupported(Format))
+    {
+        return MakeInvalidCreateFormatResponse(Operation, RequestId, Format);
+    }
+    return CreateNiagaraSystemAsset(Operation, RequestId, DestinationAssetPath, SourceAssetPath, true, bDryRun, bSave, Format);
 }
 
-TSharedPtr<FJsonObject> HandleNiagaraTemplateDuplicate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
-{
-    return HandleNiagaraSystemDuplicate(Operation, RequestId, Payload);
-}
 }

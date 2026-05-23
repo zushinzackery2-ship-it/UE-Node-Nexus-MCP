@@ -10,8 +10,8 @@ from .runtime import default_tool
 @default_tool()
 def blueprint_details_get(
     asset_path: str,
-    include_defaults: bool = True,
-    include_components: bool = True,
+    include_defaults: bool = False,
+    include_components: bool = False,
     property_names: list[str] | None = None,
     format: Literal["compact", "full"] = "compact",
 ) -> dict[str, Any]:

@@ -70,7 +70,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleAdd(const FString& Operation, const F
     const bool bChanged = !bDryRun && After.Num() > Before.Num();
     const bool bSaved = bSave && bChanged && SaveAssetPackage(System);
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("applied"), !bDryRun);
     Data->SetBoolField(TEXT("changed"), bChanged);
@@ -116,7 +116,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleRemove(const FString& Operation, cons
     }
     const bool bSaved = bSave && bRemoved && SaveAssetPackage(System);
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("applied"), !bDryRun);
     Data->SetBoolField(TEXT("changed"), bRemoved);
@@ -167,7 +167,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleSetEnabled(const FString& Operation, 
     const bool bChanged = !bDryRun && bBefore != bEnabled;
     const bool bSaved = bSave && bChanged && SaveAssetPackage(System);
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("applied"), !bDryRun);
     Data->SetBoolField(TEXT("changed"), bChanged);

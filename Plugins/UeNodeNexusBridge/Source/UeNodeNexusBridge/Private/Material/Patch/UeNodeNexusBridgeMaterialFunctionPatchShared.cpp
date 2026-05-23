@@ -1,12 +1,12 @@
-#include "UeNodeNexusBridgeMaterialFunctionPatchShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialFunctionPatchContext.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialFunctionPatchContext.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 
 namespace UeNodeNexusBridge
 {

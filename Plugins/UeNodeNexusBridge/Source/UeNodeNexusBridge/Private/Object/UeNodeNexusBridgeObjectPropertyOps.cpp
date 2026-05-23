@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeOperations.h"
 
 #include "Components/ActorComponent.h"
+#include "Engine/Level.h"
 #include "GameFramework/Actor.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
@@ -101,7 +102,7 @@ TSharedPtr<FJsonObject> HandleLevelActorGet(const FString& Operation, const FStr
         return MakeObjectMissingResponse(Operation, RequestId, TEXT("actor_not_found"), TEXT("Actor could not be resolved"));
     }
 
-    bool bIncludeComponents = true;
+    bool bIncludeComponents = false;
     Payload->TryGetBoolField(TEXT("include_components"), bIncludeComponents);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
@@ -172,123 +173,4 @@ TSharedPtr<FJsonObject> HandleObjectPropertiesGet(const FString& Operation, cons
     return Response;
 }
 
-TSharedPtr<FJsonObject> HandleObjectPropertiesSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
-{
-    FString ObjectPath;
-    if (!Payload->TryGetStringField(TEXT("object_path"), ObjectPath) || ObjectPath.IsEmpty())
-    {
-        return MakeObjectMissingResponse(Operation, RequestId, TEXT("invalid_request"), TEXT("object_path is required"));
-    }
-
-    UObject* Object = ResolveObjectByPath(ObjectPath);
-    if (Object == nullptr)
-    {
-        return MakeObjectMissingResponse(Operation, RequestId, TEXT("object_not_found"), TEXT("Object could not be resolved"));
-    }
-
-    const TArray<TSharedPtr<FJsonValue>>* Params = nullptr;
-    if (!Payload->TryGetArrayField(TEXT("params"), Params) || Params == nullptr)
-    {
-        return MakeObjectMissingResponse(Operation, RequestId, TEXT("invalid_request"), TEXT("params must be an array"));
-    }
-
-    bool bDryRun = true;
-    Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
-    bool bAllowNonEditable = false;
-    Payload->TryGetBoolField(TEXT("allow_non_editable"), bAllowNonEditable);
-    bool bSaveConfig = false;
-    Payload->TryGetBoolField(TEXT("save_config"), bSaveConfig);
-
-    TArray<TSharedPtr<FJsonValue>> Results;
-    int32 Planned = 0;
-    int32 Changed = 0;
-    bool bConfigSaved = false;
-    FString ConfigFile;
-    for (const TSharedPtr<FJsonValue>& ParamValue : *Params)
-    {
-        TSharedPtr<FJsonObject> Param = ParamValue->AsObject();
-        FString Name;
-        if (!Param.IsValid() || !Param->TryGetStringField(TEXT("name"), Name) || Name.IsEmpty())
-        {
-            continue;
-        }
-
-        FProperty* Property = Object->GetClass()->FindPropertyByName(FName(*Name));
-        TSharedPtr<FJsonObject> Result = MakeShared<FJsonObject>();
-        Result->SetStringField(TEXT("name"), Name);
-        Result->SetBoolField(TEXT("found"), Property != nullptr);
-        Result->SetBoolField(TEXT("editable"), Property != nullptr && ShouldExposeProperty(Property, bAllowNonEditable));
-        ++Planned;
-
-        FString ValueText;
-        FString Error;
-        if (!Param->TryGetStringField(TEXT("value_text"), ValueText))
-        {
-            TSharedPtr<FJsonValue> RawValue = Param->TryGetField(TEXT("value"));
-            if (RawValue.IsValid())
-            {
-                JsonValueToPropertyImportText(Property, RawValue, ValueText, Error);
-            }
-        }
-        Result->SetStringField(TEXT("value_text"), ValueText);
-
-        bool bApplied = false;
-        if (Property == nullptr)
-        {
-            Error = TEXT("property_not_found");
-        }
-        else if (!ShouldExposeProperty(Property, bAllowNonEditable))
-        {
-            Error = TEXT("property_not_editable");
-        }
-        else if (!bDryRun)
-        {
-            Object->Modify();
-            TSharedPtr<FJsonValue> RawValue = Param->TryGetField(TEXT("value"));
-            if (RawValue.IsValid() && !Param->HasField(TEXT("value_text")))
-            {
-                bApplied = ApplyPropertyJsonValue(Object, Property, RawValue, ValueText, Error);
-                Result->SetStringField(TEXT("value_text"), ValueText);
-            }
-            else
-            {
-                bApplied = ApplyPropertyText(Object, Property, ValueText);
-                if (!bApplied)
-                {
-                    Error = TEXT("import_text_failed");
-                }
-            }
-            if (bApplied)
-            {
-                Object->PostEditChange();
-                Object->MarkPackageDirty();
-                ++Changed;
-            }
-        }
-        Result->SetBoolField(TEXT("applied"), bApplied);
-        Result->SetStringField(TEXT("error"), Error);
-        Results.Add(MakeShared<FJsonValueObject>(Result));
-    }
-    if (!bDryRun && bSaveConfig && Changed > 0)
-    {
-        bConfigSaved = SaveObjectConfig(Object, ConfigFile);
-    }
-
-    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
-    AddObjectIdentity(Object, Data);
-    Data->SetBoolField(TEXT("dry_run"), bDryRun);
-    Data->SetBoolField(TEXT("allow_non_editable"), bAllowNonEditable);
-    Data->SetBoolField(TEXT("save_config"), bSaveConfig);
-    Data->SetBoolField(TEXT("config_saved"), bConfigSaved);
-    Data->SetStringField(TEXT("config_file"), ConfigFile);
-    Data->SetBoolField(TEXT("applied"), !bDryRun);
-    Data->SetBoolField(TEXT("changed"), Changed > 0);
-    Data->SetNumberField(TEXT("planned_count"), Planned);
-    Data->SetNumberField(TEXT("changed_count"), Changed);
-    Data->SetArrayField(TEXT("items"), Results);
-
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), Data);
-    return Response;
-}
 }

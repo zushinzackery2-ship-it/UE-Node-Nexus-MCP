@@ -24,7 +24,6 @@ void FUeNodeNexusNiagaraBridgeModule::StartupModule()
 {
     RegisterNiagaraOperation(TEXT("niagara_system_create"), UeNodeNexusBridge::HandleNiagaraSystemCreate);
     RegisterNiagaraOperation(TEXT("niagara_system_duplicate"), UeNodeNexusBridge::HandleNiagaraSystemDuplicate);
-    RegisterNiagaraOperation(TEXT("niagara_template_duplicate"), UeNodeNexusBridge::HandleNiagaraTemplateDuplicate);
     RegisterNiagaraOperation(TEXT("niagara_system_summary_get"), UeNodeNexusBridge::HandleNiagaraSystemSummaryGet);
     RegisterNiagaraOperation(TEXT("niagara_emitters_list"), UeNodeNexusBridge::HandleNiagaraEmittersList);
     RegisterNiagaraOperation(TEXT("niagara_user_params_get"), UeNodeNexusBridge::HandleNiagaraUserParamsGet);
@@ -40,18 +39,20 @@ void FUeNodeNexusNiagaraBridgeModule::StartupModule()
     RegisterNiagaraOperation(TEXT("niagara_module_add"), UeNodeNexusBridge::HandleNiagaraModuleAdd);
     RegisterNiagaraOperation(TEXT("niagara_module_remove"), UeNodeNexusBridge::HandleNiagaraModuleRemove);
     RegisterNiagaraOperation(TEXT("niagara_module_set_enabled"), UeNodeNexusBridge::HandleNiagaraModuleSetEnabled);
+    RegisterNiagaraOperation(TEXT("niagara_module_inputs_get"), UeNodeNexusBridge::HandleNiagaraModuleInputsGet);
+    RegisterNiagaraOperation(TEXT("niagara_module_inputs_set"), UeNodeNexusBridge::HandleNiagaraModuleInputsSet);
     RegisterNiagaraOperation(TEXT("niagara_renderers_list"), UeNodeNexusBridge::HandleNiagaraRenderersList);
     RegisterNiagaraOperation(TEXT("niagara_renderer_create"), UeNodeNexusBridge::HandleNiagaraRendererCreate);
     RegisterNiagaraOperation(TEXT("niagara_renderer_properties_get"), UeNodeNexusBridge::HandleNiagaraRendererPropertiesGet);
     RegisterNiagaraOperation(TEXT("niagara_renderer_properties_set"), UeNodeNexusBridge::HandleNiagaraRendererPropertiesSet);
     RegisterNiagaraOperation(TEXT("niagara_compile"), UeNodeNexusBridge::HandleNiagaraCompile);
+    RegisterNiagaraOperation(TEXT("niagara_asset_lint"), UeNodeNexusBridge::HandleNiagaraAssetLint);
 }
 
 void FUeNodeNexusNiagaraBridgeModule::ShutdownModule()
 {
     UnregisterNiagaraOperation(TEXT("niagara_system_create"));
     UnregisterNiagaraOperation(TEXT("niagara_system_duplicate"));
-    UnregisterNiagaraOperation(TEXT("niagara_template_duplicate"));
     UnregisterNiagaraOperation(TEXT("niagara_system_summary_get"));
     UnregisterNiagaraOperation(TEXT("niagara_emitters_list"));
     UnregisterNiagaraOperation(TEXT("niagara_user_params_get"));
@@ -67,9 +68,12 @@ void FUeNodeNexusNiagaraBridgeModule::ShutdownModule()
     UnregisterNiagaraOperation(TEXT("niagara_module_add"));
     UnregisterNiagaraOperation(TEXT("niagara_module_remove"));
     UnregisterNiagaraOperation(TEXT("niagara_module_set_enabled"));
+    UnregisterNiagaraOperation(TEXT("niagara_module_inputs_get"));
+    UnregisterNiagaraOperation(TEXT("niagara_module_inputs_set"));
     UnregisterNiagaraOperation(TEXT("niagara_renderers_list"));
     UnregisterNiagaraOperation(TEXT("niagara_renderer_create"));
     UnregisterNiagaraOperation(TEXT("niagara_renderer_properties_get"));
     UnregisterNiagaraOperation(TEXT("niagara_renderer_properties_set"));
     UnregisterNiagaraOperation(TEXT("niagara_compile"));
+    UnregisterNiagaraOperation(TEXT("niagara_asset_lint"));
 }

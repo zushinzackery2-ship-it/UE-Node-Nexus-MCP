@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from .contracts import require_mapping, require_non_empty_string
 from .runtime import call_bridge as _call
-from .runtime import default_tool, hidden_tool
+from .runtime import default_tool
 from .tools_graph_writes import graph_build_apply, graph_patch_apply  # noqa: F401
 
 
@@ -44,9 +44,8 @@ def graph_node_info_get(
 ) -> dict[str, Any]:
     """Return a whole graph in dense indexed form; grouped is readable by node type."""
     require_non_empty_string(asset_path, "asset_path")
-    operation = "graph_node_info_get_w_pos" if include_position else "graph_node_info_get"
     return _call(
-        operation,
+        "graph_node_info_get",
         {
             "asset_path": asset_path,
             "graph_name": graph_name,
@@ -55,32 +54,7 @@ def graph_node_info_get(
             "max_nodes": max_nodes,
             "format": format,
             "id_mode": id_mode,
-        },
-    )
-
-
-@hidden_tool()
-def graph_node_info_get_w_pos(
-    asset_path: str,
-    graph_name: str | None = None,
-    graph_kind: Literal["material", "material_function", "blueprint", "auto"] = "auto",
-    section: Literal["all", "brief", "input", "output", "param", "links"] = "all",
-    max_nodes: int | None = None,
-    format: Literal["indexed", "grouped", "text"] = "indexed",
-    id_mode: Literal["alias", "real", "both"] = "alias",
-) -> dict[str, Any]:
-    """Return a whole graph in dense indexed or grouped form, including node positions."""
-    require_non_empty_string(asset_path, "asset_path")
-    return _call(
-        "graph_node_info_get_w_pos",
-        {
-            "asset_path": asset_path,
-            "graph_name": graph_name,
-            "graph_kind": graph_kind,
-            "section": section,
-            "max_nodes": max_nodes,
-            "format": format,
-            "id_mode": id_mode,
+            "include_position": include_position,
         },
     )
 
@@ -191,33 +165,6 @@ def node_position_set(
             "node_id": node_id,
             "x": x,
             "y": y,
-            "graph_name": graph_name,
-            "graph_kind": graph_kind,
-            "dry_run": dry_run,
-        },
-    )
-
-
-@hidden_tool()
-def node_position_offset(
-    asset_path: str,
-    node_id: str,
-    dx: int,
-    dy: int,
-    graph_name: str | None = None,
-    graph_kind: Literal["material", "material_function", "blueprint", "auto"] = "auto",
-    dry_run: bool = True,
-) -> dict[str, Any]:
-    """Offset one graph node position without triggering compile."""
-    require_non_empty_string(asset_path, "asset_path")
-    require_non_empty_string(node_id, "node_id")
-    return _call(
-        "node_position_offset",
-        {
-            "asset_path": asset_path,
-            "node_id": node_id,
-            "dx": dx,
-            "dy": dy,
             "graph_name": graph_name,
             "graph_kind": graph_kind,
             "dry_run": dry_run,

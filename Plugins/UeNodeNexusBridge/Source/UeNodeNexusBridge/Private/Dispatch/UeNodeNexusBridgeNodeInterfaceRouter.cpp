@@ -3,9 +3,9 @@
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
 
 namespace UeNodeNexusBridge
 {
@@ -28,7 +28,7 @@ static UObject* LoadGraphAssetOrError(const FString& Operation, const FString& R
     return Asset;
 }
 
-static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload, bool bOffset)
+static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     TSharedPtr<FJsonObject> Error;
     UObject* Asset = LoadGraphAssetOrError(Operation, RequestId, Payload, Error);
@@ -51,7 +51,7 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
         {
             return HandleMaterialNodeCreate(Operation, RequestId, Material, Payload);
         }
-        return HandleMaterialNodePositionSet(Operation, RequestId, Material, Payload, bOffset);
+        return HandleMaterialNodePositionSet(Operation, RequestId, Material, Payload);
     }
 
     if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
@@ -68,7 +68,7 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
         {
             return HandleMaterialFunctionNodeCreate(Operation, RequestId, Function, Payload);
         }
-        return HandleMaterialFunctionNodePositionSet(Operation, RequestId, Function, Payload, bOffset);
+        return HandleMaterialFunctionNodePositionSet(Operation, RequestId, Function, Payload);
     }
 
     if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
@@ -85,7 +85,7 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
         {
             return HandleBlueprintNodeCreate(Operation, RequestId, Blueprint, Payload);
         }
-        return HandleBlueprintNodePositionSet(Operation, RequestId, Blueprint, Payload, bOffset);
+        return HandleBlueprintNodePositionSet(Operation, RequestId, Blueprint, Payload);
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
@@ -95,26 +95,21 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
 
 TSharedPtr<FJsonObject> HandleNodeInfoGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
-    return DispatchNodeAsset(Operation, RequestId, Payload, false);
+    return DispatchNodeAsset(Operation, RequestId, Payload);
 }
 
 TSharedPtr<FJsonObject> HandleNodePositionGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
-    return DispatchNodeAsset(Operation, RequestId, Payload, false);
+    return DispatchNodeAsset(Operation, RequestId, Payload);
 }
 
 TSharedPtr<FJsonObject> HandleNodePositionSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
-    return DispatchNodeAsset(Operation, RequestId, Payload, false);
-}
-
-TSharedPtr<FJsonObject> HandleNodePositionOffset(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
-{
-    return DispatchNodeAsset(Operation, RequestId, Payload, true);
+    return DispatchNodeAsset(Operation, RequestId, Payload);
 }
 
 TSharedPtr<FJsonObject> HandleNodeCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
-    return DispatchNodeAsset(Operation, RequestId, Payload, false);
+    return DispatchNodeAsset(Operation, RequestId, Payload);
 }
 }

@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
@@ -7,23 +7,16 @@
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {
-static bool ReadFunctionPositionPair(const TSharedPtr<FJsonObject>& Payload, bool bOffset, int32& OutX, int32& OutY)
+static bool ReadFunctionPositionPair(const TSharedPtr<FJsonObject>& Payload, int32& OutX, int32& OutY)
 {
     double X = 0.0;
     double Y = 0.0;
-    if (bOffset)
-    {
-        if (!Payload->TryGetNumberField(TEXT("dx"), X) || !Payload->TryGetNumberField(TEXT("dy"), Y))
-        {
-            return false;
-        }
-    }
-    else if (!Payload->TryGetNumberField(TEXT("x"), X) || !Payload->TryGetNumberField(TEXT("y"), Y))
+    if (!Payload->TryGetNumberField(TEXT("x"), X) || !Payload->TryGetNumberField(TEXT("y"), Y))
     {
         return ReadMaterialPosition(Payload, OutX, OutY);
     }
@@ -100,7 +93,7 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionNodePositionGet(const FString& Ope
     return Response;
 }
 
-TSharedPtr<FJsonObject> HandleMaterialFunctionNodePositionSet(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload, bool bOffset)
+TSharedPtr<FJsonObject> HandleMaterialFunctionNodePositionSet(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload)
 {
     TSharedPtr<FJsonObject> Error;
     UMaterialExpression* Expression = ReadFunctionNodeOrError(Operation, RequestId, Function, Payload, Error);
@@ -111,17 +104,17 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionNodePositionSet(const FString& Ope
 
     int32 X = 0;
     int32 Y = 0;
-    if (!ReadFunctionPositionPair(Payload, bOffset, X, Y))
+    if (!ReadFunctionPositionPair(Payload, X, Y))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), bOffset ? TEXT("dx and dy are required") : TEXT("x and y are required")));
+        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("x and y are required")));
         return Response;
     }
 
     const int32 BeforeX = Expression->MaterialExpressionEditorX;
     const int32 BeforeY = Expression->MaterialExpressionEditorY;
-    const int32 AfterX = bOffset ? BeforeX + X : X;
-    const int32 AfterY = bOffset ? BeforeY + Y : Y;
+    const int32 AfterX = X;
+    const int32 AfterY = Y;
     bool bDryRun = true;
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
 

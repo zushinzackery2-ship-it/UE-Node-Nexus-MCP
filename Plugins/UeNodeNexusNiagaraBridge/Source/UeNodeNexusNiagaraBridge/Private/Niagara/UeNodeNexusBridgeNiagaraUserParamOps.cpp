@@ -197,14 +197,17 @@ TSharedPtr<FJsonObject> HandleNiagaraUserParamsSet(const FString& Operation, con
     }
     const bool bSaved = bSave && Changed > 0 && SaveAssetPackage(System);
 
-    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("applied"), !bDryRun);
     Data->SetBoolField(TEXT("changed"), Changed > 0);
     Data->SetNumberField(TEXT("planned_count"), Planned);
     Data->SetNumberField(TEXT("changed_count"), Changed);
     Data->SetBoolField(TEXT("saved"), bSaved);
-    AddNiagaraToolBoundary(Data);
+    Data->SetNumberField(TEXT("emitter_count"), System->GetEmitterHandles().Num());
+    Data->SetNumberField(TEXT("enabled_emitter_count"), CountEnabledNiagaraEmitters(System));
+    Data->SetNumberField(TEXT("renderer_count"), CountNiagaraRenderers(System));
+    Data->SetNumberField(TEXT("enabled_renderer_count"), CountEnabledNiagaraRenderers(System));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

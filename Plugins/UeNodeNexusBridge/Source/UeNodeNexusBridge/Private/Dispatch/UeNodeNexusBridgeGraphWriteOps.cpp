@@ -5,7 +5,7 @@
 #include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeBlueprintPatchOps.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialPatchOps.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchOps.h"
 
 namespace UeNodeNexusBridge
 {

@@ -1,4 +1,4 @@
-﻿#include "UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
+﻿#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -20,18 +20,11 @@ static TSharedPtr<FJsonObject> MakeBlueprintNodeError(const FString& Operation, 
     return Response;
 }
 
-static bool ReadBlueprintPositionPair(const TSharedPtr<FJsonObject>& Payload, bool bOffset, int32& OutX, int32& OutY)
+static bool ReadBlueprintPositionPair(const TSharedPtr<FJsonObject>& Payload, int32& OutX, int32& OutY)
 {
     double X = 0.0;
     double Y = 0.0;
-    if (bOffset)
-    {
-        if (!Payload->TryGetNumberField(TEXT("dx"), X) || !Payload->TryGetNumberField(TEXT("dy"), Y))
-        {
-            return false;
-        }
-    }
-    else if (!Payload->TryGetNumberField(TEXT("x"), X) || !Payload->TryGetNumberField(TEXT("y"), Y))
+    if (!Payload->TryGetNumberField(TEXT("x"), X) || !Payload->TryGetNumberField(TEXT("y"), Y))
     {
         return ReadGraphPosition(Payload, OutX, OutY);
     }
@@ -68,7 +61,10 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeInfoGet(const FString& Operation, con
     {
         return Error;
     }
-    TSharedPtr<FJsonObject> Data = BuildBlueprintNodeInterfaceData(Blueprint, Graph, Node, Payload, TEXT("node_info_text"));
+    FString Format = TEXT("text");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    const FString DataFormat = Format.Equals(TEXT("compact_json"), ESearchCase::IgnoreCase) ? TEXT("compact_json") : TEXT("node_info_text");
+    TSharedPtr<FJsonObject> Data = BuildBlueprintNodeInterfaceData(Blueprint, Graph, Node, Payload, DataFormat);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Data->GetBoolField(TEXT("selection_ok")));
     Response->SetObjectField(TEXT("data"), Data);
     return Response;
@@ -82,13 +78,15 @@ TSharedPtr<FJsonObject> HandleBlueprintNodePositionGet(const FString& Operation,
     {
         return Error;
     }
-    TSharedPtr<FJsonObject> Data = BuildBlueprintNodeInterfaceData(Blueprint, Graph, Node, Payload, TEXT("node_position_text"));
+    TSharedPtr<FJsonObject> PositionPayload = MakeShared<FJsonObject>();
+    PositionPayload->SetStringField(TEXT("section"), TEXT("brief"));
+    TSharedPtr<FJsonObject> Data = BuildBlueprintNodeInterfaceData(Blueprint, Graph, Node, PositionPayload, TEXT("node_position_text"));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
     return Response;
 }
 
-TSharedPtr<FJsonObject> HandleBlueprintNodePositionSet(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, bool bOffset)
+TSharedPtr<FJsonObject> HandleBlueprintNodePositionSet(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload)
 {
     UEdGraph* Graph = nullptr;
     UEdGraphNode* Node = nullptr;
@@ -98,15 +96,15 @@ TSharedPtr<FJsonObject> HandleBlueprintNodePositionSet(const FString& Operation,
     }
     int32 X = 0;
     int32 Y = 0;
-    if (!ReadBlueprintPositionPair(Payload, bOffset, X, Y))
+    if (!ReadBlueprintPositionPair(Payload, X, Y))
     {
-        return MakeBlueprintNodeError(Operation, RequestId, TEXT("invalid_request"), bOffset ? TEXT("dx and dy are required") : TEXT("x and y are required"));
+        return MakeBlueprintNodeError(Operation, RequestId, TEXT("invalid_request"), TEXT("x and y are required"));
     }
 
     const int32 BeforeX = Node->NodePosX;
     const int32 BeforeY = Node->NodePosY;
-    const int32 AfterX = bOffset ? BeforeX + X : X;
-    const int32 AfterY = bOffset ? BeforeY + Y : Y;
+    const int32 AfterX = X;
+    const int32 AfterY = Y;
     bool bDryRun = true;
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     if (!bDryRun)
@@ -121,7 +119,9 @@ TSharedPtr<FJsonObject> HandleBlueprintNodePositionSet(const FString& Operation,
         FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
     }
 
-    TSharedPtr<FJsonObject> Data = BuildBlueprintNodeInterfaceData(Blueprint, Graph, Node, Payload, TEXT("node_position_text"));
+    TSharedPtr<FJsonObject> PositionPayload = MakeShared<FJsonObject>();
+    PositionPayload->SetStringField(TEXT("section"), TEXT("brief"));
+    TSharedPtr<FJsonObject> Data = BuildBlueprintNodeInterfaceData(Blueprint, Graph, Node, PositionPayload, TEXT("node_position_text"));
     SetTextPayload(Data, FString::Printf(TEXT("moved = %s\nNode.Pos.Before = %d,%d\nNode.Pos.After = %d,%d\n"), bDryRun ? TEXT("dry_run") : TEXT("true"), BeforeX, BeforeY, AfterX, AfterY) + Data->GetStringField(TEXT("text")));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

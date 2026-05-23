@@ -1,4 +1,4 @@
-﻿#include "UeNodeNexusBridgeMaterialGraphSnapshot.h"
+#include "UeNodeNexusBridgeMaterialGraphSnapshot.h"
 
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
@@ -6,7 +6,7 @@
 #include "UeNodeNexusBridgeCompactGraph.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialGraphSnapshotShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeWireGraph.h"
 #include "UObject/UnrealType.h"
 

@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"

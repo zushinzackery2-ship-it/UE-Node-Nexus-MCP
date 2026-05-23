@@ -6,7 +6,7 @@
 #include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {
@@ -166,6 +166,15 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionNodeInterfaceData(UMaterialFunction
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialFunctionGraph"));
     Data->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
     Data->SetStringField(TEXT("node_alias"), Alias);
+    FString Format = TEXT("text");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (Format.Equals(TEXT("compact_json"), ESearchCase::IgnoreCase))
+    {
+        Data->SetStringField(TEXT("format"), TEXT("node_info_compact_json"));
+        Data->SetArrayField(TEXT("input"), BuildMaterialFunctionCompactInputRows(Function, Expression));
+        Data->SetArrayField(TEXT("param"), BuildCompactParamRows(BuildMaterialExpressionParams(Expression), TEXT("value")));
+        Data->SetArrayField(TEXT("output"), BuildMaterialFunctionCompactOutputRows(Function, Expression));
+    }
     SetTextPayload(Data, bValid ? Text : TEXT("index_out_of_range"));
     Data->SetBoolField(TEXT("selection_ok"), bValid);
     return Data;

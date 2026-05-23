@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ue-node-nexus-mcp"
 version = "0.1.0"
-description = "Typed MCP server for safe Unreal Engine material and Blueprint graph operations."
+description = "Typed MCP server for safe Unreal Engine asset, graph, level, and Niagara editor operations."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -17,3 +17,6 @@ ue-node-nexus-mcp = "ue_node_nexus_mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -213,8 +213,8 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
         return Response;
     }
 
-    bool bIncludeDefaults = true;
-    bool bIncludeComponents = true;
+    bool bIncludeDefaults = false;
+    bool bIncludeComponents = false;
     Payload->TryGetBoolField(TEXT("include_defaults"), bIncludeDefaults);
     Payload->TryGetBoolField(TEXT("include_components"), bIncludeComponents);
 

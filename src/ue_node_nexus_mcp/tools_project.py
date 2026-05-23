@@ -8,6 +8,12 @@ from .runtime import default_tool
 
 
 @default_tool()
+def project_context_get() -> dict[str, Any]:
+    """Return the active Unreal project paths, command line, and /Game mount checks."""
+    return _call("project_context_get", {})
+
+
+@default_tool()
 def project_input_mappings_get(
     format: Literal["compact", "full"] = "compact",
 ) -> dict[str, Any]:

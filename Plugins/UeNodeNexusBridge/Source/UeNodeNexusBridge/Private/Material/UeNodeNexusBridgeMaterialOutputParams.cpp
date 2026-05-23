@@ -1,7 +1,9 @@
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
+#include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Materials/Material.h"
+#include "UObject/TextProperty.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge

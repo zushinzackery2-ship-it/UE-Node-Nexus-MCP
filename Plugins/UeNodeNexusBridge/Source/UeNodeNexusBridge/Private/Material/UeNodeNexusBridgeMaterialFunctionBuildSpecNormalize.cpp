@@ -3,7 +3,7 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeMaterialFunctionPatchShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
 
 namespace UeNodeNexusBridge
 {

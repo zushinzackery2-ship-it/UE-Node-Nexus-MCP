@@ -3,6 +3,7 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Misc/ConfigCacheIni.h"
+#include "UObject/TextProperty.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge

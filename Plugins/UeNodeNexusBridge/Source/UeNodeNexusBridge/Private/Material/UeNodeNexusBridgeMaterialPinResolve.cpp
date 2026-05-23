@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 #include "MaterialExpressionIO.h"
 #include "Materials/MaterialExpression.h"

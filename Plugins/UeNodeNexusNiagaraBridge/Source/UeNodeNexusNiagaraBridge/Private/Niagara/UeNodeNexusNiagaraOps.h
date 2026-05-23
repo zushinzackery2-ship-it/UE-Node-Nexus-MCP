@@ -8,7 +8,6 @@ namespace UeNodeNexusBridge
 {
 TSharedPtr<FJsonObject> HandleNiagaraSystemCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraSystemDuplicate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> HandleNiagaraTemplateDuplicate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraSystemSummaryGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraEmittersList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraUserParamsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
@@ -24,9 +23,12 @@ TSharedPtr<FJsonObject> HandleNiagaraModulesList(const FString& Operation, const
 TSharedPtr<FJsonObject> HandleNiagaraModuleAdd(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraModuleRemove(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraModuleSetEnabled(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleNiagaraModuleInputsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleNiagaraModuleInputsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraRenderersList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraRendererCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraRendererPropertiesGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraRendererPropertiesSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleNiagaraAssetLint(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 }

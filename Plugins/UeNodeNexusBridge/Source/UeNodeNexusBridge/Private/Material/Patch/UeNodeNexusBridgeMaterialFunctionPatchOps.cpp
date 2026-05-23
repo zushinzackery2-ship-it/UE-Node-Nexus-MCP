@@ -1,31 +1,20 @@
-#include "UeNodeNexusBridgeMaterialPatchOps.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchOps.h"
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
-#include "MaterialExpressionIO.h"
-#include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
+#include "Materials/MaterialFunction.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialBuildSpecNormalize.h"
-#include "UeNodeNexusBridgeMaterialPatchApplyOps.h"
-#include "UeNodeNexusBridgeMaterialPatchContext.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "UeNodeNexusBridgeMaterialFunctionBuildSpecNormalize.h"
+#include "Patch/UeNodeNexusBridgeMaterialFunctionPatchContext.h"
+#include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {
-bool IsMaterialPatchAsset(UObject* Asset)
-{
-    return Cast<UMaterial>(Asset) != nullptr;
-}
-
-static void AddMaterialPatchDiagnostic(TArray<TSharedPtr<FJsonValue>>& Diagnostics, const FString& Code, const FString& Message, UMaterial* Material)
-{
-    Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), Code, Message, Material ? Material->GetPathName() : FString(), TEXT("UeNodeNexusBridge"))));
-}
-
-TSharedPtr<FJsonObject> HandleMaterialGraphPatch(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
+TSharedPtr<FJsonObject> HandleMaterialFunctionGraphPatch(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload)
 {
     bool bDryRun = true;
     bool bCompileAfter = true;
@@ -48,7 +37,7 @@ TSharedPtr<FJsonObject> HandleMaterialGraphPatch(const FString& Operation, const
     {
         NormalizedOperations.Append(*Operations);
     }
-    AppendMaterialBuildSpecOperations(Payload, NormalizedOperations, Diagnostics, Material);
+    AppendMaterialFunctionBuildSpecOperations(Payload, NormalizedOperations, Diagnostics, Function);
     if (NormalizedOperations.Num() == 0 && !Payload->HasField(TEXT("operations")) && !Payload->HasField(TEXT("nodes")) && !Payload->HasField(TEXT("links")) && !Payload->HasField(TEXT("material_outputs")))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
@@ -60,19 +49,19 @@ TSharedPtr<FJsonObject> HandleMaterialGraphPatch(const FString& Operation, const
     TUniquePtr<FScopedTransaction> Transaction;
     if (!bDryRun)
     {
-        Transaction = MakeUnique<FScopedTransaction>(FText::FromString(TEXT("UE Node Nexus Material Patch")));
-        Material->Modify();
+        Transaction = MakeUnique<FScopedTransaction>(FText::FromString(TEXT("UE Node Nexus Material Function Patch")));
+        Function->Modify();
     }
 
-    FMaterialPatchContext Context;
+    FMaterialFunctionPatchContext Context;
     for (const TSharedPtr<FJsonValue>& Value : NormalizedOperations)
     {
         TSharedPtr<FJsonObject> Op = Value->AsObject();
-        if (!Op.IsValid() || !ApplyMaterialPatchOperation(Material, Op, bDryRun, Diff, Diagnostics, Context))
+        if (!Op.IsValid() || !ApplyMaterialFunctionPatchOperation(Function, Op, bDryRun, Diff, Diagnostics, Context))
         {
             if (Diagnostics.Num() == 0)
             {
-                AddMaterialPatchDiagnostic(Diagnostics, TEXT("patch_operation_failed"), TEXT("Material patch operation failed validation or application"), Material);
+                AddFunctionPatchDiagnostic(Diagnostics, TEXT("patch_operation_failed"), TEXT("Material function patch operation failed validation or application"), Function);
             }
             continue;
         }
@@ -82,23 +71,23 @@ TSharedPtr<FJsonObject> HandleMaterialGraphPatch(const FString& Operation, const
     TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, !bDryRun && bCompileAfter, true, 0, 0);
     if (!bDryRun && bChanged && bCompileAfter)
     {
-        UMaterialEditingLibrary::RecompileMaterial(Material);
+        UMaterialEditingLibrary::UpdateMaterialFunction(Function, nullptr);
     }
     else if (!bDryRun && bChanged)
     {
-        Material->MarkPackageDirty();
+        Function->MarkPackageDirty();
     }
 
-    TSharedPtr<FJsonObject> PinIntegrity = BuildMaterialPinIntegrity(Material);
+    TSharedPtr<FJsonObject> PinIntegrity = BuildMaterialFunctionPinIntegrity(Function);
     const bool bOk = Diagnostics.Num() == 0 && PinIntegrity->GetBoolField(TEXT("ok"));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, bOk);
-    Response->SetObjectField(TEXT("data"), MakeWriteDataWithDiffFormat(bDryRun, !bDryRun && bChanged, bChanged, Diff, PinIntegrity, Compile, MakeDirtyState(Material), DiffFormat));
+    Response->SetObjectField(TEXT("data"), MakeWriteDataWithDiffFormat(bDryRun, !bDryRun && bChanged, bChanged, Diff, PinIntegrity, Compile, MakeDirtyState(Function), DiffFormat));
     Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
     return Response;
 }
 
-TSharedPtr<FJsonObject> HandleMaterialGraphBuild(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
+TSharedPtr<FJsonObject> HandleMaterialFunctionGraphBuild(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload)
 {
-    return HandleMaterialGraphPatch(Operation, RequestId, Material, Payload);
+    return HandleMaterialFunctionGraphPatch(Operation, RequestId, Function, Payload);
 }
 }

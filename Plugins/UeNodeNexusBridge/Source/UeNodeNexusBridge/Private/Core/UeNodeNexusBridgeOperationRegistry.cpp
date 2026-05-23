@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeOperationRegistry.h"
 
+#include "Algo/Sort.h"
 #include "Containers/Map.h"
 
 namespace UeNodeNexusBridge
@@ -48,5 +49,13 @@ bool DispatchRegisteredOperation(
 bool IsOperationRegistered(const FString& Operation)
 {
     return Registry().Contains(Operation);
+}
+
+TArray<FString> GetRegisteredOperations()
+{
+    TArray<FString> Operations;
+    Registry().GenerateKeyArray(Operations);
+    Algo::Sort(Operations);
+    return Operations;
 }
 }

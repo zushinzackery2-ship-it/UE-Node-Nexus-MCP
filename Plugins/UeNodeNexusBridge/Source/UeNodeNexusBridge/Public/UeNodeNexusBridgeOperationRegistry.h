@@ -19,4 +19,5 @@ UENODENEXUSBRIDGE_API bool DispatchRegisteredOperation(
     const TSharedPtr<FJsonObject>& Payload,
     TSharedPtr<FJsonObject>& OutResponse);
 UENODENEXUSBRIDGE_API bool IsOperationRegistered(const FString& Operation);
+UENODENEXUSBRIDGE_API TArray<FString> GetRegisteredOperations();
 }

@@ -5,7 +5,7 @@
 #include "UeNodeNexusBridgeCompactGraph.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialGraphSnapshotShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeWireGraph.h"
 
 namespace UeNodeNexusBridge

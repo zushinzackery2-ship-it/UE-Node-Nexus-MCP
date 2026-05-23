@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "Formats/UeNodeNexusBridgeNiagaraPropertyListFormats.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
 #include "Dom/JsonValue.h"
 #include "NiagaraEmitter.h"
@@ -57,81 +58,15 @@ static UNiagaraRendererProperties* ResolveRenderer(UNiagaraSystem* System, const
     }
     return EmitterData->GetRenderers()[RendererIndex];
 }
-static void AddObjectIdentity(UObject* Object, TSharedPtr<FJsonObject> Data)
+
+static bool ReadWriteFormat(const TSharedPtr<FJsonObject>& Payload, FString& OutFormat)
 {
-    Data->SetStringField(TEXT("object_path"), Object ? Object->GetPathName() : FString());
-    Data->SetStringField(TEXT("object_name"), Object ? Object->GetName() : FString());
-    Data->SetStringField(TEXT("class_path"), Object && Object->GetClass() ? Object->GetClass()->GetPathName() : FString());
-}
-static void CollectPropertyNames(const TSharedPtr<FJsonObject>& Payload, TArray<FString>& OutPropertyNames)
-{
-    Payload->TryGetStringArrayField(TEXT("property_names"), OutPropertyNames);
-    OutPropertyNames.RemoveAll([](const FString& Name)
-    {
-        return Name.IsEmpty();
-    });
-}
-static bool PropertyNameMatches(FProperty* Property, const TArray<FString>& PropertyNames)
-{
-    if (PropertyNames.Num() == 0)
-    {
-        return true;
-    }
-    for (const FString& Name : PropertyNames)
-    {
-        if (Property->GetName().Equals(Name, ESearchCase::IgnoreCase))
-        {
-            return true;
-        }
-    }
-    return false;
+    OutFormat = TEXT("summary");
+    Payload->TryGetStringField(TEXT("format"), OutFormat);
+    return OutFormat.Equals(TEXT("summary"), ESearchCase::IgnoreCase) || OutFormat.Equals(TEXT("full"), ESearchCase::IgnoreCase);
 }
 
-static TSharedPtr<FJsonObject> MakeObjectPropertiesData(UObject* Object, const TSharedPtr<FJsonObject>& Payload, const FString& FormatName)
-{
-    TArray<FString> PropertyNames;
-    CollectPropertyNames(Payload, PropertyNames);
-    bool bIncludeNonEditable = false;
-    FString Format = TEXT("compact");
-    Payload->TryGetBoolField(TEXT("include_non_editable"), bIncludeNonEditable);
-    Payload->TryGetStringField(TEXT("format"), Format);
-    const bool bFull = Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
-
-    TArray<TSharedPtr<FJsonValue>> Items;
-    for (TFieldIterator<FProperty> It(Object->GetClass()); It; ++It)
-    {
-        FProperty* Property = *It;
-        if (!ShouldExposeProperty(Property, bIncludeNonEditable) || !PropertyNameMatches(Property, PropertyNames))
-        {
-            continue;
-        }
-        if (bFull)
-        {
-            Items.Add(MakeShared<FJsonValueObject>(PropertyToJson(Object, Property, true)));
-        }
-        else
-        {
-            TArray<TSharedPtr<FJsonValue>> Row;
-            Row.Add(MakeShared<FJsonValueString>(Property->GetName()));
-            Row.Add(MakeShared<FJsonValueString>(Property->GetClass()->GetName()));
-            Row.Add(PropertyValueToJson(Object, Property));
-            Items.Add(MakeShared<FJsonValueArray>(Row));
-        }
-    }
-
-    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
-    AddObjectIdentity(Object, Data);
-    if (!bFull)
-    {
-        Data->SetStringField(TEXT("format"), FormatName);
-        Data->SetArrayField(TEXT("columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("type")), MakeShared<FJsonValueString>(TEXT("value")) });
-    }
-    Data->SetArrayField(TEXT("items"), Items);
-    Data->SetNumberField(TEXT("count"), Items.Num());
-    return Data;
-}
-
-static bool ApplyProperties(UObject* Object, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject> Data)
+static bool ApplyProperties(UObject* Object, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject> Data, bool bIncludeItems)
 {
     const TArray<TSharedPtr<FJsonValue>>* Params = nullptr;
     if (!Payload->TryGetArrayField(TEXT("params"), Params) || Params == nullptr)
@@ -193,13 +128,16 @@ static bool ApplyProperties(UObject* Object, const TSharedPtr<FJsonObject>& Payl
             }
         }
 
-        TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-        Item->SetStringField(TEXT("name"), Name);
-        Item->SetBoolField(TEXT("found"), Property != nullptr);
-        Item->SetBoolField(TEXT("applied"), bApplied);
-        Item->SetStringField(TEXT("value_text"), ValueText);
-        Item->SetStringField(TEXT("error"), Error);
-        Items.Add(MakeShared<FJsonValueObject>(Item));
+        if (bIncludeItems)
+        {
+            TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
+            Item->SetStringField(TEXT("name"), Name);
+            Item->SetBoolField(TEXT("found"), Property != nullptr);
+            Item->SetBoolField(TEXT("applied"), bApplied);
+            Item->SetStringField(TEXT("value_text"), ValueText);
+            Item->SetStringField(TEXT("error"), Error);
+            Items.Add(MakeShared<FJsonValueObject>(Item));
+        }
     }
 
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
@@ -207,7 +145,11 @@ static bool ApplyProperties(UObject* Object, const TSharedPtr<FJsonObject>& Payl
     Data->SetBoolField(TEXT("changed"), Changed > 0);
     Data->SetNumberField(TEXT("planned_count"), Planned);
     Data->SetNumberField(TEXT("changed_count"), Changed);
-    Data->SetArrayField(TEXT("items"), Items);
+    Data->SetBoolField(TEXT("details_omitted"), !bIncludeItems);
+    if (bIncludeItems)
+    {
+        Data->SetArrayField(TEXT("items"), Items);
+    }
     return true;
 }
 
@@ -220,8 +162,21 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemPropertiesGet(const FString& Operatio
         return EarlyResponse;
     }
 
+    FString Format = TEXT("indexed");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (!NiagaraPropertyListFormats::IsSupportedFormat(Format))
+    {
+        return NiagaraPropertyListFormats::MakeInvalidFormatResponse(Operation, RequestId, Format);
+    }
+
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), MakeObjectPropertiesData(System, Payload, TEXT("niagara_system_properties_compact")));
+    Response->SetObjectField(TEXT("data"), NiagaraPropertyListFormats::BuildObjectPropertiesData(
+        System,
+        Payload,
+        Format,
+        TEXT("niagara_system_properties_compact"),
+        TEXT("niagara_system_properties_indexed"),
+        TEXT("niagara_system_properties_tiny")));
     return Response;
 }
 
@@ -234,8 +189,18 @@ TSharedPtr<FJsonObject> HandleNiagaraSystemPropertiesSet(const FString& Operatio
         return EarlyResponse;
     }
 
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
-    if (!ApplyProperties(System, Payload, Data))
+    FString Format;
+    if (!ReadWriteFormat(Payload, Format))
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_format"), TEXT("format must be summary or full")));
+        return Response;
+    }
+
+    const bool bFull = Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+    TSharedPtr<FJsonObject> Data = bFull ? MakeNiagaraAssetData(System) : MakeNiagaraAssetSummaryData(System);
+    Data->SetStringField(TEXT("format"), bFull ? TEXT("niagara_system_properties_set_full") : TEXT("niagara_system_properties_set_summary"));
+    if (!ApplyProperties(System, Payload, Data, bFull))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_request"), Data->GetStringField(TEXT("error"))));
@@ -263,8 +228,22 @@ TSharedPtr<FJsonObject> HandleNiagaraRendererPropertiesGet(const FString& Operat
     {
         return EarlyResponse;
     }
+
+    FString Format = TEXT("indexed");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (!NiagaraPropertyListFormats::IsSupportedFormat(Format))
+    {
+        return NiagaraPropertyListFormats::MakeInvalidFormatResponse(Operation, RequestId, Format);
+    }
+
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), MakeObjectPropertiesData(Renderer, Payload, TEXT("niagara_renderer_properties_compact")));
+    Response->SetObjectField(TEXT("data"), NiagaraPropertyListFormats::BuildObjectPropertiesData(
+        Renderer,
+        Payload,
+        Format,
+        TEXT("niagara_renderer_properties_compact"),
+        TEXT("niagara_renderer_properties_indexed"),
+        TEXT("niagara_renderer_properties_tiny")));
     return Response;
 }
 
@@ -281,9 +260,22 @@ TSharedPtr<FJsonObject> HandleNiagaraRendererPropertiesSet(const FString& Operat
     {
         return EarlyResponse;
     }
-    TSharedPtr<FJsonObject> Data = MakeNiagaraAssetData(System);
-    AddObjectIdentity(Renderer, Data);
-    if (!ApplyProperties(Renderer, Payload, Data))
+    FString Format;
+    if (!ReadWriteFormat(Payload, Format))
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_format"), TEXT("format must be summary or full")));
+        return Response;
+    }
+
+    const bool bFull = Format.Equals(TEXT("full"), ESearchCase::IgnoreCase);
+    TSharedPtr<FJsonObject> Data = bFull ? MakeNiagaraAssetData(System) : MakeNiagaraAssetSummaryData(System);
+    Data->SetStringField(TEXT("format"), bFull ? TEXT("niagara_renderer_properties_set_full") : TEXT("niagara_renderer_properties_set_summary"));
+    if (bFull)
+    {
+        NiagaraPropertyListFormats::AddObjectIdentity(Renderer, Data);
+    }
+    if (!ApplyProperties(Renderer, Payload, Data, bFull))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_request"), Data->GetStringField(TEXT("error"))));

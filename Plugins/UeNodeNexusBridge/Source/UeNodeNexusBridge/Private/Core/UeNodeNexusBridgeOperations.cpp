@@ -25,6 +25,10 @@ TSharedPtr<FJsonObject> HandleDiagnosticsGet(const FString& Operation, const FSt
 
 TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
+    if (Operation == TEXT("bridge_capabilities_get"))
+    {
+        return HandleBridgeCapabilitiesGet(Operation, RequestId, Payload);
+    }
     if (Operation == TEXT("asset_list"))
     {
         return HandleAssetList(Operation, RequestId, Payload);
@@ -89,17 +93,9 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     {
         return HandleLevelActorTransformGet(Operation, RequestId, Payload);
     }
-    if (Operation == TEXT("level_actor_transform_set"))
-    {
-        return HandleLevelActorTransformSet(Operation, RequestId, Payload);
-    }
     if (Operation == TEXT("object_properties_get"))
     {
         return HandleObjectPropertiesGet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("object_properties_set"))
-    {
-        return HandleObjectPropertiesSet(Operation, RequestId, Payload);
     }
     if (Operation == TEXT("level_mesh_instances_list"))
     {
@@ -137,6 +133,10 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     {
         return HandleProjectInputMappingsPatch(Operation, RequestId, Payload);
     }
+    if (Operation == TEXT("project_context_get"))
+    {
+        return HandleProjectContextGet(Operation, RequestId);
+    }
     if (Operation == TEXT("blueprint_details_get"))
     {
         return HandleBlueprintDetailsGet(Operation, RequestId, Payload);
@@ -154,10 +154,6 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
         return HandleGraphSnapshotGet(Operation, RequestId, Payload);
     }
     if (Operation == TEXT("graph_node_info_get"))
-    {
-        return HandleGraphNodeInfoGet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("graph_node_info_get_w_pos"))
     {
         return HandleGraphNodeInfoGet(Operation, RequestId, Payload);
     }
@@ -188,10 +184,6 @@ TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FStrin
     if (Operation == TEXT("node_position_set"))
     {
         return HandleNodePositionSet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("node_position_offset"))
-    {
-        return HandleNodePositionOffset(Operation, RequestId, Payload);
     }
     if (Operation == TEXT("node_params_get"))
     {

@@ -3,7 +3,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
@@ -136,4 +136,5 @@ FString MaterialOutputName(UMaterialExpression* Expression, int32 Index)
     }
     return Outputs[Index].OutputName.ToString();
 }
+
 }

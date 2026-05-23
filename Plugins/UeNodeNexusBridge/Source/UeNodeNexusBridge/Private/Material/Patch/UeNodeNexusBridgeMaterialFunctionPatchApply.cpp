@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeMaterialFunctionPatchShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -7,9 +7,9 @@
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
 #include "UeNodeNexusBridgeMaterialCustomParamApply.h"
-#include "UeNodeNexusBridgeMaterialFunctionPatchContext.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
-#include "UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialFunctionPatchContext.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {

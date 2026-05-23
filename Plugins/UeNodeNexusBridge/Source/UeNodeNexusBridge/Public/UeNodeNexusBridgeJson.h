@@ -1,10 +1,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "Templates/UniquePtr.h"
 
 struct FHttpServerResponse;
-class FJsonObject;
 
 namespace UeNodeNexusBridge
 {

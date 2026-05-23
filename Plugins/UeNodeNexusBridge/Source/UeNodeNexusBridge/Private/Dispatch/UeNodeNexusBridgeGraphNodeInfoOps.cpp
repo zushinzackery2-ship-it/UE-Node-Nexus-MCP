@@ -6,10 +6,10 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 #include "UeNodeNexusBridgeGraphGroupedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
 
 namespace UeNodeNexusBridge
 {
@@ -32,6 +32,13 @@ static TSharedPtr<FJsonObject> MakeGraphNodeInfoPayload(const TSharedPtr<FJsonOb
     return NodePayload;
 }
 
+static bool WantsGraphNodePositions(const TSharedPtr<FJsonObject>& Payload)
+{
+    bool bIncludePosition = false;
+    Payload->TryGetBoolField(TEXT("include_position"), bIncludePosition);
+    return bIncludePosition;
+}
+
 static TSharedPtr<FJsonObject> MakeGraphNodeInfoData(const FString& AssetPath, const FString& GraphKind, const FString& GraphName, int32 TotalNodes, int32 ReturnedNodes, const FString& Text)
 {
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -50,16 +57,17 @@ static TSharedPtr<FJsonObject> BuildMaterialGraphNodeInfo(const FString& Operati
 {
     FString Format = TEXT("indexed");
     Payload->TryGetStringField(TEXT("format"), Format);
+    const bool bWithPosition = WantsGraphNodePositions(Payload);
     if (Format.Equals(TEXT("grouped"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildMaterialGraphGroupedData(Material, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        Response->SetObjectField(TEXT("data"), BuildMaterialGraphGroupedData(Material, Payload, bWithPosition));
         return Response;
     }
     if (!Format.Equals(TEXT("text"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildMaterialGraphIndexedData(Material, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        Response->SetObjectField(TEXT("data"), BuildMaterialGraphIndexedData(Material, Payload, bWithPosition));
         return Response;
     }
 
@@ -97,16 +105,17 @@ static TSharedPtr<FJsonObject> BuildMaterialFunctionGraphNodeInfo(const FString&
 {
     FString Format = TEXT("indexed");
     Payload->TryGetStringField(TEXT("format"), Format);
+    const bool bWithPosition = WantsGraphNodePositions(Payload);
     if (Format.Equals(TEXT("grouped"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildMaterialFunctionGraphGroupedData(Function, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        Response->SetObjectField(TEXT("data"), BuildMaterialFunctionGraphGroupedData(Function, Payload, bWithPosition));
         return Response;
     }
     if (!Format.Equals(TEXT("text"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildMaterialFunctionGraphIndexedData(Function, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        Response->SetObjectField(TEXT("data"), BuildMaterialFunctionGraphIndexedData(Function, Payload, bWithPosition));
         return Response;
     }
 
@@ -152,16 +161,17 @@ static TSharedPtr<FJsonObject> BuildBlueprintGraphNodeInfo(const FString& Operat
 
     FString Format = TEXT("indexed");
     Payload->TryGetStringField(TEXT("format"), Format);
+    const bool bWithPosition = WantsGraphNodePositions(Payload);
     if (Format.Equals(TEXT("grouped"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphGroupedData(Blueprint, Graph, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphGroupedData(Blueprint, Graph, Payload, bWithPosition));
         return Response;
     }
     if (!Format.Equals(TEXT("text"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphIndexedData(Blueprint, Graph, Payload, Operation == TEXT("graph_node_info_get_w_pos")));
+        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphIndexedData(Blueprint, Graph, Payload, bWithPosition));
         return Response;
     }
 
