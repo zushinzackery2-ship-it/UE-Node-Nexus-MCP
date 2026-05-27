@@ -7,6 +7,8 @@
 #include "Materials/MaterialExpressionNamedReroute.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 
+#include <UObject/UObjectIterator.h>
+
 namespace UeNodeNexusBridge
 {
 FString MaterialExpressionNodeId(UMaterialExpression* Expression)
@@ -36,6 +38,22 @@ UClass* ResolveMaterialExpressionClass(const FString& NodeClass)
     if (UClass* Direct = LoadClass<UMaterialExpression>(nullptr, *NodeClass))
     {
         return Direct->IsChildOf(UMaterialExpression::StaticClass()) ? Direct : nullptr;
+    }
+    for (TObjectIterator<UClass> It; It; ++It)
+    {
+        UClass* Class = *It;
+        if (Class == nullptr || !Class->IsChildOf(UMaterialExpression::StaticClass()))
+        {
+            continue;
+        }
+        const FString ClassName = Class->GetName();
+        const FString ListedShortName = ClassName.Len() > 18 ? ClassName.RightChop(18) : ClassName;
+        if (ClassName.Equals(NodeClass, ESearchCase::IgnoreCase)
+            || ListedShortName.Equals(NodeClass, ESearchCase::IgnoreCase)
+            || Class->GetPathName().Equals(NodeClass, ESearchCase::IgnoreCase))
+        {
+            return Class;
+        }
     }
     const FString ShortName = NodeClass.StartsWith(TEXT("MaterialExpression")) ? NodeClass : TEXT("MaterialExpression") + NodeClass;
     return LoadClass<UMaterialExpression>(nullptr, *FString::Printf(TEXT("/Script/Engine.%s"), *ShortName));
