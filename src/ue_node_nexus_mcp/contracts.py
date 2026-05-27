@@ -103,6 +103,15 @@ LOCAL_MCP_OPERATIONS = {
     "bridge_contract_check",
 }
 
+THIN_MCP_OPERATIONS = {
+    "ue_capability_get",
+    "ue_context_get",
+    "ue_diff_get",
+    "ue_execute",
+    "ue_plan_validate",
+    "ue_read",
+}
+
 BRIDGE_OPERATIONS = ALL_OPERATIONS - LOCAL_MCP_OPERATIONS
 
 DEFAULT_HIDDEN_OPERATIONS = {
@@ -225,6 +234,8 @@ DEFAULT_EXPOSED_OPERATIONS = {
     for operation in ALL_OPERATIONS - DEFAULT_HIDDEN_OPERATIONS
     if OPERATION_FEATURES[operation] in DEFAULT_FEATURE_GROUPS
 }
+
+THIN_EXPOSED_OPERATIONS = set(THIN_MCP_OPERATIONS)
 
 
 def require_non_empty_string(value: str, field_name: str) -> None:

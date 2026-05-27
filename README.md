@@ -45,6 +45,7 @@
 | 功能 | 说明 |
 |:-----|:-----|
 | **固定 MCP 工具** | Python MCP Server 暴露类型化工具，向 UE 桥接器转发经过校验的请求载荷；Niagara 工具只在 UE 端实际可用时注册 |
+| **Thin MCP Facade** | 可选 `thin` profile 只暴露 6 个 MCP 工具，完整 UE 能力作为内部 operation registry 按需查询和执行 |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
@@ -133,6 +134,73 @@
 | **诊断** | `diagnostics_get()` | 读取最近的桥接器诊断信息 |
 | **保存** | `asset_save()` | 保存单个资产包，报告脏标记/只读/编辑器冲突状态 |
 
+---
+
+## Thin MCP Facade
+
+Thin profile 用少量公开 MCP 工具承载完整 UE operation 能力，降低 `list_tools` 和历史 tool result 对上下文窗口的占用。默认 `legacy` profile 保持原有 83 工具面兼容；`thin` profile 只注册 6 个 facade 工具。
+
+| 工具 | 说明 |
+|:-----|:-----|
+| **`ue_context_get()`** | 返回当前 profile、启用 group、facade 工具清单和推荐下一跳 |
+| **`ue_capability_get()`** | 按 group 或 operation 查询内部 operation 索引/schema |
+| **`ue_execute()`** | 通过 operation registry 执行内部 UE operation，默认返回 delta summary |
+| **`ue_read()`** | 统一读取 asset、graph、node、diagnostics、Niagara 等常见状态，默认 summary/index |
+| **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
+| **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
+
+| Profile | 暴露面 | 用途 |
+|:-----|:-----|:-----|
+| **`legacy`** | 默认 83 个 MCP 工具 | 旧客户端、脚本和回归兼容 |
+| **`thin`** | 6 个 facade 工具 | 低上下文 Agent 工作流 |
+
+Thin facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 89 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
+
+推荐 thin 工作流：
+
+```text
+ue_context_get()
+  -> ue_capability_get(group="graph", detail="index")
+  -> ue_capability_get(operation="node_params_set", detail="schema")
+  -> ue_execute(operation="node_params_set", payload={...})
+  -> ue_diff_get(since_token="diff_...")
+```
+
+启用 thin profile：
+
+```bash
+ue-node-nexus-mcp --mcp-profile thin --response-mode minimal
+```
+
+MCP client 配置：
+
+```json
+{
+  "mcpServers": {
+    "ue-node-nexus": {
+      "command": "ue-node-nexus-mcp",
+      "args": ["--mcp-profile", "thin", "--response-mode", "minimal"],
+      "env": {
+        "UE_NEXUS_BRIDGE_URL": "http://127.0.0.1:8765"
+      }
+    }
+  }
+}
+```
+
+也可以通过环境变量启用：
+
+```json
+{
+  "env": {
+    "UE_NEXUS_MCP_PROFILE": "thin",
+    "UE_NEXUS_RESPONSE_MODE": "minimal"
+  }
+}
+```
+
+完整设计见 `docs/MCP_THIN_FACADE_DESIGN.md`。
+
 > [!NOTE]
 > **Niagara 通用边界**
 >
@@ -219,6 +287,18 @@ Niagara 读取工具默认使用低上下文格式：`niagara_system_summary_get
 
 ---
 
+## Widget Blueprint 一致性验证
+
+| 验证项 | 结果 |
+|:-----|:-----|
+| **UUserWidget 子类蓝图** | 创建、详情读取、空编译、EventGraph 节点编辑、再次编译、删除链路已走通 |
+| **节点短名解析** | `node_class_params_get(K2Node_Event)` 与 `node_create(node_class="K2Node_Event")` 使用一致解析路径 |
+| **Event 节点语义** | 泛型 `K2Node_Event` 缺少 `function_name/function_owner` 时返回 `node_config_required`，不再创建无语义 `事件None` |
+| **Widget Blueprint SCS** | Widget Blueprint 走 SCS component patch 时返回 `blueprint_scs_unavailable`，不再误报 `blueprint_not_found` |
+| **未保存资产状态** | `asset_get` 可返回已加载但 AssetRegistry 不可见的资产，并标记 `asset_registry_visible=false` 与 `package_dirty` |
+
+---
+
 ## 目录结构
 
 ```
@@ -261,6 +341,8 @@ ue-node-nexus-mcp
 |:-----|:-----|:-----|
 | **`UE_NEXUS_BRIDGE_URL`** | `http://127.0.0.1:8765` | UE 桥接器端点 |
 | **`UE_NEXUS_TIMEOUT_SECONDS`** | `30` | 桥接器 HTTP 超时时间（秒） |
+| **`UE_NEXUS_MCP_PROFILE`** | `legacy` | MCP 暴露面，支持 `legacy` 或 `thin` |
+| **`UE_NEXUS_RESPONSE_MODE`** | `minimal` | facade 响应模式，支持 `minimal` 或 `full` |
 
 ---
 

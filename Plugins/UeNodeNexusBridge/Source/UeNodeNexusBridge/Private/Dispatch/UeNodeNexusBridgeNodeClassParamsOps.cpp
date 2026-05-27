@@ -1,6 +1,8 @@
 ﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "EdGraph/EdGraphNode.h"
+#include "K2Node_CustomEvent.h"
+#include "K2Node_Event.h"
 #include "Materials/MaterialExpression.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
@@ -40,6 +42,17 @@ static TSharedPtr<FJsonObject> MakeBlueprintTemplateParam(FProperty* Property, i
     return Param;
 }
 
+static TSharedPtr<FJsonObject> MakeBlueprintCreateParam(int32 Index, const FString& Name, const FString& Type, bool bRequired)
+{
+    TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
+    Param->SetNumberField(TEXT("index"), Index);
+    Param->SetStringField(TEXT("name"), Name);
+    Param->SetStringField(TEXT("type"), Type);
+    Param->SetBoolField(TEXT("editable"), true);
+    Param->SetBoolField(TEXT("required_on_create"), bRequired);
+    return Param;
+}
+
 static TArray<TSharedPtr<FJsonValue>> BuildBlueprintClassParams(UClass* Class)
 {
     TArray<TSharedPtr<FJsonValue>> Params;
@@ -56,6 +69,15 @@ static TArray<TSharedPtr<FJsonValue>> BuildBlueprintClassParams(UClass* Class)
         {
             Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintTemplateParam(Property, Index++)));
         }
+    }
+    if (Class == UK2Node_Event::StaticClass())
+    {
+        Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintCreateParam(Index++, TEXT("function_name"), TEXT("FName"), true)));
+        Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintCreateParam(Index++, TEXT("function_owner"), TEXT("UClass path"), true)));
+    }
+    else if (Class == UK2Node_CustomEvent::StaticClass())
+    {
+        Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintCreateParam(Index++, TEXT("event_name"), TEXT("FName"), false)));
     }
     return Params;
 }

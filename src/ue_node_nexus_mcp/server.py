@@ -18,6 +18,7 @@ from .tools_materials import material_expression_classes_list, material_instance
 from .tools_niagara import niagara_asset_lint, niagara_compile, niagara_emitter_create, niagara_emitter_properties_get, niagara_emitter_properties_set, niagara_emitters_list, niagara_materials_get, niagara_materials_set, niagara_renderer_create, niagara_renderer_properties_get, niagara_renderer_properties_set, niagara_renderers_list, niagara_system_create, niagara_system_duplicate, niagara_system_properties_get, niagara_system_properties_set, niagara_system_summary_get, niagara_user_params_get, niagara_user_params_set  # noqa: E402,F401
 from .tools_niagara_modules import niagara_module_add, niagara_module_inputs_get, niagara_module_inputs_set, niagara_module_remove, niagara_module_set_enabled, niagara_modules_list  # noqa: E402,F401
 from .tools_system import asset_compile, asset_save, asset_validate, bridge_capabilities_get, bridge_contract_check, diagnostics_get, editor_request_exit, editor_save_all, level_actors_list, level_current_get  # noqa: E402,F401
+from .tools_facade import ue_capability_get, ue_context_get, ue_diff_get, ue_execute, ue_plan_validate, ue_read  # noqa: E402,F401
 
 
 if __name__ == "__main__":

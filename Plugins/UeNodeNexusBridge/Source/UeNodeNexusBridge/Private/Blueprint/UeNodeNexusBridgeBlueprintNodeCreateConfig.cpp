@@ -5,6 +5,7 @@
 #include "InputCoreTypes.h"
 #include "K2Node_CallFunction.h"
 #include "K2Node_CustomEvent.h"
+#include "K2Node_Event.h"
 #include "K2Node_InputAxisEvent.h"
 #include "K2Node_InputKey.h"
 
@@ -57,6 +58,40 @@ static bool ConfigureCallFunctionNode(UK2Node_CallFunction* Node, const TSharedP
     }
 
     Node->SetFromFunction(Function);
+    return true;
+}
+
+static bool ConfigureGenericEventNode(UK2Node_Event* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
+{
+    if (Node->GetClass() != UK2Node_Event::StaticClass())
+    {
+        return true;
+    }
+
+    FString FunctionName;
+    FString FunctionOwner;
+    if (!ReadStringFieldOrParam(Payload, TEXT("function_name"), FunctionName) || !ReadStringFieldOrParam(Payload, TEXT("function_owner"), FunctionOwner))
+    {
+        OutError = TEXT("function_name and function_owner are required for K2Node_Event; use K2Node_CustomEvent with event_name for custom events");
+        return false;
+    }
+
+    UClass* OwnerClass = LoadClass<UObject>(nullptr, *FunctionOwner);
+    if (OwnerClass == nullptr)
+    {
+        OutError = FString::Printf(TEXT("Event owner class not found: %s"), *FunctionOwner);
+        return false;
+    }
+
+    UFunction* Function = OwnerClass->FindFunctionByName(FName(*FunctionName));
+    if (Function == nullptr)
+    {
+        OutError = FString::Printf(TEXT("Event function not found: %s.%s"), *OwnerClass->GetName(), *FunctionName);
+        return false;
+    }
+
+    Node->EventReference.SetFromField<UFunction>(Function, false);
+    Node->bOverrideFunction = true;
     return true;
 }
 
@@ -130,6 +165,62 @@ static bool ConfigureCustomEventNode(UK2Node_CustomEvent* Node, const TSharedPtr
     return true;
 }
 
+bool ValidateBlueprintNodeCreateConfig(UClass* NodeClass, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
+{
+    if (NodeClass->IsChildOf(UK2Node_CallFunction::StaticClass()))
+    {
+        FString FunctionName;
+        FString FunctionOwner;
+        if (!ReadStringFieldOrParam(Payload, TEXT("function_name"), FunctionName) || !ReadStringFieldOrParam(Payload, TEXT("function_owner"), FunctionOwner))
+        {
+            OutError = TEXT("function_name and function_owner are required for K2Node_CallFunction");
+            return false;
+        }
+    }
+    if (NodeClass->IsChildOf(UK2Node_InputKey::StaticClass()))
+    {
+        FString KeyName;
+        if (!ReadStringFieldOrParam(Payload, TEXT("input_key"), KeyName))
+        {
+            OutError = TEXT("input_key is required for K2Node_InputKey");
+            return false;
+        }
+    }
+    if (NodeClass->IsChildOf(UK2Node_InputAxisEvent::StaticClass()))
+    {
+        FString AxisName;
+        if (!ReadStringFieldOrParam(Payload, TEXT("axis_name"), AxisName))
+        {
+            OutError = TEXT("axis_name is required for K2Node_InputAxisEvent");
+            return false;
+        }
+    }
+    if (NodeClass == UK2Node_Event::StaticClass())
+    {
+        FString FunctionName;
+        FString FunctionOwner;
+        if (!ReadStringFieldOrParam(Payload, TEXT("function_name"), FunctionName) || !ReadStringFieldOrParam(Payload, TEXT("function_owner"), FunctionOwner))
+        {
+            OutError = TEXT("function_name and function_owner are required for K2Node_Event; use K2Node_CustomEvent with event_name for custom events");
+            return false;
+        }
+
+        UClass* OwnerClass = LoadClass<UObject>(nullptr, *FunctionOwner);
+        if (OwnerClass == nullptr)
+        {
+            OutError = FString::Printf(TEXT("Event owner class not found: %s"), *FunctionOwner);
+            return false;
+        }
+
+        if (OwnerClass->FindFunctionByName(FName(*FunctionName)) == nullptr)
+        {
+            OutError = FString::Printf(TEXT("Event function not found: %s.%s"), *OwnerClass->GetName(), *FunctionName);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
     if (UK2Node_CallFunction* CallFunctionNode = Cast<UK2Node_CallFunction>(Node))
@@ -147,6 +238,10 @@ bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, const TSharedPtr<FJsonObj
     if (UK2Node_CustomEvent* CustomEventNode = Cast<UK2Node_CustomEvent>(Node))
     {
         return ConfigureCustomEventNode(CustomEventNode, Payload);
+    }
+    if (UK2Node_Event* EventNode = Cast<UK2Node_Event>(Node))
+    {
+        return ConfigureGenericEventNode(EventNode, Payload, OutError);
     }
     return true;
 }

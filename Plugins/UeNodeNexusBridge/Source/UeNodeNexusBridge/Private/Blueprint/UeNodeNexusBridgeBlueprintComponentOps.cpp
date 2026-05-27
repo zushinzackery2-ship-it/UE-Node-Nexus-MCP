@@ -190,9 +190,13 @@ TSharedPtr<FJsonObject> HandleBlueprintComponentsPatch(const FString& Operation,
 {
     FString AssetPath;
     UBlueprint* Blueprint = Payload->TryGetStringField(TEXT("asset_path"), AssetPath) ? LoadObject<UBlueprint>(nullptr, *AssetPath) : nullptr;
-    if (Blueprint == nullptr || Blueprint->SimpleConstructionScript == nullptr)
+    if (Blueprint == nullptr)
     {
-        return MakeBlueprintComponentError(Operation, RequestId, TEXT("blueprint_not_found"), TEXT("Blueprint with a SimpleConstructionScript could not be loaded"));
+        return MakeBlueprintComponentError(Operation, RequestId, TEXT("blueprint_not_found"), TEXT("Blueprint could not be loaded"));
+    }
+    if (Blueprint->SimpleConstructionScript == nullptr)
+    {
+        return MakeBlueprintComponentError(Operation, RequestId, TEXT("blueprint_scs_unavailable"), TEXT("Blueprint does not expose a SimpleConstructionScript for component patching"));
     }
     const TArray<TSharedPtr<FJsonValue>>* Operations = nullptr;
     if (!Payload->TryGetArrayField(TEXT("operations"), Operations) || Operations == nullptr)

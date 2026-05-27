@@ -9,10 +9,21 @@ from mcp.server.fastmcp import FastMCP
 from .bridge import BridgeError, UeBridgeClient
 from .contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
 from .features import consume_feature_args, read_feature_env, resolve_enabled_features
+from .profiles import (
+    DEFAULT_MCP_PROFILE,
+    DEFAULT_RESPONSE_MODE,
+    PROFILE_LEGACY,
+    PROFILE_THIN,
+    consume_profile_args,
+    read_profile_env,
+)
 
 mcp = FastMCP("UE Node Nexus MCP")
 bridge = UeBridgeClient()
 _enabled_features = None
+_mcp_profile = None
+_response_mode = None
+_profile_args_consumed = False
 _CAPABILITY_PROBE_TIMEOUT_SECONDS = 1.0
 
 
@@ -39,6 +50,7 @@ def _read_enabled_features() -> set[str]:
     explicit_features, enable_features, disable_features, niagara_support = read_feature_env(dict(os.environ))
     arg_features, arg_enable, arg_disable, arg_niagara, remaining = consume_feature_args(sys.argv)
     sys.argv[:] = remaining
+    _ensure_profile_args_consumed()
     if arg_features is not None:
         explicit_features = arg_features
     enable_features |= arg_enable
@@ -52,11 +64,50 @@ def _read_enabled_features() -> set[str]:
     return features
 
 
+def _set_cli_profile_args(profile: str | None, response_mode: str | None) -> None:
+    global _mcp_profile, _response_mode
+    env_profile, env_response = read_profile_env(dict(os.environ))
+    _mcp_profile = profile or env_profile or DEFAULT_MCP_PROFILE
+    _response_mode = response_mode or env_response or DEFAULT_RESPONSE_MODE
+
+
+def _ensure_profile_args_consumed() -> None:
+    global _profile_args_consumed
+    if _profile_args_consumed:
+        return
+    arg_profile, arg_response, remaining = consume_profile_args(sys.argv)
+    sys.argv[:] = remaining
+    _set_cli_profile_args(arg_profile, arg_response)
+    _profile_args_consumed = True
+
+
 def enabled_features() -> set[str]:
     global _enabled_features
     if _enabled_features is None:
         _enabled_features = _read_enabled_features()
     return set(_enabled_features)
+
+
+def mcp_profile() -> str:
+    global _mcp_profile
+    if _mcp_profile is None:
+        _ensure_profile_args_consumed()
+    return str(_mcp_profile)
+
+
+def response_mode() -> str:
+    global _response_mode
+    if _response_mode is None:
+        _ensure_profile_args_consumed()
+    return str(_response_mode)
+
+
+def is_thin_profile() -> bool:
+    return mcp_profile() == PROFILE_THIN
+
+
+def is_legacy_profile() -> bool:
+    return mcp_profile() == PROFILE_LEGACY
 
 
 def is_feature_enabled(feature: str) -> bool:
@@ -75,7 +126,16 @@ def _operation_feature(operation: str) -> str:
 def default_tool(feature: str | None = None):
     def decorator(func):
         tool_feature = feature or _operation_feature(func.__name__)
-        if is_feature_enabled(tool_feature):
+        if is_legacy_profile() and is_feature_enabled(tool_feature):
+            return mcp.tool()(func)
+        return func
+
+    return decorator
+
+
+def thin_tool():
+    def decorator(func):
+        if is_thin_profile():
             return mcp.tool()(func)
         return func
 

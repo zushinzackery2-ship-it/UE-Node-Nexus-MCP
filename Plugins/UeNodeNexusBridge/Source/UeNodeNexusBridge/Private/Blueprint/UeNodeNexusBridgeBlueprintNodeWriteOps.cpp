@@ -33,6 +33,24 @@ static bool ReadBlueprintPositionPair(const TSharedPtr<FJsonObject>& Payload, in
     return true;
 }
 
+static UClass* ResolveBlueprintNodeClassForCreate(const FString& NodeClass)
+{
+    if (UClass* Direct = LoadClass<UEdGraphNode>(nullptr, *NodeClass))
+    {
+        return Direct->IsChildOf(UEdGraphNode::StaticClass()) ? Direct : nullptr;
+    }
+    const FString ShortName = NodeClass.StartsWith(TEXT("K2Node_")) ? NodeClass : TEXT("K2Node_") + NodeClass;
+    if (UClass* K2Class = LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/BlueprintGraph.%s"), *ShortName)))
+    {
+        return K2Class->IsChildOf(UEdGraphNode::StaticClass()) ? K2Class : nullptr;
+    }
+    if (UClass* EngineClass = LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/Engine.%s"), *NodeClass)))
+    {
+        return EngineClass->IsChildOf(UEdGraphNode::StaticClass()) ? EngineClass : nullptr;
+    }
+    return nullptr;
+}
+
 static TSharedPtr<FJsonObject> LoadBlueprintNodeContext(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, UEdGraph*& OutGraph, UEdGraphNode*& OutNode)
 {
     OutGraph = ResolveBlueprintNodeInterfaceGraph(Blueprint, Payload);
@@ -141,10 +159,15 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeCreate(const FString& Operation, cons
     {
         return MakeBlueprintNodeError(Operation, RequestId, TEXT("invalid_request"), TEXT("node_class is required"));
     }
-    UClass* NodeClass = LoadClass<UEdGraphNode>(nullptr, *NodeClassName);
+    UClass* NodeClass = ResolveBlueprintNodeClassForCreate(NodeClassName);
     if (NodeClass == nullptr || !NodeClass->IsChildOf(UEdGraphNode::StaticClass()))
     {
         return MakeBlueprintNodeError(Operation, RequestId, TEXT("unknown_node_class"), FString::Printf(TEXT("Blueprint node class not found: %s"), *NodeClassName));
+    }
+    FString ConfigError;
+    if (!ValidateBlueprintNodeCreateConfig(NodeClass, Payload, ConfigError))
+    {
+        return MakeBlueprintNodeError(Operation, RequestId, TEXT("node_config_required"), ConfigError);
     }
 
     int32 X = 0;
@@ -163,10 +186,11 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeCreate(const FString& Operation, cons
         NewNode = Creator.CreateNode(false, NodeClass);
         NewNode->NodePosX = X;
         NewNode->NodePosY = Y;
-        FString ConfigureError;
-        if (!ConfigureCreatedBlueprintNode(NewNode, Payload, ConfigureError))
+        if (!ConfigureCreatedBlueprintNode(NewNode, Payload, ConfigError))
         {
-            return MakeBlueprintNodeError(Operation, RequestId, TEXT("node_config_failed"), ConfigureError);
+            Creator.Finalize();
+            Graph->RemoveNode(NewNode);
+            return MakeBlueprintNodeError(Operation, RequestId, TEXT("node_config_failed"), ConfigError);
         }
         Creator.Finalize();
         Graph->NotifyGraphChanged();

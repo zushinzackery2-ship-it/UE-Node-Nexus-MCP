@@ -3,6 +3,7 @@
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Misc/PackageName.h"
+#include "UeNodeNexusBridgeLoadedAssetStatus.h"
 #include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -267,9 +268,18 @@ TSharedPtr<FJsonObject> HandleAssetGet(const FString& Operation, const FString& 
         if (AssetData.GetObjectPathString().Equals(NormalizedAssetPath, ESearchCase::IgnoreCase))
         {
             TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-            Response->SetObjectField(TEXT("data"), AssetDataToJson(AssetData));
+            TSharedPtr<FJsonObject> Data = AssetDataToJson(AssetData);
+            Data->SetBoolField(TEXT("asset_registry_visible"), true);
+            Response->SetObjectField(TEXT("data"), Data);
             return Response;
         }
+    }
+
+    if (UObject* LoadedAsset = FindObject<UObject>(nullptr, *NormalizedAssetPath))
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+        Response->SetObjectField(TEXT("data"), LoadedAssetToJson(LoadedAsset, NormalizedAssetPath));
+        return Response;
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
