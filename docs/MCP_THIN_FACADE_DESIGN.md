@@ -494,7 +494,7 @@ artifact_id -> large debug payload or full bridge response
 - token 必须绑定 asset path 和 state token。
 - token 失效时返回 `state_invalidated` 或 `token_expired`。
 - debug/full 大负载默认存为 artifact，只返回 handle。
-- artifact 通过 `ue_read(target="artifact", artifact_id="...")` 显式读取。
+- artifact 通过 `ue_read(target="artifact", query={"artifact_id":"..."})` 显式读取。
 
 不要把完整数据 base64 放进 tool result。只要进入 tool result，很多 MCP client 仍可能把它保留在历史上下文里。正确做法是返回 handle：
 

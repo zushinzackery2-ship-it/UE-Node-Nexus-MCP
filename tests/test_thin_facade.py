@@ -34,6 +34,13 @@ def test_thin_capability_schema_returns_one_operation() -> None:
     assert response["data"]["default_response"] == "delta"
 
 
+def test_thin_capability_rejects_unknown_operation() -> None:
+    response = server.ue_capability_get(operation='python_exec')
+
+    assert response['ok'] is False
+    assert response['error']['code'] == 'invalid_operation'
+
+
 def test_ue_execute_returns_delta_and_stores_diff(monkeypatch: Any) -> None:
     recording_bridge = RecordingBridge()
     recording_bridge.response = {
@@ -109,6 +116,13 @@ def test_ue_read_exposes_usable_diff_token(monkeypatch: Any) -> None:
     assert ['operation', 'graph_snapshot_get'] in diff['data']['changes']
 
 
+def test_ue_read_rejects_non_mapping_query() -> None:
+    response = server.ue_read(target='graph', query='bad')  # type: ignore[arg-type]
+
+    assert response['ok'] is False
+    assert response['error']['code'] == 'invalid_query'
+
+
 def test_ue_execute_rejects_invalid_response_mode(monkeypatch: Any) -> None:
     recording_bridge = RecordingBridge()
     monkeypatch.setattr(runtime, 'bridge', recording_bridge)
@@ -137,6 +151,24 @@ def test_ue_diff_get_rejects_invalid_limit(monkeypatch: Any) -> None:
     execute = server.ue_execute(operation='node_params_set', payload={'asset_path': '/Game/M.M', 'node_id': 'n1'})
 
     response = server.ue_diff_get(since_token=execute['data']['diff_token'], limit=0)
+
+    assert response['ok'] is False
+    assert response['error']['code'] == 'invalid_limit'
+
+
+def test_ue_diff_get_rejects_non_integer_limit(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    recording_bridge.response = {
+        'ok': True,
+        'operation': 'node_params_set',
+        'data': {'node_id': 'n1'},
+        'diagnostics': [],
+        'warnings': [],
+    }
+    monkeypatch.setattr(runtime, 'bridge', recording_bridge)
+    execute = server.ue_execute(operation='node_params_set', payload={'asset_path': '/Game/M.M', 'node_id': 'n1'})
+
+    response = server.ue_diff_get(since_token=execute['data']['diff_token'], limit='x')  # type: ignore[arg-type]
 
     assert response['ok'] is False
     assert response['error']['code'] == 'invalid_limit'

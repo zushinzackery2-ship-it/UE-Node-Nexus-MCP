@@ -89,7 +89,10 @@ def ue_capability_get(
     if group is not None and group not in features:
         return minimal_error("feature_disabled", f"feature group is not enabled: {group}", {"group": group})
     if operation:
-        spec = get_operation_spec(operation)
+        try:
+            spec = get_operation_spec(operation)
+        except ValueError as exc:
+            return minimal_error("invalid_operation", str(exc), {"operation": operation})
         if spec.group not in features:
             return minimal_error("feature_disabled", f"feature group is not enabled: {spec.group}", {"operation": operation})
         schema = operation_schema(spec)
@@ -158,6 +161,11 @@ def ue_read(
 ) -> dict[str, Any]:
     """Read common UE state through one thin facade entrypoint."""
     require_non_empty_string(target, "target")
+    if query is not None:
+        try:
+            require_mapping(query, "query")
+        except ValueError as exc:
+            return minimal_error("invalid_query", str(exc), {"target": target})
     query_payload = dict(query or {})
     if target == "artifact":
         artifact_id = str(query_payload.get("artifact_id", ""))
@@ -212,7 +220,7 @@ def ue_diff_get(
 ) -> dict[str, Any]:
     """Return compact changes stored by a previous thin facade read or execute call."""
     require_non_empty_string(since_token or "", "since_token")
-    if limit < 1:
+    if not isinstance(limit, int) or limit < 1:
         return minimal_error("invalid_limit", "limit must be a positive integer", {"limit": limit})
     diff = facade_state.get_diff(str(since_token))
     if diff is None:
