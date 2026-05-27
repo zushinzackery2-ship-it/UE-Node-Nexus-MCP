@@ -19,6 +19,7 @@ from .runtime import enabled_features, mcp_profile, thin_tool
 
 
 ResponseMode = Literal["silent", "brief", "ids_only", "delta", "summary", "full", "debug"]
+VALID_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full", "debug"}
 
 
 READ_TARGET_OPERATIONS = {
@@ -139,6 +140,8 @@ def ue_execute(
     if spec.group not in enabled_features():
         return minimal_error("feature_disabled", f"feature group is not enabled: {spec.group}", {"operation": operation})
     mode = str(response_options.get("mode", spec.default_response))
+    if mode not in VALID_RESPONSE_MODES:
+        return minimal_error("invalid_response_mode", f"unsupported response mode: {mode}", {"mode": mode})
     try:
         raw_response = _execute_operation(operation, payload)
     except ValueError as exc:
@@ -193,6 +196,7 @@ def ue_read(
         "format": format,
         "summary": compact_data_summary(raw_response.get("data")),
         "snapshot_token": artifact["id"],
+        "diff_token": diff.diff_token,
         "state_token": f"state:{asset_path or target}:{diff.diff_token}",
         "artifact": artifact,
     }
@@ -208,6 +212,8 @@ def ue_diff_get(
 ) -> dict[str, Any]:
     """Return compact changes stored by a previous thin facade read or execute call."""
     require_non_empty_string(since_token or "", "since_token")
+    if limit < 1:
+        return minimal_error("invalid_limit", "limit must be a positive integer", {"limit": limit})
     diff = facade_state.get_diff(str(since_token))
     if diff is None:
         return minimal_error("token_expired", "diff token was not found or expired", {"since_token": since_token})

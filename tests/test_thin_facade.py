@@ -90,6 +90,58 @@ def test_ue_read_stores_artifact(monkeypatch: Any) -> None:
     assert artifact["data"]["data"]["format"] == "wires_tiny"
 
 
+def test_ue_read_exposes_usable_diff_token(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    recording_bridge.response = {
+        'ok': True,
+        'operation': 'graph_snapshot_get',
+        'data': {'format': 'wires_tiny', 'asset_path': '/Game/M.M', 'total_nodes': 3},
+        'diagnostics': [],
+        'warnings': [],
+    }
+    monkeypatch.setattr(runtime, 'bridge', recording_bridge)
+
+    response = server.ue_read(target='graph', asset_path='/Game/M.M', format='summary')
+
+    assert response['ok'] is True
+    diff = server.ue_diff_get(since_token=response['data']['diff_token'])
+    assert diff['ok'] is True
+    assert ['operation', 'graph_snapshot_get'] in diff['data']['changes']
+
+
+def test_ue_execute_rejects_invalid_response_mode(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    monkeypatch.setattr(runtime, 'bridge', recording_bridge)
+
+    response = server.ue_execute(
+        operation='node_params_set',
+        payload={'asset_path': '/Game/M.M', 'node_id': 'n1'},
+        response={'mode': 'not_a_mode'},
+    )
+
+    assert response['ok'] is False
+    assert response['error']['code'] == 'invalid_response_mode'
+    assert recording_bridge.calls == []
+
+
+def test_ue_diff_get_rejects_invalid_limit(monkeypatch: Any) -> None:
+    recording_bridge = RecordingBridge()
+    recording_bridge.response = {
+        'ok': True,
+        'operation': 'node_params_set',
+        'data': {'node_id': 'n1'},
+        'diagnostics': [],
+        'warnings': [],
+    }
+    monkeypatch.setattr(runtime, 'bridge', recording_bridge)
+    execute = server.ue_execute(operation='node_params_set', payload={'asset_path': '/Game/M.M', 'node_id': 'n1'})
+
+    response = server.ue_diff_get(since_token=execute['data']['diff_token'], limit=0)
+
+    assert response['ok'] is False
+    assert response['error']['code'] == 'invalid_limit'
+
+
 def test_ue_plan_validate_rejects_unknown_operations() -> None:
     response = server.ue_plan_validate([
         {"operation": "node_create", "payload": {"asset_path": "/Game/M.M"}},
