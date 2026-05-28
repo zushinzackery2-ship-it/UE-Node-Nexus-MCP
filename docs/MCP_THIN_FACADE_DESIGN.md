@@ -548,7 +548,7 @@ ue-node-nexus-mcp --response-mode minimal
 - `ue_execute` 必须拒绝 registry 外 operation。
 - 写 operation 默认继承现有 `dry_run=true` 策略。
 - 高风险 operation 需要在 capability 中标注 `risk`，并在 execute 响应中返回风险。
-- 维护类 operation 默认不进入 thin profile。
+- 维护类 operation 默认不进入 MCP `list_tools`。
 - 关卡实例写入和任意 UObject 属性写入继续排除，不通过 facade 回流。
 - `ue_execute` 不能提供任意路径调用、任意 Python、任意 reflection 写入。
 

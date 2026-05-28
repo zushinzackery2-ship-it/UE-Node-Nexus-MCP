@@ -198,12 +198,12 @@ MCP client 配置：
 > [!NOTE]
 > **Niagara 通用边界**
 >
-> Niagara MCP 工具由独立 UE 插件 `UeNodeNexusNiagaraBridge` 提供，是否进入 MCP tool list 以 UE 端 `bridge_capabilities_get().data.modules.niagara_available` 为准。当前工具面覆盖创建/复制 System、创建 Emitter、枚举/添加/删除/启停 Module Stack、读写 Module Input、创建 Renderer、读写 System/Emitter/Renderer 属性、读写 User 参数、替换 Renderer 材质、lint、编译和保存。Niagara 能力保持通用 authoring 原语，不提供 `create_fire_effect` 这类按具体效果命名的模板工具。
+> Niagara MCP 能力由独立 UE 插件 `UeNodeNexusNiagaraBridge` 提供，是否可用以 UE 端 `bridge_capabilities_get().data.modules.niagara_available` 为准。当前内部 operation 覆盖创建/复制 System、创建 Emitter、枚举/添加/删除/启停 Module Stack、读写 Module Input、创建 Renderer、读写 System/Emitter/Renderer 属性、读写 User 参数、替换 Renderer 材质、lint、编译和保存。Niagara 能力保持通用 authoring 原语，不提供 `create_fire_effect` 这类按具体效果命名的模板工具。
 
 > [!NOTE]
 > **默认工具面**
 >
-> 代码层保留固定 operation；当前 Python 合同为 89 个 operation，其中 88 个转发到 UE bridge，`bridge_contract_check` 是 MCP 本地诊断包装器，不是 UE bridge HTTP operation。UE 端 Niagara 可用时默认 MCP 工具面注册 83 个；UE 端 Niagara 不可用或本地关闭 Niagara 时默认 MCP 工具面为 57 个 UE bridge 工具加 1 个本地诊断工具。`auto_index_disable`、`auto_index_flush`、`auto_index_clear`、`auto_index_diff_registry`、`editor_save_all`、`editor_request_exit` 作为高级/维护入口保留在 Python wrapper 和 UE bridge operation 中，但不进入默认 MCP 工具列表。
+> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 89 个内部 operation，其中 88 个转发到 UE bridge，`bridge_contract_check` 是 MCP 本地诊断包装器，不是 UE bridge HTTP operation。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
 
 ---
 
