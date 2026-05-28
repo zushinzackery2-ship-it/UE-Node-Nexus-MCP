@@ -15,7 +15,7 @@ from .facade_response import (
 from .facade_state import facade_state
 from .operation_registry import capability_index, enabled_operation_specs, get_operation_spec, operation_schema
 from .runtime import call_bridge as _call
-from .runtime import enabled_features, mcp_profile, thin_tool
+from .runtime import enabled_features, thin_tool
 
 
 ResponseMode = Literal["silent", "brief", "ids_only", "delta", "summary", "full", "debug"]
@@ -62,7 +62,6 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
     for spec in specs.values():
         groups[spec.group] = groups.get(spec.group, 0) + 1
     data: dict[str, Any] = {
-        "profile": mcp_profile(),
         "bridge": "configured",
         "groups": sorted(groups.items()) if include_counts else sorted(groups),
         "facade_tools": [

@@ -8,7 +8,7 @@
 - 保留现有 UE bridge operation 能力，不把能力删除当成上下文优化。
 - 让 Agent 按需拉取分组指令集，而不是每轮都看到完整工具面。
 - 让大 readback 和写操作默认返回 diff 或 summary，避免一次返回完整资产状态。
-- 保持现有 full/legacy 工具面可回退，迁移期不破坏旧脚本和现有合同测试。
+- 固定 facade-only 工具面，底层 operation 只通过 registry 暴露能力信息和执行入口。
 
 ## 非目标
 
@@ -424,7 +424,7 @@ Registry 是 facade 的核心 Module：
 - `ue_capability_get` 从 registry 生成指令集。
 - `ue_execute` 根据 registry 做 allowlist、风险等级、读写分类和默认响应模式。
 - 合同测试从 registry 派生 operation 数量、分组数量和暴露策略。
-- 旧 83 工具可继续作为 registry 的 Adapter 存在。
+- 底层 wrapper 可继续作为 registry 的内部 Adapter 存在。
 
 ## Diff 合同
 
@@ -521,30 +521,27 @@ Thin facade 默认响应使用 minimal envelope：
 - 大列表统一返回 `limit`、`truncated`、`next_cursor`。
 - `isEphemeral`、TTL 或客户端缓存提示只能作为可选增强，不能作为核心正确性依赖。核心压缩必须依赖 facade 自身的 summary、token、diff 和 artifact handle。
 
-## 兼容策略
+## 公开工具面策略
 
-第一阶段不直接删除现有 MCP tools。新增 profile：
+MCP server 默认且只注册 facade 工具。底层 UE operation 保留在内部 operation registry，通过 `ue_capability_get` 查询，通过 `ue_execute`、`ue_read` 和 `ue_plan_validate` 使用，不再作为 MCP tools 暴露。
 
-| Profile | MCP 暴露面 | 用途 |
+| 工具面 | MCP 暴露面 | 用途 |
 |:-----|:-----|:-----|
-| `legacy` | 当前默认 83 工具 | 旧客户端、测试、回归 |
-| `thin` | 5 到 6 个 facade 工具 | 新 Agent 默认推荐 |
-| `debug` | facade 工具加维护工具 | 开发和排障 |
+| `facade` | 6 个 facade 工具 | 默认且唯一公开入口 |
 
 环境变量建议：
 
 ```text
-UE_NEXUS_MCP_PROFILE=thin
 UE_NEXUS_RESPONSE_MODE=minimal
 ```
 
 CLI 建议：
 
 ```text
-ue-node-nexus-mcp --mcp-profile thin --response-mode minimal
+ue-node-nexus-mcp --response-mode minimal
 ```
 
-迁移期间，`legacy` 必须与当前工具面合同保持一致。`thin` 是新增能力，不改变旧脚本行为。
+底层 wrapper 可以继续作为 Python 内部函数被 facade 调用和测试覆盖，但不得进入 `list_tools`。
 
 ## 安全策略
 
@@ -561,8 +558,8 @@ ue-node-nexus-mcp --mcp-profile thin --response-mode minimal
 
 外层 MCP facade 测试：
 
-- `thin` profile 的 `list_tools` 只包含 5 到 6 个公开工具。
-- `legacy` profile 的 `list_tools` 与当前 83 工具面一致。
+- `list_tools` 只包含 6 个 facade 工具。
+- 底层 asset、graph、material、Niagara、level、project wrapper 不进入 MCP tools。
 - `ue_capability_get(detail="index")` 不返回完整 payload schema。
 - `ue_capability_get(operation=..., detail="schema")` 只返回单个 operation schema。
 - `ue_execute` 拒绝未知 operation。
@@ -579,20 +576,20 @@ ue-node-nexus-mcp --mcp-profile thin --response-mode minimal
 - Registry 的 group/kind/risk 与现有 READ/WRITE/FEATURE 合同一致。
 - 旧工具 wrapper 和 `ue_execute` 调用同一个 bridge operation。
 - 禁止回归 operation 不在 registry 中。
-- Niagara 不可用时，thin capability 不返回 Niagara operation。
-- `bridge_contract_check` 能按 profile 校验 exposed/enabled/registry 三种视角。
+- Niagara 不可用时，capability 不返回 Niagara operation。
+- `bridge_contract_check` 能按 exposed/enabled/registry 视角校验 facade 和 bridge 合同。
 
 ## 落地顺序
 
-1. 建立 operation registry，但不改变现有工具注册。
+1. 建立 operation registry。
 2. 新增 `ue_capability_get` 和 registry 合同测试。
 3. 新增 `ue_execute`，让它调用现有 bridge client 和同一 allowlist。
-4. 新增 minimal envelope 和 delta summary，默认只用于 thin profile。
+4. 新增 minimal envelope 和 delta summary，并作为 facade 默认响应。
 5. 新增 `ue_read`，先覆盖 asset index、graph、diagnostics 三类高频读取。
 6. 新增 `ue_diff_get`，先支持 request 生命周期内的 diff token。
 7. 新增 server-side state cache，支持 snapshot token、state token、artifact handle 和 token invalidation。
-8. 增加 `UE_NEXUS_MCP_PROFILE=thin|legacy|debug`。
-9. README 推荐 thin profile，但保留 legacy 作为兼容默认或可回退模式。
+8. MCP server 只导入 facade 工具，底层 wrapper 保持内部函数。
+9. README 只记录 facade 公开面和 response mode 配置。
 
 ## 风险与控制
 
@@ -601,7 +598,7 @@ ue-node-nexus-mcp --mcp-profile thin --response-mode minimal
 | Agent 不知道先查 capability | `ue_context_get` 返回 `recommended_next`，README 给固定工作流 |
 | capability 响应过大 | 强制 `index/schema/examples/full` 分级 |
 | `ue_execute` 变成过强入口 | registry allowlist、risk、dry-run、禁止任意 reflection |
-| 旧脚本找不到工具 | 迁移期保留 `legacy` profile |
+| 旧脚本找不到工具 | 统一迁移到 `ue_execute`、`ue_read` 和 `ue_capability_get` |
 | diff token 实现复杂 | 第一阶段只做 request 生命周期 token |
 | token 与外部编辑冲突 | state token 校验，冲突时返回 `state_invalidated` |
 | 大 payload handle 调试麻烦 | `response.mode="debug"` 显式读取 artifact |

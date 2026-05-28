@@ -44,8 +44,8 @@
 
 | 功能 | 说明 |
 |:-----|:-----|
-| **固定 MCP 工具** | Python MCP Server 暴露类型化工具，向 UE 桥接器转发经过校验的请求载荷；Niagara 工具只在 UE 端实际可用时注册 |
-| **Thin MCP Facade** | 可选 `thin` profile 只暴露 6 个 MCP 工具，完整 UE 能力作为内部 operation registry 按需查询和执行 |
+| **固定 MCP 工具** | Python MCP Server 只暴露 6 个 facade 工具，向 UE 桥接器转发经过校验的请求载荷 |
+| **MCP Facade** | 完整 UE 能力作为内部 operation registry 按需查询和执行；Niagara operation 只在 UE 端实际可用时进入 capability |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
@@ -136,25 +136,20 @@
 
 ---
 
-## Thin MCP Facade
+## MCP Facade
 
-Thin profile 用少量公开 MCP 工具承载完整 UE operation 能力，降低 `list_tools` 和历史 tool result 对上下文窗口的占用。默认 `legacy` profile 保持原有 83 工具面兼容；`thin` profile 只注册 6 个 facade 工具。
+MCP 公开面固定为 6 个 facade 工具，用少量入口承载完整 UE operation 能力，降低 `list_tools` 和历史 tool result 对上下文窗口的占用。底层 asset、graph、material、Niagara、level、project operation 保留为内部 registry 能力，通过 facade 查询和执行。
 
 | 工具 | 说明 |
 |:-----|:-----|
-| **`ue_context_get()`** | 返回当前 profile、启用 group、facade 工具清单和推荐下一跳 |
+| **`ue_context_get()`** | 返回启用 group、facade 工具清单和推荐下一跳 |
 | **`ue_capability_get()`** | 按 group 或 operation 查询内部 operation 索引/schema |
 | **`ue_execute()`** | 通过 operation registry 执行内部 UE operation，默认返回 delta summary |
 | **`ue_read()`** | 统一读取 asset、graph、node、diagnostics、Niagara 等常见状态，默认 summary/index |
 | **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
 | **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
 
-| Profile | 暴露面 | 用途 |
-|:-----|:-----|:-----|
-| **`legacy`** | 默认 83 个 MCP 工具 | 旧客户端、脚本和回归兼容 |
-| **`thin`** | 6 个 facade 工具 | 低上下文 Agent 工作流 |
-
-Thin facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 89 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
+Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 89 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
 
 推荐 thin 工作流：
 
@@ -166,10 +161,10 @@ ue_context_get()
   -> ue_diff_get(since_token="diff_...")
 ```
 
-启用 thin profile：
+启动 MCP server：
 
 ```bash
-ue-node-nexus-mcp --mcp-profile thin --response-mode minimal
+ue-node-nexus-mcp --response-mode minimal
 ```
 
 MCP client 配置：
@@ -179,7 +174,7 @@ MCP client 配置：
   "mcpServers": {
     "ue-node-nexus": {
       "command": "ue-node-nexus-mcp",
-      "args": ["--mcp-profile", "thin", "--response-mode", "minimal"],
+      "args": ["--response-mode", "minimal"],
       "env": {
         "UE_NEXUS_BRIDGE_URL": "http://127.0.0.1:8765"
       }
@@ -188,12 +183,11 @@ MCP client 配置：
 }
 ```
 
-也可以通过环境变量启用：
+也可以通过环境变量配置响应模式：
 
 ```json
 {
   "env": {
-    "UE_NEXUS_MCP_PROFILE": "thin",
     "UE_NEXUS_RESPONSE_MODE": "minimal"
   }
 }
@@ -341,7 +335,6 @@ ue-node-nexus-mcp
 |:-----|:-----|:-----|
 | **`UE_NEXUS_BRIDGE_URL`** | `http://127.0.0.1:8765` | UE 桥接器端点 |
 | **`UE_NEXUS_TIMEOUT_SECONDS`** | `30` | 桥接器 HTTP 超时时间（秒） |
-| **`UE_NEXUS_MCP_PROFILE`** | `legacy` | MCP 暴露面，支持 `legacy` 或 `thin` |
 | **`UE_NEXUS_RESPONSE_MODE`** | `minimal` | facade 响应模式，支持 `minimal` 或 `full` |
 
 ---
