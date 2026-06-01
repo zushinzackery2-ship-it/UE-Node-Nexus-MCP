@@ -27,16 +27,14 @@ class OperationSpec:
     default_response: str = "summary"
 
 
-WRITE_RISK_BY_GROUP = {
-    "asset": "medium",
-    "auto_index": "medium",
-    "blueprint": "medium",
-    "core": "medium",
-    "graph": "medium",
-    "level": "medium",
-    "material": "medium",
-    "niagara": "medium",
-    "project_input": "medium",
+# Destructive or irreversible operations: data loss, broad package mutation, or
+# editor lifecycle control. Everything else that mutates is "medium"; reads are "low".
+HIGH_RISK_OPERATIONS = {
+    "asset_delete",
+    "folder_delete",
+    "auto_index_clear",
+    "editor_save_all",
+    "editor_request_exit",
 }
 
 READ_SUMMARIES = {
@@ -151,14 +149,12 @@ def _operation_kind(operation: str) -> str:
     raise ValueError(f"unknown operation kind: {operation}")
 
 
-def _operation_risk(operation: str, group: str, kind: str) -> str:
-    if operation in {"editor_save_all", "editor_request_exit", "auto_index_clear"}:
+def _operation_risk(operation: str, kind: str) -> str:
+    if operation in HIGH_RISK_OPERATIONS:
         return "high"
-    if operation in DEFAULT_HIDDEN_OPERATIONS:
-        return "medium"
     if kind == "read":
         return "low"
-    return WRITE_RISK_BY_GROUP.get(group, "medium")
+    return "medium"
 
 
 def _operation_default_response(kind: str) -> str:
@@ -176,7 +172,7 @@ def _build_registry() -> dict[str, OperationSpec]:
             name=operation,
             group=group,
             kind=kind,
-            risk=_operation_risk(operation, group, kind),
+            risk=_operation_risk(operation, kind),
             summary=_operation_summary(operation),
             bridge_operation=operation if operation in BRIDGE_OPERATIONS else None,
             hidden_from_legacy=operation in DEFAULT_HIDDEN_OPERATIONS,
@@ -219,6 +215,8 @@ def capability_index(enabled_features: set[str], group: str | None = None) -> li
 
 
 def operation_schema(spec: OperationSpec) -> dict[str, Any]:
+    from .payload_schema import payload_schema_for
+
     return {
         "operation": spec.name,
         "group": spec.group,
@@ -227,8 +225,5 @@ def operation_schema(spec: OperationSpec) -> dict[str, Any]:
         "summary": spec.summary,
         "bridge_operation": spec.bridge_operation,
         "default_response": spec.default_response,
-        "payload_schema": {
-            "type": "object",
-            "description": "Use the legacy tool wrapper or bridge contract docs for field-level schema.",
-        },
+        "payload_schema": payload_schema_for(spec.name),
     }

@@ -1,107 +1,35 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
-READ_OPERATIONS = {
-    "asset_list",
-    "asset_get",
-    "auto_index_status",
-    "auto_index_overview",
-    "auto_index_tree_get",
-    "auto_index_query",
-    "auto_index_get",
-    "auto_index_resolve_path",
-    "auto_index_diff_registry",
-    "bridge_capabilities_get",
-    "bridge_contract_check",
-    "level_current_get",
-    "level_actors_list",
-    "level_actor_get",
-    "level_actor_transform_get",
-    "object_properties_get",
-    "level_mesh_instances_list",
-    "component_materials_get",
-    "material_interface_resolve",
-    "material_usage_find",
-    "component_material_instance_params_get",
-    "project_context_get",
-    "project_input_mappings_get",
-    "blueprint_details_get",
-    "anim_blueprint_summary_get",
-    "graph_snapshot_get",
-    "graph_node_info_get",
-    "node_info_get",
-    "node_position_get",
-    "node_class_params_get",
-    "node_params_get",
-    "material_expression_classes_list",
-    "material_instance_params_get",
-    "niagara_system_summary_get",
-    "niagara_asset_lint",
-    "niagara_emitters_list",
-    "niagara_system_properties_get",
-    "niagara_emitter_properties_get",
-    "niagara_modules_list",
-    "niagara_module_inputs_get",
-    "niagara_renderers_list",
-    "niagara_renderer_properties_get",
-    "niagara_user_params_get",
-    "niagara_materials_get",
-    "diagnostics_get",
-}
+_OPERATIONS_MANIFEST = Path(__file__).with_name("operations.json")
 
-WRITE_OPERATIONS = {
-    "auto_index_enable",
-    "auto_index_disable",
-    "auto_index_rebuild",
-    "auto_index_flush",
-    "auto_index_clear",
-    "asset_create",
-    "asset_delete",
-    "asset_move",
-    "asset_rename",
-    "asset_move_batch",
-    "asset_rename_batch",
-    "asset_duplicate",
-    "folder_create",
-    "folder_delete",
-    "asset_redirectors_fixup",
-    "graph_patch_apply",
-    "graph_build_apply",
-    "node_create",
-    "node_position_set",
-    "node_params_set",
-    "material_instance_params_set",
-    "niagara_system_create",
-    "niagara_system_duplicate",
-    "niagara_user_params_set",
-    "niagara_materials_set",
-    "niagara_system_properties_set",
-    "niagara_emitter_create",
-    "niagara_emitter_properties_set",
-    "niagara_module_add",
-    "niagara_module_remove",
-    "niagara_module_set_enabled",
-    "niagara_module_inputs_set",
-    "niagara_renderer_create",
-    "niagara_renderer_properties_set",
-    "niagara_compile",
-    "component_materials_set",
-    "component_material_instance_params_set",
-    "project_input_mappings_patch",
-    "blueprint_components_patch",
-    "asset_compile",
-    "asset_validate",
-    "asset_save",
-    "editor_save_all",
-    "editor_request_exit",
-}
+
+def _load_operation_records() -> list[dict[str, Any]]:
+    with _OPERATIONS_MANIFEST.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    records = manifest["operations"]
+    seen: set[str] = set()
+    for record in records:
+        name = record["name"]
+        if name in seen:
+            raise ValueError(f"duplicate operation in manifest: {name}")
+        if record["kind"] not in {"read", "write"}:
+            raise ValueError(f"operation {name} has invalid kind: {record['kind']}")
+        seen.add(name)
+    return records
+
+
+_OPERATION_RECORDS = _load_operation_records()
+
+READ_OPERATIONS = {record["name"] for record in _OPERATION_RECORDS if record["kind"] == "read"}
+WRITE_OPERATIONS = {record["name"] for record in _OPERATION_RECORDS if record["kind"] == "write"}
 
 ALL_OPERATIONS = READ_OPERATIONS | WRITE_OPERATIONS
 
-LOCAL_MCP_OPERATIONS = {
-    "bridge_contract_check",
-}
+LOCAL_MCP_OPERATIONS = {record["name"] for record in _OPERATION_RECORDS if record.get("local")}
 
 THIN_MCP_OPERATIONS = {
     "ue_capability_get",
@@ -114,120 +42,13 @@ THIN_MCP_OPERATIONS = {
 
 BRIDGE_OPERATIONS = ALL_OPERATIONS - LOCAL_MCP_OPERATIONS
 
-DEFAULT_HIDDEN_OPERATIONS = {
-    "auto_index_clear",
-    "auto_index_diff_registry",
-    "auto_index_disable",
-    "auto_index_flush",
-    "editor_save_all",
-    "editor_request_exit",
-}
+DEFAULT_HIDDEN_OPERATIONS = {record["name"] for record in _OPERATION_RECORDS if record.get("hidden")}
 
-FEATURE_GROUPS = {
-    "core",
-    "asset",
-    "auto_index",
-    "graph",
-    "material",
-    "blueprint",
-    "level",
-    "project_input",
-    "niagara",
-}
+OPERATION_FEATURES = {record["name"]: record["group"] for record in _OPERATION_RECORDS}
+
+FEATURE_GROUPS = set(OPERATION_FEATURES.values())
 
 DEFAULT_FEATURE_GROUPS = set(FEATURE_GROUPS)
-
-OPERATION_FEATURES = {
-    "asset_list": "asset",
-    "asset_get": "asset",
-    "asset_create": "asset",
-    "asset_delete": "asset",
-    "asset_move": "asset",
-    "asset_rename": "asset",
-    "asset_move_batch": "asset",
-    "asset_rename_batch": "asset",
-    "asset_duplicate": "asset",
-    "folder_create": "asset",
-    "folder_delete": "asset",
-    "asset_redirectors_fixup": "asset",
-    "auto_index_enable": "auto_index",
-    "auto_index_disable": "auto_index",
-    "auto_index_status": "auto_index",
-    "auto_index_rebuild": "auto_index",
-    "auto_index_flush": "auto_index",
-    "auto_index_clear": "auto_index",
-    "auto_index_overview": "auto_index",
-    "auto_index_tree_get": "auto_index",
-    "auto_index_query": "auto_index",
-    "auto_index_get": "auto_index",
-    "auto_index_resolve_path": "auto_index",
-    "auto_index_diff_registry": "auto_index",
-    "bridge_capabilities_get": "core",
-    "bridge_contract_check": "core",
-    "level_current_get": "level",
-    "level_actors_list": "level",
-    "level_actor_get": "level",
-    "level_actor_transform_get": "level",
-    "object_properties_get": "level",
-    "level_mesh_instances_list": "level",
-    "component_materials_get": "level",
-    "component_materials_set": "level",
-    "material_interface_resolve": "level",
-    "material_usage_find": "level",
-    "component_material_instance_params_get": "level",
-    "component_material_instance_params_set": "level",
-    "project_context_get": "core",
-    "project_input_mappings_get": "project_input",
-    "project_input_mappings_patch": "project_input",
-    "blueprint_details_get": "blueprint",
-    "blueprint_components_patch": "blueprint",
-    "anim_blueprint_summary_get": "blueprint",
-    "graph_snapshot_get": "graph",
-    "graph_node_info_get": "graph",
-    "graph_patch_apply": "graph",
-    "graph_build_apply": "graph",
-    "node_info_get": "graph",
-    "node_create": "graph",
-    "node_position_get": "graph",
-    "node_position_set": "graph",
-    "node_class_params_get": "graph",
-    "node_params_get": "graph",
-    "node_params_set": "graph",
-    "material_expression_classes_list": "material",
-    "material_instance_params_get": "material",
-    "material_instance_params_set": "material",
-    "niagara_system_create": "niagara",
-    "niagara_system_duplicate": "niagara",
-    "niagara_system_summary_get": "niagara",
-    "niagara_asset_lint": "niagara",
-    "niagara_emitters_list": "niagara",
-    "niagara_system_properties_get": "niagara",
-    "niagara_system_properties_set": "niagara",
-    "niagara_emitter_create": "niagara",
-    "niagara_emitter_properties_get": "niagara",
-    "niagara_emitter_properties_set": "niagara",
-    "niagara_modules_list": "niagara",
-    "niagara_module_add": "niagara",
-    "niagara_module_remove": "niagara",
-    "niagara_module_set_enabled": "niagara",
-    "niagara_module_inputs_get": "niagara",
-    "niagara_module_inputs_set": "niagara",
-    "niagara_renderers_list": "niagara",
-    "niagara_renderer_create": "niagara",
-    "niagara_renderer_properties_get": "niagara",
-    "niagara_renderer_properties_set": "niagara",
-    "niagara_user_params_get": "niagara",
-    "niagara_user_params_set": "niagara",
-    "niagara_materials_get": "niagara",
-    "niagara_materials_set": "niagara",
-    "niagara_compile": "niagara",
-    "asset_compile": "core",
-    "asset_validate": "core",
-    "asset_save": "core",
-    "diagnostics_get": "core",
-    "editor_save_all": "core",
-    "editor_request_exit": "core",
-}
 
 DEFAULT_EXPOSED_OPERATIONS = {
     operation

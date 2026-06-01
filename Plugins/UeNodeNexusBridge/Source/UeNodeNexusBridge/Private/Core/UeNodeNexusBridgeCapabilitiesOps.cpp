@@ -99,9 +99,17 @@ TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, co
 {
     TArray<FString> CoreOperations = GetCoreOperationNames();
     TArray<FString> AutoIndexOperations = GetAutoIndexOperationNames();
-    TArray<FString> RegisteredOperations = GetRegisteredOperations();
     Algo::Sort(CoreOperations);
     Algo::Sort(AutoIndexOperations);
+
+    // Core operations now dispatch through the shared registry as well, so
+    // GetRegisteredOperations() includes them. Subtract the statically-named
+    // core and AutoIndex operations so the "registered" bucket keeps reporting
+    // only plugin-contributed operations (e.g. Niagara). The merged total below
+    // is unaffected because MergeOperationNames de-duplicates.
+    TSet<FString> StaticallyNamedOperations = MakeStringSet(CoreOperations);
+    StaticallyNamedOperations.Append(MakeStringSet(AutoIndexOperations));
+    const TArray<FString> RegisteredOperations = Difference(GetRegisteredOperations(), StaticallyNamedOperations);
 
     const TArray<FString> AllOperations = MergeOperationNames(CoreOperations, AutoIndexOperations, RegisteredOperations);
     const TArray<FString> ExpectedOperations = ReadStringArrayField(Payload, TEXT("expected_operations"));
