@@ -8,6 +8,8 @@ namespace UeNodeNexusBridge
 {
 void StartupAutoIndex();
 void ShutdownAutoIndex();
+void RegisterAutoIndexOperations();
+void UnregisterAutoIndexOperations();
 
 TSharedPtr<FJsonObject> HandleAutoIndexEnable(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleAutoIndexDisable(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);

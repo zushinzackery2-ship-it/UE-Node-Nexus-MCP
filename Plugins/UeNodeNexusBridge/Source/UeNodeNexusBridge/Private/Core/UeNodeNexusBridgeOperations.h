@@ -7,7 +7,8 @@ class FJsonObject;
 namespace UeNodeNexusBridge
 {
 TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> DispatchAutoIndexOperation(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+void RegisterAutoIndexOperations();
+void UnregisterAutoIndexOperations();
 TArray<FString> GetCoreOperationNames();
 TArray<FString> GetAutoIndexOperationNames();
 TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);

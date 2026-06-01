@@ -25,15 +25,9 @@ TSharedPtr<FJsonObject> HandleDiagnosticsGet(const FString& Operation, const FSt
 
 TSharedPtr<FJsonObject> DispatchOperation(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
-    // Core operations are registered into the shared operation registry at module
-    // startup (see RegisterCoreOperations). AutoIndex keeps its own dispatcher and
-    // is checked first; everything else flows through the registry, which also
-    // carries plugin-contributed operations such as Niagara.
-    if (TSharedPtr<FJsonObject> AutoIndexResponse = DispatchAutoIndexOperation(Operation, RequestId, Payload))
-    {
-        return AutoIndexResponse;
-    }
-
+    // Core, AutoIndex, and plugin-contributed operations all dispatch through
+    // the shared registry. The only fallback left is the machine-readable
+    // unsupported-operation envelope.
     TSharedPtr<FJsonObject> RegisteredResponse;
     if (DispatchRegisteredOperation(Operation, RequestId, Payload, RegisteredResponse))
     {

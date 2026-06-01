@@ -176,10 +176,34 @@ def test_ue_diff_get_rejects_non_integer_limit(monkeypatch: Any) -> None:
 
 def test_ue_plan_validate_rejects_unknown_operations() -> None:
     response = server.ue_plan_validate([
-        {"operation": "node_create", "payload": {"asset_path": "/Game/M.M"}},
+        {"operation": "node_create", "payload": {"asset_path": "/Game/M.M", "node_class": "Constant"}},
         {"operation": "python_exec", "payload": {}},
     ])
 
     assert response["ok"] is False
     assert response["data"]["valid"] is False
     assert response["remaining_errors"] == 1
+
+
+def test_ue_plan_validate_flags_missing_required_fields() -> None:
+    response = server.ue_plan_validate([
+        {"operation": "node_create", "payload": {"asset_path": "/Game/M.M"}},
+    ])
+
+    assert response["ok"] is False
+    assert response["data"]["valid"] is False
+    error = response["data"]["errors"][0]
+    assert error["code"] == "missing_required_field"
+    assert "node_class" in error["fields"]
+
+
+def test_ue_capability_examples_returns_a_usable_payload() -> None:
+    response = server.ue_capability_get(operation="asset_create", detail="examples")
+
+    assert response["ok"] is True
+    examples = response["data"]["examples"]
+    assert examples and "payload" in examples[0]
+    payload = examples[0]["payload"]
+    assert payload["asset_kind"] == "material"
+    assert "asset_path" in payload
+    assert payload["dry_run"] is True

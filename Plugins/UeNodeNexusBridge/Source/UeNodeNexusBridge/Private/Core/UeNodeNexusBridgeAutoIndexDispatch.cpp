@@ -1,7 +1,17 @@
 #include "UeNodeNexusBridgeOperations.h"
 
+#include "UeNodeNexusBridgeOperationRegistry.h"
+
 namespace UeNodeNexusBridge
 {
+namespace
+{
+void Register(const TCHAR* Operation, FBridgeOperationHandler Handler)
+{
+    RegisterOperationHandler(FString(Operation), MoveTemp(Handler));
+}
+}
+
 TArray<FString> GetAutoIndexOperationNames()
 {
     return {
@@ -20,57 +30,32 @@ TArray<FString> GetAutoIndexOperationNames()
     };
 }
 
-TSharedPtr<FJsonObject> DispatchAutoIndexOperation(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+void RegisterAutoIndexOperations()
 {
-    if (Operation == TEXT("auto_index_enable"))
-    {
-        return HandleAutoIndexEnable(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_disable"))
-    {
-        return HandleAutoIndexDisable(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_status"))
-    {
-        return HandleAutoIndexStatus(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_rebuild"))
-    {
-        return HandleAutoIndexRebuild(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_flush"))
-    {
-        return HandleAutoIndexFlush(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_clear"))
-    {
-        return HandleAutoIndexClear(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_overview"))
-    {
-        return HandleAutoIndexOverview(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_tree_get"))
-    {
-        return HandleAutoIndexTreeGet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_query"))
-    {
-        return HandleAutoIndexQuery(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_get"))
-    {
-        return HandleAutoIndexGet(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_resolve_path"))
-    {
-        return HandleAutoIndexResolvePath(Operation, RequestId, Payload);
-    }
-    if (Operation == TEXT("auto_index_diff_registry"))
-    {
-        return HandleAutoIndexDiffRegistry(Operation, RequestId, Payload);
-    }
+    Register(TEXT("auto_index_enable"), HandleAutoIndexEnable);
+    Register(TEXT("auto_index_disable"), HandleAutoIndexDisable);
+    Register(TEXT("auto_index_status"), HandleAutoIndexStatus);
+    Register(TEXT("auto_index_rebuild"), HandleAutoIndexRebuild);
+    Register(TEXT("auto_index_flush"), HandleAutoIndexFlush);
+    Register(TEXT("auto_index_clear"), HandleAutoIndexClear);
+    Register(TEXT("auto_index_overview"), HandleAutoIndexOverview);
+    Register(TEXT("auto_index_tree_get"), HandleAutoIndexTreeGet);
+    Register(TEXT("auto_index_query"), HandleAutoIndexQuery);
+    Register(TEXT("auto_index_get"), HandleAutoIndexGet);
+    Register(TEXT("auto_index_resolve_path"), HandleAutoIndexResolvePath);
+    Register(TEXT("auto_index_diff_registry"), HandleAutoIndexDiffRegistry);
 
-    return nullptr;
+    for (const FString& Name : GetAutoIndexOperationNames())
+    {
+        ensureMsgf(IsOperationRegistered(Name), TEXT("AutoIndex operation %s has no registered handler"), *Name);
+    }
+}
+
+void UnregisterAutoIndexOperations()
+{
+    for (const FString& Name : GetAutoIndexOperationNames())
+    {
+        UnregisterOperationHandler(Name);
+    }
 }
 }

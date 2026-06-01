@@ -146,3 +146,39 @@ def payload_schema_for(operation: str) -> dict[str, Any]:
     schema = dict(_GENERIC_OBJECT_SCHEMA) if func is None else derive_schema(func)
     _schema_cache[operation] = schema
     return schema
+
+
+def _example_value(prop: dict[str, Any], field_name: str) -> Any:
+    enum = prop.get("enum")
+    if enum:
+        return enum[0]
+    json_type = prop.get("type")
+    if json_type == "string":
+        if field_name == "asset_path" or field_name.endswith("_path"):
+            return "/Game/Path/Asset.Asset"
+        return f"<{field_name}>"
+    if json_type == "integer":
+        return 0
+    if json_type == "number":
+        return 0.0
+    if json_type == "boolean":
+        return False
+    if json_type == "array":
+        return []
+    if json_type == "object":
+        return {}
+    return None
+
+
+def example_payload_for(operation: str) -> dict[str, Any]:
+    """Synthesize a minimal call example from the derived schema: every required
+    field gets a type-appropriate placeholder, plus dry_run when the operation
+    exposes it (so write examples surface the safe default)."""
+    schema = payload_schema_for(operation)
+    properties = schema.get("properties", {})
+    example: dict[str, Any] = {}
+    for field in schema.get("required", []):
+        example[field] = _example_value(properties.get(field, {}), field)
+    if "dry_run" in properties and "dry_run" not in example:
+        example["dry_run"] = properties["dry_run"].get("default", True)
+    return example

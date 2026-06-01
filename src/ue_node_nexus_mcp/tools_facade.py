@@ -14,6 +14,7 @@ from .facade_response import (
 )
 from .facade_state import facade_state
 from .operation_registry import capability_index, enabled_operation_specs, get_operation_spec, operation_schema
+from .payload_schema import example_payload_for, payload_schema_for
 from .runtime import call_bridge as _call
 from .runtime import enabled_features, thin_tool
 
@@ -106,7 +107,7 @@ def ue_capability_get(
         elif detail == "examples":
             data = {
                 "operation": spec.name,
-                "examples": [],
+                "examples": [{"payload": example_payload_for(spec.name)}],
                 "next_read": {"tool": "ue_capability_get", "args": {"operation": spec.name, "detail": "schema"}},
             }
         else:
@@ -266,6 +267,15 @@ def ue_plan_validate(
             continue
         if spec.group not in enabled_features():
             errors.append({"index": index, "code": "feature_disabled", "message": f"feature group is not enabled: {spec.group}"})
+            continue
+        missing_fields = [field for field in payload_schema_for(operation).get("required", []) if field not in payload]
+        if missing_fields:
+            errors.append({
+                "index": index,
+                "code": "missing_required_field",
+                "message": f"missing required field(s): {', '.join(missing_fields)}",
+                "fields": missing_fields,
+            })
             continue
         if risk_rank[spec.risk] > risk_rank[highest_risk]:
             highest_risk = spec.risk

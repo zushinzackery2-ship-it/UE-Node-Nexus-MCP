@@ -10,6 +10,7 @@ void FUeNodeNexusBridgeModule::StartupModule()
 {
     UeNodeNexusBridge::StartupAutoIndex();
     UeNodeNexusBridge::RegisterCoreOperations();
+    UeNodeNexusBridge::RegisterAutoIndexOperations();
     BridgeServer = MakeUnique<FUeNodeNexusBridgeHttpServer>();
     BridgeServer->Start();
 }
@@ -21,6 +22,7 @@ void FUeNodeNexusBridgeModule::ShutdownModule()
         BridgeServer->Stop();
         BridgeServer.Reset();
     }
+    UeNodeNexusBridge::UnregisterAutoIndexOperations();
     UeNodeNexusBridge::UnregisterCoreOperations();
     UeNodeNexusBridge::ShutdownAutoIndex();
 }
