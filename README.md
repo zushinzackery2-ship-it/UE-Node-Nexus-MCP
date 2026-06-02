@@ -97,9 +97,12 @@
 | **Project Input** | `project_input_mappings_get()` | 读取 legacy Project Settings action/axis mappings |
 | **Project Input** | `project_input_mappings_patch()` | 批量添加或移除 legacy action/axis mappings，可保存配置 |
 | **项目诊断** | `project_context_get()` | 读取当前 UE 项目路径、命令行、Content 目录和 `/Game` mount 检查 |
-| **蓝图** | `blueprint_details_get()` | 读取蓝图元数据和变量，可显式包含 CDO 默认值和组件 |
+| **蓝图** | `blueprint_details_get()` | 读取蓝图元数据和变量，可显式包含 CDO 默认值和组件；`include_inherited_components` 沿父蓝图链回填继承 SCS 组件并标 `origin` |
 | **蓝图** | `blueprint_components_patch()` | 批量添加或移除 Blueprint SCS 组件并可编译检查 |
 | **蓝图** | `anim_blueprint_summary_get()` | 读取常用 AnimGraph 节点的紧凑语义摘要 |
+| **动画** | `anim_montage_summary_get()` | 读取 AnimMontage 的 Section/Slot/Segment/Notify 结构化时间数据 |
+| **动画** | `blend_space_summary_get()` | 读取 BlendSpace 轴范围（名/Min/Max/Grid）和动画采样点 |
+| **Cascade** | `cascade_system_summary_get()` | 只读 Cascade 粒子系统的 Emitter、TypeData 和模块栈（旧粒子迁移读取入口）|
 | **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny` |
 | **图** | `graph_node_info_get()` | 读取整张图的高密度节点信息，默认 `indexed`，可用 `include_position=true` 附带坐标表 |
 | **图** | `graph_patch_apply()` | 应用声明式图编辑，附带写后检查 |
@@ -149,7 +152,7 @@ MCP 公开面固定为 6 个 facade 工具，用少量入口承载完整 UE oper
 | **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
 | **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
 
-Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 89 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
+Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 92 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
 
 推荐 thin 工作流：
 
@@ -203,7 +206,7 @@ MCP client 配置：
 > [!NOTE]
 > **默认工具面**
 >
-> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 89 个内部 operation，其中 88 个转发到 UE bridge，`bridge_contract_check` 是 MCP 本地诊断包装器，不是 UE bridge HTTP operation。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
+> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 92 个内部 operation，其中 91 个转发到 UE bridge，`bridge_contract_check` 是 MCP 本地诊断包装器，不是 UE bridge HTTP operation。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
 
 ---
 
@@ -405,7 +408,7 @@ python scripts/verify_bridge_contract.py --mode enabled --lint-niagara-asset /Ga
 
 ### Tool Feature 开关
 
-默认候选工具组为 `core,asset,auto_index,graph,material,blueprint,level,project_input,niagara`。关闭某组时，对应工具不会进入 MCP tool list。Niagara 由 UE 插件状态最终裁决：只有 `UeNodeNexusNiagaraBridge` 已加载且 UE Niagara 插件启用时才注册；本地配置只能关闭或表达启用意图，不能绕过 UE 插件状态强行开启。
+默认候选工具组为 `core,asset,auto_index,graph,material,blueprint,animation,cascade,level,project_input,niagara`。关闭某组时，对应工具不会进入 MCP tool list。Niagara 由 UE 插件状态最终裁决：只有 `UeNodeNexusNiagaraBridge` 已加载且 UE Niagara 插件启用时才注册；本地配置只能关闭或表达启用意图，不能绕过 UE 插件状态强行开启。
 
 | 配置 | 说明 |
 |:-----|:-----|

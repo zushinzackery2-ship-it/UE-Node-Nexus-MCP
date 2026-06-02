@@ -25,8 +25,13 @@ VALID_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full
 
 READ_TARGET_OPERATIONS = {
     "artifact": None,
+    "anim_blueprint": "anim_blueprint_summary_get",
+    "anim_montage": "anim_montage_summary_get",
     "asset": "asset_get",
     "asset_index": "auto_index_query",
+    "blend_space": "blend_space_summary_get",
+    "blueprint": "blueprint_details_get",
+    "cascade_system": "cascade_system_summary_get",
     "diagnostics": "diagnostics_get",
     "graph": "graph_snapshot_get",
     "level": "level_actors_list",

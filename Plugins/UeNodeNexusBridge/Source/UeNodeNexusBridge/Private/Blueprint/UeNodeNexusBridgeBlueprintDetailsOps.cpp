@@ -117,7 +117,7 @@ static FString FirstComponentAsset(UActorComponent* Component)
     return FString();
 }
 
-static TSharedPtr<FJsonValue> MakeComponentRow(const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket)
+static TSharedPtr<FJsonValue> MakeComponentRow(const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket, const FString& Origin)
 {
     TArray<TSharedPtr<FJsonValue>> Row;
     Row.Add(MakeShared<FJsonValueString>(Name));
@@ -125,10 +125,11 @@ static TSharedPtr<FJsonValue> MakeComponentRow(const FString& Name, UActorCompon
     Row.Add(MakeShared<FJsonValueString>(Parent));
     Row.Add(MakeShared<FJsonValueString>(Socket));
     Row.Add(MakeShared<FJsonValueString>(FirstComponentAsset(Component)));
+    Row.Add(MakeShared<FJsonValueString>(Origin));
     return MakeShared<FJsonValueArray>(Row);
 }
 
-static TSharedPtr<FJsonObject> MakeComponentObject(const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket)
+static TSharedPtr<FJsonObject> MakeComponentObject(const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket, const FString& Origin)
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     Json->SetStringField(TEXT("name"), Name);
@@ -137,10 +138,11 @@ static TSharedPtr<FJsonObject> MakeComponentObject(const FString& Name, UActorCo
     Json->SetStringField(TEXT("socket"), Socket);
     Json->SetStringField(TEXT("asset"), FirstComponentAsset(Component));
     Json->SetStringField(TEXT("template_path"), Component ? Component->GetPathName() : FString());
+    Json->SetStringField(TEXT("origin"), Origin);
     return Json;
 }
 
-static void AddComponentEntry(TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames, bool bCompact, const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket)
+static void AddComponentEntry(TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames, bool bCompact, const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket, const FString& Origin)
 {
     if (Name.IsEmpty() || SeenNames.Contains(Name))
     {
@@ -148,10 +150,10 @@ static void AddComponentEntry(TArray<TSharedPtr<FJsonValue>>& Components, TSet<F
     }
 
     SeenNames.Add(Name);
-    Components.Add(bCompact ? MakeComponentRow(Name, Component, Parent, Socket) : MakeShared<FJsonValueObject>(MakeComponentObject(Name, Component, Parent, Socket)));
+    Components.Add(bCompact ? MakeComponentRow(Name, Component, Parent, Socket, Origin) : MakeShared<FJsonValueObject>(MakeComponentObject(Name, Component, Parent, Socket, Origin)));
 }
 
-static void AddSCSComponents(UBlueprintGeneratedClass* GeneratedClass, bool bCompact, TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames)
+static void AddSCSComponents(UBlueprintGeneratedClass* GeneratedClass, bool bCompact, TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames, const FString& Origin)
 {
     USimpleConstructionScript* Script = GeneratedClass ? GeneratedClass->SimpleConstructionScript.Get() : nullptr;
     if (Script == nullptr)
@@ -167,7 +169,24 @@ static void AddSCSComponents(UBlueprintGeneratedClass* GeneratedClass, bool bCom
         }
 
         UActorComponent* Component = Node->GetActualComponentTemplate(GeneratedClass);
-        AddComponentEntry(Components, SeenNames, bCompact, Node->GetVariableName().ToString(), Component, Node->ParentComponentOrVariableName.ToString(), Node->AttachToName.ToString());
+        AddComponentEntry(Components, SeenNames, bCompact, Node->GetVariableName().ToString(), Component, Node->ParentComponentOrVariableName.ToString(), Node->AttachToName.ToString(), Origin);
+    }
+}
+
+// Walk the parent class chain so SCS components defined on ancestor Blueprints
+// surface with their structural attach/socket info and a "from_blueprint" origin.
+// USimpleConstructionScript::GetAllNodes returns only the nodes declared directly
+// on its own Blueprint, so inherited component structure is otherwise lost.
+static void AddInheritedSCSComponents(UBlueprintGeneratedClass* GeneratedClass, bool bCompact, TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames)
+{
+    UClass* Super = GeneratedClass ? GeneratedClass->GetSuperClass() : nullptr;
+    while (Super != nullptr)
+    {
+        if (UBlueprintGeneratedClass* SuperGeneratedClass = Cast<UBlueprintGeneratedClass>(Super))
+        {
+            AddSCSComponents(SuperGeneratedClass, bCompact, Components, SeenNames, SuperGeneratedClass->GetPathName());
+        }
+        Super = Super->GetSuperClass();
     }
 }
 
@@ -187,7 +206,7 @@ static void AddCDOComponentProperties(UBlueprintGeneratedClass* GeneratedClass, 
         }
 
         UActorComponent* Component = Cast<UActorComponent>(Property->GetObjectPropertyValue_InContainer(CDO));
-        AddComponentEntry(Components, SeenNames, bCompact, Property->GetName(), Component, FString(), FString());
+        AddComponentEntry(Components, SeenNames, bCompact, Property->GetName(), Component, FString(), FString(), FString());
     }
 }
 
@@ -215,8 +234,10 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
 
     bool bIncludeDefaults = false;
     bool bIncludeComponents = false;
+    bool bIncludeInherited = false;
     Payload->TryGetBoolField(TEXT("include_defaults"), bIncludeDefaults);
     Payload->TryGetBoolField(TEXT("include_components"), bIncludeComponents);
+    Payload->TryGetBoolField(TEXT("include_inherited_components"), bIncludeInherited);
 
     FString Format = TEXT("compact");
     Payload->TryGetStringField(TEXT("format"), Format);
@@ -259,7 +280,11 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
     if (bIncludeComponents)
     {
         TSet<FString> SeenNames;
-        AddSCSComponents(GeneratedClass, bCompact, Components, SeenNames);
+        AddSCSComponents(GeneratedClass, bCompact, Components, SeenNames, FString());
+        if (bIncludeInherited)
+        {
+            AddInheritedSCSComponents(GeneratedClass, bCompact, Components, SeenNames);
+        }
         AddCDOComponentProperties(GeneratedClass, CDO, bCompact, Components, SeenNames);
     }
 
@@ -273,7 +298,7 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
         Data->SetStringField(TEXT("format"), TEXT("blueprint_details_compact"));
         Data->SetArrayField(TEXT("variable_columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("type")), MakeShared<FJsonValueString>(TEXT("default")), MakeShared<FJsonValueString>(TEXT("category")) });
         Data->SetArrayField(TEXT("default_columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("value")) });
-        Data->SetArrayField(TEXT("component_columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("class")), MakeShared<FJsonValueString>(TEXT("parent")), MakeShared<FJsonValueString>(TEXT("socket")), MakeShared<FJsonValueString>(TEXT("asset")) });
+        Data->SetArrayField(TEXT("component_columns"), { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("class")), MakeShared<FJsonValueString>(TEXT("parent")), MakeShared<FJsonValueString>(TEXT("socket")), MakeShared<FJsonValueString>(TEXT("asset")), MakeShared<FJsonValueString>(TEXT("origin")) });
     }
     Data->SetArrayField(TEXT("variables"), Variables);
     Data->SetArrayField(TEXT("defaults"), Defaults);

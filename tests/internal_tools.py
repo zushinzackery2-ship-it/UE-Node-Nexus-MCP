@@ -28,11 +28,16 @@ from ue_node_nexus_mcp.tools_auto_index import (
     auto_index_status,
     auto_index_tree_get,
 )
+from ue_node_nexus_mcp.tools_animation import (
+    anim_montage_summary_get,
+    blend_space_summary_get,
+)
 from ue_node_nexus_mcp.tools_blueprints import (
     anim_blueprint_summary_get,
     blueprint_components_patch,
     blueprint_details_get,
 )
+from ue_node_nexus_mcp.tools_cascade import cascade_system_summary_get
 from ue_node_nexus_mcp.tools_graphs import (
     graph_node_info_get,
     graph_snapshot_get,

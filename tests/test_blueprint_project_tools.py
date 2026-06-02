@@ -22,6 +22,7 @@ def test_blueprint_read_tools_default_to_compact(monkeypatch: Any) -> None:
                 "asset_path": "/Game/BP/BP_Example.BP_Example",
                 "include_defaults": False,
                 "include_components": False,
+                "include_inherited_components": False,
                 "property_names": [],
                 "format": "compact",
             },

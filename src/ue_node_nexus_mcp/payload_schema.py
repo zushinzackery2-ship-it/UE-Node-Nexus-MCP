@@ -22,9 +22,11 @@ from .contracts import ALL_OPERATIONS
 # names (e.g. tools_niagara re-exporting tools_niagara_properties) from being
 # counted twice.
 _WRAPPER_MODULES = (
+    "tools_animation",
     "tools_assets",
     "tools_auto_index",
     "tools_blueprints",
+    "tools_cascade",
     "tools_graphs",
     "tools_graph_writes",
     "tools_level_materials",

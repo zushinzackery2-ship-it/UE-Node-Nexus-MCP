@@ -12,10 +12,15 @@ def blueprint_details_get(
     asset_path: str,
     include_defaults: bool = False,
     include_components: bool = False,
+    include_inherited_components: bool = False,
     property_names: list[str] | None = None,
     format: Literal["compact", "full"] = "compact",
 ) -> dict[str, Any]:
-    """Return Blueprint class metadata, variables, selected CDO defaults, and component templates."""
+    """Return Blueprint class metadata, variables, selected CDO defaults, and component templates.
+
+    When ``include_inherited_components`` is set (with ``include_components``), SCS
+    components defined on ancestor Blueprints are also walked and tagged with their
+    originating Blueprint in the ``origin`` column."""
     require_non_empty_string(asset_path, "asset_path")
     return _call(
         "blueprint_details_get",
@@ -23,6 +28,7 @@ def blueprint_details_get(
             "asset_path": asset_path,
             "include_defaults": include_defaults,
             "include_components": include_components,
+            "include_inherited_components": include_inherited_components,
             "property_names": property_names or [],
             "format": format,
         },

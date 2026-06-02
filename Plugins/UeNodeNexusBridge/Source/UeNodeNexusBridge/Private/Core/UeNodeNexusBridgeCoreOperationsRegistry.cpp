@@ -43,6 +43,9 @@ void RegisterCoreOperations()
     Register(TEXT("blueprint_details_get"), HandleBlueprintDetailsGet);
     Register(TEXT("blueprint_components_patch"), HandleBlueprintComponentsPatch);
     Register(TEXT("anim_blueprint_summary_get"), HandleAnimBlueprintSummaryGet);
+    Register(TEXT("anim_montage_summary_get"), HandleAnimMontageSummaryGet);
+    Register(TEXT("blend_space_summary_get"), HandleBlendSpaceSummaryGet);
+    Register(TEXT("cascade_system_summary_get"), HandleCascadeSystemSummaryGet);
     Register(TEXT("graph_snapshot_get"), HandleGraphSnapshotGet);
     Register(TEXT("graph_node_info_get"), HandleGraphNodeInfoGet);
     Register(TEXT("node_class_params_get"), HandleNodeClassParamsGet);
