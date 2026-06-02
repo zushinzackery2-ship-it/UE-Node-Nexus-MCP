@@ -4,6 +4,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
+#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeCompactGraph.h"
 #include "UeNodeNexusBridgeJson.h"
@@ -11,6 +12,11 @@
 
 namespace UeNodeNexusBridge
 {
+static bool IsExecPin(const UEdGraphPin* Pin)
+{
+    return Pin != nullptr && Pin->PinType.PinCategory == TEXT("exec");
+}
+
 static FString PinDirectionToString(EEdGraphPinDirection Direction)
 {
     return Direction == EGPD_Input ? TEXT("input") : TEXT("output");
@@ -152,7 +158,7 @@ static void AppendBlueprintCompactNode(FCompactGraphBuilder& Builder, UEdGraphNo
     }
 }
 
-static TSharedPtr<FJsonObject> BuildBlueprintCompactGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, UEdGraph* TargetGraph, bool bIncludeNodeParams, bool bIncludeLinks)
+static TSharedPtr<FJsonObject> BuildBlueprintCompactGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, UEdGraph* TargetGraph, bool bIncludeNodeParams, bool bIncludeLinks, const FBlueprintGraphFilterResult& FilterResult)
 {
     FCompactGraphBuilder Builder;
     Builder.Data->SetStringField(TEXT("asset_path"), Blueprint->GetPathName());
@@ -162,24 +168,29 @@ static TSharedPtr<FJsonObject> BuildBlueprintCompactGraphSnapshot(const FString&
 
     for (UEdGraphNode* Node : TargetGraph->Nodes)
     {
-        if (Node != nullptr)
+        if (Node != nullptr && FilterResult.ShouldInclude(Node))
         {
             AppendBlueprintCompactNode(Builder, Node, bIncludeNodeParams, bIncludeLinks);
         }
     }
     Builder.FinalizeIds();
 
+    if (!FilterResult.IncludesAll())
+    {
+        Builder.Data->SetObjectField(TEXT("filter_stats"), FilterResult.ToJson());
+    }
+
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Builder.Data);
     return Response;
 }
 
-static TSharedPtr<FJsonObject> BuildBlueprintWireGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, UEdGraph* TargetGraph, bool bIncludeLinks, bool bMin, bool bTiny)
+static TSharedPtr<FJsonObject> BuildBlueprintWireGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, UEdGraph* TargetGraph, bool bIncludeLinks, bool bMin, bool bTiny, const FBlueprintGraphFilterResult& FilterResult, bool bExecOnly)
 {
     FWireGraphBuilder Builder(TEXT("Wire graph"));
     for (UEdGraphNode* Node : TargetGraph->Nodes)
     {
-        if (Node == nullptr)
+        if (Node == nullptr || !FilterResult.ShouldInclude(Node))
         {
             continue;
         }
@@ -198,10 +209,14 @@ static TSharedPtr<FJsonObject> BuildBlueprintWireGraphSnapshot(const FString& Op
             {
                 continue;
             }
+            if (bExecOnly && !IsExecPin(Pin))
+            {
+                continue;
+            }
             for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
             {
                 UEdGraphNode* LinkedNode = LinkedPin ? LinkedPin->GetOwningNode() : nullptr;
-                if (LinkedNode == nullptr)
+                if (LinkedNode == nullptr || !FilterResult.ShouldInclude(LinkedNode))
                 {
                     continue;
                 }
@@ -216,11 +231,18 @@ static TSharedPtr<FJsonObject> BuildBlueprintWireGraphSnapshot(const FString& Op
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     const FString Text = bTiny ? Builder.BuildTinyText() : (bMin ? Builder.BuildMinText() : Builder.BuildText());
     const FString OutputFormat = bTiny ? TEXT("wires_tiny") : (bMin ? TEXT("wires_min") : TEXT("wires_text"));
-    Response->SetObjectField(TEXT("data"), MakeWireGraphData(Blueprint->GetPathName(), Blueprint->GetClass()->GetPathName(), TargetGraph->GetName(), TEXT("blueprint"), Text, OutputFormat));
+    TSharedPtr<FJsonObject> Data = MakeWireGraphData(Blueprint->GetPathName(), Blueprint->GetClass()->GetPathName(), TargetGraph->GetName(), TEXT("blueprint"), Text, OutputFormat);
+
+    if (!FilterResult.IncludesAll())
+    {
+        Data->SetObjectField(TEXT("filter_stats"), FilterResult.ToJson());
+    }
+
+    Response->SetObjectField(TEXT("data"), Data);
     return Response;
 }
 
-TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const FString& GraphName, bool bIncludeNodeParams, bool bIncludeLinks, bool bCompact, bool bWire, bool bWireMin, bool bWireTiny)
+TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const FString& GraphName, bool bIncludeNodeParams, bool bIncludeLinks, bool bCompact, bool bWire, bool bWireMin, bool bWireTiny, const FBlueprintGraphFilter& Filter)
 {
     UEdGraph* TargetGraph = ResolveBlueprintGraph(Blueprint, GraphName);
     if (TargetGraph == nullptr)
@@ -230,27 +252,30 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, co
         return Response;
     }
 
+    FBlueprintGraphFilterResult FilterResult = ApplyBlueprintGraphFilter(TargetGraph, Filter);
+
     if (bWire)
     {
-        return BuildBlueprintWireGraphSnapshot(Operation, RequestId, Blueprint, TargetGraph, bIncludeLinks, bWireMin, bWireTiny);
+        return BuildBlueprintWireGraphSnapshot(Operation, RequestId, Blueprint, TargetGraph, bIncludeLinks, bWireMin, bWireTiny, FilterResult, Filter.bExecOnly);
     }
 
     if (bCompact)
     {
-        return BuildBlueprintCompactGraphSnapshot(Operation, RequestId, Blueprint, TargetGraph, bIncludeNodeParams, bIncludeLinks);
+        return BuildBlueprintCompactGraphSnapshot(Operation, RequestId, Blueprint, TargetGraph, bIncludeNodeParams, bIncludeLinks, FilterResult);
     }
 
     TArray<TSharedPtr<FJsonValue>> Nodes;
     TArray<TSharedPtr<FJsonValue>> Links;
     for (UEdGraphNode* Node : TargetGraph->Nodes)
     {
-        if (Node != nullptr)
+        if (Node == nullptr || !FilterResult.ShouldInclude(Node))
         {
-            Nodes.Add(MakeShared<FJsonValueObject>(BlueprintNodeToJson(Node, bIncludeNodeParams)));
-            if (bIncludeLinks)
-            {
-                AddBlueprintLinks(Node, Links);
-            }
+            continue;
+        }
+        Nodes.Add(MakeShared<FJsonValueObject>(BlueprintNodeToJson(Node, bIncludeNodeParams)));
+        if (bIncludeLinks)
+        {
+            AddBlueprintLinks(Node, Links);
         }
     }
 
@@ -261,6 +286,11 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, co
     Data->SetStringField(TEXT("graph_kind"), TEXT("blueprint"));
     Data->SetArrayField(TEXT("nodes"), Nodes);
     Data->SetArrayField(TEXT("links"), Links);
+
+    if (!FilterResult.IncludesAll())
+    {
+        Data->SetObjectField(TEXT("filter_stats"), FilterResult.ToJson());
+    }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

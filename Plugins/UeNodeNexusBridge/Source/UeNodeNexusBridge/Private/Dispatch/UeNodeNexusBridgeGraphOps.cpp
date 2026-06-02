@@ -1,14 +1,36 @@
 #include "UeNodeNexusBridgeOperations.h"
 
+#include "EdGraph/EdGraph.h"
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
+#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialGraphSnapshot.h"
 
 namespace UeNodeNexusBridge
 {
-TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const FString& GraphName, bool bIncludeNodeParams, bool bIncludeLinks, bool bCompact, bool bWire, bool bWireMin, bool bWireTiny);
+TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const FString& GraphName, bool bIncludeNodeParams, bool bIncludeLinks, bool bCompact, bool bWire, bool bWireMin, bool bWireTiny, const FBlueprintGraphFilter& Filter);
+
+static TArray<TSharedPtr<FJsonValue>> BuildAvailableGraphs(UBlueprint* Blueprint)
+{
+    TArray<UEdGraph*> AllGraphs;
+    Blueprint->GetAllGraphs(AllGraphs);
+
+    TArray<TSharedPtr<FJsonValue>> GraphList;
+    for (UEdGraph* Graph : AllGraphs)
+    {
+        if (Graph == nullptr)
+        {
+            continue;
+        }
+        TSharedPtr<FJsonObject> Entry = MakeShared<FJsonObject>();
+        Entry->SetStringField(TEXT("name"), Graph->GetName());
+        Entry->SetNumberField(TEXT("nodes"), Graph->Nodes.Num());
+        GraphList.Add(MakeShared<FJsonValueObject>(Entry));
+    }
+    return GraphList;
+}
 
 static bool IsSupportedGraphSnapshotFormat(const FString& Format)
 {
@@ -53,7 +75,16 @@ TSharedPtr<FJsonObject> HandleGraphSnapshotGet(const FString& Operation, const F
     UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
     if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
     {
-        return BuildBlueprintGraphSnapshot(Operation, RequestId, Blueprint, GraphName, bIncludeNodeParams, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny);
+        FBlueprintGraphFilter Filter = FBlueprintGraphFilter::FromPayload(Payload);
+        TSharedPtr<FJsonObject> Response = BuildBlueprintGraphSnapshot(Operation, RequestId, Blueprint, GraphName, bIncludeNodeParams, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny, Filter);
+
+        TSharedPtr<FJsonObject> Data = Response->GetObjectField(TEXT("data"));
+        if (Data.IsValid())
+        {
+            Data->SetArrayField(TEXT("available_graphs"), BuildAvailableGraphs(Blueprint));
+        }
+
+        return Response;
     }
     if (UMaterial* Material = Cast<UMaterial>(Asset))
     {

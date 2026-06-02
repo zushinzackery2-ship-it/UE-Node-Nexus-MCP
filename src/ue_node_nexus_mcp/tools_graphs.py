@@ -16,6 +16,11 @@ def graph_snapshot_get(
     format: Literal["wires_tiny", "wires_min", "wires", "compact", "full"] = "wires_tiny",
     include_node_params: bool = False,
     include_links: bool = True,
+    keyword: str | None = None,
+    node_class_filter: list[str] | None = None,
+    trace_from: str | None = None,
+    trace_depth: int = 3,
+    exec_only: bool = False,
 ) -> dict[str, Any]:
     """Return a graph snapshot. Minimal wire text is the default to protect model context."""
     require_non_empty_string(asset_path, "asset_path")
@@ -28,6 +33,11 @@ def graph_snapshot_get(
             "format": format,
             "include_node_params": include_node_params,
             "include_links": include_links,
+            "keyword": keyword,
+            "node_class_filter": node_class_filter,
+            "trace_from": trace_from,
+            "trace_depth": trace_depth,
+            "exec_only": exec_only,
         },
     )
 
