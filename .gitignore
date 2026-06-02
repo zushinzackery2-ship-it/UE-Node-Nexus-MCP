@@ -19,6 +19,7 @@ Laffey.ico
 .clangd
 tests/
 docs/
+build_current_ue55.bat
 
 # Python caches
 *.py[cod]
