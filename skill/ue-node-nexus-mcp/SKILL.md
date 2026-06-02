@@ -18,12 +18,14 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - **Material / Material Function / Blueprint node graph** → `ue_read(target="graph")` or `graph_snapshot_get(graph_kind="material"|"material_function"|"blueprint")` — this is the core node-graph reader, NOT a `*_summary` op
 - Blueprint vars / defaults / components → `blueprint_details_get(include_components=true, include_inherited_components=true)`
 - AnimBlueprint graph nodes → `anim_blueprint_summary_get`
+- AnimBlueprint state machines (states / entry_state / transitions with from/to/rule/blend) → `anim_state_machine_summary_get` / `ue_read(target="anim_state_machine")` — graph_snapshot_get does NOT descend the state-machine sub-graph
 - AnimMontage sections/slots/segments/notifies → `anim_montage_summary_get`
 - BlendSpace axes/samples → `blend_space_summary_get`
-- Cascade (`UParticleSystem`) emitters/modules → `cascade_system_summary_get`
+- Cascade (`UParticleSystem`) emitters/modules (+ normalized module param values: Spawn/Lifetime/Size/Color/Velocity/Location/Rotation/Light, in `format="full"`) → `cascade_system_summary_get`
 - Niagara → `ue_read(target="niagara_system"|"niagara_stack")` / `niagara_*`
 - level actors / component materials → `level_*` / `component_*`
 - SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
+- Texture2D dimensions / source+pixel format / compression / sRGB / LOD group → `texture_summary_get` / `ue_read(target="texture")`
 
 ## Response modes
 `ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Use `full`/`debug` only for the raw bridge envelope. `detail` is NOT an execute mode — it is `ue_read.format`.
@@ -47,7 +49,7 @@ Gotcha: `asset_list(format="indexed")` does not populate row `items`; use `forma
 `ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes.
 
 ## Don't guess calls
-Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs `asset_path`/`material_path`/`component_path`); an empty call is a request error, not a missing asset.
+Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs EXACTLY one of `asset_path` / `material_path` / `component_path`+`slot_index`); an empty call is a request error (`invalid_request`), passing more than one is `target_conflict`, and an out-of-range slot is `invalid_slot` — none of these are `material_not_found`.
 
 ## Evidence order
 live op result > bridge diagnostics > project context/mounts > AssetRegistry > AutoIndex state/index path > repo source & README > historical notes.
