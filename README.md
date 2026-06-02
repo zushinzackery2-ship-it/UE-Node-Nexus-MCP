@@ -382,7 +382,7 @@ ue-node-nexus-mcp
 
 连接 UE 后建议先运行 `project_context_get()` 确认 `.uproject`、Content 目录和 `/Game` mount，再运行 `bridge_capabilities_get()` 或 MCP 本地工具 `bridge_contract_check()` 确认 Python MCP、核心 bridge 插件和 Niagara bridge 插件的 operation 合同一致。脚本验收会直接调用 UE 端 `bridge_capabilities_get`，不会把 MCP 本地 wrapper 当成 UE operation。
 
-源码仓库中也可以用脚本执行同样的验收；Release zip 不包含 `scripts/`，发布包内请直接通过 MCP 工具执行 `project_context_get()`、`bridge_contract_check()` 和需要的 `niagara_asset_lint()`。
+`scripts/` 验收脚本仅存在于本地开发树、不随仓库分发；一般用户直接通过 MCP 工具执行 `project_context_get()`、`bridge_contract_check()` 和需要的 `niagara_asset_lint()` 即可完成同等验收。
 
 最终 UE5.5 工作流验收入口会依次检查 bridge 合同、六面映射大坝材质函数接入、Niagara 炉火资产和 3C Blueprint 工作流：
 
@@ -450,9 +450,9 @@ ue-node-nexus-mcp --features core,asset,material
 
 ---
 
-## UE 5.5 Release 安装
+## 安装位置
 
-下载 `UeNodeNexusBridge-UE5.5-Win64.zip` 后解压，最终目录应为：
+本仓库不发布预编译二进制，请从源码构建（见下方「Plugin 编译」）。构建产物部署到目标引擎或项目的 `Plugins/` 下，目录形如：
 
 ```
 UE_5.5/
@@ -481,7 +481,7 @@ YourProject/
         └── UeNodeNexusNiagaraBridge.uplugin
 ```
 
-Release 包的 Win64 二进制只针对 UE 5.5 Launcher Windows x64 验证；其他 UE 5.x 版本请保留 `Source` 并让目标引擎重新编译。
+二进制随目标引擎/项目编译产生；不同 UE 5.x 版本各自保留 `Source` 重新编译即可。
 
 ---
 
