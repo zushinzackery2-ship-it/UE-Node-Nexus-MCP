@@ -16,6 +16,13 @@
 
 ---
 
+> [!IMPORTANT]
+> **先装 Agent skill**
+>
+> 使用本 MCP 前，请把本仓库的 `skill/ue-node-nexus-mcp/SKILL.md` 装进 Agent 的 skill 目录（Claude Code：复制到 `~/.claude/skills/ue-node-nexus-mcp/` 或项目 `.claude/skills/` 下）。它教 Agent 通过 6 工具 facade **先查 schema 再调用**、正确区分读/写 operation。不装的话，模型容易凭工具名猜参数导致调用失败（例如把写 op 当读用、或读 op 不传目标）。
+
+---
+
 > [!NOTE]
 > **仓库边界**
 >
@@ -341,9 +348,6 @@ ue-node-nexus-mcp
 ---
 
 ## MCP Client 配置
-
-> [!IMPORTANT]
-> 强烈建议把本仓库的 `skill/ue-node-nexus-mcp/SKILL.md` 装进 Agent 的 skill 目录（Claude Code：复制到 `~/.claude/skills/ue-node-nexus-mcp/` 或项目 `.claude/skills/` 下）。它教 Agent 通过 6 工具 facade **先查 schema 再调用**、正确区分读/写 operation。不装的话，模型容易凭工具名猜参数导致调用失败（例如把写 op 当读用、或读 op 不传目标）。
 
 启动 UE 项目并启用 `UeNodeNexusBridge` 插件后，把 MCP client 配成 stdio 启动 Python server：
 
