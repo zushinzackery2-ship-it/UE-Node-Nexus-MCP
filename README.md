@@ -54,7 +54,7 @@
 | **固定 MCP 工具** | Python MCP Server 只暴露 6 个 facade 工具，向 UE 桥接器转发经过校验的请求载荷 |
 | **MCP Facade** | 完整 UE 能力作为内部 operation registry 按需查询和执行；Niagara operation 只在 UE 端实际可用时进入 capability |
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
-| **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式 |
+| **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式；蓝图图支持 `keyword`、`node_class_filter`、`trace_from`+`trace_depth`、`exec_only` 子图筛选；蓝图响应附带 `available_graphs`（名字+节点数） |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
 | **图安全写入** | `graph_patch_apply` 编辑 Blueprint pin 或 Material Expression 连线，返回差异、引脚完整性、编译状态和脏标记 |
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
@@ -110,7 +110,7 @@
 | **动画** | `anim_montage_summary_get()` | 读取 AnimMontage 的 Section/Slot/Segment/Notify 结构化时间数据 |
 | **动画** | `blend_space_summary_get()` | 读取 BlendSpace 轴范围（名/Min/Max/Grid）和动画采样点 |
 | **Cascade** | `cascade_system_summary_get()` | 只读 Cascade 粒子系统的 Emitter、TypeData 和模块栈（旧粒子迁移读取入口）|
-| **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny` |
+| **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny`；蓝图支持 `keyword`/`node_class_filter`/`trace_from`+`trace_depth`/`exec_only` 子图筛选，响应含 `available_graphs` 和 `filter_stats` |
 | **图** | `graph_node_info_get()` | 读取整张图的高密度节点信息，默认 `indexed`，可用 `include_position=true` 附带坐标表 |
 | **图** | `graph_patch_apply()` | 应用声明式图编辑，附带写后检查 |
 | **图** | `graph_build_apply()` | 用 `nodes`、`links`、`material_outputs` 一次创建节点、写参数、连线并编译 |
