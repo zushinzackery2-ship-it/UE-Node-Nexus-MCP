@@ -5,6 +5,7 @@ namespace UeNodeNexusBridge
 TArray<FString> GetCoreOperationNames()
 {
     return {
+        TEXT("sound_cue_summary_get"),
         TEXT("asset_list"),
         TEXT("asset_get"),
         TEXT("asset_create"),

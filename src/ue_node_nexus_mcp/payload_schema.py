@@ -24,6 +24,7 @@ from .contracts import ALL_OPERATIONS
 _WRAPPER_MODULES = (
     "tools_animation",
     "tools_assets",
+    "tools_audio",
     "tools_auto_index",
     "tools_blueprints",
     "tools_cascade",

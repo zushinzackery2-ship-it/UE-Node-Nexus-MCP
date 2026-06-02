@@ -62,6 +62,8 @@
 
     {"name": "cascade_system_summary_get", "kind": "read", "group": "cascade", "hidden": false, "local": false},
 
+    {"name": "sound_cue_summary_get", "kind": "read", "group": "audio", "hidden": false, "local": false},
+
     {"name": "graph_snapshot_get", "kind": "read", "group": "graph", "hidden": false, "local": false},
     {"name": "graph_node_info_get", "kind": "read", "group": "graph", "hidden": false, "local": false},
     {"name": "node_info_get", "kind": "read", "group": "graph", "hidden": false, "local": false},

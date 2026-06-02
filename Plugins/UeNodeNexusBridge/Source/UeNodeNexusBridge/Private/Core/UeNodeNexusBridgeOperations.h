@@ -11,6 +11,7 @@ void RegisterAutoIndexOperations();
 void UnregisterAutoIndexOperations();
 TArray<FString> GetCoreOperationNames();
 TArray<FString> GetAutoIndexOperationNames();
+TSharedPtr<FJsonObject> HandleSoundCueSummaryGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleAssetList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleAssetGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);

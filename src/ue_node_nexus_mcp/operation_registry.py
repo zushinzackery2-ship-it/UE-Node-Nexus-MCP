@@ -66,6 +66,7 @@ READ_SUMMARIES = {
     "anim_montage_summary_get": "Read AnimMontage sections, slots, segments, and notifies.",
     "blend_space_summary_get": "Read BlendSpace axis ranges and sample points.",
     "cascade_system_summary_get": "Read Cascade particle system emitters and modules.",
+    "sound_cue_summary_get": "Read SoundCue USoundNode tree structure.",
     "graph_snapshot_get": "Read graph snapshot.",
     "graph_node_info_get": "Read whole graph node information.",
     "node_info_get": "Read one graph node edit view.",

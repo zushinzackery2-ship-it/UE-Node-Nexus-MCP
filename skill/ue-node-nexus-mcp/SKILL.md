@@ -23,7 +23,7 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - Cascade (`UParticleSystem`) emitters/modules → `cascade_system_summary_get`
 - Niagara → `ue_read(target="niagara_system"|"niagara_stack")` / `niagara_*`
 - level actors / component materials → `level_*` / `component_*`
-- anything else, incl. **SoundCue / USoundNode trees** → `object_properties_get` for flat reflected props. There is NO structured node-graph reader for SoundCue or any non-Material/Blueprint/Niagara graph; don't expect one.
+- SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
 
 ## Response modes
 `ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Use `full`/`debug` only for the raw bridge envelope. `detail` is NOT an execute mode — it is `ue_read.format`.

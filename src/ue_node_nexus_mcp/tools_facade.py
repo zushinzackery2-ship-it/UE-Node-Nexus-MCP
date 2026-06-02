@@ -40,6 +40,7 @@ READ_TARGET_OPERATIONS = {
     "niagara_system": "niagara_system_summary_get",
     "node": "node_info_get",
     "project_input": "project_input_mappings_get",
+    "sound_cue": "sound_cue_summary_get",
 }
 
 

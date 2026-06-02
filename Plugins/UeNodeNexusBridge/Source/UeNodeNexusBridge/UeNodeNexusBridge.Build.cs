@@ -10,6 +10,7 @@ public class UeNodeNexusBridge : ModuleRules
         PrivateIncludePaths.AddRange(new string[]
         {
             System.IO.Path.Combine(ModuleDirectory, "Private", "Animation"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Audio"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Assets"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "AutoIndex"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Blueprint"),

@@ -15,6 +15,7 @@ void Register(const TCHAR* Operation, FBridgeOperationHandler Handler)
 
 void RegisterCoreOperations()
 {
+    Register(TEXT("sound_cue_summary_get"), HandleSoundCueSummaryGet);
     Register(TEXT("asset_list"), HandleAssetList);
     Register(TEXT("asset_get"), HandleAssetGet);
     Register(TEXT("asset_create"), HandleAssetCreate);

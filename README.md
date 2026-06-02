@@ -159,7 +159,7 @@ MCP 公开面固定为 6 个 facade 工具，用少量入口承载完整 UE oper
 | **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
 | **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
 
-Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 92 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
+Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 93 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
 
 推荐 thin 工作流：
 
@@ -211,7 +211,7 @@ MCP client 配置：
 > [!NOTE]
 > **默认工具面**
 >
-> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 92 个内部 operation，其中 91 个转发到 UE bridge，`bridge_contract_check` 是 MCP 本地诊断包装器，不是 UE bridge HTTP operation。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
+> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 93 个内部 operation，其中 92 个转发到 UE bridge，`bridge_contract_check` 是 MCP 本地诊断包装器，不是 UE bridge HTTP operation。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
 
 ---
 
@@ -413,7 +413,7 @@ python scripts/verify_bridge_contract.py --mode enabled --lint-niagara-asset /Ga
 
 ### Tool Feature 开关
 
-默认候选工具组为 `core,asset,auto_index,graph,material,blueprint,animation,cascade,level,project_input,niagara`。关闭某组时，对应工具不会进入 MCP tool list。Niagara 由 UE 插件状态最终裁决：只有 `UeNodeNexusNiagaraBridge` 已加载且 UE Niagara 插件启用时才注册；本地配置只能关闭或表达启用意图，不能绕过 UE 插件状态强行开启。
+默认候选工具组为 `core,asset,auto_index,graph,material,blueprint,animation,cascade,audio,level,project_input,niagara`。关闭某组时，对应工具不会进入 MCP tool list。Niagara 由 UE 插件状态最终裁决：只有 `UeNodeNexusNiagaraBridge` 已加载且 UE Niagara 插件启用时才注册；本地配置只能关闭或表达启用意图，不能绕过 UE 插件状态强行开启。
 
 | 配置 | 说明 |
 |:-----|:-----|
