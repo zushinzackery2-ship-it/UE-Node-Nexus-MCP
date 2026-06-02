@@ -15,9 +15,7 @@ namespace UeNodeNexusBridge
 {
 static TSharedPtr<FJsonObject> MakeBlueprintNodeError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message)
 {
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(Code, Message));
-    return Response;
+    return MakeOperationError(Operation, RequestId, Code, Message);
 }
 
 static bool ReadBlueprintPositionPair(const TSharedPtr<FJsonObject>& Payload, int32& OutX, int32& OutY)

@@ -6,26 +6,19 @@
 
 namespace UeNodeNexusBridge
 {
-static TSharedPtr<FJsonObject> MakeLevelActorTransformError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message)
-{
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(Code, Message));
-    return Response;
-}
-
 static AActor* ResolveActorForTransform(const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutError, const FString& Operation, const FString& RequestId)
 {
     FString ActorPath;
     if (!Payload->TryGetStringField(TEXT("actor_path"), ActorPath) || ActorPath.IsEmpty())
     {
-        OutError = MakeLevelActorTransformError(Operation, RequestId, TEXT("invalid_request"), TEXT("actor_path is required"));
+        OutError = MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("actor_path is required"));
         return nullptr;
     }
 
     AActor* Actor = Cast<AActor>(ResolveObjectByPath(ActorPath));
     if (Actor == nullptr)
     {
-        OutError = MakeLevelActorTransformError(Operation, RequestId, TEXT("actor_not_found"), TEXT("Actor could not be resolved"));
+        OutError = MakeOperationError(Operation, RequestId, TEXT("actor_not_found"), TEXT("Actor could not be resolved"));
         return nullptr;
     }
     return Actor;

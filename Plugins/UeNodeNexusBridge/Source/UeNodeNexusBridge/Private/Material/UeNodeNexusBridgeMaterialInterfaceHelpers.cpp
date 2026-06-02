@@ -13,9 +13,7 @@ namespace UeNodeNexusBridge
 {
 TSharedPtr<FJsonObject> MakeMaterialInterfaceError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message)
 {
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(Code, Message));
-    return Response;
+    return MakeOperationError(Operation, RequestId, Code, Message);
 }
 
 static TSharedPtr<FJsonObject> ColorToJson(const FLinearColor& Color)

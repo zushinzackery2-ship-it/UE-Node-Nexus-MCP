@@ -13,9 +13,7 @@ TSharedPtr<FJsonObject> MakeAutoIndexEnvelope(const FString& Operation, const FS
 
 TSharedPtr<FJsonObject> MakeAutoIndexError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message)
 {
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(Code, Message));
-    return Response;
+    return MakeOperationError(Operation, RequestId, Code, Message);
 }
 
 bool IsFullFormat(const TSharedPtr<FJsonObject>& Payload)

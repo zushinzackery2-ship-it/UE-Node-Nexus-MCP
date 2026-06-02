@@ -1,13 +1,11 @@
-﻿#include "UeNodeNexusBridgeOperations.h"
+#include "UeNodeNexusBridgeOperations.h"
 
-#include "Components/ActorComponent.h"
 #include "Dom/JsonValue.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
-#include "Engine/SCS_Node.h"
-#include "Engine/SimpleConstructionScript.h"
+#include "UeNodeNexusBridgeBlueprintComponentJson.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UObject/UnrealType.h"
+#include "UeNodeNexusBridgeObjectHelpers.h"
 
 namespace UeNodeNexusBridge
 {
@@ -26,36 +24,6 @@ static FString CompactPinType(const FEdGraphPinType& PinType)
         Result += PinType.PinSubCategoryObject->GetName();
     }
     return Result;
-}
-
-static FString CleanExportedText(FString Value)
-{
-    Value.RemoveFromStart(TEXT("("));
-    Value.RemoveFromEnd(TEXT(")"));
-    Value.ReplaceInline(TEXT("\r"), TEXT(" "));
-    Value.ReplaceInline(TEXT("\n"), TEXT(" "));
-    return Value.Left(300);
-}
-
-static bool ExportPropertyText(UObject* Object, const FName& PropertyName, FString& OutValue)
-{
-    FProperty* Property = Object ? Object->GetClass()->FindPropertyByName(PropertyName) : nullptr;
-    if (Property == nullptr)
-    {
-        return false;
-    }
-
-    if (const FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))
-    {
-        UObject* ValueObject = ObjectProperty->GetObjectPropertyValue_InContainer(Object);
-        OutValue = ValueObject ? ValueObject->GetPathName() : FString();
-        return true;
-    }
-
-    FString Value;
-    Property->ExportText_InContainer(0, Value, Object, nullptr, Object, PPF_None);
-    OutValue = CleanExportedText(Value);
-    return true;
 }
 
 static TSharedPtr<FJsonValue> MakeVariableRow(const FBPVariableDescription& Variable)
@@ -96,140 +64,22 @@ static TSharedPtr<FJsonObject> MakeDefaultObject(const FString& Name, const FStr
     return Json;
 }
 
-static FString FirstComponentAsset(UActorComponent* Component)
-{
-    static const FName Names[] = {
-        TEXT("StaticMesh"),
-        TEXT("SkeletalMeshAsset"),
-        TEXT("SkeletalMesh"),
-        TEXT("AnimClass"),
-        TEXT("Texture")
-    };
-
-    for (const FName& Name : Names)
-    {
-        FString Value;
-        if (ExportPropertyText(Component, Name, Value) && !Value.IsEmpty() && Value != TEXT("None"))
-        {
-            return Value;
-        }
-    }
-    return FString();
-}
-
-static TSharedPtr<FJsonValue> MakeComponentRow(const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket, const FString& Origin)
-{
-    TArray<TSharedPtr<FJsonValue>> Row;
-    Row.Add(MakeShared<FJsonValueString>(Name));
-    Row.Add(MakeShared<FJsonValueString>(Component ? Component->GetClass()->GetName() : FString()));
-    Row.Add(MakeShared<FJsonValueString>(Parent));
-    Row.Add(MakeShared<FJsonValueString>(Socket));
-    Row.Add(MakeShared<FJsonValueString>(FirstComponentAsset(Component)));
-    Row.Add(MakeShared<FJsonValueString>(Origin));
-    return MakeShared<FJsonValueArray>(Row);
-}
-
-static TSharedPtr<FJsonObject> MakeComponentObject(const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket, const FString& Origin)
-{
-    TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
-    Json->SetStringField(TEXT("name"), Name);
-    Json->SetStringField(TEXT("class"), Component ? Component->GetClass()->GetPathName() : FString());
-    Json->SetStringField(TEXT("parent"), Parent);
-    Json->SetStringField(TEXT("socket"), Socket);
-    Json->SetStringField(TEXT("asset"), FirstComponentAsset(Component));
-    Json->SetStringField(TEXT("template_path"), Component ? Component->GetPathName() : FString());
-    Json->SetStringField(TEXT("origin"), Origin);
-    return Json;
-}
-
-static void AddComponentEntry(TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames, bool bCompact, const FString& Name, UActorComponent* Component, const FString& Parent, const FString& Socket, const FString& Origin)
-{
-    if (Name.IsEmpty() || SeenNames.Contains(Name))
-    {
-        return;
-    }
-
-    SeenNames.Add(Name);
-    Components.Add(bCompact ? MakeComponentRow(Name, Component, Parent, Socket, Origin) : MakeShared<FJsonValueObject>(MakeComponentObject(Name, Component, Parent, Socket, Origin)));
-}
-
-static void AddSCSComponents(UBlueprintGeneratedClass* GeneratedClass, bool bCompact, TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames, const FString& Origin)
-{
-    USimpleConstructionScript* Script = GeneratedClass ? GeneratedClass->SimpleConstructionScript.Get() : nullptr;
-    if (Script == nullptr)
-    {
-        return;
-    }
-
-    for (USCS_Node* Node : Script->GetAllNodes())
-    {
-        if (Node == nullptr)
-        {
-            continue;
-        }
-
-        UActorComponent* Component = Node->GetActualComponentTemplate(GeneratedClass);
-        AddComponentEntry(Components, SeenNames, bCompact, Node->GetVariableName().ToString(), Component, Node->ParentComponentOrVariableName.ToString(), Node->AttachToName.ToString(), Origin);
-    }
-}
-
-// Walk the parent class chain so SCS components defined on ancestor Blueprints
-// surface with their structural attach/socket info and a "from_blueprint" origin.
-// USimpleConstructionScript::GetAllNodes returns only the nodes declared directly
-// on its own Blueprint, so inherited component structure is otherwise lost.
-static void AddInheritedSCSComponents(UBlueprintGeneratedClass* GeneratedClass, bool bCompact, TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames)
-{
-    UClass* Super = GeneratedClass ? GeneratedClass->GetSuperClass() : nullptr;
-    while (Super != nullptr)
-    {
-        if (UBlueprintGeneratedClass* SuperGeneratedClass = Cast<UBlueprintGeneratedClass>(Super))
-        {
-            AddSCSComponents(SuperGeneratedClass, bCompact, Components, SeenNames, SuperGeneratedClass->GetPathName());
-        }
-        Super = Super->GetSuperClass();
-    }
-}
-
-static void AddCDOComponentProperties(UBlueprintGeneratedClass* GeneratedClass, UObject* CDO, bool bCompact, TArray<TSharedPtr<FJsonValue>>& Components, TSet<FString>& SeenNames)
-{
-    if (GeneratedClass == nullptr || CDO == nullptr)
-    {
-        return;
-    }
-
-    for (TFieldIterator<FObjectProperty> It(GeneratedClass, EFieldIteratorFlags::IncludeSuper); It; ++It)
-    {
-        FObjectProperty* Property = *It;
-        if (Property == nullptr || Property->PropertyClass == nullptr || !Property->PropertyClass->IsChildOf(UActorComponent::StaticClass()))
-        {
-            continue;
-        }
-
-        UActorComponent* Component = Cast<UActorComponent>(Property->GetObjectPropertyValue_InContainer(CDO));
-        AddComponentEntry(Components, SeenNames, bCompact, Property->GetName(), Component, FString(), FString(), FString());
-    }
-}
-
 TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     const double StartSeconds = FPlatformTime::Seconds();
 
-    FString AssetPath;
-    if (!Payload->TryGetStringField(TEXT("asset_path"), AssetPath) || AssetPath.IsEmpty())
+    TSharedPtr<FJsonObject> ErrorResponse;
+    UBlueprint* Blueprint = LoadAssetOrError<UBlueprint>(Payload, Operation, RequestId, ErrorResponse, TEXT("Blueprint"));
+    if (Blueprint == nullptr)
     {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("asset_path is required")));
-        return Response;
+        return ErrorResponse;
     }
 
-    UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, *AssetPath);
-    UBlueprintGeneratedClass* GeneratedClass = Blueprint ? Cast<UBlueprintGeneratedClass>(Blueprint->GeneratedClass.Get()) : nullptr;
+    UBlueprintGeneratedClass* GeneratedClass = Cast<UBlueprintGeneratedClass>(Blueprint->GeneratedClass.Get());
     UObject* CDO = GeneratedClass ? GeneratedClass->GetDefaultObject() : nullptr;
-    if (Blueprint == nullptr || GeneratedClass == nullptr)
+    if (GeneratedClass == nullptr)
     {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("asset_not_found"), TEXT("Blueprint with generated class could not be loaded")));
-        return Response;
+        return MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), TEXT("Blueprint generated class could not be loaded"));
     }
 
     bool bIncludeDefaults = false;
@@ -265,7 +115,7 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
         for (const FString& Name : DefaultNames)
         {
             FString Value;
-            if (ExportPropertyText(CDO, FName(*Name), Value))
+            if (ExportNamedPropertyText(CDO, FName(*Name), Value))
             {
                 Defaults.Add(bCompact ? MakeDefaultRow(Name, Value) : MakeShared<FJsonValueObject>(MakeDefaultObject(Name, Value)));
             }
@@ -279,13 +129,7 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
     TArray<TSharedPtr<FJsonValue>> Components;
     if (bIncludeComponents)
     {
-        TSet<FString> SeenNames;
-        AddSCSComponents(GeneratedClass, bCompact, Components, SeenNames, FString());
-        if (bIncludeInherited)
-        {
-            AddInheritedSCSComponents(GeneratedClass, bCompact, Components, SeenNames);
-        }
-        AddCDOComponentProperties(GeneratedClass, CDO, bCompact, Components, SeenNames);
+        CollectBlueprintComponents(GeneratedClass, CDO, bCompact, bIncludeInherited, Components);
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -307,7 +151,7 @@ TSharedPtr<FJsonObject> HandleBlueprintDetailsGet(const FString& Operation, cons
     Data->SetNumberField(TEXT("variable_count"), Variables.Num());
     Data->SetNumberField(TEXT("default_count"), Defaults.Num());
     Data->SetNumberField(TEXT("component_count"), Components.Num());
-    Data->SetNumberField(TEXT("elapsed_ms"), (FPlatformTime::Seconds() - StartSeconds) * 1000.0);
+    AddElapsedMs(Data, StartSeconds);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

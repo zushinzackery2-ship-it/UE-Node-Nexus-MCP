@@ -8,6 +8,7 @@
 #include "Particles/ParticleSystem.h"
 #include "Particles/Spawn/ParticleModuleSpawn.h"
 #include "Particles/TypeData/ParticleModuleTypeDataBase.h"
+#include "UeNodeNexusBridgeCascadeDistributions.h"
 #include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
@@ -28,6 +29,7 @@ void AddModule(TArray<TSharedPtr<FJsonValue>>& Modules, bool bCompact, const FSt
         Row.Add(MakeShared<FJsonValueString>(Role));
         Row.Add(MakeShared<FJsonValueString>(Module->GetClass()->GetName()));
         Row.Add(MakeShared<FJsonValueString>(Module->GetPathName()));
+        Row.Add(MakeShared<FJsonValueString>(ModuleValuesToCompactString(Module)));
         Modules.Add(MakeShared<FJsonValueArray>(Row));
     }
     else
@@ -38,6 +40,7 @@ void AddModule(TArray<TSharedPtr<FJsonValue>>& Modules, bool bCompact, const FSt
         Json->SetStringField(TEXT("class"), Module->GetClass()->GetPathName());
         Json->SetStringField(TEXT("template_path"), Module->GetPathName());
         Json->SetBoolField(TEXT("enabled"), Module->bEnabled != 0);
+        Json->SetObjectField(TEXT("values"), ModuleValuesToJson(Module));
         Modules.Add(MakeShared<FJsonValueObject>(Json));
     }
 }
@@ -47,20 +50,11 @@ TSharedPtr<FJsonObject> HandleCascadeSystemSummaryGet(const FString& Operation, 
 {
     const double StartSeconds = FPlatformTime::Seconds();
 
-    FString AssetPath;
-    if (!Payload->TryGetStringField(TEXT("asset_path"), AssetPath) || AssetPath.IsEmpty())
-    {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("asset_path is required")));
-        return Response;
-    }
-
-    UParticleSystem* System = LoadObject<UParticleSystem>(nullptr, *AssetPath);
+    TSharedPtr<FJsonObject> ErrorResponse;
+    UParticleSystem* System = LoadAssetOrError<UParticleSystem>(Payload, Operation, RequestId, ErrorResponse, TEXT("Cascade ParticleSystem"));
     if (System == nullptr)
     {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("asset_not_found"), TEXT("Cascade ParticleSystem could not be loaded")));
-        return Response;
+        return ErrorResponse;
     }
 
     FString Format = TEXT("compact");
@@ -121,7 +115,7 @@ TSharedPtr<FJsonObject> HandleCascadeSystemSummaryGet(const FString& Operation, 
     {
         Data->SetStringField(TEXT("format"), TEXT("cascade_system_summary_compact"));
         TArray<TSharedPtr<FJsonValue>> EmitterColumns = { MakeShared<FJsonValueString>(TEXT("name")), MakeShared<FJsonValueString>(TEXT("enabled")), MakeShared<FJsonValueString>(TEXT("type_data")), MakeShared<FJsonValueString>(TEXT("module_count")) };
-        TArray<TSharedPtr<FJsonValue>> ModuleColumns = { MakeShared<FJsonValueString>(TEXT("emitter")), MakeShared<FJsonValueString>(TEXT("role")), MakeShared<FJsonValueString>(TEXT("class")), MakeShared<FJsonValueString>(TEXT("template_path")) };
+        TArray<TSharedPtr<FJsonValue>> ModuleColumns = { MakeShared<FJsonValueString>(TEXT("emitter")), MakeShared<FJsonValueString>(TEXT("role")), MakeShared<FJsonValueString>(TEXT("class")), MakeShared<FJsonValueString>(TEXT("template_path")), MakeShared<FJsonValueString>(TEXT("values")) };
         Data->SetArrayField(TEXT("emitter_columns"), EmitterColumns);
         Data->SetArrayField(TEXT("module_columns"), ModuleColumns);
     }
@@ -129,7 +123,7 @@ TSharedPtr<FJsonObject> HandleCascadeSystemSummaryGet(const FString& Operation, 
     Data->SetArrayField(TEXT("modules"), Modules);
     Data->SetNumberField(TEXT("emitter_count"), Emitters.Num());
     Data->SetNumberField(TEXT("module_count"), Modules.Num());
-    Data->SetNumberField(TEXT("elapsed_ms"), (FPlatformTime::Seconds() - StartSeconds) * 1000.0);
+    AddElapsedMs(Data, StartSeconds);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

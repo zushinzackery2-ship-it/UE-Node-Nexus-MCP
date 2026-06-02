@@ -9,71 +9,60 @@ namespace
 {
 using FHandler = UeNodeNexusBridge::FBridgeOperationHandler;
 
-void RegisterNiagaraOperation(const TCHAR* Operation, FHandler Handler)
+struct FNiagaraOperation
 {
-    UeNodeNexusBridge::RegisterOperationHandler(FString(Operation), MoveTemp(Handler));
-}
+    const TCHAR* Name;
+    FHandler Handler;
+};
 
-void UnregisterNiagaraOperation(const TCHAR* Operation)
+// Single source for the Niagara op set: StartupModule registers every entry and
+// ShutdownModule unregisters by name, so the two can never drift. The names stay
+// as TEXT() literals so the offline contract-sync test still parses them.
+const TArray<FNiagaraOperation>& NiagaraOperations()
 {
-    UeNodeNexusBridge::UnregisterOperationHandler(FString(Operation));
+    static const TArray<FNiagaraOperation> Operations = {
+        { TEXT("niagara_system_create"), UeNodeNexusBridge::HandleNiagaraSystemCreate },
+        { TEXT("niagara_system_duplicate"), UeNodeNexusBridge::HandleNiagaraSystemDuplicate },
+        { TEXT("niagara_system_summary_get"), UeNodeNexusBridge::HandleNiagaraSystemSummaryGet },
+        { TEXT("niagara_emitters_list"), UeNodeNexusBridge::HandleNiagaraEmittersList },
+        { TEXT("niagara_user_params_get"), UeNodeNexusBridge::HandleNiagaraUserParamsGet },
+        { TEXT("niagara_user_params_set"), UeNodeNexusBridge::HandleNiagaraUserParamsSet },
+        { TEXT("niagara_materials_get"), UeNodeNexusBridge::HandleNiagaraMaterialsGet },
+        { TEXT("niagara_materials_set"), UeNodeNexusBridge::HandleNiagaraMaterialsSet },
+        { TEXT("niagara_system_properties_get"), UeNodeNexusBridge::HandleNiagaraSystemPropertiesGet },
+        { TEXT("niagara_system_properties_set"), UeNodeNexusBridge::HandleNiagaraSystemPropertiesSet },
+        { TEXT("niagara_emitter_create"), UeNodeNexusBridge::HandleNiagaraEmitterCreate },
+        { TEXT("niagara_emitter_properties_get"), UeNodeNexusBridge::HandleNiagaraEmitterPropertiesGet },
+        { TEXT("niagara_emitter_properties_set"), UeNodeNexusBridge::HandleNiagaraEmitterPropertiesSet },
+        { TEXT("niagara_modules_list"), UeNodeNexusBridge::HandleNiagaraModulesList },
+        { TEXT("niagara_module_add"), UeNodeNexusBridge::HandleNiagaraModuleAdd },
+        { TEXT("niagara_module_remove"), UeNodeNexusBridge::HandleNiagaraModuleRemove },
+        { TEXT("niagara_module_set_enabled"), UeNodeNexusBridge::HandleNiagaraModuleSetEnabled },
+        { TEXT("niagara_module_inputs_get"), UeNodeNexusBridge::HandleNiagaraModuleInputsGet },
+        { TEXT("niagara_module_inputs_set"), UeNodeNexusBridge::HandleNiagaraModuleInputsSet },
+        { TEXT("niagara_renderers_list"), UeNodeNexusBridge::HandleNiagaraRenderersList },
+        { TEXT("niagara_renderer_create"), UeNodeNexusBridge::HandleNiagaraRendererCreate },
+        { TEXT("niagara_renderer_properties_get"), UeNodeNexusBridge::HandleNiagaraRendererPropertiesGet },
+        { TEXT("niagara_renderer_properties_set"), UeNodeNexusBridge::HandleNiagaraRendererPropertiesSet },
+        { TEXT("niagara_compile"), UeNodeNexusBridge::HandleNiagaraCompile },
+        { TEXT("niagara_asset_lint"), UeNodeNexusBridge::HandleNiagaraAssetLint },
+    };
+    return Operations;
 }
 }
 
 void FUeNodeNexusNiagaraBridgeModule::StartupModule()
 {
-    RegisterNiagaraOperation(TEXT("niagara_system_create"), UeNodeNexusBridge::HandleNiagaraSystemCreate);
-    RegisterNiagaraOperation(TEXT("niagara_system_duplicate"), UeNodeNexusBridge::HandleNiagaraSystemDuplicate);
-    RegisterNiagaraOperation(TEXT("niagara_system_summary_get"), UeNodeNexusBridge::HandleNiagaraSystemSummaryGet);
-    RegisterNiagaraOperation(TEXT("niagara_emitters_list"), UeNodeNexusBridge::HandleNiagaraEmittersList);
-    RegisterNiagaraOperation(TEXT("niagara_user_params_get"), UeNodeNexusBridge::HandleNiagaraUserParamsGet);
-    RegisterNiagaraOperation(TEXT("niagara_user_params_set"), UeNodeNexusBridge::HandleNiagaraUserParamsSet);
-    RegisterNiagaraOperation(TEXT("niagara_materials_get"), UeNodeNexusBridge::HandleNiagaraMaterialsGet);
-    RegisterNiagaraOperation(TEXT("niagara_materials_set"), UeNodeNexusBridge::HandleNiagaraMaterialsSet);
-    RegisterNiagaraOperation(TEXT("niagara_system_properties_get"), UeNodeNexusBridge::HandleNiagaraSystemPropertiesGet);
-    RegisterNiagaraOperation(TEXT("niagara_system_properties_set"), UeNodeNexusBridge::HandleNiagaraSystemPropertiesSet);
-    RegisterNiagaraOperation(TEXT("niagara_emitter_create"), UeNodeNexusBridge::HandleNiagaraEmitterCreate);
-    RegisterNiagaraOperation(TEXT("niagara_emitter_properties_get"), UeNodeNexusBridge::HandleNiagaraEmitterPropertiesGet);
-    RegisterNiagaraOperation(TEXT("niagara_emitter_properties_set"), UeNodeNexusBridge::HandleNiagaraEmitterPropertiesSet);
-    RegisterNiagaraOperation(TEXT("niagara_modules_list"), UeNodeNexusBridge::HandleNiagaraModulesList);
-    RegisterNiagaraOperation(TEXT("niagara_module_add"), UeNodeNexusBridge::HandleNiagaraModuleAdd);
-    RegisterNiagaraOperation(TEXT("niagara_module_remove"), UeNodeNexusBridge::HandleNiagaraModuleRemove);
-    RegisterNiagaraOperation(TEXT("niagara_module_set_enabled"), UeNodeNexusBridge::HandleNiagaraModuleSetEnabled);
-    RegisterNiagaraOperation(TEXT("niagara_module_inputs_get"), UeNodeNexusBridge::HandleNiagaraModuleInputsGet);
-    RegisterNiagaraOperation(TEXT("niagara_module_inputs_set"), UeNodeNexusBridge::HandleNiagaraModuleInputsSet);
-    RegisterNiagaraOperation(TEXT("niagara_renderers_list"), UeNodeNexusBridge::HandleNiagaraRenderersList);
-    RegisterNiagaraOperation(TEXT("niagara_renderer_create"), UeNodeNexusBridge::HandleNiagaraRendererCreate);
-    RegisterNiagaraOperation(TEXT("niagara_renderer_properties_get"), UeNodeNexusBridge::HandleNiagaraRendererPropertiesGet);
-    RegisterNiagaraOperation(TEXT("niagara_renderer_properties_set"), UeNodeNexusBridge::HandleNiagaraRendererPropertiesSet);
-    RegisterNiagaraOperation(TEXT("niagara_compile"), UeNodeNexusBridge::HandleNiagaraCompile);
-    RegisterNiagaraOperation(TEXT("niagara_asset_lint"), UeNodeNexusBridge::HandleNiagaraAssetLint);
+    for (const FNiagaraOperation& Operation : NiagaraOperations())
+    {
+        UeNodeNexusBridge::RegisterOperationHandler(FString(Operation.Name), Operation.Handler);
+    }
 }
 
 void FUeNodeNexusNiagaraBridgeModule::ShutdownModule()
 {
-    UnregisterNiagaraOperation(TEXT("niagara_system_create"));
-    UnregisterNiagaraOperation(TEXT("niagara_system_duplicate"));
-    UnregisterNiagaraOperation(TEXT("niagara_system_summary_get"));
-    UnregisterNiagaraOperation(TEXT("niagara_emitters_list"));
-    UnregisterNiagaraOperation(TEXT("niagara_user_params_get"));
-    UnregisterNiagaraOperation(TEXT("niagara_user_params_set"));
-    UnregisterNiagaraOperation(TEXT("niagara_materials_get"));
-    UnregisterNiagaraOperation(TEXT("niagara_materials_set"));
-    UnregisterNiagaraOperation(TEXT("niagara_system_properties_get"));
-    UnregisterNiagaraOperation(TEXT("niagara_system_properties_set"));
-    UnregisterNiagaraOperation(TEXT("niagara_emitter_create"));
-    UnregisterNiagaraOperation(TEXT("niagara_emitter_properties_get"));
-    UnregisterNiagaraOperation(TEXT("niagara_emitter_properties_set"));
-    UnregisterNiagaraOperation(TEXT("niagara_modules_list"));
-    UnregisterNiagaraOperation(TEXT("niagara_module_add"));
-    UnregisterNiagaraOperation(TEXT("niagara_module_remove"));
-    UnregisterNiagaraOperation(TEXT("niagara_module_set_enabled"));
-    UnregisterNiagaraOperation(TEXT("niagara_module_inputs_get"));
-    UnregisterNiagaraOperation(TEXT("niagara_module_inputs_set"));
-    UnregisterNiagaraOperation(TEXT("niagara_renderers_list"));
-    UnregisterNiagaraOperation(TEXT("niagara_renderer_create"));
-    UnregisterNiagaraOperation(TEXT("niagara_renderer_properties_get"));
-    UnregisterNiagaraOperation(TEXT("niagara_renderer_properties_set"));
-    UnregisterNiagaraOperation(TEXT("niagara_compile"));
-    UnregisterNiagaraOperation(TEXT("niagara_asset_lint"));
+    for (const FNiagaraOperation& Operation : NiagaraOperations())
+    {
+        UeNodeNexusBridge::UnregisterOperationHandler(FString(Operation.Name));
+    }
 }

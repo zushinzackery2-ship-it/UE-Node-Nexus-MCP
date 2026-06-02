@@ -37,6 +37,7 @@ _WRAPPER_MODULES = (
     "tools_niagara_properties",
     "tools_project",
     "tools_system",
+    "tools_texture",
 )
 
 _PRIMITIVE_JSON_TYPES: dict[type, str] = {

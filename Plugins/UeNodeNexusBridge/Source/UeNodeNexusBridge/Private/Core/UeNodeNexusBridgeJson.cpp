@@ -9,11 +9,31 @@ namespace UeNodeNexusBridge
 {
 TSharedPtr<FJsonObject> MakeError(const FString& Code, const FString& Message)
 {
+    return MakeError(Code, Message, nullptr);
+}
+
+TSharedPtr<FJsonObject> MakeError(const FString& Code, const FString& Message, const TSharedPtr<FJsonObject>& Details)
+{
     TSharedPtr<FJsonObject> Error = MakeShared<FJsonObject>();
     Error->SetStringField(TEXT("code"), Code);
     Error->SetStringField(TEXT("message"), Message);
-    Error->SetObjectField(TEXT("details"), MakeShared<FJsonObject>());
+    Error->SetObjectField(TEXT("details"), Details.IsValid() ? Details : MakeShared<FJsonObject>());
     return Error;
+}
+
+TSharedPtr<FJsonObject> MakeOperationError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message, const TSharedPtr<FJsonObject>& Details)
+{
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+    Response->SetObjectField(TEXT("error"), MakeError(Code, Message, Details));
+    return Response;
+}
+
+void AddElapsedMs(const TSharedPtr<FJsonObject>& Data, double StartSeconds)
+{
+    if (Data.IsValid())
+    {
+        Data->SetNumberField(TEXT("elapsed_ms"), (FPlatformTime::Seconds() - StartSeconds) * 1000.0);
+    }
 }
 
 TSharedPtr<FJsonObject> MakeEnvelope(const FString& Operation, const FString& RequestId, bool bOk)

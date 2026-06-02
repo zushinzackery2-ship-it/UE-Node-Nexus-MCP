@@ -6,6 +6,7 @@ TArray<FString> GetCoreOperationNames()
 {
     return {
         TEXT("sound_cue_summary_get"),
+        TEXT("texture_summary_get"),
         TEXT("asset_list"),
         TEXT("asset_get"),
         TEXT("asset_create"),
@@ -36,6 +37,7 @@ TArray<FString> GetCoreOperationNames()
         TEXT("blueprint_details_get"),
         TEXT("blueprint_components_patch"),
         TEXT("anim_blueprint_summary_get"),
+        TEXT("anim_state_machine_summary_get"),
         TEXT("anim_montage_summary_get"),
         TEXT("blend_space_summary_get"),
         TEXT("cascade_system_summary_get"),

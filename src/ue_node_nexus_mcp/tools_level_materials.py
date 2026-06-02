@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .contracts import require_list, require_non_empty_string
+from .contracts import require_exactly_one, require_list, require_non_empty_string
 from .runtime import call_bridge as _call
 from .runtime import default_tool
 
@@ -88,7 +88,22 @@ def material_interface_resolve(
     slot_index: int | None = None,
     include_params: bool = False,
 ) -> dict[str, Any]:
-    """Resolve a material interface to parent chain, root material, and optional parameters."""
+    """Resolve a material interface to parent chain, root material, and optional parameters.
+
+    Exactly one target must be supplied: ``asset_path``, ``material_path``, or
+    ``component_path`` (with ``slot_index``). The bridge enforces the same hard
+    contract (target_conflict / invalid_slot / material_not_found).
+    """
+    require_exactly_one(
+        {
+            "asset_path": bool(asset_path),
+            "material_path": bool(material_path),
+            "component_path": bool(component_path),
+        },
+        "asset_path, material_path, or component_path",
+    )
+    if component_path and slot_index is None:
+        raise ValueError("slot_index is required with component_path")
     return _call(
         "material_interface_resolve",
         {

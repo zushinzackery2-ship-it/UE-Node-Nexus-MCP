@@ -74,3 +74,24 @@ def anim_blueprint_summary_get(
             "max_nodes": max_nodes,
         },
     )
+
+
+@default_tool()
+def anim_state_machine_summary_get(
+    asset_path: str,
+    format: Literal["compact", "full"] = "compact",
+) -> dict[str, Any]:
+    """Return AnimBlueprint state machines: states, entry state, and transitions.
+
+    Descends each state machine's editor graph (which graph_snapshot_get does not
+    enter) to expose states[], entry_state, and transitions[] with from/to/rule
+    and a blend digest (crossfade, blend_mode, logic, priority, automatic rule).
+    """
+    require_non_empty_string(asset_path, "asset_path")
+    return _call(
+        "anim_state_machine_summary_get",
+        {
+            "asset_path": asset_path,
+            "format": format,
+        },
+    )

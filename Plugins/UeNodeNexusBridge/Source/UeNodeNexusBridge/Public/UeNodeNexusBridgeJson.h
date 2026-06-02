@@ -3,14 +3,48 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "HAL/PlatformTime.h"
 #include "Templates/UniquePtr.h"
+#include "UObject/UObjectGlobals.h"
 
 struct FHttpServerResponse;
 
 namespace UeNodeNexusBridge
 {
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeError(const FString& Code, const FString& Message);
+// Overload carrying field-level error context (e.g. conflicting fields, valid
+// ranges, expected/actual types). The base overload always seeds empty details.
+UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeError(const FString& Code, const FString& Message, const TSharedPtr<FJsonObject>& Details);
+// Canonical failed-envelope builder. Replaces the per-domain Make<Domain>Error
+// wrappers that all shared the same body.
+UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeOperationError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message, const TSharedPtr<FJsonObject>& Details = nullptr);
+// Stamps data.elapsed_ms from a FPlatformTime::Seconds() start mark. Used by
+// every summary handler.
+UENODENEXUSBRIDGE_API void AddElapsedMs(const TSharedPtr<FJsonObject>& Data, double StartSeconds);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeEnvelope(const FString& Operation, const FString& RequestId, bool bOk);
+
+// Shared read-op preamble: require a non-empty asset_path then LoadObject<T>.
+// On failure returns nullptr and fills OutErrorResponse with the canonical
+// invalid_request / asset_not_found envelope; on success returns the asset.
+template <typename TAsset>
+TAsset* LoadAssetOrError(const TSharedPtr<FJsonObject>& Payload, const FString& Operation, const FString& RequestId, TSharedPtr<FJsonObject>& OutErrorResponse, const TCHAR* AssetTypeName)
+{
+    OutErrorResponse.Reset();
+    FString AssetPath;
+    if (!Payload->TryGetStringField(TEXT("asset_path"), AssetPath) || AssetPath.IsEmpty())
+    {
+        OutErrorResponse = MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("asset_path is required"));
+        return nullptr;
+    }
+
+    TAsset* Asset = LoadObject<TAsset>(nullptr, *AssetPath);
+    if (Asset == nullptr)
+    {
+        OutErrorResponse = MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), FString::Printf(TEXT("%s could not be loaded"), AssetTypeName));
+        return nullptr;
+    }
+    return Asset;
+}
 UENODENEXUSBRIDGE_API TUniquePtr<FHttpServerResponse> JsonResponse(const TSharedPtr<FJsonObject>& JsonObject);
 UENODENEXUSBRIDGE_API FString BodyToString(const TArray<uint8>& Body);
 UENODENEXUSBRIDGE_API bool TryGetPayload(const TSharedPtr<FJsonObject>& Envelope, TSharedPtr<FJsonObject>& OutPayload);

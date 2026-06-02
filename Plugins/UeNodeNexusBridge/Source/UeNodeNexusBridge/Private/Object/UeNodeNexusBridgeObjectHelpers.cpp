@@ -59,6 +59,45 @@ FString PropertyValueToText(UObject* Object, FProperty* Property)
     return Text;
 }
 
+FString CleanExportedPropertyText(const FString& Value, int32 MaxLen, bool bStripQuotes)
+{
+    FString Result = Value;
+    Result.RemoveFromStart(TEXT("("));
+    Result.RemoveFromEnd(TEXT(")"));
+    Result.ReplaceInline(TEXT("\r"), TEXT(" "));
+    Result.ReplaceInline(TEXT("\n"), TEXT(" "));
+    if (bStripQuotes)
+    {
+        Result.ReplaceInline(TEXT("\""), TEXT(""));
+    }
+    if (MaxLen > 0 && Result.Len() > MaxLen)
+    {
+        Result = Result.Left(MaxLen);
+    }
+    return Result;
+}
+
+bool ExportNamedPropertyText(UObject* Object, const FName& PropertyName, FString& OutValue)
+{
+    FProperty* Property = Object ? Object->GetClass()->FindPropertyByName(PropertyName) : nullptr;
+    if (Property == nullptr)
+    {
+        return false;
+    }
+
+    if (const FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))
+    {
+        UObject* ValueObject = ObjectProperty->GetObjectPropertyValue_InContainer(Object);
+        OutValue = ValueObject ? ValueObject->GetPathName() : FString();
+        return true;
+    }
+
+    FString Value;
+    Property->ExportText_InContainer(0, Value, Object, nullptr, Object, PPF_None);
+    OutValue = CleanExportedPropertyText(Value, 300, /*bStripQuotes*/ false);
+    return true;
+}
+
 static TSharedPtr<FJsonValue> StructPropertyToJson(UObject* Object, FStructProperty* Property)
 {
     const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Object);

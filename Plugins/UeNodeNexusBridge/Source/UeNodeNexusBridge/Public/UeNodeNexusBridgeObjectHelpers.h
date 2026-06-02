@@ -13,6 +13,15 @@ UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeVectorJson(const FVector& Valu
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeRotatorJson(const FRotator& Value);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeTransformJson(const FTransform& Value);
 UENODENEXUSBRIDGE_API FString PropertyValueToText(UObject* Object, FProperty* Property);
+// Normalizes an exported-property string for compact summaries: drops the outer
+// struct parens, flattens CR/LF to spaces, optionally strips quotes, and clamps
+// to MaxLen (0 = no clamp).
+UENODENEXUSBRIDGE_API FString CleanExportedPropertyText(const FString& Value, int32 MaxLen = 0, bool bStripQuotes = false);
+// Exports a named property on Object to a cleaned display string. Object
+// properties yield the referenced object's path name; others are exported text
+// normalized via CleanExportedPropertyText(300). Returns false when the property
+// does not exist on the object's class.
+UENODENEXUSBRIDGE_API bool ExportNamedPropertyText(UObject* Object, const FName& PropertyName, FString& OutValue);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonValue> PropertyValueToJson(UObject* Object, FProperty* Property);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> PropertyToJson(UObject* Object, FProperty* Property, bool bFull);
 UENODENEXUSBRIDGE_API bool ShouldExposeProperty(FProperty* Property, bool bIncludeNonEditable);

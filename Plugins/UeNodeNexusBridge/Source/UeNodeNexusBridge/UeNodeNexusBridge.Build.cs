@@ -26,6 +26,7 @@ public class UeNodeNexusBridge : ModuleRules
             System.IO.Path.Combine(ModuleDirectory, "Private", "Material", "Patch"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Module"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Object"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Texture"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Transport")
         });
 
@@ -39,6 +40,7 @@ public class UeNodeNexusBridge : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
+            "AnimGraph",
             "AssetRegistry",
             "AssetTools",
             "BlueprintGraph",

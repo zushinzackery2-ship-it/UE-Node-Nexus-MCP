@@ -16,13 +16,6 @@ namespace UeNodeNexusBridge
 {
 namespace
 {
-TSharedPtr<FJsonObject> MakeSoundCueError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message)
-{
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(Code, Message));
-    return Response;
-}
-
 FString NodeId(USoundNode* Node)
 {
     return Node ? Node->GetName() : FString();
@@ -151,16 +144,11 @@ TSharedPtr<FJsonObject> HandleSoundCueSummaryGet(const FString& Operation, const
 {
     const double StartSeconds = FPlatformTime::Seconds();
 
-    FString AssetPath;
-    if (!Payload->TryGetStringField(TEXT("asset_path"), AssetPath) || AssetPath.IsEmpty())
-    {
-        return MakeSoundCueError(Operation, RequestId, TEXT("invalid_request"), TEXT("asset_path is required"));
-    }
-
-    USoundCue* SoundCue = LoadObject<USoundCue>(nullptr, *AssetPath);
+    TSharedPtr<FJsonObject> ErrorResponse;
+    USoundCue* SoundCue = LoadAssetOrError<USoundCue>(Payload, Operation, RequestId, ErrorResponse, TEXT("SoundCue"));
     if (SoundCue == nullptr)
     {
-        return MakeSoundCueError(Operation, RequestId, TEXT("asset_not_found"), TEXT("SoundCue could not be loaded"));
+        return ErrorResponse;
     }
 
     FString Format = TEXT("compact");
@@ -188,7 +176,7 @@ TSharedPtr<FJsonObject> HandleSoundCueSummaryGet(const FString& Operation, const
     Data->SetArrayField(TEXT("edges"), Edges);
     Data->SetNumberField(TEXT("node_count"), Nodes.Num());
     Data->SetNumberField(TEXT("edge_count"), Edges.Num());
-    Data->SetNumberField(TEXT("elapsed_ms"), (FPlatformTime::Seconds() - StartSeconds) * 1000.0);
+    AddElapsedMs(Data, StartSeconds);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

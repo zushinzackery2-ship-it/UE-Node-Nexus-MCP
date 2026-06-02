@@ -12,6 +12,7 @@ from .facade_response import (
     minimal_error,
     summarize_response,
 )
+from .facade_read import apply_read_format_defaults, resolve_read_operation
 from .facade_state import facade_state
 from .operation_registry import capability_index, enabled_operation_specs, get_operation_spec, operation_schema
 from .payload_schema import example_payload_for, payload_schema_for
@@ -21,27 +22,6 @@ from .runtime import enabled_features, thin_tool
 
 ResponseMode = Literal["silent", "brief", "ids_only", "delta", "summary", "full", "debug"]
 VALID_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full", "debug"}
-
-
-READ_TARGET_OPERATIONS = {
-    "artifact": None,
-    "anim_blueprint": "anim_blueprint_summary_get",
-    "anim_montage": "anim_montage_summary_get",
-    "asset": "asset_get",
-    "asset_index": "auto_index_query",
-    "blend_space": "blend_space_summary_get",
-    "blueprint": "blueprint_details_get",
-    "cascade_system": "cascade_system_summary_get",
-    "diagnostics": "diagnostics_get",
-    "graph": "graph_snapshot_get",
-    "level": "level_actors_list",
-    "material_instance": "material_instance_params_get",
-    "niagara_stack": "niagara_modules_list",
-    "niagara_system": "niagara_system_summary_get",
-    "node": "node_info_get",
-    "project_input": "project_input_mappings_get",
-    "sound_cue": "sound_cue_summary_get",
-}
 
 
 def _execute_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -181,20 +161,12 @@ def ue_read(
             return minimal_error("token_expired", "artifact was not found or expired", {"artifact_id": artifact_id})
         return {"ok": True, "data": artifact.payload, "remaining_errors": 0}
 
-    operation = READ_TARGET_OPERATIONS.get(target)
+    operation = resolve_read_operation(target)
     if operation is None:
         return minimal_error("unsupported_target", f"unsupported read target: {target}", {"target": target})
     if asset_path is not None:
         query_payload.setdefault("asset_path", asset_path)
-    if format in {"summary", "index"}:
-        if operation == "graph_snapshot_get":
-            query_payload.setdefault("format", "wires_tiny")
-        elif operation in {"auto_index_query", "level_actors_list"}:
-            query_payload.setdefault("format", "indexed")
-        elif operation == "project_input_mappings_get":
-            query_payload.setdefault("format", "compact")
-    elif format == "detail":
-        query_payload.setdefault("format", "full")
+    apply_read_format_defaults(operation, format, query_payload)
 
     try:
         raw_response = _execute_operation(operation, query_payload)

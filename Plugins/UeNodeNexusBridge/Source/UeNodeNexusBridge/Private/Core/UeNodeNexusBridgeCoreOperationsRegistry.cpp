@@ -16,6 +16,7 @@ void Register(const TCHAR* Operation, FBridgeOperationHandler Handler)
 void RegisterCoreOperations()
 {
     Register(TEXT("sound_cue_summary_get"), HandleSoundCueSummaryGet);
+    Register(TEXT("texture_summary_get"), HandleTextureSummaryGet);
     Register(TEXT("asset_list"), HandleAssetList);
     Register(TEXT("asset_get"), HandleAssetGet);
     Register(TEXT("asset_create"), HandleAssetCreate);
@@ -44,6 +45,7 @@ void RegisterCoreOperations()
     Register(TEXT("blueprint_details_get"), HandleBlueprintDetailsGet);
     Register(TEXT("blueprint_components_patch"), HandleBlueprintComponentsPatch);
     Register(TEXT("anim_blueprint_summary_get"), HandleAnimBlueprintSummaryGet);
+    Register(TEXT("anim_state_machine_summary_get"), HandleAnimStateMachineSummaryGet);
     Register(TEXT("anim_montage_summary_get"), HandleAnimMontageSummaryGet);
     Register(TEXT("blend_space_summary_get"), HandleBlendSpaceSummaryGet);
     Register(TEXT("cascade_system_summary_get"), HandleCascadeSystemSummaryGet);

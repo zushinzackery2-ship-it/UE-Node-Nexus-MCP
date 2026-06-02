@@ -55,6 +55,7 @@
 
     {"name": "blueprint_details_get", "kind": "read", "group": "blueprint", "hidden": false, "local": false},
     {"name": "anim_blueprint_summary_get", "kind": "read", "group": "blueprint", "hidden": false, "local": false},
+    {"name": "anim_state_machine_summary_get", "kind": "read", "group": "blueprint", "hidden": false, "local": false},
     {"name": "blueprint_components_patch", "kind": "write", "group": "blueprint", "hidden": false, "local": false},
 
     {"name": "anim_montage_summary_get", "kind": "read", "group": "animation", "hidden": false, "local": false},
@@ -63,6 +64,8 @@
     {"name": "cascade_system_summary_get", "kind": "read", "group": "cascade", "hidden": false, "local": false},
 
     {"name": "sound_cue_summary_get", "kind": "read", "group": "audio", "hidden": false, "local": false},
+
+    {"name": "texture_summary_get", "kind": "read", "group": "texture", "hidden": false, "local": false},
 
     {"name": "graph_snapshot_get", "kind": "read", "group": "graph", "hidden": false, "local": false},
     {"name": "graph_node_info_get", "kind": "read", "group": "graph", "hidden": false, "local": false},

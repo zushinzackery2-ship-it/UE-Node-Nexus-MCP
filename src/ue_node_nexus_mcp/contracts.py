@@ -75,3 +75,18 @@ def require_list(value: list[dict[str, Any]], field_name: str) -> None:
     for index, item in enumerate(value):
         if not isinstance(item, dict):
             raise ValueError(f"{field_name}[{index}] must be an object")
+
+
+def require_exactly_one(present: dict[str, bool], group_label: str) -> None:
+    """Enforce a mutually-exclusive target group.
+
+    ``present`` maps each candidate field label to whether it was supplied.
+    Raises ValueError on zero or more than one present field. Mirrors the
+    authoritative C++ ``target_conflict`` / ``invalid_request`` contract for
+    direct/internal callers (the live ue_execute path is validated bridge-side).
+    """
+    chosen = [label for label, is_present in present.items() if is_present]
+    if len(chosen) == 0:
+        raise ValueError(f"provide exactly one of {group_label}")
+    if len(chosen) > 1:
+        raise ValueError(f"provide exactly one of {group_label}; got: {', '.join(chosen)}")

@@ -5,6 +5,7 @@
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
+#include "UeNodeNexusBridgeAnimReflectionUtils.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UObject/UnrealType.h"
 
@@ -31,77 +32,6 @@ static bool IsTrackedAnimNodeClass(const FString& ClassName)
     };
 
     return ExactNames.Contains(ClassName) || ClassName.Contains(TEXT("ControlRig")) || ClassName.Contains(TEXT("IK")) || ClassName.Contains(TEXT("Blend"));
-}
-
-static FString CleanSummaryText(FString Value)
-{
-    Value.RemoveFromStart(TEXT("("));
-    Value.RemoveFromEnd(TEXT(")"));
-    Value.ReplaceInline(TEXT("\r"), TEXT(" "));
-    Value.ReplaceInline(TEXT("\n"), TEXT(" "));
-    Value.ReplaceInline(TEXT("\""), TEXT(""));
-    return Value.Left(160);
-}
-
-static bool ExportFieldValue(UObject* Owner, const void* Container, FProperty* Property, FString& OutValue)
-{
-    if (Property == nullptr || Container == nullptr)
-    {
-        return false;
-    }
-
-    if (const FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))
-    {
-        const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Container);
-        UObject* ValueObject = ObjectProperty->GetObjectPropertyValue(ValuePtr);
-        OutValue = ValueObject ? ValueObject->GetPathName() : FString();
-        return !OutValue.IsEmpty();
-    }
-
-    FString Value;
-    const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Container);
-    Property->ExportTextItem_Direct(Value, ValuePtr, nullptr, Owner, PPF_None);
-    OutValue = CleanSummaryText(Value);
-    return !OutValue.IsEmpty() && !OutValue.Equals(TEXT("None"), ESearchCase::IgnoreCase);
-}
-
-static FProperty* FindPropertyCaseInsensitive(UStruct* Struct, const FString& Name)
-{
-    if (Struct == nullptr)
-    {
-        return nullptr;
-    }
-
-    for (TFieldIterator<FProperty> It(Struct, EFieldIteratorFlags::IncludeSuper); It; ++It)
-    {
-        FProperty* Property = *It;
-        if (Property != nullptr && Property->GetName().Equals(Name, ESearchCase::IgnoreCase))
-        {
-            return Property;
-        }
-    }
-    return nullptr;
-}
-
-static void AddField(TArray<FString>& Parts, UObject* Owner, const void* Container, UStruct* Struct, const FString& FieldName, const FString& Alias)
-{
-    FString Value;
-    if (ExportFieldValue(Owner, Container, FindPropertyCaseInsensitive(Struct, FieldName), Value))
-    {
-        Parts.Add(FString::Printf(TEXT("%s=%s"), *Alias, *Value));
-    }
-}
-
-static void AddStructField(TArray<FString>& Parts, UObject* Owner, const void* Container, UStruct* Struct, const FString& StructFieldName, const FString& InnerFieldName, const FString& Alias)
-{
-    FStructProperty* StructProperty = CastField<FStructProperty>(FindPropertyCaseInsensitive(Struct, StructFieldName));
-    if (StructProperty == nullptr)
-    {
-        return;
-    }
-
-    const void* StructPtr = StructProperty->ContainerPtrToValuePtr<void>(Container);
-    AddField(Parts, Owner, StructPtr, StructProperty->Struct, InnerFieldName, Alias);
 }
 
 static FStructProperty* FindAnimNodeStructProperty(UEdGraphNode* Node)
@@ -135,26 +65,26 @@ static FString BuildAnimNodeSummary(UEdGraphNode* Node)
     {
         const void* AnimNodePtr = AnimNodeProperty->ContainerPtrToValuePtr<void>(Node);
         UStruct* AnimNodeStruct = AnimNodeProperty->Struct;
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("Alpha"), TEXT("alpha"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("AlphaInputType"), TEXT("alpha_type"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("bApplyAdditive"), TEXT("additive"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("bMeshSpaceRotationBlend"), TEXT("mesh_rot"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("BlendSpace"), TEXT("blend_space"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("Sequence"), TEXT("sequence"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("SlotName"), TEXT("slot"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("ControlRigClass"), TEXT("rig"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("X"), TEXT("x"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("Y"), TEXT("y"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("BlendMode"), TEXT("blend_mode"));
-        AddField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("LayerSetup"), TEXT("layers"));
-        AddStructField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("IKBone"), TEXT("BoneName"), TEXT("ik_bone"));
-        AddStructField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("EffectorTarget"), TEXT("Bone"), TEXT("eff_bone"));
-        AddStructField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("EffectorTarget"), TEXT("Socket"), TEXT("eff_socket"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("Alpha"), TEXT("alpha"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("AlphaInputType"), TEXT("alpha_type"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("bApplyAdditive"), TEXT("additive"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("bMeshSpaceRotationBlend"), TEXT("mesh_rot"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("BlendSpace"), TEXT("blend_space"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("Sequence"), TEXT("sequence"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("SlotName"), TEXT("slot"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("ControlRigClass"), TEXT("rig"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("X"), TEXT("x"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("Y"), TEXT("y"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("BlendMode"), TEXT("blend_mode"));
+        AddAnimField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("LayerSetup"), TEXT("layers"));
+        AddAnimStructField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("IKBone"), TEXT("BoneName"), TEXT("ik_bone"));
+        AddAnimStructField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("EffectorTarget"), TEXT("Bone"), TEXT("eff_bone"));
+        AddAnimStructField(Parts, Node, AnimNodePtr, AnimNodeStruct, TEXT("EffectorTarget"), TEXT("Socket"), TEXT("eff_socket"));
     }
 
-    AddField(Parts, Node, Node, Node->GetClass(), TEXT("CacheName"), TEXT("cache"));
-    AddField(Parts, Node, Node, Node->GetClass(), TEXT("NameOfCache"), TEXT("cache"));
-    AddField(Parts, Node, Node, Node->GetClass(), TEXT("NodeTag"), TEXT("tag"));
+    AddAnimField(Parts, Node, Node, Node->GetClass(), TEXT("CacheName"), TEXT("cache"));
+    AddAnimField(Parts, Node, Node, Node->GetClass(), TEXT("NameOfCache"), TEXT("cache"));
+    AddAnimField(Parts, Node, Node, Node->GetClass(), TEXT("NodeTag"), TEXT("tag"));
     return FString::Join(Parts, TEXT(";"));
 }
 
@@ -188,20 +118,11 @@ TSharedPtr<FJsonObject> HandleAnimBlueprintSummaryGet(const FString& Operation, 
 {
     const double StartSeconds = FPlatformTime::Seconds();
 
-    FString AssetPath;
-    if (!Payload->TryGetStringField(TEXT("asset_path"), AssetPath) || AssetPath.IsEmpty())
-    {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("asset_path is required")));
-        return Response;
-    }
-
-    UAnimBlueprint* AnimBlueprint = LoadObject<UAnimBlueprint>(nullptr, *AssetPath);
+    TSharedPtr<FJsonObject> ErrorResponse;
+    UAnimBlueprint* AnimBlueprint = LoadAssetOrError<UAnimBlueprint>(Payload, Operation, RequestId, ErrorResponse, TEXT("AnimBlueprint"));
     if (AnimBlueprint == nullptr)
     {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("asset_not_found"), TEXT("AnimBlueprint could not be loaded")));
-        return Response;
+        return ErrorResponse;
     }
 
     FString Format = TEXT("compact");
@@ -268,7 +189,7 @@ TSharedPtr<FJsonObject> HandleAnimBlueprintSummaryGet(const FString& Operation, 
     Data->SetNumberField(TEXT("returned_count"), Items.Num());
     Data->SetNumberField(TEXT("total_count"), TotalMatched);
     Data->SetBoolField(TEXT("truncated"), bTruncated);
-    Data->SetNumberField(TEXT("elapsed_ms"), (FPlatformTime::Seconds() - StartSeconds) * 1000.0);
+    AddElapsedMs(Data, StartSeconds);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

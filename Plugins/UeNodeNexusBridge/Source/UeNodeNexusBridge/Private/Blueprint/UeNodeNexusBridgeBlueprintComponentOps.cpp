@@ -20,9 +20,22 @@ namespace UeNodeNexusBridge
 {
 static TSharedPtr<FJsonObject> MakeBlueprintComponentError(const FString& Operation, const FString& RequestId, const FString& Code, const FString& Message)
 {
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), MakeError(Code, Message));
-    return Response;
+    return MakeOperationError(Operation, RequestId, Code, Message);
+}
+
+static TSharedPtr<FJsonObject> MakeBlueprintComponentInvalidParams(const FString& Operation, const FString& RequestId)
+{
+    // Keep the actionable message + error code in step with the sibling patch ops
+    // (graph/material/material-function/project-input all say "operations must be
+    // an array" under invalid_request), and attach a complete field->type schema
+    // covering every payload field HandleBlueprintComponentsPatch consumes.
+    TSharedPtr<FJsonObject> Details = MakeShared<FJsonObject>();
+    Details->SetStringField(TEXT("asset_path"), TEXT("string"));
+    Details->SetStringField(TEXT("operations"), TEXT("array<object>"));
+    Details->SetStringField(TEXT("dry_run"), TEXT("boolean"));
+    Details->SetStringField(TEXT("compile_after"), TEXT("boolean"));
+    Details->SetStringField(TEXT("format"), TEXT("string"));
+    return MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("operations must be an array"), Details);
 }
 
 static USCS_Node* FindComponentNode(USimpleConstructionScript* Script, const FString& Name)
@@ -201,7 +214,7 @@ TSharedPtr<FJsonObject> HandleBlueprintComponentsPatch(const FString& Operation,
     const TArray<TSharedPtr<FJsonValue>>* Operations = nullptr;
     if (!Payload->TryGetArrayField(TEXT("operations"), Operations) || Operations == nullptr)
     {
-        return MakeBlueprintComponentError(Operation, RequestId, TEXT("invalid_request"), TEXT("operations must be an array"));
+        return MakeBlueprintComponentInvalidParams(Operation, RequestId);
     }
 
     bool bDryRun = true;
