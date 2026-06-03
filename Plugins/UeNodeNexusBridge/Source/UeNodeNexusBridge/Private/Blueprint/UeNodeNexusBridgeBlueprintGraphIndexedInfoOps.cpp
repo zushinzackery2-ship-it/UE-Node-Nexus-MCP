@@ -6,6 +6,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
+#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
@@ -61,7 +62,7 @@ static void AppendBlueprintIndexedEdges(UEdGraphNode* Node, int32 NodeIndex, con
     }
 }
 
-TSharedPtr<FJsonObject> BuildBlueprintGraphIndexedData(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Payload, bool bWithPosition)
+TSharedPtr<FJsonObject> BuildBlueprintGraphIndexedData(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Payload, bool bWithPosition, const FBlueprintGraphFilterResult& FilterResult)
 {
     const int32 MaxNodes = ReadIndexedMaxNodes(Payload);
     const bool bRealIds = WantsRealIds(Payload);
@@ -69,7 +70,7 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphIndexedData(UBlueprint* Blueprint, UE
     TArray<UEdGraphNode*> Nodes;
     for (UEdGraphNode* Node : Graph->Nodes)
     {
-        if (Node != nullptr)
+        if (Node != nullptr && FilterResult.ShouldInclude(Node))
         {
             if (MaxNodes > 0 && Nodes.Num() >= MaxNodes)
             {
@@ -137,6 +138,10 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphIndexedData(UBlueprint* Blueprint, UE
     Data->SetNumberField(TEXT("total_nodes"), Graph->Nodes.Num());
     Data->SetNumberField(TEXT("returned_nodes"), Nodes.Num());
     Data->SetBoolField(TEXT("truncated"), Nodes.Num() < Graph->Nodes.Num());
+    if (!FilterResult.IncludesAll())
+    {
+        Data->SetObjectField(TEXT("filter_stats"), FilterResult.ToJson());
+    }
     SetTextPayload(Data, Text);
     return Data;
 }

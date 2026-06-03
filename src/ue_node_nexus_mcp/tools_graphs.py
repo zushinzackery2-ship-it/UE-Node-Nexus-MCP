@@ -51,6 +51,11 @@ def graph_node_info_get(
     format: Literal["indexed", "grouped", "text"] = "indexed",
     id_mode: Literal["alias", "real", "both"] = "alias",
     include_position: bool = False,
+    keyword: str | None = None,
+    node_class_filter: list[str] | None = None,
+    trace_from: str | None = None,
+    trace_depth: int = 3,
+    exec_only: bool = False,
 ) -> dict[str, Any]:
     """Return a whole graph in dense indexed form; grouped is readable by node type."""
     require_non_empty_string(asset_path, "asset_path")
@@ -65,6 +70,11 @@ def graph_node_info_get(
             "format": format,
             "id_mode": id_mode,
             "include_position": include_position,
+            "keyword": keyword,
+            "node_class_filter": node_class_filter,
+            "trace_from": trace_from,
+            "trace_depth": trace_depth,
+            "exec_only": exec_only,
         },
     )
 

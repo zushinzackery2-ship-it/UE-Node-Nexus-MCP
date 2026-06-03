@@ -20,5 +20,6 @@ FString ShortBlueprintNodeClass(UEdGraphNode* Node);
 FString BlueprintNodeAlias(UEdGraph* Graph, UEdGraphNode* Target);
 int32 BlueprintPinLocalIndex(UEdGraphPin* Pin);
 TSharedPtr<FJsonObject> BuildBlueprintNodeInterfaceData(UBlueprint* Blueprint, UEdGraph* Graph, UEdGraphNode* Node, const TSharedPtr<FJsonObject>& Payload, const FString& Format);
-TSharedPtr<FJsonObject> BuildBlueprintGraphIndexedData(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Payload, bool bWithPosition);
+struct FBlueprintGraphFilterResult;
+TSharedPtr<FJsonObject> BuildBlueprintGraphIndexedData(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Payload, bool bWithPosition, const FBlueprintGraphFilterResult& FilterResult);
 }

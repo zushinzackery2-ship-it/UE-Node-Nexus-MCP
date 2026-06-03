@@ -6,6 +6,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
+#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 #include "UeNodeNexusBridgeGraphGroupedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
@@ -159,19 +160,22 @@ static TSharedPtr<FJsonObject> BuildBlueprintGraphNodeInfo(const FString& Operat
         return Response;
     }
 
+    FBlueprintGraphFilter Filter = FBlueprintGraphFilter::FromPayload(Payload);
+    FBlueprintGraphFilterResult FilterResult = ApplyBlueprintGraphFilter(Graph, Filter);
+
     FString Format = TEXT("indexed");
     Payload->TryGetStringField(TEXT("format"), Format);
     const bool bWithPosition = WantsGraphNodePositions(Payload);
     if (Format.Equals(TEXT("grouped"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphGroupedData(Blueprint, Graph, Payload, bWithPosition));
+        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphGroupedData(Blueprint, Graph, Payload, bWithPosition, FilterResult));
         return Response;
     }
     if (!Format.Equals(TEXT("text"), ESearchCase::IgnoreCase))
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphIndexedData(Blueprint, Graph, Payload, bWithPosition));
+        Response->SetObjectField(TEXT("data"), BuildBlueprintGraphIndexedData(Blueprint, Graph, Payload, bWithPosition, FilterResult));
         return Response;
     }
 
@@ -182,7 +186,7 @@ static TSharedPtr<FJsonObject> BuildBlueprintGraphNodeInfo(const FString& Operat
     int32 ReturnedNodes = 0;
     for (UEdGraphNode* Node : Graph->Nodes)
     {
-        if (Node == nullptr)
+        if (Node == nullptr || !FilterResult.ShouldInclude(Node))
         {
             continue;
         }
@@ -199,7 +203,12 @@ static TSharedPtr<FJsonObject> BuildBlueprintGraphNodeInfo(const FString& Operat
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), MakeGraphNodeInfoData(Blueprint->GetPathName(), TEXT("blueprint"), Graph->GetName(), Graph->Nodes.Num(), ReturnedNodes, Text));
+    TSharedPtr<FJsonObject> Data = MakeGraphNodeInfoData(Blueprint->GetPathName(), TEXT("blueprint"), Graph->GetName(), Graph->Nodes.Num(), ReturnedNodes, Text);
+    if (!FilterResult.IncludesAll())
+    {
+        Data->SetObjectField(TEXT("filter_stats"), FilterResult.ToJson());
+    }
+    Response->SetObjectField(TEXT("data"), Data);
     return Response;
 }
 

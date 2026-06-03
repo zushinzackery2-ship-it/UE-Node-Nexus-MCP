@@ -6,6 +6,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
+#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "MaterialExpressionIO.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
@@ -239,7 +240,7 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionGraphGroupedData(UMaterialFunction*
     return Data;
 }
 
-TSharedPtr<FJsonObject> BuildBlueprintGraphGroupedData(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Payload, bool bWithPosition)
+TSharedPtr<FJsonObject> BuildBlueprintGraphGroupedData(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Payload, bool bWithPosition, const FBlueprintGraphFilterResult& FilterResult)
 {
     const int32 MaxNodes = ReadIndexedMaxNodes(Payload);
     const bool bRealIds = WantsRealIds(Payload);
@@ -249,7 +250,7 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphGroupedData(UBlueprint* Blueprint, UE
 
     for (UEdGraphNode* Node : Graph->Nodes)
     {
-        if (Node == nullptr || (MaxNodes > 0 && ReturnedNodes >= MaxNodes))
+        if (Node == nullptr || !FilterResult.ShouldInclude(Node) || (MaxNodes > 0 && ReturnedNodes >= MaxNodes))
         {
             continue;
         }
@@ -279,6 +280,10 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphGroupedData(UBlueprint* Blueprint, UE
     Data->SetNumberField(TEXT("total_nodes"), Graph->Nodes.Num());
     Data->SetNumberField(TEXT("returned_nodes"), ReturnedNodes);
     Data->SetBoolField(TEXT("truncated"), ReturnedNodes < Graph->Nodes.Num());
+    if (!FilterResult.IncludesAll())
+    {
+        Data->SetObjectField(TEXT("filter_stats"), FilterResult.ToJson());
+    }
     SetTextPayload(Data, BuildGroupedText(FString::Printf(TEXT("G:%s|blueprint|%s|%d\n"), *EscapeIndexedToken(Blueprint->GetPathName()), *EscapeIndexedToken(Graph->GetName()), Graph->Nodes.Num()), Order, Groups));
     return Data;
 }
