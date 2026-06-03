@@ -381,7 +381,7 @@ ue-node-nexus-mcp
 
 连接 UE 后建议先运行 `project_context_get()` 确认 `.uproject`、Content 目录和 `/Game` mount，再运行 `bridge_capabilities_get()` 或 MCP 本地工具 `bridge_contract_check()` 确认 Python MCP、核心 bridge 插件和 Niagara bridge 插件的 operation 合同一致。脚本验收会直接调用 UE 端 `bridge_capabilities_get`，不会把 MCP 本地 wrapper 当成 UE operation。
 
-`scripts/` 验收脚本仅存在于本地开发树、不随仓库分发；一般用户直接通过 MCP 工具执行 `project_context_get()`、`bridge_contract_check()` 和需要的 `niagara_asset_lint()` 即可完成同等验收。
+Release zip 不包含 `scripts/`、`tests/`、`docs/` 等开发目录。`scripts/` 验收脚本仅存在于本地开发树；一般用户直接通过 MCP 工具执行 `project_context_get()`、`bridge_contract_check()` 和需要的 `niagara_asset_lint()` 即可完成同等验收。
 
 最终 UE5.5 工作流验收入口会依次检查 bridge 合同、六面映射大坝材质函数接入、Niagara 炉火资产和 3C Blueprint 工作流：
 
