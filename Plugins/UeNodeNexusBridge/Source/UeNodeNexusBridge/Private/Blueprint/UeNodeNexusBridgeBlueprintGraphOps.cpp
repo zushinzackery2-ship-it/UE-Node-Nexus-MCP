@@ -80,7 +80,7 @@ static TSharedPtr<FJsonObject> BlueprintNodeToJson(UEdGraphNode* Node, bool bInc
     return Json;
 }
 
-static void AddBlueprintLinks(const UEdGraphNode* Node, TArray<TSharedPtr<FJsonValue>>& Links)
+static void AddBlueprintLinks(const UEdGraphNode* Node, TArray<TSharedPtr<FJsonValue>>& Links, const FBlueprintGraphFilterResult& FilterResult)
 {
     for (const UEdGraphPin* Pin : Node->Pins)
     {
@@ -90,7 +90,8 @@ static void AddBlueprintLinks(const UEdGraphNode* Node, TArray<TSharedPtr<FJsonV
         }
         for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)
         {
-            if (LinkedPin == nullptr || LinkedPin->GetOwningNode() == nullptr)
+            UEdGraphNode* LinkedNode = LinkedPin ? LinkedPin->GetOwningNode() : nullptr;
+            if (LinkedNode == nullptr || !FilterResult.ShouldInclude(LinkedNode))
             {
                 continue;
             }
@@ -98,7 +99,7 @@ static void AddBlueprintLinks(const UEdGraphNode* Node, TArray<TSharedPtr<FJsonV
             TSharedPtr<FJsonObject> Link = MakeShared<FJsonObject>();
             Link->SetStringField(TEXT("from_node_id"), Node->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
             Link->SetStringField(TEXT("from_pin_id"), Pin->PinId.ToString(EGuidFormats::DigitsWithHyphens));
-            Link->SetStringField(TEXT("to_node_id"), LinkedPin->GetOwningNode()->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            Link->SetStringField(TEXT("to_node_id"), LinkedNode->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
             Link->SetStringField(TEXT("to_pin_id"), LinkedPin->PinId.ToString(EGuidFormats::DigitsWithHyphens));
             Links.Add(MakeShared<FJsonValueObject>(Link));
         }
@@ -123,7 +124,7 @@ static UEdGraph* ResolveBlueprintGraph(UBlueprint* Blueprint, const FString& Gra
     return TargetGraph;
 }
 
-static void AppendBlueprintCompactNode(FCompactGraphBuilder& Builder, UEdGraphNode* Node, bool bIncludeNodeParams, bool bIncludeLinks)
+static void AppendBlueprintCompactNode(FCompactGraphBuilder& Builder, UEdGraphNode* Node, bool bIncludeNodeParams, bool bIncludeLinks, const FBlueprintGraphFilterResult& FilterResult)
 {
     const FString NodeId = Node->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens);
     Builder.AddNode(NodeId, Node->GetClass()->GetName(), Node->GetNodeTitle(ENodeTitleType::ListView).ToString(), Node->NodePosX, Node->NodePosY);
@@ -141,7 +142,8 @@ static void AppendBlueprintCompactNode(FCompactGraphBuilder& Builder, UEdGraphNo
         {
             for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
             {
-                if (LinkedPin != nullptr)
+                UEdGraphNode* LinkedNode = LinkedPin ? LinkedPin->GetOwningNode() : nullptr;
+                if (LinkedNode != nullptr && FilterResult.ShouldInclude(LinkedNode))
                 {
                     Builder.AddLink(PinId, LinkedPin->PinId.ToString(EGuidFormats::DigitsWithHyphens));
                 }
@@ -170,7 +172,7 @@ static TSharedPtr<FJsonObject> BuildBlueprintCompactGraphSnapshot(const FString&
     {
         if (Node != nullptr && FilterResult.ShouldInclude(Node))
         {
-            AppendBlueprintCompactNode(Builder, Node, bIncludeNodeParams, bIncludeLinks);
+            AppendBlueprintCompactNode(Builder, Node, bIncludeNodeParams, bIncludeLinks, FilterResult);
         }
     }
     Builder.FinalizeIds();
@@ -275,7 +277,7 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, co
         Nodes.Add(MakeShared<FJsonValueObject>(BlueprintNodeToJson(Node, bIncludeNodeParams)));
         if (bIncludeLinks)
         {
-            AddBlueprintLinks(Node, Links);
+            AddBlueprintLinks(Node, Links, FilterResult);
         }
     }
 
