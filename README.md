@@ -53,7 +53,7 @@
 |:-----|:-----|
 | **固定 MCP 工具** | Python MCP Server 只暴露 6 个 facade 工具，向 UE 桥接器转发经过校验的请求载荷 |
 | **MCP Facade** | 完整 UE 能力作为内部 operation registry 按需查询和执行；Niagara operation 只在 UE 端实际可用时进入 capability |
-| **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地 HTTP 端点 `http://127.0.0.1:8765/mcp` 提供服务 |
+| **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地命名管道 `\\.\pipe\UeNodeNexusBridge.<pid>` 提供服务（每实例一条，按 pid 命名，无端口占用） |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式；蓝图图支持 `keyword`、`node_class_filter`、`trace_from`+`trace_depth`、`exec_only` 子图筛选；蓝图响应附带 `available_graphs`（名字+节点数） |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
 | **图安全写入** | `graph_patch_apply` 编辑 Blueprint pin 或 Material Expression 连线，返回差异、引脚完整性、编译状态和脏标记 |
@@ -184,10 +184,7 @@ MCP client 配置：
   "mcpServers": {
     "ue-node-nexus": {
       "command": "ue-node-nexus-mcp",
-      "args": ["--response-mode", "minimal"],
-      "env": {
-        "UE_NEXUS_BRIDGE_URL": "http://127.0.0.1:8765"
-      }
+      "args": ["--response-mode", "minimal"]
     }
   }
 }
@@ -211,7 +208,7 @@ MCP client 配置：
 > [!NOTE]
 > **默认工具面**
 >
-> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 95 个内部 operation，其中 94 个转发到 UE bridge，`bridge_contract_check` 是 MCP 本地诊断包装器，不是 UE bridge HTTP operation。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
+> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 97 个内部 operation，其中 94 个转发到 UE bridge，`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select` 是 MCP 本地 operation，在 server 内处理、不转发到 UE。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
 
 ---
 
@@ -341,8 +338,7 @@ ue-node-nexus-mcp
 
 | 环境变量 | 默认值 | 说明 |
 |:-----|:-----|:-----|
-| **`UE_NEXUS_BRIDGE_URL`** | `http://127.0.0.1:8765` | UE 桥接器端点 |
-| **`UE_NEXUS_TIMEOUT_SECONDS`** | `30` | 桥接器 HTTP 超时时间（秒） |
+| **`UE_NEXUS_TIMEOUT_SECONDS`** | `30` | 桥接器请求超时时间（秒） |
 | **`UE_NEXUS_RESPONSE_MODE`** | `minimal` | facade 响应模式，支持 `minimal` 或 `full` |
 
 ---
@@ -357,7 +353,6 @@ ue-node-nexus-mcp
     "ue-node-nexus": {
       "command": "ue-node-nexus-mcp",
       "env": {
-        "UE_NEXUS_BRIDGE_URL": "http://127.0.0.1:8765",
         "UE_NEXUS_TIMEOUT_SECONDS": "30"
       }
     }
@@ -372,16 +367,15 @@ ue-node-nexus-mcp
   "mcpServers": {
     "ue-node-nexus": {
       "command": "python",
-      "args": ["-m", "ue_node_nexus_mcp.server"],
-      "env": {
-        "UE_NEXUS_BRIDGE_URL": "http://127.0.0.1:8765"
-      }
+      "args": ["-m", "ue_node_nexus_mcp.server"]
     }
   }
 }
 ```
 
-连接链路为 `MCP Client -> Python MCP Server -> UE Editor Plugin`。UE 未打开、插件未启用或端口不通时，工具会返回桥接器连接错误。
+连接链路为 `MCP Client -> Python MCP Server -> UE Editor Plugin`，传输层为本地命名管道 `\\.\pipe\UeNodeNexusBridge.<pid>`。UE 未打开、插件未启用或管道不可用时，工具会返回桥接器连接错误。
+
+多个 UE 编辑器实例同时打开时，每个实例各自暴露一条以 pid 命名的管道，互不冲突。MCP 会话默认自动连接唯一在线实例；存在多个实例时，先 `ue_execute("bridge_instance_list", {})` 查看在线实例，再 `ue_execute("bridge_instance_select", {"pid": 1234})`（或 `{"project": "工程名"}`）绑定本会话。`ue_context_get()` 会显示当前 `active_instance` 与 `available_instances`。
 
 ### 部署验收
 

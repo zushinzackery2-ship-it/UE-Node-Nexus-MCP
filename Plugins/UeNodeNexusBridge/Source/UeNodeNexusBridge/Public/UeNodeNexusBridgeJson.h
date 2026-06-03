@@ -7,8 +7,6 @@
 #include "Templates/UniquePtr.h"
 #include "UObject/UObjectGlobals.h"
 
-struct FHttpServerResponse;
-
 namespace UeNodeNexusBridge
 {
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeError(const FString& Code, const FString& Message);
@@ -45,7 +43,9 @@ TAsset* LoadAssetOrError(const TSharedPtr<FJsonObject>& Payload, const FString& 
     }
     return Asset;
 }
-UENODENEXUSBRIDGE_API TUniquePtr<FHttpServerResponse> JsonResponse(const TSharedPtr<FJsonObject>& JsonObject);
+// Serialize a JSON object to a compact UTF-16 FString. Transport-neutral
+// replacement for the former HTTP-coupled JsonResponse builder.
+UENODENEXUSBRIDGE_API FString SerializeJsonObjectToString(const TSharedPtr<FJsonObject>& JsonObject);
 UENODENEXUSBRIDGE_API FString BodyToString(const TArray<uint8>& Body);
 UENODENEXUSBRIDGE_API bool TryGetPayload(const TSharedPtr<FJsonObject>& Envelope, TSharedPtr<FJsonObject>& OutPayload);
 UENODENEXUSBRIDGE_API int32 ReadCursor(const TSharedPtr<FJsonObject>& Payload);

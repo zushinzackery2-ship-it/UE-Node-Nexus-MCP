@@ -1,7 +1,6 @@
 #include "UeNodeNexusBridgeJson.h"
 
 #include "Containers/StringConv.h"
-#include "HttpServerResponse.h"
 #include "Serialization/JsonSerializer.h"
 #include "UObject/Package.h"
 
@@ -47,12 +46,12 @@ TSharedPtr<FJsonObject> MakeEnvelope(const FString& Operation, const FString& Re
     return Envelope;
 }
 
-TUniquePtr<FHttpServerResponse> JsonResponse(const TSharedPtr<FJsonObject>& JsonObject)
+FString SerializeJsonObjectToString(const TSharedPtr<FJsonObject>& JsonObject)
 {
     FString Output;
     const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Output);
     FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
-    return FHttpServerResponse::Create(Output, TEXT("application/json"));
+    return Output;
 }
 
 FString BodyToString(const TArray<uint8>& Body)

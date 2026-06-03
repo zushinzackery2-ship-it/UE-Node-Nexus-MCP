@@ -2,7 +2,7 @@
 
 #include "UeNodeNexusBridgeAutoIndex.h"
 #include "UeNodeNexusBridgeCoreOperationsRegistry.h"
-#include "UeNodeNexusBridgeHttpServer.h"
+#include "UeNodeNexusBridgeNamedPipeServer.h"
 
 IMPLEMENT_MODULE(FUeNodeNexusBridgeModule, UeNodeNexusBridge)
 
@@ -11,7 +11,7 @@ void FUeNodeNexusBridgeModule::StartupModule()
     UeNodeNexusBridge::StartupAutoIndex();
     UeNodeNexusBridge::RegisterCoreOperations();
     UeNodeNexusBridge::RegisterAutoIndexOperations();
-    BridgeServer = MakeUnique<FUeNodeNexusBridgeHttpServer>();
+    BridgeServer = MakeUnique<FUeNodeNexusBridgeNamedPipeServer>();
     BridgeServer->Start();
 }
 

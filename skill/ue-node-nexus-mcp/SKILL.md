@@ -12,6 +12,13 @@ Fixed at 6 facade tools: `ue_context_get`, `ue_capability_get`, `ue_execute`, `u
 
 > If an operation named in this skill is missing from `ue_capability_get`, your MCP **server process is running stale code** — reinstall the plugin's `MCPServer` Python and restart the MCP client. The bridge plugin (UE editor) and the Python server must BOTH be current; updating one without restarting the other is the most common "feature X doesn't work" cause.
 
+## Instance selection (multi-editor)
+Transport is a per-editor Windows named pipe (`\\.\pipe\UeNodeNexusBridge.<pid>`), not a TCP port — rapid editor restarts and multiple concurrent editors no longer collide. Each MCP (Agent) session binds to ONE editor:
+- One editor live → auto-bound on first call; nothing to do.
+- Two+ live → calls error until you pick: `ue_execute("bridge_instance_list", {})` then `ue_execute("bridge_instance_select", {"pid": <pid>})` (or `{"project": "<name substring>"}`). Both are MCP-local control ops (not forwarded to UE).
+- `ue_context_get` reports `active_instance` (pid + auto/explicit mode) and `available_instances`.
+- An auto-bound session re-binds transparently across an editor restart; an explicitly-selected instance that exits errors until you re-select. "selected instance is gone" / "no UE editor instance found" → the editor closed or the plugin is not loaded.
+
 ## Read cheatsheet (intent → call)
 Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `ue_capability_get(operation, detail="schema")` for exact params.
 - asset metadata → `ue_read(target="asset")` / `asset_get`

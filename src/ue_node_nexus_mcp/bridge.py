@@ -1,36 +1,44 @@
 from __future__ import annotations
 
-import json
 import os
 import uuid
 from dataclasses import dataclass
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from .contracts import BRIDGE_OPERATIONS
+from .errors import BridgeError
+from .instance import instance_manager
+from .transport import named_pipe_transport
 
-
-class BridgeError(RuntimeError):
-    pass
+# Re-exported so existing callers keep importing it from this module.
+__all__ = ["BridgeError", "BridgeConfig", "UeBridgeClient"]
 
 
 @dataclass(frozen=True)
 class BridgeConfig:
-    base_url: str
     timeout_seconds: float
 
     @staticmethod
     def from_environment() -> "BridgeConfig":
         return BridgeConfig(
-            base_url=os.environ.get("UE_NEXUS_BRIDGE_URL", "http://127.0.0.1:8765").rstrip("/"),
             timeout_seconds=float(os.environ.get("UE_NEXUS_TIMEOUT_SECONDS", "30")),
         )
 
 
 class UeBridgeClient:
-    def __init__(self, config: BridgeConfig | None = None) -> None:
+    """Forwards bridge operations to the session's selected UE editor instance
+    over its named pipe. Instance selection and the wire transport are injected
+    so tests can swap in fakes."""
+
+    def __init__(
+        self,
+        config: BridgeConfig | None = None,
+        transport: Any | None = None,
+        instances: Any | None = None,
+    ) -> None:
         self._config = config or BridgeConfig.from_environment()
+        self._transport = transport or named_pipe_transport
+        self._instances = instances or instance_manager
 
     def call(self, operation: str, payload: dict[str, Any], timeout_seconds: float | None = None) -> dict[str, Any]:
         if operation not in BRIDGE_OPERATIONS:
@@ -42,7 +50,9 @@ class UeBridgeClient:
             "request_id": request_id,
             "payload": payload,
         }
-        response = self._post_json("/mcp", envelope, timeout_seconds=timeout_seconds)
+        timeout = self._config.timeout_seconds if timeout_seconds is None else timeout_seconds
+        target = self._instances.resolve_target()
+        response = self._transport.send(target, envelope, timeout)
 
         if not isinstance(response, dict):
             raise BridgeError("Bridge returned a non-object response")
@@ -52,32 +62,3 @@ class UeBridgeClient:
         response.setdefault("diagnostics", [])
         response.setdefault("warnings", [])
         return response
-
-    def _post_json(self, path: str, body: dict[str, Any], timeout_seconds: float | None = None) -> dict[str, Any]:
-        url = f"{self._config.base_url}{path}"
-        data = json.dumps(body, separators=(",", ":")).encode("utf-8")
-        timeout = self._config.timeout_seconds if timeout_seconds is None else timeout_seconds
-        request = Request(
-            url,
-            data=data,
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
-            method="POST",
-        )
-
-        try:
-            with urlopen(request, timeout=timeout) as response:
-                raw = response.read().decode("utf-8")
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise BridgeError(f"Bridge HTTP error {exc.code}: {detail}") from exc
-        except URLError as exc:
-            raise BridgeError(f"Bridge connection failed: {exc.reason}") from exc
-
-        try:
-            decoded = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise BridgeError("Bridge returned invalid JSON") from exc
-
-        if not isinstance(decoded, dict):
-            raise BridgeError("Bridge returned JSON that is not an object")
-        return decoded

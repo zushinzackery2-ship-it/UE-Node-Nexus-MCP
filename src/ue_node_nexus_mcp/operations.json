@@ -29,6 +29,8 @@
 
     {"name": "bridge_capabilities_get", "kind": "read", "group": "core", "hidden": false, "local": false},
     {"name": "bridge_contract_check", "kind": "read", "group": "core", "hidden": false, "local": true},
+    {"name": "bridge_instance_list", "kind": "read", "group": "core", "hidden": false, "local": true},
+    {"name": "bridge_instance_select", "kind": "write", "group": "core", "hidden": false, "local": true},
     {"name": "project_context_get", "kind": "read", "group": "core", "hidden": false, "local": false},
     {"name": "diagnostics_get", "kind": "read", "group": "core", "hidden": false, "local": false},
     {"name": "asset_compile", "kind": "write", "group": "core", "hidden": false, "local": false},

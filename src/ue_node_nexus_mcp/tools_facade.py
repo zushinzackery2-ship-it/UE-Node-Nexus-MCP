@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from .contracts import BRIDGE_OPERATIONS, require_list, require_mapping, require_non_empty_string
+from .errors import BridgeError
+from .instance import instance_manager
 from .facade_response import (
     artifact_handle,
     asset_path_from_payload,
@@ -27,17 +29,37 @@ VALID_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full
 def _execute_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     spec = get_operation_spec(operation)
     if spec.local_mcp:
-        if operation != "bridge_contract_check":
-            raise ValueError(f"local operation is not supported by ue_execute: {operation}")
+        return _execute_local_operation(operation, payload)
+    if operation not in BRIDGE_OPERATIONS:
+        raise ValueError(f"operation is not a bridge operation: {operation}")
+    return _call(operation, payload)
+
+
+def _execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Dispatch session-local control-plane ops handled inside the MCP server
+    (not forwarded to any UE instance)."""
+    if operation == "bridge_contract_check":
         from .tools_system import bridge_contract_check
 
         mode = payload.get("mode", "enabled")
         if not isinstance(mode, str):
             raise ValueError("mode must be a string")
         return bridge_contract_check(mode=mode)  # type: ignore[arg-type]
-    if operation not in BRIDGE_OPERATIONS:
-        raise ValueError(f"operation is not a bridge operation: {operation}")
-    return _call(operation, payload)
+    if operation == "bridge_instance_list":
+        from .tools_system import bridge_instance_list
+
+        return bridge_instance_list()
+    if operation == "bridge_instance_select":
+        from .tools_system import bridge_instance_select
+
+        pid = payload.get("pid")
+        project = payload.get("project")
+        if pid is not None and not isinstance(pid, int):
+            raise ValueError("pid must be an integer")
+        if project is not None and not isinstance(project, str):
+            raise ValueError("project must be a string")
+        return bridge_instance_select(pid=pid, project=project)
+    raise ValueError(f"local operation is not supported by ue_execute: {operation}")
 
 
 @thin_tool()
@@ -48,8 +70,14 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
     groups: dict[str, int] = {}
     for spec in specs.values():
         groups[spec.group] = groups.get(spec.group, 0) + 1
+    try:
+        available_instances = instance_manager.list_instances()
+    except BridgeError:
+        available_instances = []
     data: dict[str, Any] = {
-        "bridge": "configured",
+        "bridge": "named_pipe",
+        "active_instance": instance_manager.current(),
+        "available_instances": available_instances,
         "groups": sorted(groups.items()) if include_counts else sorted(groups),
         "facade_tools": [
             "ue_context_get",

@@ -44,7 +44,6 @@ public class UeNodeNexusBridge : ModuleRules
             "AssetRegistry",
             "AssetTools",
             "BlueprintGraph",
-            "HTTPServer",
             "InputCore",
             "JsonUtilities",
             "MaterialEditor",

@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from .contracts import BRIDGE_OPERATIONS, DEFAULT_HIDDEN_OPERATIONS, OPERATION_FEATURES, require_non_empty_string
+from .errors import BridgeError
+from .instance import instance_manager
 from .runtime import call_bridge as _call
 from .runtime import default_tool
 from .runtime import enabled_features
@@ -46,6 +48,41 @@ def bridge_contract_check(
             "allowed_extra_operations": sorted(allowed_extra_operations),
             "mode": mode,
         },
+    )
+
+
+def _local_instance_response(operation: str, produce: Any) -> dict[str, Any]:
+    """Run a session-local instance op and shape it like a bridge response so the
+    thin facade's summarizer handles it uniformly. These ops never touch a UE
+    instance's data plane — they manage which instance the session targets."""
+    try:
+        data = produce()
+    except BridgeError as exc:
+        return {
+            "ok": False,
+            "operation": operation,
+            "error": {"code": "instance_error", "message": str(exc), "details": {}},
+            "diagnostics": [],
+            "warnings": [],
+        }
+    return {"ok": True, "operation": operation, "data": data, "diagnostics": [], "warnings": []}
+
+
+@default_tool()
+def bridge_instance_list() -> dict[str, Any]:
+    """List live UE editor instances discoverable on named pipes (pid, project, active flag)."""
+    return _local_instance_response(
+        "bridge_instance_list",
+        lambda: {"instances": instance_manager.list_instances(), "active": instance_manager.current()},
+    )
+
+
+@default_tool()
+def bridge_instance_select(pid: int | None = None, project: str | None = None) -> dict[str, Any]:
+    """Bind this MCP session to one UE editor instance by pid or project-name substring."""
+    return _local_instance_response(
+        "bridge_instance_select",
+        lambda: {"selected": instance_manager.select(pid=pid, project=project), "active": instance_manager.current()},
     )
 
 

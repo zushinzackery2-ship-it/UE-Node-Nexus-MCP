@@ -83,6 +83,14 @@ def enabled_features() -> set[str]:
     return set(_enabled_features)
 
 
+def reset_feature_cache() -> None:
+    """Drop cached feature gating so it is recomputed against the active editor
+    instance. Called when the selected instance changes (different editors may
+    have different module availability, e.g. niagara)."""
+    global _enabled_features
+    _enabled_features = None
+
+
 def response_mode() -> str:
     global _response_mode
     if _response_mode is None:
