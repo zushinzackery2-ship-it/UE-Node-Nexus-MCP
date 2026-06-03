@@ -2,7 +2,7 @@
 
 #include "Modules/ModuleManager.h"
 
-class FUeNodeNexusNiagaraBridgeModule : public IModuleInterface
+class FUeNodeNexusVfxBridgeModule : public IModuleInterface
 {
 public:
     virtual void StartupModule() override;

@@ -14,7 +14,6 @@ public class UeNodeNexusBridge : ModuleRules
             System.IO.Path.Combine(ModuleDirectory, "Private", "Assets"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "AutoIndex"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Blueprint"),
-            System.IO.Path.Combine(ModuleDirectory, "Private", "Cascade"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Blueprint", "NodeInterface"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Core"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Dispatch"),

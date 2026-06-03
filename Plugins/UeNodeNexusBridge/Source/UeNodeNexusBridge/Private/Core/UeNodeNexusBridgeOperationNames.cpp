@@ -40,7 +40,6 @@ TArray<FString> GetCoreOperationNames()
         TEXT("anim_state_machine_summary_get"),
         TEXT("anim_montage_summary_get"),
         TEXT("blend_space_summary_get"),
-        TEXT("cascade_system_summary_get"),
         TEXT("graph_snapshot_get"),
         TEXT("graph_node_info_get"),
         TEXT("node_class_params_get"),

@@ -60,7 +60,7 @@
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
 | **Material Instance 参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
-| **Niagara 工具组** | 由独立 `UeNodeNexusNiagaraBridge` 插件承载；仅当 UE 端启用 Niagara 插件并加载 Niagara bridge 模块时暴露 System、Emitter、Module Stack、Renderer、User 参数、材质、lint 和编译工具 |
+| **Niagara 工具组** | 由独立 `UeNodeNexusVfxBridge` 插件承载；仅当 UE 端启用 Niagara 插件并加载 Niagara bridge 模块时暴露 System、Emitter、Module Stack、Renderer、User 参数、材质、lint 和编译工具 |
 | **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
 | **资产管理** | `asset_move`、`asset_rename`、batch、duplicate、delete、folder、redirector 工具覆盖 Content Browser 清理闭环 |
 | **Level material usage** | 枚举当前 Level 网格实例、Actor transform、UObject 属性、material slot、Material Instance 参数和材质使用点；不提供关卡 Actor 实例化或 Actor transform/任意 UObject 属性写入 |
@@ -159,7 +159,7 @@ MCP 公开面固定为 6 个 facade 工具，用少量入口承载完整 UE oper
 | **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
 | **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
 
-Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 95 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
+Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 97 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
 
 推荐 thin 工作流：
 
@@ -201,9 +201,9 @@ MCP client 配置：
 ```
 
 > [!NOTE]
-> **Niagara 通用边界**
+> **VFX 通用边界**
 >
-> Niagara MCP 能力由独立 UE 插件 `UeNodeNexusNiagaraBridge` 提供，是否可用以 UE 端 `bridge_capabilities_get().data.modules.niagara_available` 为准。当前内部 operation 覆盖创建/复制 System、创建 Emitter、枚举/添加/删除/启停 Module Stack、读写 Module Input、创建 Renderer、读写 System/Emitter/Renderer 属性、读写 User 参数、替换 Renderer 材质、lint、编译和保存。Niagara 能力保持通用 authoring 原语，不提供 `create_fire_effect` 这类按具体效果命名的模板工具。
+> VFX MCP 能力（Niagara + Cascade）由独立 UE 插件 `UeNodeNexusVfxBridge` 提供，是否可用以 UE 端 `bridge_capabilities_get().data.modules.vfx_available` 为准。Niagara 覆盖创建/复制 System、创建 Emitter、枚举/添加/删除/启停 Module Stack、读写 Module Input、创建 Renderer、读写 System/Emitter/Renderer 属性、读写 User 参数、替换 Renderer 材质、lint、编译和保存；Cascade 提供只读 emitter/module stack 摘要。VFX 能力保持通用 authoring 原语，不提供 `create_fire_effect` 这类按具体效果命名的模板工具。
 
 > [!NOTE]
 > **默认工具面**
@@ -307,9 +307,9 @@ UE-Node-Nexus-MCP/
 │       ├── Source/
 │       ├── Resources/
 │       └── UeNodeNexusBridge.uplugin
-│   └── UeNodeNexusNiagaraBridge/
+│   └── UeNodeNexusVfxBridge/
 │       ├── Source/
-│       └── UeNodeNexusNiagaraBridge.uplugin
+│       └── UeNodeNexusVfxBridge.uplugin
 ├── src/
 │   └── ue_node_nexus_mcp/
 ├── pyproject.toml
@@ -393,7 +393,7 @@ python scripts/run_final_ue_acceptance.py --wait-timeout 300 --step-timeout 120 
 python scripts/verify_bridge_contract.py --mode enabled --json
 ```
 
-源码验收脚本使用与 MCP server 相同的 feature 开关解析逻辑，支持 `UE_NEXUS_FEATURES`、`UE_NEXUS_ENABLE_FEATURES`、`UE_NEXUS_DISABLE_FEATURES`、`UE_NEXUS_NIAGARA_SUPPORT`，也支持 CLI 的 `--features`、`--enable-feature`、`--disable-feature`、`--niagara-support`。例如只验核心和资产工具：
+源码验收脚本使用与 MCP server 相同的 feature 开关解析逻辑，支持 `UE_NEXUS_FEATURES`、`UE_NEXUS_ENABLE_FEATURES`、`UE_NEXUS_DISABLE_FEATURES`、`UE_NEXUS_VFX_SUPPORT`，也支持 CLI 的 `--features`、`--enable-feature`、`--disable-feature`、`--vfx-support`。例如只验核心和资产工具：
 
 ```bash
 python scripts/verify_bridge_contract.py --mode enabled --features core,asset --json
@@ -407,14 +407,14 @@ python scripts/verify_bridge_contract.py --mode enabled --lint-niagara-asset /Ga
 
 ### Tool Feature 开关
 
-默认候选工具组为 `core,asset,auto_index,graph,material,blueprint,animation,cascade,audio,level,project_input,niagara`。关闭某组时，对应工具不会进入 MCP tool list。Niagara 由 UE 插件状态最终裁决：只有 `UeNodeNexusNiagaraBridge` 已加载且 UE Niagara 插件启用时才注册；本地配置只能关闭或表达启用意图，不能绕过 UE 插件状态强行开启。
+默认候选工具组为 `core,asset,auto_index,graph,material,blueprint,animation,audio,level,project_input,texture,vfx`。关闭某组时，对应工具不会进入 MCP tool list。VFX（Niagara + Cascade）由 UE 插件状态最终裁决：只有 `UeNodeNexusVfxBridge` 已加载且 UE Niagara 插件启用时才注册；本地配置只能关闭或表达启用意图，不能绕过 UE 插件状态强行开启。
 
 | 配置 | 说明 |
 |:-----|:-----|
 | **`UE_NEXUS_FEATURES`** | 显式指定工具组，例如 `core,asset,material` |
 | **`UE_NEXUS_ENABLE_FEATURES`** | 在默认或显式工具组上追加工具组 |
 | **`UE_NEXUS_DISABLE_FEATURES`** | 从当前工具组中移除工具组 |
-| **`UE_NEXUS_NIAGARA_SUPPORT`** | `true`/`false`，本地 Niagara 工具组意图开关；`true` 不会覆盖 UE 端 `niagara_available=false` |
+| **`UE_NEXUS_VFX_SUPPORT`** | `true`/`false`，本地 VFX 工具组意图开关；`true` 不会覆盖 UE 端 `vfx_available=false` |
 
 示例：只暴露资产、材质和核心诊断工具：
 
@@ -442,7 +442,7 @@ ue-node-nexus-mcp --features core,asset,material
 ```json
 {
   "env": {
-    "UE_NEXUS_NIAGARA_SUPPORT": "false"
+    "UE_NEXUS_VFX_SUPPORT": "false"
   }
 }
 ```
@@ -463,10 +463,10 @@ UE_5.5/
             ├── Config/
             ├── Resources/
             └── UeNodeNexusBridge.uplugin
-        └── UeNodeNexusNiagaraBridge/
+        └── UeNodeNexusVfxBridge/
             ├── Binaries/
             ├── Source/
-            └── UeNodeNexusNiagaraBridge.uplugin
+            └── UeNodeNexusVfxBridge.uplugin
 ```
 
 也可以放到项目目录：
@@ -476,8 +476,8 @@ YourProject/
 └── Plugins/
     ├── UeNodeNexusBridge/
         └── UeNodeNexusBridge.uplugin
-    └── UeNodeNexusNiagaraBridge/
-        └── UeNodeNexusNiagaraBridge.uplugin
+    └── UeNodeNexusVfxBridge/
+        └── UeNodeNexusVfxBridge.uplugin
 ```
 
 二进制随目标引擎/项目编译产生；不同 UE 5.x 版本各自保留 `Source` 重新编译即可。
@@ -495,14 +495,14 @@ YourProject/
         ├── Source/
         ├── Resources/
         └── UeNodeNexusBridge.uplugin
-    └── UeNodeNexusNiagaraBridge/
+    └── UeNodeNexusVfxBridge/
         ├── Source/
-        └── UeNodeNexusNiagaraBridge.uplugin
+        └── UeNodeNexusVfxBridge.uplugin
 ```
 
 然后右键 `.uproject` 生成项目文件，或直接打开项目触发 UE 的插件编译提示。该方式适合不同 UE 5.x 项目各自编译自己的插件二进制。
 
-也可以把两个插件目录作为 Engine Plugin 放到目标引擎的 `Engine/Plugins/` 下，再用该引擎重新编译插件。只需要核心能力时，可以不启用 `UeNodeNexusNiagaraBridge`。
+也可以把两个插件目录作为 Engine Plugin 放到目标引擎的 `Engine/Plugins/` 下，再用该引擎重新编译插件。只需要核心能力时，可以不启用 `UeNodeNexusVfxBridge`。
 
 ---
 

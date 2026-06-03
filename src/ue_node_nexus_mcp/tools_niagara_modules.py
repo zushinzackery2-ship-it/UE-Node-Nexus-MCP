@@ -7,7 +7,7 @@ from .runtime import default_tool
 from .tools_niagara_common import _call_niagara
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_modules_list(
     asset_path: str,
     emitter_index: int | None = None,
@@ -29,7 +29,7 @@ def niagara_modules_list(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_module_add(
     asset_path: str,
     module_script_path: str,
@@ -58,7 +58,7 @@ def niagara_module_add(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_module_remove(
     asset_path: str,
     emitter_index: int,
@@ -82,7 +82,7 @@ def niagara_module_remove(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_module_set_enabled(
     asset_path: str,
     emitter_index: int,
@@ -108,7 +108,7 @@ def niagara_module_set_enabled(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_module_inputs_get(
     asset_path: str,
     emitter_index: int,
@@ -128,7 +128,7 @@ def niagara_module_inputs_get(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_module_inputs_set(
     asset_path: str,
     emitter_index: int,

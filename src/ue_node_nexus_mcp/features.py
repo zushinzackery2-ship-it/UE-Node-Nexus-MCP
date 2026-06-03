@@ -28,7 +28,7 @@ def consume_feature_args(argv: list[str]) -> tuple[set[str] | None, set[str], se
     explicit_features = None
     enable_features: set[str] = set()
     disable_features: set[str] = set()
-    niagara_support = None
+    vfx_support = None
     remaining = [argv[0]]
     index = 1
     while index < len(argv):
@@ -54,32 +54,32 @@ def consume_feature_args(argv: list[str]) -> tuple[set[str] | None, set[str], se
             disable_features |= parse_feature_list(argv[index])
         elif arg.startswith("--disable-feature="):
             disable_features |= parse_feature_list(arg.split("=", 1)[1])
-        elif arg == "--niagara-support":
+        elif arg == "--vfx-support":
             index += 1
             if index >= len(argv):
-                raise FeatureArgumentError("--niagara-support requires true or false")
-            niagara_support = parse_bool(argv[index])
-        elif arg.startswith("--niagara-support="):
-            niagara_support = parse_bool(arg.split("=", 1)[1])
+                raise FeatureArgumentError("--vfx-support requires true or false")
+            vfx_support = parse_bool(argv[index])
+        elif arg.startswith("--vfx-support="):
+            vfx_support = parse_bool(arg.split("=", 1)[1])
         else:
             remaining.append(arg)
         index += 1
-    return explicit_features, enable_features, disable_features, niagara_support, remaining
+    return explicit_features, enable_features, disable_features, vfx_support, remaining
 
 
 def resolve_enabled_features(
     explicit_features: set[str] | None = None,
     enable_features: set[str] | None = None,
     disable_features: set[str] | None = None,
-    niagara_support: bool | None = None,
+    vfx_support: bool | None = None,
 ) -> set[str]:
     features = set(explicit_features if explicit_features is not None else DEFAULT_FEATURE_GROUPS)
     features |= set(enable_features or set())
     features -= set(disable_features or set())
-    if niagara_support is True:
-        features.add("niagara")
-    elif niagara_support is False:
-        features.discard("niagara")
+    if vfx_support is True:
+        features.add("vfx")
+    elif vfx_support is False:
+        features.discard("vfx")
     return features
 
 
@@ -87,7 +87,7 @@ def read_feature_env(env: dict[str, str]) -> tuple[set[str] | None, set[str], se
     explicit_features = None
     enable_features: set[str] = set()
     disable_features: set[str] = set()
-    niagara_support = None
+    vfx_support = None
 
     env_features = env.get("UE_NEXUS_FEATURES")
     if env_features:
@@ -101,8 +101,8 @@ def read_feature_env(env: dict[str, str]) -> tuple[set[str] | None, set[str], se
     if env_disable:
         disable_features |= parse_feature_list(env_disable)
 
-    env_niagara = env.get("UE_NEXUS_NIAGARA_SUPPORT")
-    if env_niagara:
-        niagara_support = parse_bool(env_niagara)
+    env_vfx = env.get("UE_NEXUS_VFX_SUPPORT")
+    if env_vfx:
+        vfx_support = parse_bool(env_vfx)
 
-    return explicit_features, enable_features, disable_features, niagara_support
+    return explicit_features, enable_features, disable_features, vfx_support

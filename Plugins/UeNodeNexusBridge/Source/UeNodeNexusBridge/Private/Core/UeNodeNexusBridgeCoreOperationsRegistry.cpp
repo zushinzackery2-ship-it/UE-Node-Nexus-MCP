@@ -48,7 +48,6 @@ void RegisterCoreOperations()
     Register(TEXT("anim_state_machine_summary_get"), HandleAnimStateMachineSummaryGet);
     Register(TEXT("anim_montage_summary_get"), HandleAnimMontageSummaryGet);
     Register(TEXT("blend_space_summary_get"), HandleBlendSpaceSummaryGet);
-    Register(TEXT("cascade_system_summary_get"), HandleCascadeSystemSummaryGet);
     Register(TEXT("graph_snapshot_get"), HandleGraphSnapshotGet);
     Register(TEXT("graph_node_info_get"), HandleGraphNodeInfoGet);
     Register(TEXT("node_class_params_get"), HandleNodeClassParamsGet);

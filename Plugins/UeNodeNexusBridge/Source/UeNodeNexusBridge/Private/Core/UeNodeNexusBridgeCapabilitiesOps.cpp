@@ -137,16 +137,16 @@ TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, co
 
     TSharedPtr<FJsonObject> Modules = MakeShared<FJsonObject>();
     const TSharedPtr<IPlugin> NiagaraPlugin = IPluginManager::Get().FindPlugin(TEXT("Niagara"));
-    const TSharedPtr<IPlugin> NiagaraBridgePlugin = IPluginManager::Get().FindPlugin(TEXT("UeNodeNexusNiagaraBridge"));
+    const TSharedPtr<IPlugin> VfxBridgePlugin = IPluginManager::Get().FindPlugin(TEXT("UeNodeNexusVfxBridge"));
     const bool bCoreLoaded = FModuleManager::Get().IsModuleLoaded(TEXT("UeNodeNexusBridge"));
-    const bool bNiagaraLoaded = FModuleManager::Get().IsModuleLoaded(TEXT("UeNodeNexusNiagaraBridge"));
+    const bool bVfxLoaded = FModuleManager::Get().IsModuleLoaded(TEXT("UeNodeNexusVfxBridge"));
     const bool bNiagaraPluginEnabled = NiagaraPlugin.IsValid() && NiagaraPlugin->IsEnabled();
-    const bool bNiagaraBridgePluginEnabled = NiagaraBridgePlugin.IsValid() && NiagaraBridgePlugin->IsEnabled();
+    const bool bVfxBridgePluginEnabled = VfxBridgePlugin.IsValid() && VfxBridgePlugin->IsEnabled();
     Modules->SetBoolField(TEXT("core_loaded"), bCoreLoaded);
-    Modules->SetBoolField(TEXT("niagara_loaded"), bNiagaraLoaded);
+    Modules->SetBoolField(TEXT("vfx_bridge_loaded"), bVfxLoaded);
     Modules->SetBoolField(TEXT("niagara_plugin_enabled"), bNiagaraPluginEnabled);
-    Modules->SetBoolField(TEXT("niagara_bridge_plugin_enabled"), bNiagaraBridgePluginEnabled);
-    Modules->SetBoolField(TEXT("niagara_available"), bNiagaraPluginEnabled && bNiagaraBridgePluginEnabled && bNiagaraLoaded);
+    Modules->SetBoolField(TEXT("vfx_bridge_plugin_enabled"), bVfxBridgePluginEnabled);
+    Modules->SetBoolField(TEXT("vfx_available"), bNiagaraPluginEnabled && bVfxBridgePluginEnabled && bVfxLoaded);
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("bridge"), TEXT("UeNodeNexusBridge"));

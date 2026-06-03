@@ -1,14 +1,15 @@
 using UnrealBuildTool;
 
-public class UeNodeNexusNiagaraBridge : ModuleRules
+public class UeNodeNexusVfxBridge : ModuleRules
 {
-    public UeNodeNexusNiagaraBridge(ReadOnlyTargetRules Target) : base(Target)
+    public UeNodeNexusVfxBridge(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         IWYUSupport = IWYUSupport.Full;
 
         PrivateIncludePaths.AddRange(new string[]
         {
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Cascade"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Module"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara", "Formats"),

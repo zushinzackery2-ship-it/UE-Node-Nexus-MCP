@@ -3,12 +3,35 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from .contracts import require_list, require_non_empty_string
+from .runtime import call_bridge as _call
 from .runtime import default_tool
 from .tools_niagara_common import _call_niagara
 from .tools_niagara_properties import niagara_renderer_properties_get, niagara_renderer_properties_set, niagara_system_properties_get, niagara_system_properties_set  # noqa: F401
 
 
-@default_tool("niagara")
+@default_tool()
+def cascade_system_summary_get(
+    asset_path: str,
+    format: Literal["compact", "full"] = "compact",
+) -> dict[str, Any]:
+    """Return Cascade particle system emitters, type data, and module stack (read-only).
+
+    ``full`` inlines normalized per-module parameter values (Spawn rate/rate-scale/
+    bursts, Lifetime, Size, Color/Alpha-over-life, Velocity, Location, Rotation,
+    Light) as typed distribution objects; ``compact`` carries the same as a digest
+    string in the module ``values`` column. Each module keeps its template_path.
+    """
+    require_non_empty_string(asset_path, "asset_path")
+    return _call(
+        "cascade_system_summary_get",
+        {
+            "asset_path": asset_path,
+            "format": format,
+        },
+    )
+
+
+@default_tool("vfx")
 def niagara_system_create(
     asset_path: str,
     source_asset_path: str | None = None,
@@ -32,7 +55,7 @@ def niagara_system_create(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_system_duplicate(
     source_asset_path: str,
     destination_asset_path: str,
@@ -55,35 +78,35 @@ def niagara_system_duplicate(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_system_summary_get(asset_path: str, format: Literal["compact", "full", "indexed", "tiny"] = "indexed") -> dict[str, Any]:
     """Return Niagara asset readiness counts; indexed/tiny keep default responses compact."""
     require_non_empty_string(asset_path, "asset_path")
     return _call_niagara("niagara_system_summary_get", {"asset_path": asset_path, "format": format})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_asset_lint(asset_path: str, format: Literal["indexed", "tiny", "full"] = "indexed") -> dict[str, Any]:
     """Report generic Niagara authoring risks; indexed is the compact default."""
     require_non_empty_string(asset_path, "asset_path")
     return _call_niagara("niagara_asset_lint", {"asset_path": asset_path, "format": format})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_emitters_list(asset_path: str, format: Literal["compact", "full", "indexed", "tiny"] = "indexed") -> dict[str, Any]:
     """List existing emitters; indexed/tiny keep default responses compact."""
     require_non_empty_string(asset_path, "asset_path")
     return _call_niagara("niagara_emitters_list", {"asset_path": asset_path, "format": format})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_user_params_get(asset_path: str, format: Literal["compact", "full", "indexed", "tiny"] = "indexed") -> dict[str, Any]:
     """List exposed Niagara User parameters; indexed/tiny omit values to keep default responses compact."""
     require_non_empty_string(asset_path, "asset_path")
     return _call_niagara("niagara_user_params_get", {"asset_path": asset_path, "format": format})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_user_params_set(
     asset_path: str,
     params: list[dict[str, Any]],
@@ -96,14 +119,14 @@ def niagara_user_params_set(
     return _call_niagara("niagara_user_params_set", {"asset_path": asset_path, "params": params, "dry_run": dry_run, "save": save})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_materials_get(asset_path: str, format: Literal["compact", "full", "indexed", "tiny"] = "indexed") -> dict[str, Any]:
     """List materials on existing sprite/ribbon/mesh renderers; this tool cannot create renderers."""
     require_non_empty_string(asset_path, "asset_path")
     return _call_niagara("niagara_materials_get", {"asset_path": asset_path, "format": format})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_materials_set(
     asset_path: str,
     material_path: str,
@@ -128,7 +151,7 @@ def niagara_materials_set(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_emitter_create(
     asset_path: str,
     mode: Literal["default", "empty", "from_asset"] = "default",
@@ -152,14 +175,14 @@ def niagara_emitter_create(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_emitter_properties_get(asset_path: str, emitter_index: int) -> dict[str, Any]:
     """Read compact editable handle/emitter settings for one Niagara emitter."""
     require_non_empty_string(asset_path, "asset_path")
     return _call_niagara("niagara_emitter_properties_get", {"asset_path": asset_path, "emitter_index": emitter_index})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_emitter_properties_set(
     asset_path: str,
     emitter_index: int,
@@ -176,14 +199,14 @@ def niagara_emitter_properties_set(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_renderers_list(asset_path: str, format: Literal["compact", "full", "indexed", "tiny"] = "indexed") -> dict[str, Any]:
     """List all Niagara renderers with indexes and primary material paths."""
     require_non_empty_string(asset_path, "asset_path")
     return _call_niagara("niagara_renderers_list", {"asset_path": asset_path, "format": format})
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_renderer_create(
     asset_path: str,
     emitter_index: int,
@@ -205,7 +228,7 @@ def niagara_renderer_create(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_compile(asset_path: str, wait: bool = True, save: bool = False) -> dict[str, Any]:
     """Compile a Niagara system and report asset readiness warnings."""
     require_non_empty_string(asset_path, "asset_path")

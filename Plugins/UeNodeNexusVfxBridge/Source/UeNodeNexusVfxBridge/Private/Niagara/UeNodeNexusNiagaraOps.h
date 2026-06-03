@@ -31,4 +31,5 @@ TSharedPtr<FJsonObject> HandleNiagaraRendererPropertiesGet(const FString& Operat
 TSharedPtr<FJsonObject> HandleNiagaraRendererPropertiesSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleNiagaraAssetLint(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleCascadeSystemSummaryGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 }

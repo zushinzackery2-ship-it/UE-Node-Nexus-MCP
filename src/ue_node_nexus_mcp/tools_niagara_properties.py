@@ -7,7 +7,7 @@ from .runtime import default_tool
 from .tools_niagara_common import _call_niagara
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_system_properties_get(
     asset_path: str,
     property_names: list[str] | None = None,
@@ -29,7 +29,7 @@ def niagara_system_properties_get(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_system_properties_set(
     asset_path: str,
     params: list[dict[str, Any]],
@@ -54,7 +54,7 @@ def niagara_system_properties_set(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_renderer_properties_get(
     asset_path: str,
     emitter_index: int,
@@ -80,7 +80,7 @@ def niagara_renderer_properties_get(
     )
 
 
-@default_tool("niagara")
+@default_tool("vfx")
 def niagara_renderer_properties_set(
     asset_path: str,
     emitter_index: int,

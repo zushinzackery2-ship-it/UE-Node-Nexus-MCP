@@ -1,6 +1,6 @@
 ---
 name: ue-node-nexus-mcp
-description: Operate and diagnose the UE Node Nexus MCP bridge for Unreal Editor asset, graph, AutoIndex, Niagara, and thin facade workflows. Use when the user mentions UE Node Nexus MCP, UEMCP Bridge, ue-node-nexus-mcp, ue_execute, ue_read, ue_diff_get, auto_index, asset_list returning empty data, project_context_get, or MCP bridge context issues.
+description: Operate and diagnose the UE Node Nexus MCP bridge for Unreal Editor asset, graph, AutoIndex, VFX (Niagara & Cascade), and thin facade workflows. Use when the user mentions UE Node Nexus MCP, UEMCP Bridge, ue-node-nexus-mcp, ue_execute, ue_read, ue_diff_get, auto_index, asset_list returning empty data, project_context_get, or MCP bridge context issues.
 ---
 
 # UE Node Nexus MCP

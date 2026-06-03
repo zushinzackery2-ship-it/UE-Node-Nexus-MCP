@@ -1,4 +1,4 @@
-#include "UeNodeNexusBridgeOperations.h"
+#include "UeNodeNexusNiagaraOps.h"
 
 #include "Dom/JsonValue.h"
 #include "Particles/ParticleEmitter.h"

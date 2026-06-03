@@ -27,7 +27,6 @@ _WRAPPER_MODULES = (
     "tools_audio",
     "tools_auto_index",
     "tools_blueprints",
-    "tools_cascade",
     "tools_graphs",
     "tools_graph_writes",
     "tools_level_materials",

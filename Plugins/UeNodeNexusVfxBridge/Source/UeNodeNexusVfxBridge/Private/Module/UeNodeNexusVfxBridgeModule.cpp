@@ -1,26 +1,24 @@
-#include "UeNodeNexusNiagaraBridgeModule.h"
+#include "UeNodeNexusVfxBridgeModule.h"
 
 #include "UeNodeNexusBridgeOperationRegistry.h"
 #include "UeNodeNexusNiagaraOps.h"
 
-IMPLEMENT_MODULE(FUeNodeNexusNiagaraBridgeModule, UeNodeNexusNiagaraBridge)
+IMPLEMENT_MODULE(FUeNodeNexusVfxBridgeModule, UeNodeNexusVfxBridge)
 
 namespace
 {
 using FHandler = UeNodeNexusBridge::FBridgeOperationHandler;
 
-struct FNiagaraOperation
+struct FVfxOperation
 {
     const TCHAR* Name;
     FHandler Handler;
 };
 
-// Single source for the Niagara op set: StartupModule registers every entry and
-// ShutdownModule unregisters by name, so the two can never drift. The names stay
-// as TEXT() literals so the offline contract-sync test still parses them.
-const TArray<FNiagaraOperation>& NiagaraOperations()
+const TArray<FVfxOperation>& VfxOperations()
 {
-    static const TArray<FNiagaraOperation> Operations = {
+    static const TArray<FVfxOperation> Operations = {
+        { TEXT("cascade_system_summary_get"), UeNodeNexusBridge::HandleCascadeSystemSummaryGet },
         { TEXT("niagara_system_create"), UeNodeNexusBridge::HandleNiagaraSystemCreate },
         { TEXT("niagara_system_duplicate"), UeNodeNexusBridge::HandleNiagaraSystemDuplicate },
         { TEXT("niagara_system_summary_get"), UeNodeNexusBridge::HandleNiagaraSystemSummaryGet },
@@ -51,17 +49,17 @@ const TArray<FNiagaraOperation>& NiagaraOperations()
 }
 }
 
-void FUeNodeNexusNiagaraBridgeModule::StartupModule()
+void FUeNodeNexusVfxBridgeModule::StartupModule()
 {
-    for (const FNiagaraOperation& Operation : NiagaraOperations())
+    for (const FVfxOperation& Operation : VfxOperations())
     {
         UeNodeNexusBridge::RegisterOperationHandler(FString(Operation.Name), Operation.Handler);
     }
 }
 
-void FUeNodeNexusNiagaraBridgeModule::ShutdownModule()
+void FUeNodeNexusVfxBridgeModule::ShutdownModule()
 {
-    for (const FNiagaraOperation& Operation : NiagaraOperations())
+    for (const FVfxOperation& Operation : VfxOperations())
     {
         UeNodeNexusBridge::UnregisterOperationHandler(FString(Operation.Name));
     }

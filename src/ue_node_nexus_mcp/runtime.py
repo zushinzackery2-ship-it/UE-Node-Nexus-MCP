@@ -23,7 +23,7 @@ _profile_args_consumed = False
 _CAPABILITY_PROBE_TIMEOUT_SECONDS = 1.0
 
 
-def _bridge_niagara_available() -> bool:
+def _bridge_vfx_available() -> bool:
     try:
         response = bridge.call(
             "bridge_capabilities_get",
@@ -39,24 +39,24 @@ def _bridge_niagara_available() -> bool:
     modules = data.get("modules")
     if not isinstance(modules, dict):
         return False
-    return modules.get("niagara_available") is True
+    return modules.get("vfx_available") is True
 
 
 def _read_enabled_features() -> set[str]:
-    explicit_features, enable_features, disable_features, niagara_support = read_feature_env(dict(os.environ))
-    arg_features, arg_enable, arg_disable, arg_niagara, remaining = consume_feature_args(sys.argv)
+    explicit_features, enable_features, disable_features, vfx_support = read_feature_env(dict(os.environ))
+    arg_features, arg_enable, arg_disable, arg_vfx, remaining = consume_feature_args(sys.argv)
     sys.argv[:] = remaining
     _ensure_profile_args_consumed()
     if arg_features is not None:
         explicit_features = arg_features
     enable_features |= arg_enable
     disable_features |= arg_disable
-    if arg_niagara is not None:
-        niagara_support = arg_niagara
+    if arg_vfx is not None:
+        vfx_support = arg_vfx
 
-    features = resolve_enabled_features(explicit_features, enable_features, disable_features, niagara_support)
-    if "niagara" in features and not _bridge_niagara_available():
-        features.discard("niagara")
+    features = resolve_enabled_features(explicit_features, enable_features, disable_features, vfx_support)
+    if "vfx" in features and not _bridge_vfx_available():
+        features.discard("vfx")
     return features
 
 
