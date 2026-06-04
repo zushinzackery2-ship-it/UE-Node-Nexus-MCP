@@ -70,6 +70,32 @@ TSharedPtr<FJsonObject> MakeBlueprintLinkJson(UEdGraphPin* FromPin, UEdGraphPin*
     return Link;
 }
 
+static UEdGraphPin* FindPinByFriendlyName(UEdGraphNode* Node, const FString& Name, EEdGraphPinDirection Direction)
+{
+    UEdGraphPin* AnyDirection = nullptr;
+    for (UEdGraphPin* Pin : Node->Pins)
+    {
+        if (Pin == nullptr)
+        {
+            continue;
+        }
+        const FString Friendly = Pin->PinFriendlyName.IsEmpty() ? Pin->PinName.ToString() : Pin->PinFriendlyName.ToString();
+        if (!Friendly.Equals(Name, ESearchCase::IgnoreCase))
+        {
+            continue;
+        }
+        if (Pin->Direction == Direction)
+        {
+            return Pin;
+        }
+        if (AnyDirection == nullptr)
+        {
+            AnyDirection = Pin;
+        }
+    }
+    return AnyDirection;
+}
+
 static UEdGraphPin* ResolvePinByIdOrName(UEdGraphNode* Node, const TSharedPtr<FJsonObject>& Op, const TCHAR* IdField, const TCHAR* NameField, EEdGraphPinDirection Direction)
 {
     if (Node == nullptr)
@@ -89,7 +115,12 @@ static UEdGraphPin* ResolvePinByIdOrName(UEdGraphNode* Node, const TSharedPtr<FJ
         {
             return ByName;
         }
-        return Node->FindPin(FName(*PinName));
+        ByName = Node->FindPin(FName(*PinName));
+        if (ByName != nullptr)
+        {
+            return ByName;
+        }
+        return FindPinByFriendlyName(Node, PinName, Direction);
     }
     return nullptr;
 }
