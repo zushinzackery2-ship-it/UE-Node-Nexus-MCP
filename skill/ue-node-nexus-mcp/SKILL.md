@@ -19,8 +19,14 @@ Transport is a per-editor Windows named pipe (`\\.\pipe\UeNodeNexusBridge.<pid>`
 - `ue_context_get` reports `active_instance` (pid + auto/explicit mode) and `available_instances`.
 - An auto-bound session re-binds transparently across an editor restart; an explicitly-selected instance that exits errors until you re-select. "selected instance is gone" / "no UE editor instance found" → the editor closed or the plugin is not loaded.
 
+## Getting actual data from read operations
+`ue_execute` **defaults to `response.mode="summary"` for reads** — returns a one-line text summary, NOT the bridge data payload. To get real data:
+- **`ue_execute(..., response={"mode":"full"})`** — returns the raw bridge envelope with full `data` field
+- **`ue_read(target=...)`** — the recommended path for reads; returns an artifact token for the full response
+- Do NOT use `ue_execute` without `response.mode="full"` and expect to see data fields
+
 ## Read cheatsheet (intent → call)
-Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `ue_capability_get(operation, detail="schema")` for exact params.
+Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `ue_capability_get(operation, detail="schema")` for exact params; `detail="examples"` for a complete payload example.
 - asset metadata → `ue_read(target="asset")` / `asset_get`
 - **Material / Material Function / Blueprint node graph** → `ue_read(target="graph")` or `graph_snapshot_get(graph_kind="material"|"material_function"|"blueprint")` — this is the core node-graph reader, NOT a `*_summary` op
 - **Large blueprint sub-graph drill** → `graph_snapshot_get(keyword="Damage")` or `graph_node_info_get(keyword="Damage")` for node-name substring, `trace_from="Event BeginPlay", trace_depth=5` for BFS neighborhood, `node_class_filter=["CallFunction"]` for class filtering, `exec_only=true` for exec-pin-only wires. All 5 filter params work on both `graph_snapshot_get` (topology) and `graph_node_info_get` (dense node info). Response includes `filter_stats` (total/matched/included nodes). Blueprint `graph_snapshot_get` responses always include `available_graphs` (name + node count) — use it to pick `graph_name` instead of guessing
@@ -35,8 +41,31 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
 - Texture2D dimensions / source+pixel format / compression / sRGB / LOD group → `texture_summary_get` / `ue_read(target="texture")`
 
+## Patch operations cheatsheet
+All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capability_get(operation, detail="examples")` first. All default to `dry_run=true`.
+
+**blueprint_components_patch** — `op`: `add_component` | `remove_component`
+```json
+{"op": "add_component", "component_class": "Engine.NiagaraComponent", "name": "AimVFX", "parent": "Mesh"}
+{"op": "remove_component", "name": "OldComponent"}
+```
+
+**graph_patch_apply** (Blueprint) — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pin identifiers are **GUIDs** from `graph_snapshot_get(format="full")`, not human names.
+```json
+{"op": "connect_pins", "from_node_id": "<GUID>", "from_pin_id": "<PIN_GUID>", "to_node_id": "<GUID>", "to_pin_id": "<PIN_GUID>"}
+{"op": "set_node_param", "node_id": "<GUID>", "name": "PinName", "value": "string_or_number"}
+```
+
+**project_input_mappings_patch** — `op`: `add_action_mapping` | `remove_action_mapping` | `add_axis_mapping` | `remove_axis_mapping`
+```json
+{"op": "add_action_mapping", "action_name": "Aim", "key": "RightMouseButton"}
+{"op": "add_axis_mapping", "axis_name": "MoveForward", "key": "W", "scale": 1.0}
+```
+
+**node_params_set** — `params` is `{"pin_name": value}` object (NOT array). Pin names must match exact UE pin names; use `node_params_get` to discover them.
+
 ## Response modes
-`ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Use `full`/`debug` only for the raw bridge envelope. `detail` is NOT an execute mode — it is `ue_read.format`.
+`ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Read ops default to `summary` (text-only); write ops default to `delta`. Use `full`/`debug` to get the raw bridge envelope with `data` field. `detail` is NOT an execute mode — it is `ue_read.format`.
 
 ## First probe (any bridge/context question)
 1. `ue_context_get(include_counts=true)`
@@ -57,7 +86,7 @@ Gotcha: `asset_list(format="indexed")` does not populate row `items`; use `forma
 `ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes.
 
 ## Don't guess calls
-Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs EXACTLY one of `asset_path` / `material_path` / `component_path`+`slot_index`); an empty call is a request error (`invalid_request`), passing more than one is `target_conflict`, and an out-of-range slot is `invalid_slot` — none of these are `material_not_found`.
+Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. Use `detail="examples"` for a valid payload example. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs EXACTLY one of `asset_path` / `material_path` / `component_path`+`slot_index`); an empty call is a request error (`invalid_request`), passing more than one is `target_conflict`, and an out-of-range slot is `invalid_slot` — none of these are `material_not_found`.
 
 ## Evidence order
 live op result > bridge diagnostics > project context/mounts > AssetRegistry > AutoIndex state/index path > repo source & README > historical notes.

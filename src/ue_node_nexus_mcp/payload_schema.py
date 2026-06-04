@@ -53,6 +53,83 @@ _GENERIC_OBJECT_SCHEMA: dict[str, Any] = {
     "description": "No typed wrapper is registered for this operation; pass bridge payload fields directly.",
 }
 
+_OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
+    "blueprint_components_patch": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+            "op": {"type": "string", "enum": ["add_component", "remove_component"]},
+            "component_class": {"type": "string", "description": "Module.ClassName, e.g. Engine.NiagaraComponent (add_component)"},
+            "name": {"type": "string", "description": "Component variable name"},
+            "parent": {"type": "string", "description": "Parent component name to attach to (add_component)"},
+        },
+    },
+    "graph_patch_apply": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+            "op": {"type": "string", "enum": ["connect_pins", "disconnect_pins", "set_node_param", "create_node", "delete_node", "set_node_position"]},
+            "from_node_id": {"type": "string", "description": "Source node GUID (connect/disconnect)"},
+            "from_pin_id": {"type": "string", "description": "Source pin GUID (connect/disconnect)"},
+            "to_node_id": {"type": "string", "description": "Target node GUID (connect/disconnect)"},
+            "to_pin_id": {"type": "string", "description": "Target pin GUID (connect/disconnect)"},
+            "node_id": {"type": "string", "description": "Node GUID (set_node_param/delete_node/set_node_position)"},
+            "name": {"type": "string", "description": "Pin name (set_node_param)"},
+            "value": {"description": "Pin value as string/number/boolean (set_node_param)"},
+            "class_path": {"type": "string", "description": "Node class path (create_node)"},
+            "x": {"type": "integer"},
+            "y": {"type": "integer"},
+        },
+    },
+    "project_input_mappings_patch": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+            "op": {"type": "string", "enum": ["add_action_mapping", "remove_action_mapping", "add_axis_mapping", "remove_axis_mapping"]},
+            "action_name": {"type": "string", "description": "Action mapping name (action ops)"},
+            "axis_name": {"type": "string", "description": "Axis mapping name (axis ops)"},
+            "key": {"type": "string", "description": "UE key name, e.g. RightMouseButton, W, Space"},
+            "scale": {"type": "number", "description": "Axis scale factor (axis ops, default 1.0)"},
+            "shift": {"type": "boolean", "default": False},
+            "ctrl": {"type": "boolean", "default": False},
+            "alt": {"type": "boolean", "default": False},
+            "cmd": {"type": "boolean", "default": False},
+        },
+    },
+}
+
+_OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
+    "blueprint_components_patch": {
+        "asset_path": "/Game/BP/BP_Character.BP_Character",
+        "operations": [
+            {"op": "add_component", "component_class": "Engine.NiagaraComponent", "name": "AimVFX", "parent": "Mesh"},
+        ],
+        "dry_run": True,
+    },
+    "graph_patch_apply": {
+        "asset_path": "/Game/BP/BP_Character.BP_Character",
+        "graph_kind": "blueprint",
+        "operations": [
+            {"op": "connect_pins", "from_node_id": "<from_node_GUID>", "from_pin_id": "<from_pin_GUID>", "to_node_id": "<to_node_GUID>", "to_pin_id": "<to_pin_GUID>"},
+        ],
+        "dry_run": True,
+    },
+    "project_input_mappings_patch": {
+        "operations": [
+            {"op": "add_action_mapping", "action_name": "Aim", "key": "RightMouseButton"},
+            {"op": "add_axis_mapping", "axis_name": "MoveForward", "key": "W", "scale": 1.0},
+        ],
+        "dry_run": True,
+    },
+    "node_params_set": {
+        "asset_path": "/Game/BP/BP_Character.BP_Character",
+        "graph_kind": "blueprint",
+        "node_id": "<node_GUID>",
+        "params": {"InputPinName": "value_as_string_or_number"},
+        "dry_run": True,
+    },
+}
+
 _wrapper_index: dict[str, Any] | None = None
 _schema_cache: dict[str, dict[str, Any]] = {}
 
@@ -141,12 +218,22 @@ def derive_schema(func: Any) -> dict[str, Any]:
     return schema
 
 
+def _apply_item_schema(operation: str, schema: dict[str, Any]) -> None:
+    item_schema = _OPERATION_ITEM_SCHEMAS.get(operation)
+    if item_schema is None:
+        return
+    properties = schema.get("properties", {})
+    if "operations" in properties and properties["operations"].get("type") == "array":
+        properties["operations"]["items"] = item_schema
+
+
 def payload_schema_for(operation: str) -> dict[str, Any]:
     cached = _schema_cache.get(operation)
     if cached is not None:
         return cached
     func = _get_wrapper_index().get(operation)
     schema = dict(_GENERIC_OBJECT_SCHEMA) if func is None else derive_schema(func)
+    _apply_item_schema(operation, schema)
     _schema_cache[operation] = schema
     return schema
 
@@ -174,9 +261,11 @@ def _example_value(prop: dict[str, Any], field_name: str) -> Any:
 
 
 def example_payload_for(operation: str) -> dict[str, Any]:
-    """Synthesize a minimal call example from the derived schema: every required
-    field gets a type-appropriate placeholder, plus dry_run when the operation
-    exposes it (so write examples surface the safe default)."""
+    """Return a hand-written example if available, otherwise synthesize a minimal
+    call example from the derived schema."""
+    manual = _OPERATION_EXAMPLES.get(operation)
+    if manual is not None:
+        return dict(manual)
     schema = payload_schema_for(operation)
     properties = schema.get("properties", {})
     example: dict[str, Any] = {}
