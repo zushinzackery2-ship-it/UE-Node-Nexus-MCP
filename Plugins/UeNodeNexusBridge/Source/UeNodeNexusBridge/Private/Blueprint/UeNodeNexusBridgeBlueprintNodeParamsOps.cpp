@@ -5,6 +5,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
+#include "K2Node_InputAction.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
@@ -24,6 +25,17 @@ static TSharedPtr<FJsonObject> PinParamToJson(UEdGraphPin* Pin)
     return Param;
 }
 
+static TSharedPtr<FJsonObject> NodePropertyParamToJson(const FString& Name, const FString& Value)
+{
+    TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
+    Param->SetStringField(TEXT("name"), Name);
+    Param->SetStringField(TEXT("pin_id"), FString());
+    Param->SetStringField(TEXT("default_value"), Value);
+    Param->SetStringField(TEXT("source"), TEXT("node_property"));
+    Param->SetBoolField(TEXT("editable"), false);
+    return Param;
+}
+
 TArray<TSharedPtr<FJsonValue>> BuildBlueprintNodeParams(UEdGraphNode* Node)
 {
     TArray<TSharedPtr<FJsonValue>> Params;
@@ -32,6 +44,10 @@ TArray<TSharedPtr<FJsonValue>> BuildBlueprintNodeParams(UEdGraphNode* Node)
         return Params;
     }
 
+    if (UK2Node_InputAction* InputAction = Cast<UK2Node_InputAction>(Node))
+    {
+        Params.Add(MakeShared<FJsonValueObject>(NodePropertyParamToJson(TEXT("InputActionName"), InputAction->InputActionName.ToString())));
+    }
     for (UEdGraphPin* Pin : Node->Pins)
     {
         if (Pin != nullptr && Pin->Direction == EGPD_Input)

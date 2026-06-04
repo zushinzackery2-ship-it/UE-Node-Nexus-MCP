@@ -163,7 +163,17 @@ def _operation_risk(operation: str, kind: str) -> str:
     return "medium"
 
 
-def _operation_default_response(kind: str) -> str:
+FULL_DEFAULT_READ_OPERATIONS = {
+    "graph_node_info_get",
+    "node_class_params_get",
+    "node_info_get",
+    "node_params_get",
+}
+
+
+def _operation_default_response(operation: str, kind: str) -> str:
+    if operation in FULL_DEFAULT_READ_OPERATIONS:
+        return "full"
     if kind == "read":
         return "summary"
     return "delta"
@@ -183,7 +193,7 @@ def _build_registry() -> dict[str, OperationSpec]:
             bridge_operation=operation if operation in BRIDGE_OPERATIONS else None,
             hidden_from_legacy=operation in DEFAULT_HIDDEN_OPERATIONS,
             local_mcp=operation in LOCAL_MCP_OPERATIONS,
-            default_response=_operation_default_response(kind),
+            default_response=_operation_default_response(operation, kind),
         )
     return specs
 
