@@ -3,6 +3,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
+#include "K2Node_Variable.h"
 #include "Materials/MaterialExpression.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
@@ -69,6 +70,10 @@ static TArray<TSharedPtr<FJsonValue>> BuildBlueprintClassParams(UClass* Class)
         {
             Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintTemplateParam(Property, Index++)));
         }
+    }
+    if (Class->IsChildOf(UK2Node_Variable::StaticClass()))
+    {
+        Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintCreateParam(Index++, TEXT("variable_name"), TEXT("FName"), true)));
     }
     if (Class == UK2Node_Event::StaticClass())
     {

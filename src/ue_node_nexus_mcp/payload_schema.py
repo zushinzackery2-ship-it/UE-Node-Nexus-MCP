@@ -58,10 +58,12 @@ _OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
         "type": "object",
         "required": ["op"],
         "properties": {
-            "op": {"type": "string", "enum": ["add_component", "remove_component"]},
-            "component_class": {"type": "string", "description": "Module.ClassName, e.g. Engine.NiagaraComponent (add_component)"},
+            "op": {"type": "string", "enum": ["add_component", "remove_component", "set_component_defaults", "set_component_properties"]},
+            "component_class": {"type": "string", "description": "Module.ClassName or /Script path, e.g. /Script/Niagara.NiagaraComponent (add_component)"},
             "name": {"type": "string", "description": "Component variable name"},
             "parent": {"type": "string", "description": "Parent component name to attach to (add_component)"},
+            "defaults": {"type": "object", "description": "Component template defaults; supports reflected properties plus RelativeTransform/material conveniences"},
+            "properties": {"type": "object", "description": "Alias for defaults"},
         },
     },
     "graph_patch_apply": {
@@ -104,7 +106,21 @@ _OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
     "blueprint_components_patch": {
         "asset_path": "/Game/BP/BP_Character.BP_Character",
         "operations": [
-            {"op": "add_component", "component_class": "Engine.NiagaraComponent", "name": "AimVFX", "parent": "Mesh"},
+            {
+                "op": "add_component",
+                "component_class": "/Script/Niagara.NiagaraComponent",
+                "name": "AimVFX",
+                "parent": "Mesh",
+                "defaults": {
+                    "Asset": "/Game/FX/NS_AimMagicCircle.NS_AimMagicCircle",
+                    "bAutoActivate": False,
+                    "RelativeTransform": {
+                        "location": {"x": 0, "y": 0, "z": 50},
+                        "rotation": {"pitch": 0, "yaw": 0, "roll": 0},
+                        "scale": {"x": 1, "y": 1, "z": 1},
+                    },
+                },
+            },
         ],
         "dry_run": True,
     },

@@ -44,10 +44,11 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 ## Patch operations cheatsheet
 All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capability_get(operation, detail="examples")` first. All default to `dry_run=true`.
 
-**blueprint_components_patch** — `op`: `add_component` | `remove_component`
+**blueprint_components_patch** — `op`: `add_component` | `remove_component` | `set_component_defaults` | `set_component_properties`. `defaults` and `properties` are aliases for component template defaults; reflected fields accept UE property names, plus convenience `RelativeTransform` and `material`.
 ```json
-{"op": "add_component", "component_class": "Engine.NiagaraComponent", "name": "AimVFX", "parent": "Mesh"}
-{"op": "remove_component", "name": "OldComponent"}
+{"op":"add_component","component_class":"/Script/Niagara.NiagaraComponent","name":"AimVFX","parent":"Mesh","defaults":{"Asset":"/Game/FX/NS_AimMagicCircle.NS_AimMagicCircle","bAutoActivate":false,"RelativeTransform":{"location":{"x":0,"y":0,"z":50},"rotation":{"pitch":0,"yaw":0,"roll":0},"scale":{"x":1,"y":1,"z":1}}}}
+{"op":"set_component_defaults","name":"AimVFX","defaults":{"bAutoActivate":false}}
+{"op":"remove_component","name":"OldComponent"}
 ```
 
 **graph_patch_apply** (Blueprint) — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pins accept **GUID** (`from_pin_id`/`to_pin_id`) OR **name** (`from_pin`/`to_pin`) — name is easier, GUID is unambiguous when a node has duplicate pin names.

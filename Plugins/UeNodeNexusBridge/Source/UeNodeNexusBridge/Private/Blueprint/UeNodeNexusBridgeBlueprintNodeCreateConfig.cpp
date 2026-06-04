@@ -9,6 +9,11 @@
 #include "K2Node_InputAction.h"
 #include "K2Node_InputAxisEvent.h"
 #include "K2Node_InputKey.h"
+#include "K2Node_Variable.h"
+#include "Engine/Blueprint.h"
+#include "Engine/SCS_Node.h"
+#include "Engine/SimpleConstructionScript.h"
+#include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
 {
@@ -32,6 +37,108 @@ static bool ReadBoolFieldOrParam(const TSharedPtr<FJsonObject>& Payload, const F
 
     const TSharedPtr<FJsonObject>* Params = nullptr;
     return Payload->TryGetObjectField(TEXT("params"), Params) && Params != nullptr && (*Params)->TryGetBoolField(FieldName, OutValue);
+}
+
+static bool ReadVariableNameFieldOrParam(const TSharedPtr<FJsonObject>& Payload, FString& OutValue)
+{
+    if (ReadStringFieldOrParam(Payload, TEXT("variable_name"), OutValue)
+        || ReadStringFieldOrParam(Payload, TEXT("VariableName"), OutValue)
+        || ReadStringFieldOrParam(Payload, TEXT("member_name"), OutValue))
+    {
+        return !OutValue.IsEmpty();
+    }
+
+    const TSharedPtr<FJsonObject>* VariableReference = nullptr;
+    if (Payload->TryGetObjectField(TEXT("variable_reference"), VariableReference) && VariableReference != nullptr)
+    {
+        return (*VariableReference)->TryGetStringField(TEXT("member_name"), OutValue) && !OutValue.IsEmpty();
+    }
+
+    const TSharedPtr<FJsonObject>* Params = nullptr;
+    if (Payload->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)
+    {
+        if ((*Params)->TryGetObjectField(TEXT("variable_reference"), VariableReference) && VariableReference != nullptr)
+        {
+            return (*VariableReference)->TryGetStringField(TEXT("member_name"), OutValue) && !OutValue.IsEmpty();
+        }
+    }
+    return false;
+}
+
+static USCS_Node* FindComponentNodeByVariableName(UBlueprint* Blueprint, const FName VariableName)
+{
+    USimpleConstructionScript* Script = Blueprint ? Blueprint->SimpleConstructionScript : nullptr;
+    if (Script == nullptr || VariableName.IsNone())
+    {
+        return nullptr;
+    }
+    if (USCS_Node* ExactNode = Script->FindSCSNode(VariableName))
+    {
+        return ExactNode;
+    }
+    for (USCS_Node* Node : Script->GetAllNodes())
+    {
+        if (Node != nullptr && Node->GetVariableName().IsEqual(VariableName, ENameCase::IgnoreCase))
+        {
+            return Node;
+        }
+    }
+    return nullptr;
+}
+
+static FProperty* FindBlueprintProperty(UBlueprint* Blueprint, const FName VariableName)
+{
+    if (Blueprint == nullptr || VariableName.IsNone())
+    {
+        return nullptr;
+    }
+    if (UClass* SkeletonClass = Blueprint->SkeletonGeneratedClass)
+    {
+        if (FProperty* Property = FindFProperty<FProperty>(SkeletonClass, VariableName))
+        {
+            return Property;
+        }
+    }
+    if (UClass* GeneratedClass = Blueprint->GeneratedClass)
+    {
+        if (FProperty* Property = FindFProperty<FProperty>(GeneratedClass, VariableName))
+        {
+            return Property;
+        }
+    }
+    return nullptr;
+}
+
+static bool BlueprintVariableExists(UBlueprint* Blueprint, const FString& VariableName)
+{
+    const FName VariableFName(*VariableName);
+    return FindBlueprintProperty(Blueprint, VariableFName) != nullptr || FindComponentNodeByVariableName(Blueprint, VariableFName) != nullptr;
+}
+
+static bool ConfigureVariableNode(UK2Node_Variable* Node, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
+{
+    FString VariableName;
+    if (!ReadVariableNameFieldOrParam(Payload, VariableName))
+    {
+        OutError = TEXT("variable_name is required for K2Node_VariableGet/K2Node_VariableSet");
+        return false;
+    }
+
+    const FName VariableFName(*VariableName);
+    if (FProperty* Property = FindBlueprintProperty(Blueprint, VariableFName))
+    {
+        Node->SetFromProperty(Property, true, Property->GetOwnerClass());
+        return true;
+    }
+
+    if (USCS_Node* ComponentNode = FindComponentNodeByVariableName(Blueprint, VariableFName))
+    {
+        Node->VariableReference.SetSelfMember(ComponentNode->GetVariableName(), ComponentNode->VariableGuid);
+        return true;
+    }
+
+    OutError = FString::Printf(TEXT("variable_name not found on Blueprint variables or components: %s"), *VariableName);
+    return false;
 }
 
 static bool ConfigureCallFunctionNode(UK2Node_CallFunction* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
@@ -188,8 +295,22 @@ static bool ConfigureCustomEventNode(UK2Node_CustomEvent* Node, const TSharedPtr
     return true;
 }
 
-bool ValidateBlueprintNodeCreateConfig(UClass* NodeClass, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
+bool ValidateBlueprintNodeCreateConfig(UClass* NodeClass, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
+    if (NodeClass->IsChildOf(UK2Node_Variable::StaticClass()))
+    {
+        FString VariableName;
+        if (!ReadVariableNameFieldOrParam(Payload, VariableName))
+        {
+            OutError = TEXT("variable_name is required for K2Node_VariableGet/K2Node_VariableSet");
+            return false;
+        }
+        if (!BlueprintVariableExists(Blueprint, VariableName))
+        {
+            OutError = FString::Printf(TEXT("variable_name not found on Blueprint variables or components: %s"), *VariableName);
+            return false;
+        }
+    }
     if (NodeClass->IsChildOf(UK2Node_CallFunction::StaticClass()))
     {
         FString FunctionName;
@@ -253,8 +374,12 @@ bool ValidateBlueprintNodeCreateConfig(UClass* NodeClass, const TSharedPtr<FJson
     return true;
 }
 
-bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
+bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
+    if (UK2Node_Variable* VariableNode = Cast<UK2Node_Variable>(Node))
+    {
+        return ConfigureVariableNode(VariableNode, Blueprint, Payload, OutError);
+    }
     if (UK2Node_CallFunction* CallFunctionNode = Cast<UK2Node_CallFunction>(Node))
     {
         return ConfigureCallFunctionNode(CallFunctionNode, Payload, OutError);

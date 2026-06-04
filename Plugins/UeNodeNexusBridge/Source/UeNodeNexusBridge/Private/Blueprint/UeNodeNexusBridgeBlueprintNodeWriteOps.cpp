@@ -163,7 +163,7 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeCreate(const FString& Operation, cons
         return MakeBlueprintNodeError(Operation, RequestId, TEXT("unknown_node_class"), FString::Printf(TEXT("Blueprint node class not found: %s"), *NodeClassName));
     }
     FString ConfigError;
-    if (!ValidateBlueprintNodeCreateConfig(NodeClass, Payload, ConfigError))
+    if (!ValidateBlueprintNodeCreateConfig(NodeClass, Blueprint, Payload, ConfigError))
     {
         return MakeBlueprintNodeError(Operation, RequestId, TEXT("node_config_required"), ConfigError);
     }
@@ -184,7 +184,7 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeCreate(const FString& Operation, cons
         NewNode = Creator.CreateNode(false, NodeClass);
         NewNode->NodePosX = X;
         NewNode->NodePosY = Y;
-        if (!ConfigureCreatedBlueprintNode(NewNode, Payload, ConfigError))
+        if (!ConfigureCreatedBlueprintNode(NewNode, Blueprint, Payload, ConfigError))
         {
             Creator.Finalize();
             Graph->RemoveNode(NewNode);
