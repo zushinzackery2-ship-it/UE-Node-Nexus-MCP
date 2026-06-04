@@ -6,6 +6,7 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
+#include "K2Node_InputAction.h"
 #include "K2Node_InputAxisEvent.h"
 #include "K2Node_InputKey.h"
 
@@ -151,6 +152,28 @@ static bool ConfigureInputAxisEventNode(UK2Node_InputAxisEvent* Node, const TSha
     return true;
 }
 
+static bool ConfigureInputActionNode(UK2Node_InputAction* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
+{
+    FString ActionName;
+    if (!ReadStringFieldOrParam(Payload, TEXT("input_action_name"), ActionName))
+    {
+        OutError = TEXT("input_action_name is required for K2Node_InputAction");
+        return false;
+    }
+
+    Node->InputActionName = FName(*ActionName);
+    bool bConsumeInput = Node->bConsumeInput;
+    bool bExecuteWhenPaused = Node->bExecuteWhenPaused;
+    bool bOverrideParentBinding = Node->bOverrideParentBinding;
+    ReadBoolFieldOrParam(Payload, TEXT("consume_input"), bConsumeInput);
+    ReadBoolFieldOrParam(Payload, TEXT("execute_when_paused"), bExecuteWhenPaused);
+    ReadBoolFieldOrParam(Payload, TEXT("override_parent_binding"), bOverrideParentBinding);
+    Node->bConsumeInput = bConsumeInput;
+    Node->bExecuteWhenPaused = bExecuteWhenPaused;
+    Node->bOverrideParentBinding = bOverrideParentBinding;
+    return true;
+}
+
 static bool ConfigureCustomEventNode(UK2Node_CustomEvent* Node, const TSharedPtr<FJsonObject>& Payload)
 {
     FString EventName;
@@ -183,6 +206,15 @@ bool ValidateBlueprintNodeCreateConfig(UClass* NodeClass, const TSharedPtr<FJson
         if (!ReadStringFieldOrParam(Payload, TEXT("input_key"), KeyName))
         {
             OutError = TEXT("input_key is required for K2Node_InputKey");
+            return false;
+        }
+    }
+    if (NodeClass->IsChildOf(UK2Node_InputAction::StaticClass()))
+    {
+        FString ActionName;
+        if (!ReadStringFieldOrParam(Payload, TEXT("input_action_name"), ActionName))
+        {
+            OutError = TEXT("input_action_name is required for K2Node_InputAction");
             return false;
         }
     }
@@ -230,6 +262,10 @@ bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, const TSharedPtr<FJsonObj
     if (UK2Node_InputKey* InputKeyNode = Cast<UK2Node_InputKey>(Node))
     {
         return ConfigureInputKeyNode(InputKeyNode, Payload, OutError);
+    }
+    if (UK2Node_InputAction* InputActionNode = Cast<UK2Node_InputAction>(Node))
+    {
+        return ConfigureInputActionNode(InputActionNode, Payload, OutError);
     }
     if (UK2Node_InputAxisEvent* InputAxisEventNode = Cast<UK2Node_InputAxisEvent>(Node))
     {
