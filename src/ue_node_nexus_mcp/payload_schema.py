@@ -70,9 +70,11 @@ _OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
         "properties": {
             "op": {"type": "string", "enum": ["connect_pins", "disconnect_pins", "set_node_param", "create_node", "delete_node", "set_node_position"]},
             "from_node_id": {"type": "string", "description": "Source node GUID (connect/disconnect)"},
-            "from_pin_id": {"type": "string", "description": "Source pin GUID (connect/disconnect)"},
+            "from_pin_id": {"type": "string", "description": "Source pin GUID (connect/disconnect); omit if using from_pin"},
+            "from_pin": {"type": "string", "description": "Source pin name as fallback when from_pin_id is not available (connect/disconnect)"},
             "to_node_id": {"type": "string", "description": "Target node GUID (connect/disconnect)"},
-            "to_pin_id": {"type": "string", "description": "Target pin GUID (connect/disconnect)"},
+            "to_pin_id": {"type": "string", "description": "Target pin GUID (connect/disconnect); omit if using to_pin"},
+            "to_pin": {"type": "string", "description": "Target pin name as fallback when to_pin_id is not available (connect/disconnect)"},
             "node_id": {"type": "string", "description": "Node GUID (set_node_param/delete_node/set_node_position)"},
             "name": {"type": "string", "description": "Pin name (set_node_param)"},
             "value": {"description": "Pin value as string/number/boolean (set_node_param)"},
@@ -110,7 +112,7 @@ _OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
         "asset_path": "/Game/BP/BP_Character.BP_Character",
         "graph_kind": "blueprint",
         "operations": [
-            {"op": "connect_pins", "from_node_id": "<from_node_GUID>", "from_pin_id": "<from_pin_GUID>", "to_node_id": "<to_node_GUID>", "to_pin_id": "<to_pin_GUID>"},
+            {"op": "connect_pins", "from_node_id": "<from_node_GUID>", "from_pin": "OutputPinName", "to_node_id": "<to_node_GUID>", "to_pin": "InputPinName"},
         ],
         "dry_run": True,
     },

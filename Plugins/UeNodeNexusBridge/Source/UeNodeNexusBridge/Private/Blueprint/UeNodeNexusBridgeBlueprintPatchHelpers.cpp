@@ -70,21 +70,43 @@ TSharedPtr<FJsonObject> MakeBlueprintLinkJson(UEdGraphPin* FromPin, UEdGraphPin*
     return Link;
 }
 
+static UEdGraphPin* ResolvePinByIdOrName(UEdGraphNode* Node, const TSharedPtr<FJsonObject>& Op, const TCHAR* IdField, const TCHAR* NameField, EEdGraphPinDirection Direction)
+{
+    if (Node == nullptr)
+    {
+        return nullptr;
+    }
+    FString PinId;
+    if (Op->TryGetStringField(IdField, PinId))
+    {
+        return FindBlueprintPin(Node, PinId);
+    }
+    FString PinName;
+    if (Op->TryGetStringField(NameField, PinName))
+    {
+        UEdGraphPin* ByName = Node->FindPin(FName(*PinName), Direction);
+        if (ByName != nullptr)
+        {
+            return ByName;
+        }
+        return Node->FindPin(FName(*PinName));
+    }
+    return nullptr;
+}
+
 bool ResolveBlueprintLinkPins(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Op, UEdGraphPin*& OutFrom, UEdGraphPin*& OutTo)
 {
     FString FromNodeId;
-    FString FromPinId;
     FString ToNodeId;
-    FString ToPinId;
-    if (!Op->TryGetStringField(TEXT("from_node_id"), FromNodeId) || !Op->TryGetStringField(TEXT("from_pin_id"), FromPinId) || !Op->TryGetStringField(TEXT("to_node_id"), ToNodeId) || !Op->TryGetStringField(TEXT("to_pin_id"), ToPinId))
+    if (!Op->TryGetStringField(TEXT("from_node_id"), FromNodeId) || !Op->TryGetStringField(TEXT("to_node_id"), ToNodeId))
     {
         return false;
     }
 
     UEdGraphNode* FromNode = FindBlueprintNode(Graph, FromNodeId);
     UEdGraphNode* ToNode = FindBlueprintNode(Graph, ToNodeId);
-    OutFrom = FindBlueprintPin(FromNode, FromPinId);
-    OutTo = FindBlueprintPin(ToNode, ToPinId);
+    OutFrom = ResolvePinByIdOrName(FromNode, Op, TEXT("from_pin_id"), TEXT("from_pin"), EGPD_Output);
+    OutTo = ResolvePinByIdOrName(ToNode, Op, TEXT("to_pin_id"), TEXT("to_pin"), EGPD_Input);
     return OutFrom != nullptr && OutTo != nullptr;
 }
 

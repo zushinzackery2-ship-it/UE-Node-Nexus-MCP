@@ -50,8 +50,9 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 {"op": "remove_component", "name": "OldComponent"}
 ```
 
-**graph_patch_apply** (Blueprint) — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pin identifiers are **GUIDs** from `graph_snapshot_get(format="full")`, not human names.
+**graph_patch_apply** (Blueprint) — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pins accept **GUID** (`from_pin_id`/`to_pin_id`) OR **name** (`from_pin`/`to_pin`) — name is easier, GUID is unambiguous when a node has duplicate pin names.
 ```json
+{"op": "connect_pins", "from_node_id": "<GUID>", "from_pin": "ReturnValue", "to_node_id": "<GUID>", "to_pin": "NewParam"}
 {"op": "connect_pins", "from_node_id": "<GUID>", "from_pin_id": "<PIN_GUID>", "to_node_id": "<GUID>", "to_pin_id": "<PIN_GUID>"}
 {"op": "set_node_param", "node_id": "<GUID>", "name": "PinName", "value": "string_or_number"}
 ```
