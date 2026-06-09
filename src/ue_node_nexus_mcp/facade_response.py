@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .facade_state import StoredDiff, facade_state
 from .runtime import response_mode
+
+LARGE_RESPONSE_INLINE_BYTE_LIMIT = 16 * 1024
 
 
 def minimal_error(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -92,6 +95,15 @@ def compact_data_summary(data: Any) -> str:
     return str(data)
 
 
+def response_payload_bytes(response: dict[str, Any]) -> int:
+    payload = json.dumps(response, ensure_ascii=False, separators=(",", ":"), default=str)
+    return len(payload.encode("utf-8"))
+
+
+def estimated_tokens_for_bytes(payload_bytes: int) -> int:
+    return max(1, (payload_bytes + 3) // 4)
+
+
 def diff_changes(diff: StoredDiff) -> list[list[Any]]:
     changes: list[list[Any]] = [["operation", diff.operation]]
     payload = diff.payload
@@ -109,7 +121,11 @@ def diff_changes(diff: StoredDiff) -> list[list[Any]]:
 
 
 def summarize_response(operation: str, payload: dict[str, Any], response: dict[str, Any], mode: str) -> dict[str, Any]:
+    raw_mode = mode if mode in {"full", "debug"} else "full"
     if mode in {"full", "debug"} or response_mode() == "full":
+        payload_bytes = response_payload_bytes(response)
+        if payload_bytes > LARGE_RESPONSE_INLINE_BYTE_LIMIT:
+            return _artifact_summary_for_large_response(operation, payload, response, raw_mode, payload_bytes)
         return response
 
     if response.get("ok") is False:
@@ -143,6 +159,51 @@ def summarize_response(operation: str, payload: dict[str, Any], response: dict[s
         }
 
     return {"ok": True, "data": summary, "remaining_errors": response.get("remaining_errors", 0)}
+
+
+def _artifact_summary_for_large_response(
+    operation: str,
+    payload: dict[str, Any],
+    response: dict[str, Any],
+    mode: str,
+    payload_bytes: int,
+) -> dict[str, Any]:
+    data = response.get("data")
+    diff = facade_state.store_diff(operation, payload, response)
+    artifact = artifact_handle(f"{operation}_{mode}_response", response)
+    summary = {
+        "operation": operation,
+        "response_mode": mode,
+        "summary": compact_data_summary(data),
+        "stored_as_artifact": True,
+        "truncated": True,
+        "payload_bytes": payload_bytes,
+        "inline_limit_bytes": LARGE_RESPONSE_INLINE_BYTE_LIMIT,
+        "estimated_tokens": estimated_tokens_for_bytes(payload_bytes),
+        "artifact": artifact,
+        "snapshot_token": artifact["id"],
+        "diff_token": diff.diff_token,
+        "diagnostics": diagnostic_counts(response),
+    }
+
+    asset_path = asset_path_from_payload(payload)
+    if asset_path:
+        summary["state_token"] = f"state:{asset_path}:{diff.diff_token}"
+        summary["next_read"] = {
+            "tool": "ue_read",
+            "args": {
+                "target": "artifact",
+                "query": {
+                    "artifact_id": artifact["id"],
+                },
+            },
+        }
+
+    return {
+        "ok": response.get("ok", False),
+        "data": summary,
+        "remaining_errors": response.get("remaining_errors", 0 if response.get("ok", False) else 1),
+    }
 
 
 def _affected_from_payload(payload: dict[str, Any]) -> dict[str, list[str]]:

@@ -56,7 +56,7 @@
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地命名管道 `\\.\pipe\UeNodeNexusBridge.<pid>` 提供服务（每实例一条，按 pid 命名，无端口占用） |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式；蓝图图支持 `keyword`、`node_class_filter`、`trace_from`+`trace_depth`、`exec_only` 子图筛选；蓝图响应附带 `available_graphs`（名字+节点数） |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
-| **图安全写入** | `graph_patch_apply` 编辑 Blueprint pin 或 Material Expression 连线，返回差异、引脚完整性、编译状态和脏标记 |
+| **图安全写入** | `graph_patch_apply` 编辑 Blueprint pin 或 Material Expression 连线；Blueprint patch 支持同批 `create_node`、`client_id` 引用、节点别名/对象名解析和 dry-run 临时节点清理，返回差异、引脚完整性、编译状态和脏标记 |
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
 | **Material Instance 参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
@@ -112,7 +112,7 @@
 | **Cascade** | `cascade_system_summary_get()` | 只读 Cascade 粒子系统的 Emitter、TypeData 和模块栈（旧粒子迁移读取入口）|
 | **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny`；蓝图支持 `keyword`/`node_class_filter`/`trace_from`+`trace_depth`/`exec_only` 子图筛选，响应含 `available_graphs` 和 `filter_stats` |
 | **图** | `graph_node_info_get()` | 读取整张图的高密度节点信息，默认 `indexed`，可用 `include_position=true` 附带坐标表 |
-| **图** | `graph_patch_apply()` | 应用声明式图编辑，附带写后检查 |
+| **图** | `graph_patch_apply()` | 应用声明式图编辑；Blueprint 支持同批创建节点后用 `client_id` 连接/设参/定位/删除，附带写后检查 |
 | **图** | `graph_build_apply()` | 用 `nodes`、`links`、`material_outputs` 一次创建节点、写参数、连线并编译 |
 | **节点** | `node_info_get()` | 读取单个节点的紧凑编辑视图，可按 section/index 精确截取 |
 | **节点** | `node_create()` | 创建材质节点并返回完整节点编辑视图 |
@@ -159,7 +159,7 @@ MCP 公开面固定为 6 个 facade 工具，用少量入口承载完整 UE oper
 | **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
 | **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
 
-Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 97 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`。
+Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 97 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`，超过 inline 阈值的大响应会自动存为 artifact handle。
 
 推荐 thin 工作流：
 
@@ -227,7 +227,7 @@ MCP client 配置：
 
 Niagara 读取工具默认使用低上下文格式：`niagara_system_summary_get`、`niagara_emitters_list`、`niagara_renderers_list`、`niagara_user_params_get`、`niagara_materials_get` 默认 `indexed`，可切到 `tiny` 或 `full`。`niagara_asset_lint(format="indexed")` 返回 `G/S/C/I` 文本：`S` 是严重级别计数，`C` 是 issue code 字典，`I` 是 `严重级别:code索引:位置` 行；`format="full"` 才返回完整 issue 对象。
 
-默认响应按有效信息压缩：图快照默认 `wires_tiny`，整图信息默认 `indexed`，Niagara 查询默认 `indexed` 或 `summary`，详细数组、真实 pin GUID 和完整 issue 对象仅在显式 `format="full"` 或对应 include flag 打开时返回。验收脚本需要精确连线时只做局部 `full` snapshot，不改变 MCP 工具的默认低上下文输出。
+默认响应按有效信息压缩：图快照默认 `wires_tiny`，整图信息默认 `indexed`，Niagara 查询默认 `indexed` 或 `summary`，详细数组、真实 pin GUID 和完整 issue 对象仅在显式 `format="full"` 或对应 include flag 打开时请求。Material / MaterialFunction 的 `include_node_params=true` 默认只返回 `node_params_format="compact"` 参数值，不重复输出 `enum_values`、`metadata`、`default_value`、`cpp_type` 和 `property_flags`；整图完整参数 schema 需显式 `node_params_format="full"`。`ue_execute(response.mode="full"|"debug")` 的大负载不会直接进入 tool result，而是返回 `artifact.id`、payload 字节数、估算 token 和摘要；`graph_snapshot_get(format="full", include_node_params=true, node_params_format="full")` 会在执行 UE 读取前被前置拦截，除非显式传 `response.allow_heavy=true`。验收脚本需要精确连线时只做局部 `full` snapshot，不改变 MCP 工具的默认低上下文输出。
 
 所有 MCP 响应根对象末端会附带一个整数 `remaining_errors`，默认 `0`。该值由当前响应实时计算：结构化 `error`、`error/fatal` 级 diagnostics、嵌套 `error_count` 会计入总数。`remaining_errors` 是根级保留字段，嵌套同名字段会被 wrapper 移除，避免业务 data 与全局错误汇总混用。
 

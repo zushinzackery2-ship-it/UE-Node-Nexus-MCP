@@ -31,7 +31,7 @@ static bool ReadBlueprintPositionPair(const TSharedPtr<FJsonObject>& Payload, in
     return true;
 }
 
-static UClass* ResolveBlueprintNodeClassForCreate(const FString& NodeClass)
+UClass* ResolveBlueprintNodeClassForCreate(const FString& NodeClass)
 {
     if (UClass* Direct = LoadClass<UEdGraphNode>(nullptr, *NodeClass))
     {

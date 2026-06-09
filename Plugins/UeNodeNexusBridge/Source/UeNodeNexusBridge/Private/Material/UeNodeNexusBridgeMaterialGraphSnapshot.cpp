@@ -6,6 +6,7 @@
 #include "UeNodeNexusBridgeCompactGraph.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialGraphSnapshotShared.h"
+#include "UeNodeNexusBridgeMaterialPropertySchema.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeWireGraph.h"
 #include "UObject/UnrealType.h"
@@ -66,7 +67,18 @@ FString MaterialSnapshotFunctionExpressionDisplayName(UMaterialExpression* Expre
     return MaterialExpressionDisplayName(Expression);
 }
 
-TSharedPtr<FJsonObject> MaterialSnapshotNodeToJson(UMaterialExpression* Expression, bool bIncludeNodeParams)
+static TArray<TSharedPtr<FJsonValue>> BuildMaterialSnapshotNodeParams(UMaterialExpression* Expression, bool bIncludeNodeParams, EMaterialSnapshotNodeParamsFormat NodeParamsFormat)
+{
+    if (!bIncludeNodeParams)
+    {
+        return TArray<TSharedPtr<FJsonValue>>();
+    }
+    return NodeParamsFormat == EMaterialSnapshotNodeParamsFormat::Full
+        ? BuildMaterialExpressionParams(Expression)
+        : BuildMaterialExpressionParamValues(Expression);
+}
+
+TSharedPtr<FJsonObject> MaterialSnapshotNodeToJson(UMaterialExpression* Expression, bool bIncludeNodeParams, EMaterialSnapshotNodeParamsFormat NodeParamsFormat)
 {
     TSharedPtr<FJsonObject> Node = MakeShared<FJsonObject>();
     const FString NodeId = MaterialSnapshotNodeId(Expression);
@@ -92,7 +104,7 @@ TSharedPtr<FJsonObject> MaterialSnapshotNodeToJson(UMaterialExpression* Expressi
     }
 
     Node->SetArrayField(TEXT("pins"), Pins);
-    Node->SetArrayField(TEXT("params"), bIncludeNodeParams ? BuildMaterialExpressionParams(Expression) : TArray<TSharedPtr<FJsonValue>>());
+    Node->SetArrayField(TEXT("params"), BuildMaterialSnapshotNodeParams(Expression, bIncludeNodeParams, NodeParamsFormat));
     return Node;
 }
 
@@ -135,7 +147,7 @@ void AppendMaterialSnapshotCompactNode(FCompactGraphBuilder& Builder, UMaterialE
 
     if (bIncludeNodeParams)
     {
-        for (const TSharedPtr<FJsonValue>& ParamValue : BuildMaterialExpressionParams(Expression))
+        for (const TSharedPtr<FJsonValue>& ParamValue : BuildMaterialExpressionParamValues(Expression))
         {
             Builder.AddParam(NodeId, ParamValue->AsObject());
         }
@@ -163,6 +175,7 @@ static TSharedPtr<FJsonObject> BuildMaterialCompactSnapshot(const FString& Opera
     Builder.Data->SetStringField(TEXT("asset_class"), Material->GetClass()->GetPathName());
     Builder.Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Builder.Data->SetStringField(TEXT("graph_kind"), TEXT("material"));
+    Builder.Data->SetStringField(TEXT("node_params_format"), bIncludeNodeParams ? TEXT("compact") : TEXT("none"));
 
     for (TObjectPtr<UMaterialExpression> ExpressionPtr : Material->GetExpressions())
     {
@@ -225,7 +238,7 @@ static TSharedPtr<FJsonObject> BuildMaterialWireSnapshot(const FString& Operatio
     return Response;
 }
 
-static TSharedPtr<FJsonObject> BuildMaterialFullSnapshot(const FString& Operation, const FString& RequestId, UMaterial* Material, bool bIncludeNodeParams, bool bIncludeLinks)
+static TSharedPtr<FJsonObject> BuildMaterialFullSnapshot(const FString& Operation, const FString& RequestId, UMaterial* Material, bool bIncludeNodeParams, EMaterialSnapshotNodeParamsFormat NodeParamsFormat, bool bIncludeLinks)
 {
     TArray<TSharedPtr<FJsonValue>> Nodes;
     TArray<TSharedPtr<FJsonValue>> Links;
@@ -233,7 +246,7 @@ static TSharedPtr<FJsonObject> BuildMaterialFullSnapshot(const FString& Operatio
     {
         if (UMaterialExpression* Expression = ExpressionPtr.Get())
         {
-            Nodes.Add(MakeShared<FJsonValueObject>(MaterialSnapshotNodeToJson(Expression, bIncludeNodeParams)));
+            Nodes.Add(MakeShared<FJsonValueObject>(MaterialSnapshotNodeToJson(Expression, bIncludeNodeParams, NodeParamsFormat)));
             if (bIncludeLinks)
             {
                 AddMaterialSnapshotLinks(Expression, Links);
@@ -246,6 +259,7 @@ static TSharedPtr<FJsonObject> BuildMaterialFullSnapshot(const FString& Operatio
     Data->SetStringField(TEXT("asset_class"), Material->GetClass()->GetPathName());
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Data->SetStringField(TEXT("graph_kind"), TEXT("material"));
+    Data->SetStringField(TEXT("node_params_format"), bIncludeNodeParams ? (NodeParamsFormat == EMaterialSnapshotNodeParamsFormat::Full ? TEXT("full") : TEXT("compact")) : TEXT("none"));
     Data->SetArrayField(TEXT("nodes"), Nodes);
     Data->SetArrayField(TEXT("links"), Links);
 
@@ -254,7 +268,7 @@ static TSharedPtr<FJsonObject> BuildMaterialFullSnapshot(const FString& Operatio
     return Response;
 }
 
-TSharedPtr<FJsonObject> BuildMaterialGraphSnapshot(const FString& Operation, const FString& RequestId, UMaterial* Material, bool bIncludeNodeParams, bool bIncludeLinks, bool bCompact, bool bWire, bool bWireMin, bool bWireTiny)
+TSharedPtr<FJsonObject> BuildMaterialGraphSnapshot(const FString& Operation, const FString& RequestId, UMaterial* Material, bool bIncludeNodeParams, EMaterialSnapshotNodeParamsFormat NodeParamsFormat, bool bIncludeLinks, bool bCompact, bool bWire, bool bWireMin, bool bWireTiny)
 {
     if (bWire)
     {
@@ -264,7 +278,7 @@ TSharedPtr<FJsonObject> BuildMaterialGraphSnapshot(const FString& Operation, con
     {
         return BuildMaterialCompactSnapshot(Operation, RequestId, Material, bIncludeNodeParams, bIncludeLinks);
     }
-    return BuildMaterialFullSnapshot(Operation, RequestId, Material, bIncludeNodeParams, bIncludeLinks);
+    return BuildMaterialFullSnapshot(Operation, RequestId, Material, bIncludeNodeParams, NodeParamsFormat, bIncludeLinks);
 }
 
 }

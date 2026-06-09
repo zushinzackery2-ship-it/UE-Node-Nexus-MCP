@@ -62,6 +62,62 @@ def _execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[st
     raise ValueError(f"local operation is not supported by ue_execute: {operation}")
 
 
+def _preflight_execute_request(operation: str, payload: dict[str, Any], response_options: dict[str, Any]) -> dict[str, Any] | None:
+    if operation != "graph_snapshot_get":
+        return None
+    if response_options.get("allow_heavy") is True:
+        return None
+
+    graph_format = str(payload.get("format", "")).lower()
+    include_node_params = payload.get("include_node_params") is True
+    node_params_format = str(payload.get("node_params_format", "compact")).lower()
+    if graph_format != "full" or not include_node_params or node_params_format != "full":
+        return None
+
+    asset_path = payload.get("asset_path")
+    graph_kind = payload.get("graph_kind", "auto")
+    graph_name = payload.get("graph_name")
+    recommended_payload = {
+        "asset_path": asset_path,
+        "graph_kind": graph_kind,
+        "format": "wires_tiny",
+        "include_node_params": False,
+        "include_links": payload.get("include_links", True),
+    }
+    if graph_name:
+        recommended_payload["graph_name"] = graph_name
+
+    return {
+        "ok": False,
+        "error": {
+            "code": "heavy_graph_snapshot_blocked",
+            "message": "graph_snapshot_get(format=\"full\", include_node_params=true, node_params_format=\"full\") is a heavy whole-graph schema read. Use compact node params or fetch full node params by node_id.",
+            "details": {
+                "operation": operation,
+                "asset_path": asset_path,
+                "override": {"response": {"allow_heavy": True}},
+            },
+        },
+        "data": {
+            "recommended_read": {
+                "operation": "graph_snapshot_get",
+                "payload": recommended_payload,
+                "response": {"mode": "summary"},
+            },
+            "recommended_param_read": {
+                "operation": "node_params_get",
+                "payload": {
+                    "asset_path": asset_path,
+                    "graph_kind": graph_kind,
+                    "node_id": "<node_id from graph snapshot>",
+                },
+                "response": {"mode": "summary"},
+            },
+        },
+        "remaining_errors": 0,
+    }
+
+
 @thin_tool()
 def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
     """Return thin facade status, enabled groups, and the recommended first capability query."""
@@ -159,6 +215,9 @@ def ue_execute(
     mode = str(response_options.get("mode", spec.default_response))
     if mode not in VALID_RESPONSE_MODES:
         return minimal_error("invalid_response_mode", f"unsupported response mode: {mode}", {"mode": mode})
+    preflight_response = _preflight_execute_request(operation, payload, response_options)
+    if preflight_response is not None:
+        return preflight_response
     try:
         raw_response = _execute_operation(operation, payload)
     except ValueError as exc:

@@ -71,6 +71,17 @@ TSharedPtr<FJsonObject> HandleGraphSnapshotGet(const FString& Operation, const F
     bool bIncludeLinks = true;
     Payload->TryGetBoolField(TEXT("include_node_params"), bIncludeNodeParams);
     Payload->TryGetBoolField(TEXT("include_links"), bIncludeLinks);
+    FString NodeParamsFormat = TEXT("compact");
+    Payload->TryGetStringField(TEXT("node_params_format"), NodeParamsFormat);
+    if (!NodeParamsFormat.Equals(TEXT("compact"), ESearchCase::IgnoreCase) && !NodeParamsFormat.Equals(TEXT("full"), ESearchCase::IgnoreCase))
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("node_params_format must be compact or full")));
+        return Response;
+    }
+    const EMaterialSnapshotNodeParamsFormat MaterialNodeParamsFormat = NodeParamsFormat.Equals(TEXT("full"), ESearchCase::IgnoreCase)
+        ? EMaterialSnapshotNodeParamsFormat::Full
+        : EMaterialSnapshotNodeParamsFormat::Compact;
 
     UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
     if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
@@ -88,11 +99,11 @@ TSharedPtr<FJsonObject> HandleGraphSnapshotGet(const FString& Operation, const F
     }
     if (UMaterial* Material = Cast<UMaterial>(Asset))
     {
-        return BuildMaterialGraphSnapshot(Operation, RequestId, Material, bIncludeNodeParams, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny);
+        return BuildMaterialGraphSnapshot(Operation, RequestId, Material, bIncludeNodeParams, MaterialNodeParamsFormat, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny);
     }
     if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
     {
-        return BuildMaterialFunctionGraphSnapshot(Operation, RequestId, Function, bIncludeNodeParams, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny);
+        return BuildMaterialFunctionGraphSnapshot(Operation, RequestId, Function, bIncludeNodeParams, MaterialNodeParamsFormat, bIncludeLinks, bCompact, bWire, bWireMin, bWireTiny);
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);

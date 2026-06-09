@@ -21,7 +21,7 @@ Transport is a per-editor Windows named pipe (`\\.\pipe\UeNodeNexusBridge.<pid>`
 
 ## Getting actual data from read operations
 `ue_execute` **defaults to `response.mode="summary"` for reads** — returns a one-line text summary, NOT the bridge data payload. To get real data:
-- **`ue_execute(..., response={"mode":"full"})`** — returns the raw bridge envelope with full `data` field
+- **`ue_execute(..., response={"mode":"full"})`** — requests the raw bridge envelope with full `data` field; large payloads are stored as artifact handles instead of entering tool context
 - **`ue_read(target=...)`** — the recommended path for reads; returns an artifact token for the full response
 - Do NOT use `ue_execute` without `response.mode="full"` and expect to see data fields
 
@@ -29,6 +29,7 @@ Transport is a per-editor Windows named pipe (`\\.\pipe\UeNodeNexusBridge.<pid>`
 Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `ue_capability_get(operation, detail="schema")` for exact params; `detail="examples"` for a complete payload example.
 - asset metadata → `ue_read(target="asset")` / `asset_get`
 - **Material / Material Function / Blueprint node graph** → `ue_read(target="graph")` or `graph_snapshot_get(graph_kind="material"|"material_function"|"blueprint")` — this is the core node-graph reader, NOT a `*_summary` op
+- **Graph params** → `graph_snapshot_get(format="full", include_node_params=true)` returns compact Material / Material Function param values by default (`node_params_format="compact"`), not full enum/metadata schema. Whole-graph full schema (`node_params_format="full"`) is blocked before UE execution unless `response={"allow_heavy": true}` is supplied; use `wires_tiny` first, then `node_params_get` for specific nodes.
 - **Large blueprint sub-graph drill** → `graph_snapshot_get(keyword="Damage")` or `graph_node_info_get(keyword="Damage")` for node-name substring, `trace_from="Event BeginPlay", trace_depth=5` for BFS neighborhood, `node_class_filter=["CallFunction"]` for class filtering, `exec_only=true` for exec-pin-only wires. All 5 filter params work on both `graph_snapshot_get` (topology) and `graph_node_info_get` (dense node info). Response includes `filter_stats` (total/matched/included nodes). Blueprint `graph_snapshot_get` responses always include `available_graphs` (name + node count) — use it to pick `graph_name` instead of guessing
 - Blueprint vars / defaults / components → `blueprint_details_get(include_components=true, include_inherited_components=true)`
 - AnimBlueprint graph nodes → `anim_blueprint_summary_get`
@@ -51,8 +52,10 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 {"op":"remove_component","name":"OldComponent"}
 ```
 
-**graph_patch_apply** (Blueprint) — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pins accept **GUID** (`from_pin_id`/`to_pin_id`) OR **name** (`from_pin`/`to_pin`) — name is easier, GUID is unambiguous when a node has duplicate pin names.
+**graph_patch_apply** (Blueprint) — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pins accept **GUID** (`from_pin_id`/`to_pin_id`) OR **name** (`from_pin`/`to_pin`) — name is easier, GUID is unambiguous when a node has duplicate pin names. `create_node` accepts `client_id`; later ops in the same patch can reference that id through `node_id` / `from_node_id` / `to_node_id`.
 ```json
+{"op": "create_node", "client_id": "branch", "node_class": "Branch", "position": {"x": 300, "y": 0}}
+{"op": "connect_pins", "from_node_id": "<GUID>", "from_pin": "Then", "to_node_id": "branch", "to_pin": "execute"}
 {"op": "connect_pins", "from_node_id": "<GUID>", "from_pin": "ReturnValue", "to_node_id": "<GUID>", "to_pin": "NewParam"}
 {"op": "connect_pins", "from_node_id": "<GUID>", "from_pin_id": "<PIN_GUID>", "to_node_id": "<GUID>", "to_pin_id": "<PIN_GUID>"}
 {"op": "set_node_param", "node_id": "<GUID>", "name": "PinName", "value": "string_or_number"}
@@ -67,7 +70,7 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 **node_params_set** — `params` is `{"pin_name": value}` object (NOT array). Pin names must match exact UE pin names; use `node_params_get` to discover them.
 
 ## Response modes
-`ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Read ops default to `summary` (text-only); write ops default to `delta`. Use `full`/`debug` to get the raw bridge envelope with `data` field. `detail` is NOT an execute mode — it is `ue_read.format`.
+`ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Read ops default to `summary` (text-only); write ops default to `delta`. Use `full`/`debug` only when you need the raw bridge envelope; large payloads return `artifact.id`, byte size, estimated tokens, and summary instead of raw `data`. `detail` is NOT an execute mode — it is `ue_read.format`.
 
 ## First probe (any bridge/context question)
 1. `ue_context_get(include_counts=true)`
