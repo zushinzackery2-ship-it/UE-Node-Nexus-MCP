@@ -88,7 +88,7 @@ READ_SUMMARIES = {
     "niagara_renderer_properties_get": "Read Niagara renderer properties.",
     "niagara_user_params_get": "Read Niagara user parameters.",
     "niagara_materials_get": "Read Niagara renderer materials.",
-    "diagnostics_get": "Read recent UE bridge diagnostics.",
+    "diagnostics_get": "Read UE message-log and asset compile diagnostics.",
 }
 
 WRITE_SUMMARIES = {

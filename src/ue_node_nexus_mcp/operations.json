@@ -70,6 +70,7 @@
     {"name": "texture_summary_get", "kind": "read", "group": "texture", "hidden": false, "local": false},
 
     {"name": "graph_snapshot_get", "kind": "read", "group": "graph", "hidden": false, "local": false},
+    {"name": "graph_node_search", "kind": "read", "group": "graph", "hidden": false, "local": false},
     {"name": "graph_node_info_get", "kind": "read", "group": "graph", "hidden": false, "local": false},
     {"name": "node_info_get", "kind": "read", "group": "graph", "hidden": false, "local": false},
     {"name": "node_position_get", "kind": "read", "group": "graph", "hidden": false, "local": false},

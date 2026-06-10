@@ -180,7 +180,7 @@ def diagnostics_get(
     asset_path: str | None = None,
     severity: Literal["info", "warning", "error", "all"] = "all",
 ) -> dict[str, Any]:
-    """Return recent UE bridge diagnostics, optionally filtered by asset and severity."""
+    """Return UE message-log and asset compile diagnostics, optionally filtered by asset and severity."""
     return _call(
         "diagnostics_get",
         {

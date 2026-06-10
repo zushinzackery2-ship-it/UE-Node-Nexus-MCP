@@ -43,6 +43,29 @@ def graph_snapshot_get(
         },
     )
 
+
+@default_tool()
+def graph_node_search(
+    asset_path: str,
+    graph_name: str | None = None,
+    filters: dict[str, Any] | None = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Return matching graph node ids by class, object name, or display name."""
+    require_non_empty_string(asset_path, "asset_path")
+    if filters is not None:
+        require_mapping(filters, "filters")
+    return _call(
+        "graph_node_search",
+        {
+            "asset_path": asset_path,
+            "graph_name": graph_name,
+            "filters": filters or {},
+            "limit": limit,
+        },
+    )
+
+
 @default_tool()
 def graph_node_info_get(
     asset_path: str,

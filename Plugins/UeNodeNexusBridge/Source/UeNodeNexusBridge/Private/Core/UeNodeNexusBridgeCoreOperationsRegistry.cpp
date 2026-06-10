@@ -49,6 +49,7 @@ void RegisterCoreOperations()
     Register(TEXT("anim_montage_summary_get"), HandleAnimMontageSummaryGet);
     Register(TEXT("blend_space_summary_get"), HandleBlendSpaceSummaryGet);
     Register(TEXT("graph_snapshot_get"), HandleGraphSnapshotGet);
+    Register(TEXT("graph_node_search"), HandleGraphNodeSearch);
     Register(TEXT("graph_node_info_get"), HandleGraphNodeInfoGet);
     Register(TEXT("node_class_params_get"), HandleNodeClassParamsGet);
     Register(TEXT("graph_patch_apply"), HandleGraphPatchApply);
@@ -81,11 +82,7 @@ void RegisterCoreOperations()
         {
             return HandleProjectContextGet(Op, ReqId);
         });
-    Register(TEXT("diagnostics_get"),
-        [](const FString& Op, const FString& ReqId, const TSharedPtr<FJsonObject>&)
-        {
-            return HandleDiagnosticsGet(Op, ReqId);
-        });
+    Register(TEXT("diagnostics_get"), HandleDiagnosticsGet);
 
     // Completeness guard: every operation reported by GetCoreOperationNames must
     // actually have a registered handler, or capabilities would advertise an

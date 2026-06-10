@@ -164,25 +164,22 @@ def _count_diagnostic_errors(items: Any) -> int:
     return total
 
 
-def _count_nested_errors(value: Any) -> int:
+def _max_nested_error_count(value: Any) -> int:
     if isinstance(value, list):
-        return sum(_count_nested_errors(item) for item in value)
+        maximum = 0
+        for item in value:
+            maximum = max(maximum, _max_nested_error_count(item))
+        return maximum
     if not isinstance(value, dict):
         return 0
 
-    total = 0
+    maximum = 0
     for key, child in value.items():
-        if key == "diagnostics":
-            total += _count_diagnostic_errors(child)
-            continue
         if key == "error_count":
-            total += _coerce_error_count(child)
+            maximum = max(maximum, _coerce_error_count(child))
             continue
-        if key == "error" and isinstance(child, dict):
-            total += 1
-            continue
-        total += _count_nested_errors(child)
-    return total
+        maximum = max(maximum, _max_nested_error_count(child))
+    return maximum
 
 
 def _strip_nested_remaining_errors(value: Any) -> None:
@@ -201,24 +198,38 @@ def _strip_nested_remaining_errors(value: Any) -> None:
 
 
 def _count_response_errors(response: dict[str, Any]) -> int:
-    total = _count_nested_errors(response)
-    if response.get("ok") is False and total == 0:
+    diagnostic_total = _count_diagnostic_errors(response.get("diagnostics"))
+    nested_total = _max_nested_error_count(response.get("data"))
+    total = max(diagnostic_total, nested_total)
+    if response.get("ok") is False and total == 0 and isinstance(response.get("error"), dict):
         return 1
     return total
 
 
-def _with_remaining_errors(response: dict[str, Any]) -> dict[str, Any]:
+def _payload_asset_path(payload: dict[str, Any]) -> str | None:
+    value = payload.get("asset_path")
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _should_include_remaining_errors(operation: str, payload: dict[str, Any], response: dict[str, Any]) -> bool:
+    return _payload_asset_path(payload) is not None
+
+
+def _with_remaining_errors(operation: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
     response.pop("remaining_errors", None)
     _strip_nested_remaining_errors(response)
-    response["remaining_errors"] = _count_response_errors(response)
+    if _should_include_remaining_errors(operation, payload, response):
+        response["remaining_errors"] = _count_response_errors(response)
     return response
 
 
 def call_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        return _with_remaining_errors(bridge.call(operation, payload))
+        return _with_remaining_errors(operation, payload, bridge.call(operation, payload))
     except (BridgeError, ValueError) as exc:
-        return _with_remaining_errors({
+        return _with_remaining_errors(operation, payload, {
             "ok": False,
             "operation": operation,
             "error": {

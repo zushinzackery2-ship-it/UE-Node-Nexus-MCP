@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .contracts import BRIDGE_OPERATIONS, require_list, require_mapping, require_non_empty_string
+from .contracts import require_list, require_mapping, require_non_empty_string
 from .errors import BridgeError
 from .instance import instance_manager
+from .facade_auto_read import execute_auto_read
+from .facade_execute import VALID_RESPONSE_MODES, execute_operation, preflight_execute_request
 from .facade_response import (
     artifact_handle,
     asset_path_from_payload,
@@ -13,109 +15,16 @@ from .facade_response import (
     diff_changes,
     minimal_error,
     summarize_response,
+    with_optional_remaining_errors,
 )
-from .facade_read import apply_read_format_defaults, resolve_read_operation
+from .facade_read import apply_read_format_defaults, resolve_read_operation, unsupported_target_details
 from .facade_state import facade_state
 from .operation_registry import capability_index, enabled_operation_specs, get_operation_spec, operation_schema
 from .payload_schema import example_payload_for, payload_schema_for
-from .runtime import call_bridge as _call
 from .runtime import enabled_features, thin_tool
 
 
-ResponseMode = Literal["silent", "brief", "ids_only", "delta", "summary", "full", "debug"]
-VALID_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full", "debug"}
-
-
-def _execute_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
-    spec = get_operation_spec(operation)
-    if spec.local_mcp:
-        return _execute_local_operation(operation, payload)
-    if operation not in BRIDGE_OPERATIONS:
-        raise ValueError(f"operation is not a bridge operation: {operation}")
-    return _call(operation, payload)
-
-
-def _execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Dispatch session-local control-plane ops handled inside the MCP server
-    (not forwarded to any UE instance)."""
-    if operation == "bridge_contract_check":
-        from .tools_system import bridge_contract_check
-
-        mode = payload.get("mode", "enabled")
-        if not isinstance(mode, str):
-            raise ValueError("mode must be a string")
-        return bridge_contract_check(mode=mode)  # type: ignore[arg-type]
-    if operation == "bridge_instance_list":
-        from .tools_system import bridge_instance_list
-
-        return bridge_instance_list()
-    if operation == "bridge_instance_select":
-        from .tools_system import bridge_instance_select
-
-        pid = payload.get("pid")
-        project = payload.get("project")
-        if pid is not None and not isinstance(pid, int):
-            raise ValueError("pid must be an integer")
-        if project is not None and not isinstance(project, str):
-            raise ValueError("project must be a string")
-        return bridge_instance_select(pid=pid, project=project)
-    raise ValueError(f"local operation is not supported by ue_execute: {operation}")
-
-
-def _preflight_execute_request(operation: str, payload: dict[str, Any], response_options: dict[str, Any]) -> dict[str, Any] | None:
-    if operation != "graph_snapshot_get":
-        return None
-    if response_options.get("allow_heavy") is True:
-        return None
-
-    graph_format = str(payload.get("format", "")).lower()
-    include_node_params = payload.get("include_node_params") is True
-    node_params_format = str(payload.get("node_params_format", "compact")).lower()
-    if graph_format != "full" or not include_node_params or node_params_format != "full":
-        return None
-
-    asset_path = payload.get("asset_path")
-    graph_kind = payload.get("graph_kind", "auto")
-    graph_name = payload.get("graph_name")
-    recommended_payload = {
-        "asset_path": asset_path,
-        "graph_kind": graph_kind,
-        "format": "wires_tiny",
-        "include_node_params": False,
-        "include_links": payload.get("include_links", True),
-    }
-    if graph_name:
-        recommended_payload["graph_name"] = graph_name
-
-    return {
-        "ok": False,
-        "error": {
-            "code": "heavy_graph_snapshot_blocked",
-            "message": "graph_snapshot_get(format=\"full\", include_node_params=true, node_params_format=\"full\") is a heavy whole-graph schema read. Use compact node params or fetch full node params by node_id.",
-            "details": {
-                "operation": operation,
-                "asset_path": asset_path,
-                "override": {"response": {"allow_heavy": True}},
-            },
-        },
-        "data": {
-            "recommended_read": {
-                "operation": "graph_snapshot_get",
-                "payload": recommended_payload,
-                "response": {"mode": "summary"},
-            },
-            "recommended_param_read": {
-                "operation": "node_params_get",
-                "payload": {
-                    "asset_path": asset_path,
-                    "graph_kind": graph_kind,
-                    "node_id": "<node_id from graph snapshot>",
-                },
-                "response": {"mode": "summary"},
-            },
-        },
-        "remaining_errors": 0,
-    }
+VALID_RESPONSE_OPTION_FIELDS = {"allow_heavy", "mode"}
 
 
 @thin_tool()
@@ -145,7 +54,7 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
         ],
         "recommended_next": "ue_capability_get",
     }
-    return {"ok": True, "data": data, "remaining_errors": 0}
+    return {"ok": True, "data": data}
 
 
 @thin_tool()
@@ -182,7 +91,7 @@ def ue_capability_get(
             }
         else:
             data = schema
-        return {"ok": True, "data": data, "remaining_errors": 0}
+        return {"ok": True, "data": data}
 
     return {
         "ok": True,
@@ -190,8 +99,7 @@ def ue_capability_get(
             "group": group,
             "detail": "index",
             "operations": capability_index(features, group),
-        },
-        "remaining_errors": 0,
+        }
     }
 
 
@@ -206,6 +114,9 @@ def ue_execute(
     require_mapping(payload, "payload")
     response_options = response or {}
     require_mapping(response_options, "response")
+    response_error = _validate_response_options(response_options)
+    if response_error is not None:
+        return response_error
     try:
         spec = get_operation_spec(operation)
     except ValueError as exc:
@@ -215,11 +126,11 @@ def ue_execute(
     mode = str(response_options.get("mode", spec.default_response))
     if mode not in VALID_RESPONSE_MODES:
         return minimal_error("invalid_response_mode", f"unsupported response mode: {mode}", {"mode": mode})
-    preflight_response = _preflight_execute_request(operation, payload, response_options)
+    preflight_response = preflight_execute_request(operation, payload, response_options)
     if preflight_response is not None:
         return preflight_response
     try:
-        raw_response = _execute_operation(operation, payload)
+        raw_response = execute_operation(operation, payload)
     except ValueError as exc:
         return minimal_error("invalid_operation", str(exc), {"operation": operation})
     return summarize_response(operation, payload, raw_response, mode)
@@ -246,17 +157,41 @@ def ue_read(
         artifact = facade_state.get_artifact(artifact_id)
         if artifact is None:
             return minimal_error("token_expired", "artifact was not found or expired", {"artifact_id": artifact_id})
-        return {"ok": True, "data": artifact.payload, "remaining_errors": 0}
+        return {"ok": True, "data": artifact.payload}
+    if target == "auto":
+        requested_path = asset_path or str(query_payload.get("path") or query_payload.get("asset_path") or "")
+        try:
+            require_non_empty_string(requested_path, "asset_path")
+            route_target, operation, resolved_asset_path, operation_payload, raw_response = execute_auto_read(requested_path, query_payload, format)
+        except ValueError as exc:
+            return minimal_error("invalid_read", str(exc), {"target": target})
+        if format == "debug":
+            return raw_response
+        artifact = artifact_handle("auto_read", raw_response)
+        diff = facade_state.store_diff(operation, operation_payload, raw_response)
+        data = {
+            "target": target,
+            "route_target": route_target,
+            "operation": operation,
+            "format": format,
+            "resolved_asset_path": resolved_asset_path,
+            "summary": compact_data_summary(raw_response.get("data")),
+            "snapshot_token": artifact["id"],
+            "diff_token": diff.diff_token,
+            "state_token": f"state:{resolved_asset_path}:{diff.diff_token}",
+            "artifact": artifact,
+        }
+        return with_optional_remaining_errors({"ok": raw_response.get("ok", False), "data": data}, raw_response)
 
     operation = resolve_read_operation(target)
     if operation is None:
-        return minimal_error("unsupported_target", f"unsupported read target: {target}", {"target": target})
+        return minimal_error("unsupported_target", f"unsupported read target: {target}", unsupported_target_details(target))
     if asset_path is not None:
         query_payload.setdefault("asset_path", asset_path)
     apply_read_format_defaults(operation, format, query_payload)
 
     try:
-        raw_response = _execute_operation(operation, query_payload)
+        raw_response = execute_operation(operation, query_payload)
     except ValueError as exc:
         return minimal_error("invalid_read", str(exc), {"target": target})
     if format == "debug":
@@ -273,7 +208,25 @@ def ue_read(
         "state_token": f"state:{asset_path or target}:{diff.diff_token}",
         "artifact": artifact,
     }
-    return {"ok": raw_response.get("ok", False), "data": data, "remaining_errors": raw_response.get("remaining_errors", 0)}
+    return with_optional_remaining_errors({"ok": raw_response.get("ok", False), "data": data}, raw_response)
+
+
+def _validate_response_options(response_options: dict[str, Any]) -> dict[str, Any] | None:
+    unknown_fields = sorted(set(response_options) - VALID_RESPONSE_OPTION_FIELDS)
+    if not unknown_fields:
+        return None
+    suggestions: dict[str, str] = {}
+    if "format" in unknown_fields:
+        suggestions["format"] = 'Use response.mode="full" instead.'
+    return minimal_error(
+        "invalid_response_field",
+        f"unsupported response option field(s): {', '.join(unknown_fields)}",
+        {
+            "unknown_fields": unknown_fields,
+            "allowed_fields": sorted(VALID_RESPONSE_OPTION_FIELDS),
+            "suggestions": suggestions,
+        },
+    )
 
 
 @thin_tool()
@@ -302,7 +255,7 @@ def ue_diff_get(
         "truncated": truncated,
         "next_cursor": str(limit) if truncated else None,
     }
-    return {"ok": True, "data": data, "remaining_errors": 0}
+    return {"ok": True, "data": data}
 
 
 @thin_tool()
@@ -355,6 +308,5 @@ def ue_plan_validate(
             "estimated_changes": estimated_changes,
             "errors": errors,
             "warnings": [],
-        },
-        "remaining_errors": len(errors),
+        }
     }

@@ -42,7 +42,9 @@ bool WantsRealIds(const TSharedPtr<FJsonObject>& Payload)
 {
     FString IdMode = TEXT("alias");
     Payload->TryGetStringField(TEXT("id_mode"), IdMode);
-    return IdMode.Equals(TEXT("real"), ESearchCase::IgnoreCase) || IdMode.Equals(TEXT("both"), ESearchCase::IgnoreCase);
+    return IdMode.Equals(TEXT("real"), ESearchCase::IgnoreCase)
+        || IdMode.Equals(TEXT("guid"), ESearchCase::IgnoreCase)
+        || IdMode.Equals(TEXT("both"), ESearchCase::IgnoreCase);
 }
 
 int32 ReadIndexedMaxNodes(const TSharedPtr<FJsonObject>& Payload)

@@ -91,20 +91,65 @@ static UEdGraphPin* ResolveBlueprintPatchPinByIdOrName(UEdGraphNode* Node, const
     return nullptr;
 }
 
-static bool ResolveBlueprintPatchLinkPins(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Op, const FBlueprintPatchContext& Context, UEdGraphPin*& OutFrom, UEdGraphPin*& OutTo)
+static bool ResolveBlueprintPatchLinkPins(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Op, const FBlueprintPatchContext& Context, UEdGraphPin*& OutFrom, UEdGraphPin*& OutTo, TArray<TSharedPtr<FJsonValue>>& Diagnostics, UBlueprint* Blueprint)
 {
     const FString FromNodeId = ReadBlueprintPatchNodeRef(Op, TEXT("from_node_id"), TEXT("from_node"));
     const FString ToNodeId = ReadBlueprintPatchNodeRef(Op, TEXT("to_node_id"), TEXT("to_node"));
+    FString FromPinRef, ToPinRef;
+    Op->TryGetStringField(TEXT("from_pin_id"), FromPinRef) || Op->TryGetStringField(TEXT("from_pin"), FromPinRef);
+    Op->TryGetStringField(TEXT("to_pin_id"), ToPinRef) || Op->TryGetStringField(TEXT("to_pin"), ToPinRef);
+
     if (FromNodeId.IsEmpty() || ToNodeId.IsEmpty())
     {
+        Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("missing_node_ref"), TEXT("connect_pins requires from_node_id and to_node_id"), Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
         return false;
     }
 
     UEdGraphNode* FromNode = ResolveBlueprintPatchNode(Graph, FromNodeId, Context);
+    if (FromNode == nullptr)
+    {
+        Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("source_node_not_found"), FString::Printf(TEXT("Source node not found: %s"), *FromNodeId), Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
+        return false;
+    }
+
     UEdGraphNode* ToNode = ResolveBlueprintPatchNode(Graph, ToNodeId, Context);
+    if (ToNode == nullptr)
+    {
+        Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("target_node_not_found"), FString::Printf(TEXT("Target node not found: %s"), *ToNodeId), Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
+        return false;
+    }
+
     OutFrom = ResolveBlueprintPatchPinByIdOrName(FromNode, Op, TEXT("from_pin_id"), TEXT("from_pin"), EGPD_Output);
+    if (OutFrom == nullptr)
+    {
+        TArray<FString> AvailableOutputs;
+        for (UEdGraphPin* Pin : FromNode->Pins)
+        {
+            if (Pin && Pin->Direction == EGPD_Output)
+            {
+                AvailableOutputs.Add(Pin->PinName.ToString());
+            }
+        }
+        Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("source_pin_not_found"), FString::Printf(TEXT("Source pin '%s' not found on node %s. Available outputs: [%s]"), *FromPinRef, *FromNodeId, *FString::Join(AvailableOutputs, TEXT(", "))), Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
+        return false;
+    }
+
     OutTo = ResolveBlueprintPatchPinByIdOrName(ToNode, Op, TEXT("to_pin_id"), TEXT("to_pin"), EGPD_Input);
-    return OutFrom != nullptr && OutTo != nullptr;
+    if (OutTo == nullptr)
+    {
+        TArray<FString> AvailableInputs;
+        for (UEdGraphPin* Pin : ToNode->Pins)
+        {
+            if (Pin && Pin->Direction == EGPD_Input)
+            {
+                AvailableInputs.Add(Pin->PinName.ToString());
+            }
+        }
+        Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("target_pin_not_found"), FString::Printf(TEXT("Target pin '%s' not found on node %s. Available inputs: [%s]"), *ToPinRef, *ToNodeId, *FString::Join(AvailableInputs, TEXT(", "))), Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
+        return false;
+    }
+
+    return true;
 }
 
 static UEdGraphNode* ResolveBlueprintPatchOpNode(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Op, const FBlueprintPatchContext& Context, FString& OutNodeId)
@@ -226,7 +271,7 @@ static bool ApplyBlueprintOperation(UBlueprint* Blueprint, UEdGraph* Graph, cons
     {
         UEdGraphPin* FromPin = nullptr;
         UEdGraphPin* ToPin = nullptr;
-        if (!ResolveBlueprintPatchLinkPins(Graph, Op, Context, FromPin, ToPin))
+        if (!ResolveBlueprintPatchLinkPins(Graph, Op, Context, FromPin, ToPin, Diagnostics, Blueprint))
         {
             return false;
         }

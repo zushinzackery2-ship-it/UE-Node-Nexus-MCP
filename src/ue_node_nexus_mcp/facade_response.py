@@ -16,9 +16,15 @@ def minimal_error(code: str, message: str, details: dict[str, Any] | None = None
             "code": code,
             "message": message,
             "details": details or {},
-        },
-        "remaining_errors": 1,
+        }
     }
+
+
+def with_optional_remaining_errors(result: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
+    remaining = response.get("remaining_errors")
+    if isinstance(remaining, int):
+        result["remaining_errors"] = remaining
+    return result
 
 
 def diagnostic_counts(response: dict[str, Any]) -> dict[str, int]:
@@ -129,13 +135,12 @@ def summarize_response(operation: str, payload: dict[str, Any], response: dict[s
         return response
 
     if response.get("ok") is False:
-        return {
+        return with_optional_remaining_errors({
             "ok": False,
             "error": response.get("error", {"code": "operation_failed", "message": "Operation failed.", "details": {}}),
             "diagnostics": diagnostic_counts(response),
             "artifact": artifact_handle(f"{operation}_error", response),
-            "remaining_errors": response.get("remaining_errors", 1),
-        }
+        }, response)
 
     diff = facade_state.store_diff(operation, payload, response)
     data = response.get("data")
@@ -158,7 +163,7 @@ def summarize_response(operation: str, payload: dict[str, Any], response: dict[s
             },
         }
 
-    return {"ok": True, "data": summary, "remaining_errors": response.get("remaining_errors", 0)}
+    return with_optional_remaining_errors({"ok": True, "data": summary}, response)
 
 
 def _artifact_summary_for_large_response(
@@ -199,11 +204,10 @@ def _artifact_summary_for_large_response(
             },
         }
 
-    return {
+    return with_optional_remaining_errors({
         "ok": response.get("ok", False),
         "data": summary,
-        "remaining_errors": response.get("remaining_errors", 0 if response.get("ok", False) else 1),
-    }
+    }, response)
 
 
 def _affected_from_payload(payload: dict[str, Any]) -> dict[str, list[str]]:

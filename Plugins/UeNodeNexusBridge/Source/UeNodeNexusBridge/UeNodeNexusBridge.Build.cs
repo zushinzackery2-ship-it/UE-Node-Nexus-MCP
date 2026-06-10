@@ -16,6 +16,7 @@ public class UeNodeNexusBridge : ModuleRules
             System.IO.Path.Combine(ModuleDirectory, "Private", "Blueprint"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Blueprint", "NodeInterface"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Core"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Diagnostics"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Dispatch"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Graph"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Input"),
@@ -46,6 +47,7 @@ public class UeNodeNexusBridge : ModuleRules
             "InputCore",
             "JsonUtilities",
             "MaterialEditor",
+            "MessageLog",
             "Projects",
             "UnrealEd"
         });

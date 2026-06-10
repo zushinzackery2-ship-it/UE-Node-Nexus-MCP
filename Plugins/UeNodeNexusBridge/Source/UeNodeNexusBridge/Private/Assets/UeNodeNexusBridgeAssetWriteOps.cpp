@@ -2,15 +2,10 @@
 
 #include "Engine/Blueprint.h"
 #include "FileHelpers.h"
-#include "Kismet2/CompilerResultsLog.h"
-#include "Kismet2/KismetEditorUtilities.h"
-#include "Logging/TokenizedMessage.h"
-#include "MaterialEditingLibrary.h"
-#include "MaterialShared.h"
 #include "Materials/Material.h"
-#include "Materials/MaterialInterface.h"
 #include "Materials/MaterialFunction.h"
 #include "Misc/PackageName.h"
+#include "UeNodeNexusBridgeDiagnostics.h"
 #include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
@@ -36,36 +31,6 @@ static UObject* LoadRequiredAsset(const TSharedPtr<FJsonObject>& Payload, TShare
     return Asset;
 }
 
-static FString SeverityToString(EMessageSeverity::Type Severity)
-{
-    if (Severity == EMessageSeverity::Error)
-    {
-        return TEXT("error");
-    }
-    if (Severity == EMessageSeverity::Warning)
-    {
-        return TEXT("warning");
-    }
-    return TEXT("info");
-}
-
-static TArray<TSharedPtr<FJsonValue>> CompilerMessagesToDiagnostics(const FCompilerResultsLog& Results, const FString& AssetPath)
-{
-    TArray<TSharedPtr<FJsonValue>> Diagnostics;
-    for (const TSharedRef<FTokenizedMessage>& Message : Results.Messages)
-    {
-        TSharedPtr<FJsonObject> Diagnostic = MakeShared<FJsonObject>();
-        Diagnostic->SetStringField(TEXT("severity"), SeverityToString(Message->GetSeverity()));
-        Diagnostic->SetStringField(TEXT("code"), TEXT("compile_message"));
-        Diagnostic->SetStringField(TEXT("message"), Message->ToText().ToString());
-        Diagnostic->SetStringField(TEXT("asset_path"), AssetPath);
-        Diagnostic->SetStringField(TEXT("source"), TEXT("Unreal"));
-        Diagnostic->SetStringField(TEXT("raw"), Message->ToText().ToString());
-        Diagnostics.Add(MakeShared<FJsonValueObject>(Diagnostic));
-    }
-    return Diagnostics;
-}
-
 static TSharedPtr<FJsonObject> MakeCompileData(bool bRequested, bool bRan, bool bOk, int32 ErrorCount, int32 WarningCount)
 {
     TSharedPtr<FJsonObject> Compile = MakeShared<FJsonObject>();
@@ -75,37 +40,6 @@ static TSharedPtr<FJsonObject> MakeCompileData(bool bRequested, bool bRan, bool 
     Compile->SetNumberField(TEXT("error_count"), ErrorCount);
     Compile->SetNumberField(TEXT("warning_count"), WarningCount);
     return Compile;
-}
-
-static void AddMaterialCompileDiagnostics(const TArray<FString>& CompileErrors, const FString& AssetPath, TArray<TSharedPtr<FJsonValue>>& Diagnostics)
-{
-    for (const FString& CompileError : CompileErrors)
-    {
-        TSharedPtr<FJsonObject> Diagnostic = MakeDiagnostic(TEXT("error"), TEXT("material_compile_error"), CompileError, AssetPath, TEXT("Unreal.MaterialCompiler"));
-        Diagnostic->SetStringField(TEXT("raw"), CompileError);
-        Diagnostics.Add(MakeShared<FJsonValueObject>(Diagnostic));
-    }
-}
-
-static TArray<FString> CollectMaterialCompileErrors(UMaterialInterface* MaterialInterface)
-{
-    TArray<FString> CompileErrors;
-    if (MaterialInterface == nullptr)
-    {
-        return CompileErrors;
-    }
-
-    FMaterialResource* MaterialResource = MaterialInterface->GetMaterialResource(ERHIFeatureLevel::SM6);
-    if (MaterialResource == nullptr)
-    {
-        return CompileErrors;
-    }
-
-    for (const FString& CompileError : MaterialResource->GetCompileErrors())
-    {
-        CompileErrors.AddUnique(CompileError);
-    }
-    return CompileErrors;
 }
 
 TSharedPtr<FJsonObject> HandleAssetCompile(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
@@ -125,39 +59,12 @@ TSharedPtr<FJsonObject> HandleAssetCompile(const FString& Operation, const FStri
     Data->SetStringField(TEXT("asset_path"), AssetPath);
     Data->SetStringField(TEXT("asset_class"), Asset->GetClass()->GetPathName());
 
-    if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
+    FBridgeAssetCompileDiagnostics CompileDiagnostics = CollectAssetCompileDiagnostics(Asset, AssetPath, true);
+    if (CompileDiagnostics.bSupported)
     {
-        FCompilerResultsLog Results;
-        Results.bSilentMode = true;
-        FKismetEditorUtilities::CompileBlueprint(Blueprint, EBlueprintCompileOptions::SkipGarbageCollection, &Results);
-        const bool bOk = Results.NumErrors == 0 && Blueprint->Status != BS_Error;
-        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, true, bOk, Results.NumErrors, Results.NumWarnings));
-        Response->SetArrayField(TEXT("diagnostics"), CompilerMessagesToDiagnostics(Results, AssetPath));
-        Response->SetBoolField(TEXT("ok"), bOk);
-    }
-    else if (UMaterial* Material = Cast<UMaterial>(Asset))
-    {
-        Material->ForceRecompileForRendering();
-        Material->MarkPackageDirty();
-        const TArray<FString> CompileErrors = CollectMaterialCompileErrors(Material);
-        const bool bOk = CompileErrors.Num() == 0;
-        TArray<TSharedPtr<FJsonValue>> Diagnostics;
-        AddMaterialCompileDiagnostics(CompileErrors, AssetPath, Diagnostics);
-        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, true, bOk, CompileErrors.Num(), 0));
-        Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
-        Response->SetBoolField(TEXT("ok"), bOk);
-    }
-    else if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
-    {
-        UMaterialEditingLibrary::UpdateMaterialFunction(Function, nullptr);
-        UMaterialInterface* PreviewMaterial = Function->GetPreviewMaterial();
-        const TArray<FString> CompileErrors = CollectMaterialCompileErrors(PreviewMaterial);
-        const bool bOk = CompileErrors.Num() == 0;
-        TArray<TSharedPtr<FJsonValue>> Diagnostics;
-        AddMaterialCompileDiagnostics(CompileErrors, AssetPath, Diagnostics);
-        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, true, bOk, CompileErrors.Num(), 0));
-        Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
-        Response->SetBoolField(TEXT("ok"), bOk);
+        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, CompileDiagnostics.bRan, CompileDiagnostics.bOk, CompileDiagnostics.ErrorCount, CompileDiagnostics.WarningCount));
+        Response->SetArrayField(TEXT("diagnostics"), CompileDiagnostics.Diagnostics);
+        Response->SetBoolField(TEXT("ok"), CompileDiagnostics.bOk);
     }
     else
     {

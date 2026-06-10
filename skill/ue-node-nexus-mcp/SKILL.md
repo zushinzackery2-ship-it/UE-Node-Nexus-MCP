@@ -24,11 +24,15 @@ Transport is a per-editor Windows named pipe (`\\.\pipe\UeNodeNexusBridge.<pid>`
 - **`ue_execute(..., response={"mode":"full"})`** — requests the raw bridge envelope with full `data` field; large payloads are stored as artifact handles instead of entering tool context
 - **`ue_read(target=...)`** — the recommended path for reads; returns an artifact token for the full response
 - Do NOT use `ue_execute` without `response.mode="full"` and expect to see data fields
+- Do NOT use `response={"format":"full"}`. `response.format` is invalid; use `response={"mode":"full"}` for envelope detail, or put `format` in the operation payload / `ue_read(format="detail")` for read shape.
 
 ## Read cheatsheet (intent → call)
 Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `ue_capability_get(operation, detail="schema")` for exact params; `detail="examples"` for a complete payload example.
 - asset metadata → `ue_read(target="asset")` / `asset_get`
+- fuzzy path / unknown asset type → `ue_read(target="auto", asset_path="terrain_demo", format="detail")` — resolves through AutoIndex, inspects asset class with `asset_get`, then routes to the narrow read op
 - **Material / Material Function / Blueprint node graph** → `ue_read(target="graph")` or `graph_snapshot_get(graph_kind="material"|"material_function"|"blueprint")` — this is the core node-graph reader, NOT a `*_summary` op
+- **Material Instance params / parent chain** → `ue_read(target="material_instance")`, `material_instance_params_get`, or `material_interface_resolve`
+- There is no `ue_read(target="material")`; use `auto` for unknown material-like assets, `graph` for Material/Material Function nodes, or `material_instance` for instance parameters.
 - **Graph params** → `graph_snapshot_get(format="full", include_node_params=true)` returns compact Material / Material Function param values by default (`node_params_format="compact"`), not full enum/metadata schema. Whole-graph full schema (`node_params_format="full"`) is blocked before UE execution unless `response={"allow_heavy": true}` is supplied; use `wires_tiny` first, then `node_params_get` for specific nodes.
 - **Large blueprint sub-graph drill** → `graph_snapshot_get(keyword="Damage")` or `graph_node_info_get(keyword="Damage")` for node-name substring, `trace_from="Event BeginPlay", trace_depth=5` for BFS neighborhood, `node_class_filter=["CallFunction"]` for class filtering, `exec_only=true` for exec-pin-only wires. All 5 filter params work on both `graph_snapshot_get` (topology) and `graph_node_info_get` (dense node info). Response includes `filter_stats` (total/matched/included nodes). Blueprint `graph_snapshot_get` responses always include `available_graphs` (name + node count) — use it to pick `graph_name` instead of guessing
 - Blueprint vars / defaults / components → `blueprint_details_get(include_components=true, include_inherited_components=true)`
@@ -41,6 +45,7 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - level actors / component materials → `level_*` / `component_*`
 - SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
 - Texture2D dimensions / source+pixel format / compression / sRGB / LOD group → `texture_summary_get` / `ue_read(target="texture")`
+- **Project diagnostics / current error items** → `diagnostics_get` / `ue_read(target="diagnostics")`. Global diagnostics report `data.error_count`, `data.warning_count`, and `data.items`; `remaining_errors` is reserved for concrete asset responses that carry `asset_path`.
 
 ## Patch operations cheatsheet
 All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capability_get(operation, detail="examples")` first. All default to `dry_run=true`.
@@ -70,14 +75,14 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 **node_params_set** — `params` is `{"pin_name": value}` object (NOT array). Pin names must match exact UE pin names; use `node_params_get` to discover them.
 
 ## Response modes
-`ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Read ops default to `summary` (text-only); write ops default to `delta`. Use `full`/`debug` only when you need the raw bridge envelope; large payloads return `artifact.id`, byte size, estimated tokens, and summary instead of raw `data`. `detail` is NOT an execute mode — it is `ue_read.format`.
+`ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Read ops default to `summary` (text-only); write ops default to `delta`. Use `full`/`debug` only when you need the raw bridge envelope; large payloads return `artifact.id`, byte size, estimated tokens, and summary instead of raw `data`. `ue_execute.response` only supports `mode` and `allow_heavy`; if `invalid_response_field` reports `format`, move `format` into the operation payload or change it to `response.mode`. `detail` is NOT an execute mode — it is `ue_read.format`.
 
 ## First probe (any bridge/context question)
 1. `ue_context_get(include_counts=true)`
 2. `ue_capability_get(detail="index")`
 3. `ue_execute("bridge_capabilities_get", {}, response={"mode":"full"})`
 4. `ue_execute("project_context_get", {}, response={"mode":"full"})`
-5. `ue_execute("diagnostics_get", {"severity":"all"}, response={"mode":"full"})`
+5. `ue_execute("diagnostics_get", {"severity":"all"}, response={"mode":"full"})` — reads UE MessageLog and project asset compile diagnostics; use `data.error_count` for global count
 
 ## Empty asset / AutoIndex diagnosis
 Never conclude "no active project" from one empty `assets`/`items`. Cross-check `project_context_get` (path, content dir, `/Game` mount), `asset_list` (`package_paths=["/Game"]`, small limit), `auto_index_status`/`auto_index_overview`, `diagnostics_get`. Read as:

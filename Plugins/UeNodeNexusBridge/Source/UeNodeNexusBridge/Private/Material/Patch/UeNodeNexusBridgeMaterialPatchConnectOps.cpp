@@ -32,6 +32,12 @@ bool ApplyMaterialPatchConnect(UMaterial* Material, const TSharedPtr<FJsonObject
     }
 
     UMaterialExpression* FromExpression = ResolveMaterialPatchNode(Material, FromNodeId, Context);
+    if (FromExpression == nullptr)
+    {
+        AddMaterialPatchDiagnostic(Diagnostics, TEXT("source_node_not_found"), FString::Printf(TEXT("Source node not found: %s"), *FromNodeId), Material);
+        return false;
+    }
+
     bool bFromInput = false;
     int32 FromOutputIndex = INDEX_NONE;
     if (!ResolveMaterialOutputPin(FromExpression, FromPinId, bFromInput, FromOutputIndex) || bFromInput)
@@ -57,12 +63,28 @@ bool ApplyMaterialPatchConnect(UMaterial* Material, const TSharedPtr<FJsonObject
     else
     {
         ToExpression = ResolveMaterialPatchNode(Material, ToNodeId, Context);
+        if (ToExpression == nullptr)
+        {
+            AddMaterialPatchDiagnostic(Diagnostics, TEXT("target_node_not_found"), FString::Printf(TEXT("Target node not found: %s"), *ToNodeId), Material);
+            return false;
+        }
         ToInput = ResolveMaterialInputPin(ToExpression, ToPinId);
         ResolvedToNodeId = MaterialExpressionNodeId(ToExpression);
     }
     if (FromExpression == nullptr || ToInput == nullptr || !FromExpression->GetOutputs().IsValidIndex(FromOutputIndex))
     {
-        AddMaterialPatchDiagnostic(Diagnostics, TEXT("pin_resolution_failed"), FString::Printf(TEXT("Could not resolve material link: %s.%s -> %s.%s"), *FromNodeId, *FromPinId, *ToNodeId, *ToPinId), Material);
+        TArray<FString> AvailableInputs;
+        if (ToExpression)
+        {
+            for (int32 i = 0; i < ToExpression->CountInputs(); ++i)
+            {
+                if (FString InputName = FindMaterialInputName(ToExpression, FString::Printf(TEXT("%s:in:%d"), *ResolvedToNodeId, i)); !InputName.IsEmpty())
+                {
+                    AvailableInputs.Add(InputName);
+                }
+            }
+        }
+        AddMaterialPatchDiagnostic(Diagnostics, TEXT("pin_resolution_failed"), FString::Printf(TEXT("Could not resolve material link: %s.%s -> %s.%s. Available inputs on target: [%s]"), *FromNodeId, *FromPinId, *ToNodeId, *ToPinId, *FString::Join(AvailableInputs, TEXT(", "))), Material);
         return false;
     }
 
