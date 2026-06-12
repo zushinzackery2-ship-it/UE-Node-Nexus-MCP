@@ -25,7 +25,6 @@ TArray<FString> GetCoreOperationNames()
         TEXT("level_actor_transform_get"),
         TEXT("object_properties_get"),
         TEXT("landscape_layer_info_set"),
-        TEXT("landscape_grass_type_set"),
         TEXT("level_mesh_instances_list"),
         TEXT("component_materials_get"),
         TEXT("component_materials_set"),

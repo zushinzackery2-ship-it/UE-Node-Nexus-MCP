@@ -34,7 +34,6 @@ void RegisterCoreOperations()
     Register(TEXT("level_actor_transform_get"), HandleLevelActorTransformGet);
     Register(TEXT("object_properties_get"), HandleObjectPropertiesGet);
     Register(TEXT("landscape_layer_info_set"), HandleLandscapeLayerInfoSet);
-    Register(TEXT("landscape_grass_type_set"), HandleLandscapeGrassTypeSet);
     Register(TEXT("level_mesh_instances_list"), HandleLevelMeshInstancesList);
     Register(TEXT("component_materials_get"), HandleComponentMaterialsGet);
     Register(TEXT("component_materials_set"), HandleComponentMaterialsSet);

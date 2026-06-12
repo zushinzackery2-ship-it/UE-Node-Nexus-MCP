@@ -32,7 +32,6 @@ TSharedPtr<FJsonObject> HandleLevelActorGet(const FString& Operation, const FStr
 TSharedPtr<FJsonObject> HandleLevelActorTransformGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleObjectPropertiesGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleLandscapeLayerInfoSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> HandleLandscapeGrassTypeSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleLevelMeshInstancesList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleComponentMaterialsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleComponentMaterialsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);

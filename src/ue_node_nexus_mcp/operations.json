@@ -50,7 +50,6 @@
     {"name": "material_usage_find", "kind": "read", "group": "level", "hidden": false, "local": false},
     {"name": "component_material_instance_params_get", "kind": "read", "group": "level", "hidden": false, "local": false},
     {"name": "landscape_layer_info_set", "kind": "write", "group": "level", "hidden": false, "local": false},
-    {"name": "landscape_grass_type_set", "kind": "write", "group": "level", "hidden": false, "local": false},
     {"name": "component_materials_set", "kind": "write", "group": "level", "hidden": false, "local": false},
     {"name": "component_material_instance_params_set", "kind": "write", "group": "level", "hidden": false, "local": false},
 
