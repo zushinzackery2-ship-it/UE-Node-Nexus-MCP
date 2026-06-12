@@ -125,6 +125,18 @@ _OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
             "no_weight_blend": {"type": "boolean", "description": "Optional bNoWeightBlend value for new or empty LayerInfo assets"},
         },
     },
+    "landscape_grass_type_set": {
+        "type": "object",
+        "required": ["index"],
+        "properties": {
+            "index": {"type": "integer", "description": "GrassVarieties array index to edit"},
+            "scale_multiplier": {"type": "number", "description": "Multiply current ScaleX/ScaleY/ScaleZ min and max by this value"},
+            "scaling": {"type": "string", "enum": ["Uniform", "Free", "LockXY"]},
+            "scale_x": {"type": "object", "description": "Optional {min,max} override for ScaleX"},
+            "scale_y": {"type": "object", "description": "Optional {min,max} override for ScaleY"},
+            "scale_z": {"type": "object", "description": "Optional {min,max} override for ScaleZ"},
+        },
+    },
 }
 
 _OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
@@ -174,6 +186,15 @@ _OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
                 "create_if_missing": True,
                 "no_weight_blend": False,
             },
+        ],
+        "dry_run": True,
+        "save": False,
+    },
+    "landscape_grass_type_set": {
+        "asset_path": "/Game/Terrain/Grass_Main.Grass_Main",
+        "varieties": [
+            {"index": 0, "scale_multiplier": 1.15},
+            {"index": 1, "scaling": "Free", "scale_z": {"min": 0.75, "max": 1.35}},
         ],
         "dry_run": True,
         "save": False,
@@ -284,6 +305,8 @@ def _apply_item_schema(operation: str, schema: dict[str, Any]) -> None:
         properties["operations"]["items"] = item_schema
     if "layers" in properties and properties["layers"].get("type") == "array":
         properties["layers"]["items"] = item_schema
+    if "varieties" in properties and properties["varieties"].get("type") == "array":
+        properties["varieties"]["items"] = item_schema
 
 
 def payload_schema_for(operation: str) -> dict[str, Any]:

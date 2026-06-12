@@ -31,6 +31,7 @@ TArray<EMaterialProperty> MaterialOutputProperties()
         MP_OpacityMask,
         MP_Normal,
         MP_Tangent,
+        MP_WorldPositionOffset,
         MP_SubsurfaceColor,
         MP_AmbientOcclusion,
         MP_Refraction,
@@ -63,6 +64,7 @@ FString MaterialOutputPropertyName(EMaterialProperty Property)
     case MP_OpacityMask: return TEXT("OpacityMask");
     case MP_Normal: return TEXT("Normal");
     case MP_Tangent: return TEXT("Tangent");
+    case MP_WorldPositionOffset: return TEXT("WorldPositionOffset");
     case MP_SubsurfaceColor: return TEXT("SubsurfaceColor");
     case MP_AmbientOcclusion: return TEXT("AmbientOcclusion");
     case MP_Refraction: return TEXT("Refraction");

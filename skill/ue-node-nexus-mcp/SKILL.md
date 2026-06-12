@@ -45,6 +45,7 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - Niagara → `ue_read(target="niagara_system"|"niagara_stack")` / `niagara_*`
 - level actors / component materials → `level_*` / `component_*`
 - Landscape Paint layer info binding → `landscape_layer_info_set` after reading `object_properties_get(TargetLayers)`; this is a narrow write for `LandscapeLayerInfoObject`, not a generic UObject property setter.
+- Landscape grass variety size → `landscape_grass_type_set` after reading `object_properties_get(GrassVarieties)`; this is a narrow write for `LandscapeGrassType` scale ranges, not a generic UObject property setter.
 - SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
 - Texture2D dimensions / source+pixel format / compression / sRGB / LOD group → `texture_summary_get` / `ue_read(target="texture")`
 - **Project diagnostics / current error items** → `diagnostics_get` / `ue_read(target="diagnostics")`. Global diagnostics report `data.error_count`, `data.warning_count`, and `data.items`; `remaining_errors` is reserved for concrete asset responses that carry `asset_path`. Python also adds `data.related_log_items` for UE log material compile fallback / sampler mismatch clues; these are historical and carry `stale_possible=true`, so do not treat them as current global errors.
@@ -79,6 +80,11 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 {"actor_path":"/Game/Maps/Demo.Demo:PersistentLevel.Landscape_0","layers":[{"name":"Cliff","layer_info_asset_path":"/Game/Maps/Demo_sharedassets/Cliff_LayerInfo.Cliff_LayerInfo","create_if_missing":true,"no_weight_blend":false}],"dry_run":true,"save":false}
 ```
 
+**landscape_grass_type_set** — sets `LandscapeGrassType.GrassVarieties` scale ranges by array index. Use `scale_multiplier` for proportional size changes, or `scale_x` / `scale_y` / `scale_z` `{min,max}` for exact ranges. Defaults to `dry_run=true`.
+```json
+{"asset_path":"/Game/Terrain/Grass_Main.Grass_Main","varieties":[{"index":0,"scale_multiplier":1.15},{"index":1,"scaling":"Free","scale_z":{"min":0.75,"max":1.35}}],"dry_run":true,"save":false}
+```
+
 **node_params_set** — `params` is `{"pin_name": value}` object (NOT array). Pin names must match exact UE pin names; use `node_params_get` to discover them.
 
 ## Response modes
@@ -100,7 +106,7 @@ Never conclude "no active project" from one empty `assets`/`items`. Cross-check 
 Gotcha: `asset_list(format="indexed")` does not populate row `items`; use `format="compact"` (rows `[object_path, class, loaded, redirector]`) or `"full"` to read rows. Filter with `class_names` + `package_paths`.
 
 ## Safe writes
-`ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes. Use narrow domain writes such as `landscape_layer_info_set` instead of adding broad `object_properties_set`.
+`ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes. Use narrow domain writes such as `landscape_layer_info_set` / `landscape_grass_type_set` instead of adding broad `object_properties_set`.
 
 ## Don't guess calls
 Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. Use `detail="examples"` for a valid payload example. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs EXACTLY one of `asset_path` / `material_path` / `component_path`+`slot_index`); an empty call is a request error (`invalid_request`), passing more than one is `target_conflict`, and an out-of-range slot is `invalid_slot` — none of these are `material_not_found`.

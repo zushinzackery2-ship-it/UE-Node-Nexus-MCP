@@ -84,6 +84,27 @@ def landscape_layer_info_set(
 
 
 @default_tool()
+def landscape_grass_type_set(
+    asset_path: str,
+    varieties: list[dict[str, Any]],
+    dry_run: bool = True,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Set LandscapeGrassType variety scale ranges by index."""
+    require_non_empty_string(asset_path, "asset_path")
+    require_list(varieties, "varieties")
+    return _call(
+        "landscape_grass_type_set",
+        {
+            "asset_path": asset_path,
+            "varieties": varieties,
+            "dry_run": dry_run,
+            "save": save,
+        },
+    )
+
+
+@default_tool()
 def component_materials_get(component_path: str) -> dict[str, Any]:
     """Return material slots for a mesh component, including MI/root material identity."""
     require_non_empty_string(component_path, "component_path")

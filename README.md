@@ -98,6 +98,7 @@
 | **关卡** | `level_actor_transform_get()` | 读取 Actor 世界 transform |
 | **关卡** | `object_properties_get()` | 读取 UObject 属性，用于诊断和定位，不提供任意属性写入 |
 | **关卡** | `landscape_layer_info_set()` | 为 Landscape Paint 目标层创建或绑定 `LandscapeLayerInfoObject`，用于修复缺 LayerInfo 的层 |
+| **关卡** | `landscape_grass_type_set()` | 按 `GrassVarieties` 条目设置 `LandscapeGrassType` 的 ScaleX/Y/Z 范围和 Scaling 模式 |
 | **关卡材质** | `level_mesh_instances_list()` | 枚举当前 Level 网格实例、组件路径和材质槽摘要 |
 | **关卡材质** | `component_materials_get()` / `component_materials_set()` | 读取或替换网格组件 material slot |
 | **关卡材质** | `material_interface_resolve()` | 解析 Material Interface、Material Instance parent chain 和 root material |
@@ -222,7 +223,7 @@ MCP client 配置：
 > [!NOTE]
 > **默认工具面**
 >
-> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 100 个内部 operation，其中 96 个转发到 UE bridge，`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint` 是 MCP 本地 operation，在 server 内处理、不转发到 UE。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
+> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 101 个内部 operation，其中 97 个转发到 UE bridge，`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint` 是 MCP 本地 operation，在 server 内处理、不转发到 UE。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
 
 ---
 

@@ -131,6 +131,7 @@ WRITE_SUMMARIES = {
     "component_materials_set": "Set component material slots.",
     "component_material_instance_params_set": "Set component material instance parameters.",
     "landscape_layer_info_set": "Create or bind Landscape LayerInfo objects for paint layers.",
+    "landscape_grass_type_set": "Set LandscapeGrassType variety scale ranges.",
     "project_input_mappings_patch": "Patch legacy project input mappings.",
     "blueprint_components_patch": "Patch Blueprint components.",
     "asset_compile": "Compile or recompile an asset.",
