@@ -14,6 +14,7 @@ from .profiles import (
     consume_profile_args,
     read_profile_env,
 )
+from .response_normalization import normalize_bridge_response
 
 mcp = FastMCP("UE Node Nexus MCP")
 bridge = UeBridgeClient()
@@ -227,7 +228,7 @@ def _with_remaining_errors(operation: str, payload: dict[str, Any], response: di
 
 def call_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        return _with_remaining_errors(operation, payload, bridge.call(operation, payload))
+        return _with_remaining_errors(operation, payload, normalize_bridge_response(bridge.call(operation, payload)))
     except (BridgeError, ValueError) as exc:
         return _with_remaining_errors(operation, payload, {
             "ok": False,

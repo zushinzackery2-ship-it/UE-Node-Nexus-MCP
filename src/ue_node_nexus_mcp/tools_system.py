@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from .contracts import BRIDGE_OPERATIONS, DEFAULT_HIDDEN_OPERATIONS, OPERATION_FEATURES, require_non_empty_string
+from .diagnostics_logs import enrich_with_material_log_diagnostics
 from .errors import BridgeError
 from .instance import instance_manager
 from .runtime import call_bridge as _call
@@ -181,10 +182,20 @@ def diagnostics_get(
     severity: Literal["info", "warning", "error", "all"] = "all",
 ) -> dict[str, Any]:
     """Return UE message-log and asset compile diagnostics, optionally filtered by asset and severity."""
-    return _call(
+    response = _call(
         "diagnostics_get",
         {
             "asset_path": asset_path,
             "severity": severity,
         },
+    )
+    if response.get("ok") is not True:
+        return response
+
+    project_context = _call("project_context_get", {})
+    return enrich_with_material_log_diagnostics(
+        response,
+        project_context,
+        asset_path=asset_path,
+        severity=severity,
     )

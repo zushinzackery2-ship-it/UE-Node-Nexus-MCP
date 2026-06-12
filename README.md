@@ -56,9 +56,10 @@
 | **UE 编辑器桥接** | UE 5.5 编辑器插件通过本地命名管道 `\\.\pipe\UeNodeNexusBridge.<pid>` 提供服务（每实例一条，按 pid 命名，无端口占用） |
 | **图快照读取** | `graph_snapshot_get` 支持 `wires_tiny`、`wires_min`、`wires`、`compact`、`full` 五种格式；蓝图图支持 `keyword`、`node_class_filter`、`trace_from`+`trace_depth`、`exec_only` 子图筛选；蓝图响应附带 `available_graphs`（名字+节点数） |
 | **高密度整图读取** | `graph_node_info_get` 支持 `indexed` 和 `grouped`，一次返回整张 Material/Blueprint graph 的节点、参数和连线 |
-| **图安全写入** | `graph_patch_apply` 编辑 Blueprint pin 或 Material Expression 连线；Blueprint patch 支持同批 `create_node`、`client_id` 引用、节点别名/对象名解析和 dry-run 临时节点清理，返回差异、引脚完整性、编译状态和脏标记 |
+| **图安全写入** | `graph_patch_apply` 编辑 Blueprint pin 或 Material Expression 连线；Blueprint patch 支持同批 `create_node`、`client_id` 引用和 dry-run 临时节点清理；Material/MaterialFunction patch 在 `dry_run=false` 时由 Python 端展开同批 `create_node.client_id` 引用；返回差异、引脚完整性、编译状态和脏标记 |
 | **节点参数读写** | `node_params_get` 和 `node_params_set` 支持 alias/真实 ID，稳定导出默认值、枚举、布尔、对象引用和空字符串 |
 | **材质节点类枚举** | `material_expression_classes_list` 枚举已加载的 `UMaterialExpression` 子类并返回可编辑属性 schema 统计 |
+| **材质只读 lint** | `material_lint` 是 Python 本地 operation，不编译材质；读取材质图和 Texture summary，检查采样器/压缩/sRGB 冲突与占位贴图 |
 | **Material Instance 参数** | `material_instance_params_get` 和 `material_instance_params_set` 读写标量、向量、纹理和静态开关参数 |
 | **Niagara 工具组** | 由独立 `UeNodeNexusVfxBridge` 插件承载；仅当 UE 端启用 Niagara 插件并加载 Niagara bridge 模块时暴露 System、Emitter、Module Stack、Renderer、User 参数、材质、lint 和编译工具 |
 | **AutoIndex** | `auto_index_*` 在 UE 内维护持久资产/文件夹索引，默认返回 indexed/text/count/cursor |
@@ -96,6 +97,7 @@
 | **关卡** | `level_actor_get()` | 读取当前 Level 内 Actor 类型、路径、label，可显式包含组件摘要 |
 | **关卡** | `level_actor_transform_get()` | 读取 Actor 世界 transform |
 | **关卡** | `object_properties_get()` | 读取 UObject 属性，用于诊断和定位，不提供任意属性写入 |
+| **关卡** | `landscape_layer_info_set()` | 为 Landscape Paint 目标层创建或绑定 `LandscapeLayerInfoObject`，用于修复缺 LayerInfo 的层 |
 | **关卡材质** | `level_mesh_instances_list()` | 枚举当前 Level 网格实例、组件路径和材质槽摘要 |
 | **关卡材质** | `component_materials_get()` / `component_materials_set()` | 读取或替换网格组件 material slot |
 | **关卡材质** | `material_interface_resolve()` | 解析 Material Interface、Material Instance parent chain 和 root material |
@@ -112,7 +114,7 @@
 | **Cascade** | `cascade_system_summary_get()` | 只读 Cascade 粒子系统的 Emitter、TypeData 和模块栈（旧粒子迁移读取入口）|
 | **图** | `graph_snapshot_get()` | 读取材质或蓝图图拓扑，默认格式为 `wires_tiny`；蓝图支持 `keyword`/`node_class_filter`/`trace_from`+`trace_depth`/`exec_only` 子图筛选，响应含 `available_graphs` 和 `filter_stats` |
 | **图** | `graph_node_info_get()` | 读取整张图的高密度节点信息，默认 `indexed`，可用 `include_position=true` 附带坐标表 |
-| **图** | `graph_patch_apply()` | 应用声明式图编辑；Blueprint 支持同批创建节点后用 `client_id` 连接/设参/定位/删除，附带写后检查 |
+| **图** | `graph_patch_apply()` | 应用声明式图编辑；Blueprint 支持同批创建节点后用 `client_id` 连接/设参/定位/删除；Material/MaterialFunction 在 `dry_run=false` 时支持 Python 端展开同批 `client_id` 连线，附带写后检查 |
 | **图** | `graph_build_apply()` | 用 `nodes`、`links`、`material_outputs` 一次创建节点、写参数、连线并编译 |
 | **节点** | `node_info_get()` | 读取单个节点的紧凑编辑视图，可按 section/index 精确截取 |
 | **节点** | `node_create()` | 创建材质节点并返回完整节点编辑视图 |
@@ -122,6 +124,7 @@
 | **节点参数** | `node_params_get()` | 读取单个图节点的可编辑参数 |
 | **节点参数** | `node_params_set()` | 写入节点参数，附带编译诊断 |
 | **材质节点类** | `material_expression_classes_list()` | 枚举材质表达式节点类及其可编辑属性 schema 数量 |
+| **材质诊断** | `material_lint()` | Python 本地只读 lint；不触发编译，检查材质贴图采样器、Texture 压缩/sRGB/source format 与占位贴图风险 |
 | **Material Instance** | `material_instance_params_get()` | 读取 Material Instance 参数值 |
 | **Material Instance** | `material_instance_params_set()` | 写入 Material Instance 参数，附带类型校验 |
 | **Niagara** | `niagara_system_create()` / `niagara_system_duplicate()` | 创建空 Niagara System 或复制已有 System |
@@ -141,7 +144,7 @@
 | **桥接诊断** | `bridge_contract_check()` | MCP 本地诊断包装器；用当前 Python 合同调用 `bridge_capabilities_get` 并检查 UE bridge operation 缺失、额外和模块加载状态 |
 | **诊断** | `asset_compile()` | 编译蓝图或材质资产，返回诊断信息 |
 | **诊断** | `asset_validate()` | 校验资产，返回机器可读的结果 |
-| **诊断** | `diagnostics_get()` | 读取 UE MessageLog 与项目资产编译诊断，支持 `asset_path` / `severity` 过滤 |
+| **诊断** | `diagnostics_get()` | 读取 UE MessageLog 与项目资产编译诊断，支持 `asset_path` / `severity` 过滤；附带 UE log 中材质编译回退线索 |
 | **保存** | `asset_save()` | 保存单个资产包，报告脏标记/只读/编辑器冲突状态 |
 
 ---
@@ -159,7 +162,7 @@ MCP 公开面固定为 6 个 facade 工具，用少量入口承载完整 UE oper
 | **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
 | **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
 
-Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 97 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`，超过 inline 阈值的大响应会自动存为 artifact handle。`ue_execute.response` 只接受 `mode` 和 `allow_heavy`；`response.format="full"` 会被拒绝并提示改用 `response.mode="full"`，读取格式应放在 operation payload 的 `format` 或 `ue_read(format="detail")`。
+Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 99 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`，超过 inline 阈值的大响应会自动存为 artifact handle。`ue_execute.response` 只接受 `mode` 和 `allow_heavy`；`response.format="full"` 会被拒绝并提示改用 `response.mode="full"`，读取格式应放在 operation payload 的 `format` 或 `ue_read(format="detail")`。
 
 常见资产读取可以走自动入口：
 
@@ -219,7 +222,7 @@ MCP client 配置：
 > [!NOTE]
 > **默认工具面**
 >
-> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 98 个内部 operation，其中 95 个转发到 UE bridge，`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select` 是 MCP 本地 operation，在 server 内处理、不转发到 UE。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
+> MCP 公开面固定且只注册 6 个 facade 工具：`ue_context_get`、`ue_capability_get`、`ue_execute`、`ue_read`、`ue_diff_get`、`ue_plan_validate`。代码层保留固定 operation registry；当前 Python 合同为 100 个内部 operation，其中 96 个转发到 UE bridge，`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint` 是 MCP 本地 operation，在 server 内处理、不转发到 UE。底层 asset、graph、material、Niagara、level、project operation 不进入 MCP `list_tools`，只能通过 facade 查询和执行。
 
 ---
 
@@ -240,7 +243,7 @@ Niagara 读取工具默认使用低上下文格式：`niagara_system_summary_get
 
 默认响应按有效信息压缩：图快照默认 `wires_tiny`，整图信息默认 `indexed`，Niagara 查询默认 `indexed` 或 `summary`，详细数组、真实 pin GUID 和完整 issue 对象仅在显式 `format="full"` 或对应 include flag 打开时请求。Material / MaterialFunction 的 `include_node_params=true` 默认只返回 `node_params_format="compact"` 参数值，不重复输出 `enum_values`、`metadata`、`default_value`、`cpp_type` 和 `property_flags`；整图完整参数 schema 需显式 `node_params_format="full"`。`ue_execute(response.mode="full"|"debug")` 的大负载不会直接进入 tool result，而是返回 `artifact.id`、payload 字节数、估算 token 和摘要；`ue_execute(response={"format":"full"})` 是无效写法，完整响应必须用 `response={"mode":"full"}`。`graph_snapshot_get(format="full", include_node_params=true, node_params_format="full")` 会在执行 UE 读取前被前置拦截，除非显式传 `response.allow_heavy=true`。验收脚本需要精确连线时只做局部 `full` snapshot，不改变 MCP 工具的默认低上下文输出。
 
-带 `asset_path` 的具体资产响应可在根对象末端附带整数 `remaining_errors`，表示这次针对具体资产检查后仍剩余的错误数；无资产目标的全局/元信息读取不会返回该字段。全局项目诊断请调用 `diagnostics_get`，结果以 `data.error_count`、`data.warning_count` 和 `data.items` 表达，避免把“全项目错误数”和“某个资产后置检查结果”混用。`remaining_errors` 是根级保留字段，嵌套同名字段会被 wrapper 移除。
+带 `asset_path` 的具体资产响应可在根对象末端附带整数 `remaining_errors`，表示这次针对具体资产检查后仍剩余的错误数；无资产目标的全局/元信息读取不会返回该字段。全局项目诊断请调用 `diagnostics_get`，结果以 `data.error_count`、`data.warning_count` 和 `data.items` 表达，避免把“全项目错误数”和“某个资产后置检查结果”混用。`diagnostics_get` 还会附带 `data.related_log_items`，用于提示 UE log 中的材质编译回退、sampler mismatch 等历史线索；这些 log 线索带 `stale_possible=true`，不会写入当前全局 `error_count`。`remaining_errors` 是根级保留字段，嵌套同名字段会被 wrapper 移除。
 
 > [!NOTE]
 > **节点参数语义**

@@ -203,6 +203,8 @@ static TSharedPtr<FJsonObject> MakeCompactDiff(const TSharedPtr<FJsonObject>& Di
         TEXT("folders_created"),
         TEXT("folders_deleted"),
         TEXT("redirectors_fixed"),
+        TEXT("landscape_layers_changed"),
+        TEXT("layer_infos_created"),
     };
 
     TSharedPtr<FJsonObject> Compact = MakeShared<FJsonObject>();

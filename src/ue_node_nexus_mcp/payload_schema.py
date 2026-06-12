@@ -30,6 +30,7 @@ _WRAPPER_MODULES = (
     "tools_graphs",
     "tools_graph_writes",
     "tools_level_materials",
+    "material_lint",
     "tools_materials",
     "tools_niagara",
     "tools_niagara_modules",
@@ -114,6 +115,16 @@ _OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
             "cmd": {"type": "boolean", "default": False},
         },
     },
+    "landscape_layer_info_set": {
+        "type": "object",
+        "required": ["name", "layer_info_asset_path"],
+        "properties": {
+            "name": {"type": "string", "description": "Landscape paint target layer name; must match the material layer name exactly"},
+            "layer_info_asset_path": {"type": "string", "description": "LandscapeLayerInfoObject asset path to load or create"},
+            "create_if_missing": {"type": "boolean", "default": False},
+            "no_weight_blend": {"type": "boolean", "description": "Optional bNoWeightBlend value for new or empty LayerInfo assets"},
+        },
+    },
 }
 
 _OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
@@ -153,6 +164,19 @@ _OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
             {"op": "add_axis_mapping", "axis_name": "MoveForward", "key": "W", "scale": 1.0},
         ],
         "dry_run": True,
+    },
+    "landscape_layer_info_set": {
+        "actor_path": "/Game/Maps/Demo.Demo:PersistentLevel.Landscape_0",
+        "layers": [
+            {
+                "name": "Cliff",
+                "layer_info_asset_path": "/Game/Maps/Demo_sharedassets/Cliff_LayerInfo.Cliff_LayerInfo",
+                "create_if_missing": True,
+                "no_weight_blend": False,
+            },
+        ],
+        "dry_run": True,
+        "save": False,
     },
     "node_params_set": {
         "asset_path": "/Game/BP/BP_Character.BP_Character",
@@ -258,6 +282,8 @@ def _apply_item_schema(operation: str, schema: dict[str, Any]) -> None:
     properties = schema.get("properties", {})
     if "operations" in properties and properties["operations"].get("type") == "array":
         properties["operations"]["items"] = item_schema
+    if "layers" in properties and properties["layers"].get("type") == "array":
+        properties["layers"]["items"] = item_schema
 
 
 def payload_schema_for(operation: str) -> dict[str, Any]:

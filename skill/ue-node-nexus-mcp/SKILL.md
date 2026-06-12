@@ -31,6 +31,7 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - asset metadata → `ue_read(target="asset")` / `asset_get`
 - fuzzy path / unknown asset type → `ue_read(target="auto", asset_path="terrain_demo", format="detail")` — resolves through AutoIndex, inspects asset class with `asset_get`, then routes to the narrow read op
 - **Material / Material Function / Blueprint node graph** → `ue_read(target="graph")` or `graph_snapshot_get(graph_kind="material"|"material_function"|"blueprint")` — this is the core node-graph reader, NOT a `*_summary` op
+- **Material static lint** → `material_lint` via `ue_execute`, a Python-local read operation that does not compile; it reads graph node params + texture summaries to flag sampler/texture compression/sRGB mismatches and placeholder texture risks
 - **Material Instance params / parent chain** → `ue_read(target="material_instance")`, `material_instance_params_get`, or `material_interface_resolve`
 - There is no `ue_read(target="material")`; use `auto` for unknown material-like assets, `graph` for Material/Material Function nodes, or `material_instance` for instance parameters.
 - **Graph params** → `graph_snapshot_get(format="full", include_node_params=true)` returns compact Material / Material Function param values by default (`node_params_format="compact"`), not full enum/metadata schema. Whole-graph full schema (`node_params_format="full"`) is blocked before UE execution unless `response={"allow_heavy": true}` is supplied; use `wires_tiny` first, then `node_params_get` for specific nodes.
@@ -43,9 +44,10 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - Cascade (`UParticleSystem`) emitters/modules (+ normalized module param values: Spawn/Lifetime/Size/Color/Velocity/Location/Rotation/Light, in `format="full"`) → `cascade_system_summary_get`
 - Niagara → `ue_read(target="niagara_system"|"niagara_stack")` / `niagara_*`
 - level actors / component materials → `level_*` / `component_*`
+- Landscape Paint layer info binding → `landscape_layer_info_set` after reading `object_properties_get(TargetLayers)`; this is a narrow write for `LandscapeLayerInfoObject`, not a generic UObject property setter.
 - SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
 - Texture2D dimensions / source+pixel format / compression / sRGB / LOD group → `texture_summary_get` / `ue_read(target="texture")`
-- **Project diagnostics / current error items** → `diagnostics_get` / `ue_read(target="diagnostics")`. Global diagnostics report `data.error_count`, `data.warning_count`, and `data.items`; `remaining_errors` is reserved for concrete asset responses that carry `asset_path`.
+- **Project diagnostics / current error items** → `diagnostics_get` / `ue_read(target="diagnostics")`. Global diagnostics report `data.error_count`, `data.warning_count`, and `data.items`; `remaining_errors` is reserved for concrete asset responses that carry `asset_path`. Python also adds `data.related_log_items` for UE log material compile fallback / sampler mismatch clues; these are historical and carry `stale_possible=true`, so do not treat them as current global errors.
 
 ## Patch operations cheatsheet
 All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capability_get(operation, detail="examples")` first. All default to `dry_run=true`.
@@ -57,7 +59,7 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 {"op":"remove_component","name":"OldComponent"}
 ```
 
-**graph_patch_apply** (Blueprint) — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pins accept **GUID** (`from_pin_id`/`to_pin_id`) OR **name** (`from_pin`/`to_pin`) — name is easier, GUID is unambiguous when a node has duplicate pin names. `create_node` accepts `client_id`; later ops in the same patch can reference that id through `node_id` / `from_node_id` / `to_node_id`.
+**graph_patch_apply** — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pins accept **GUID** (`from_pin_id`/`to_pin_id`) OR **name** (`from_pin`/`to_pin`) — name is easier, GUID is unambiguous when a node has duplicate pin names. Blueprint supports same-batch `create_node.client_id` with dry-run transient nodes. Material/MaterialFunction same-batch `create_node.client_id` is expanded by the Python MCP layer only when `dry_run=false`; for dry-run, split create/read/connect or expect a client-side unsupported dry-run error.
 ```json
 {"op": "create_node", "client_id": "branch", "node_class": "Branch", "position": {"x": 300, "y": 0}}
 {"op": "connect_pins", "from_node_id": "<GUID>", "from_pin": "Then", "to_node_id": "branch", "to_pin": "execute"}
@@ -72,6 +74,11 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 {"op": "add_axis_mapping", "axis_name": "MoveForward", "key": "W", "scale": 1.0}
 ```
 
+**landscape_layer_info_set** — binds or creates `ULandscapeLayerInfoObject` assets for named Landscape Paint target layers. Layer `name` must match the material layer name exactly. Defaults to `dry_run=true`.
+```json
+{"actor_path":"/Game/Maps/Demo.Demo:PersistentLevel.Landscape_0","layers":[{"name":"Cliff","layer_info_asset_path":"/Game/Maps/Demo_sharedassets/Cliff_LayerInfo.Cliff_LayerInfo","create_if_missing":true,"no_weight_blend":false}],"dry_run":true,"save":false}
+```
+
 **node_params_set** — `params` is `{"pin_name": value}` object (NOT array). Pin names must match exact UE pin names; use `node_params_get` to discover them.
 
 ## Response modes
@@ -82,7 +89,7 @@ All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capabili
 2. `ue_capability_get(detail="index")`
 3. `ue_execute("bridge_capabilities_get", {}, response={"mode":"full"})`
 4. `ue_execute("project_context_get", {}, response={"mode":"full"})`
-5. `ue_execute("diagnostics_get", {"severity":"all"}, response={"mode":"full"})` — reads UE MessageLog and project asset compile diagnostics; use `data.error_count` for global count
+5. `ue_execute("diagnostics_get", {"severity":"all"}, response={"mode":"full"})` — reads UE MessageLog and project asset compile diagnostics; use `data.error_count` for global count, and inspect `data.related_log_items` for stale-but-useful material log clues
 
 ## Empty asset / AutoIndex diagnosis
 Never conclude "no active project" from one empty `assets`/`items`. Cross-check `project_context_get` (path, content dir, `/Game` mount), `asset_list` (`package_paths=["/Game"]`, small limit), `auto_index_status`/`auto_index_overview`, `diagnostics_get`. Read as:
@@ -93,7 +100,7 @@ Never conclude "no active project" from one empty `assets`/`items`. Cross-check 
 Gotcha: `asset_list(format="indexed")` does not populate row `items`; use `format="compact"` (rows `[object_path, class, loaded, redirector]`) or `"full"` to read rows. Filter with `class_names` + `package_paths`.
 
 ## Safe writes
-`ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes.
+`ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes. Use narrow domain writes such as `landscape_layer_info_set` instead of adding broad `object_properties_set`.
 
 ## Don't guess calls
 Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. Use `detail="examples"` for a valid payload example. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs EXACTLY one of `asset_path` / `material_path` / `component_path`+`slot_index`); an empty call is a request error (`invalid_request`), passing more than one is `target_conflict`, and an out-of-range slot is `invalid_slot` — none of these are `material_not_found`.

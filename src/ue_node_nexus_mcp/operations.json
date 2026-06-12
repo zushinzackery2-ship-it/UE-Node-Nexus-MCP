@@ -49,6 +49,7 @@
     {"name": "material_interface_resolve", "kind": "read", "group": "level", "hidden": false, "local": false},
     {"name": "material_usage_find", "kind": "read", "group": "level", "hidden": false, "local": false},
     {"name": "component_material_instance_params_get", "kind": "read", "group": "level", "hidden": false, "local": false},
+    {"name": "landscape_layer_info_set", "kind": "write", "group": "level", "hidden": false, "local": false},
     {"name": "component_materials_set", "kind": "write", "group": "level", "hidden": false, "local": false},
     {"name": "component_material_instance_params_set", "kind": "write", "group": "level", "hidden": false, "local": false},
 
@@ -83,6 +84,7 @@
     {"name": "node_params_set", "kind": "write", "group": "graph", "hidden": false, "local": false},
 
     {"name": "material_expression_classes_list", "kind": "read", "group": "material", "hidden": false, "local": false},
+    {"name": "material_lint", "kind": "read", "group": "material", "hidden": false, "local": true},
     {"name": "material_instance_params_get", "kind": "read", "group": "material", "hidden": false, "local": false},
     {"name": "material_instance_params_set", "kind": "write", "group": "material", "hidden": false, "local": false},
 

@@ -42,6 +42,23 @@ def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str
         if project is not None and not isinstance(project, str):
             raise ValueError("project must be a string")
         return bridge_instance_select(pid=pid, project=project)
+    if operation == "material_lint":
+        from .material_lint import material_lint
+
+        asset_path = payload.get("asset_path")
+        if not isinstance(asset_path, str):
+            raise ValueError("asset_path must be a string")
+        graph_kind = payload.get("graph_kind", "material")
+        if not isinstance(graph_kind, str):
+            raise ValueError("graph_kind must be a string")
+        max_texture_checks = payload.get("max_texture_checks", 48)
+        if not isinstance(max_texture_checks, int):
+            raise ValueError("max_texture_checks must be an integer")
+        return material_lint(
+            asset_path=asset_path,
+            graph_kind=graph_kind,
+            max_texture_checks=max_texture_checks,
+        )
     raise ValueError(f"local operation is not supported by ue_execute: {operation}")
 
 

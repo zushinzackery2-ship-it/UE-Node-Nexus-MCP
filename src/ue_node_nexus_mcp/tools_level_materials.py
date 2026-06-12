@@ -63,6 +63,27 @@ def level_mesh_instances_list(
 
 
 @default_tool()
+def landscape_layer_info_set(
+    actor_path: str,
+    layers: list[dict[str, Any]],
+    dry_run: bool = True,
+    save: bool = False,
+) -> dict[str, Any]:
+    """Create or bind LandscapeLayerInfoObject assets for named Landscape paint layers."""
+    require_non_empty_string(actor_path, "actor_path")
+    require_list(layers, "layers")
+    return _call(
+        "landscape_layer_info_set",
+        {
+            "actor_path": actor_path,
+            "layers": layers,
+            "dry_run": dry_run,
+            "save": save,
+        },
+    )
+
+
+@default_tool()
 def component_materials_get(component_path: str) -> dict[str, Any]:
     """Return material slots for a mesh component, including MI/root material identity."""
     require_non_empty_string(component_path, "component_path")
