@@ -22,16 +22,19 @@ remove dead code, and preserve all tests.
 | Named-pipe structure | Complete | Overlapped I/O and game-thread dispatch separated from worker lifecycle |
 | Landscape layer structure | Complete | Plan construction separated from asset application and editor refresh |
 | Source line budget | Complete | Regression test enforces a 300-line maximum for Python/C++/header/build sources |
-| Dead-code/static analysis | Pending | Run after dependencies are installed |
-| Python tests | Pending | Baseline environment lacked `pytest`; run after first implementation commit |
-| UE build | Environment-limited | Requires UE 5.5/Windows; perform static include/symbol checks in this environment |
+| Dead-code/static analysis | Complete | Ruff and Vulture pass; obsolete imports, globals, and assignments removed |
+| MCP compatibility | Complete | All tests pass with both declared minimum MCP 1.13 and current MCP 2.0 |
+| Python tests | Complete | 13 tests pass, including schema, registration, graph patch, and source-budget coverage |
+| UE static verification | Complete | New declarations/definitions and include consumers cross-checked |
+| UE build | Environment-limited | UE 5.5/Windows toolchain is not available in this Linux environment |
 
 ## Verification checklist
 
-- [ ] `python3 -m compileall -q src tests`
-- [ ] `python3 -m pytest -q`
-- [ ] Python lint and dead-code scan
-- [ ] C++ include/symbol/static structure checks
-- [ ] No source file exceeds 300 lines
-- [ ] `git diff --check`
-- [ ] Final commit and push
+- [x] `python3 -m compileall -q src tests`
+- [x] `python3 -m pytest -q` (13 passed on MCP 2.0)
+- [x] MCP 1.13 compatibility suite (13 passed; one upstream Pydantic warning)
+- [x] Python lint and dead-code scan
+- [x] C++ include/symbol/static structure checks
+- [x] No source file exceeds 300 lines
+- [x] `git diff --check`
+- [x] Final commit and push
