@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any
+from typing import Any, get_type_hints
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -128,6 +128,11 @@ def default_tool(feature: str | None = None):
 
 def thin_tool():
     def decorator(func):
+        # FastMCP 1.13 calls issubclass() directly on annotations and therefore
+        # cannot consume the strings produced by ``from __future__ import
+        # annotations``. Resolve them once before registration; MCP 2.x accepts
+        # the resulting runtime types as well.
+        func.__annotations__ = get_type_hints(func)
         return mcp.tool()(func)
 
     return decorator
