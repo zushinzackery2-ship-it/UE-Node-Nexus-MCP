@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .contracts import require_list, require_mapping, require_non_empty_string
-from .errors import BridgeError
-from .instance import instance_manager
 from .facade_auto_read import execute_auto_read
+from .facade_capabilities import ue_capability_get, ue_context_get
 from .facade_execute import VALID_RESPONSE_MODES, execute_operation, preflight_execute_request
+from .facade_plan import ue_plan_validate
 from .facade_response import (
     artifact_handle,
-    asset_path_from_payload,
     compact_data_summary,
     diagnostic_counts,
     diff_changes,
@@ -19,88 +17,12 @@ from .facade_response import (
 )
 from .facade_read import apply_read_format_defaults, resolve_read_operation, unsupported_target_details
 from .facade_state import facade_state
-from .operation_registry import capability_index, enabled_operation_specs, get_operation_spec, operation_schema
-from .payload_schema import example_payload_for, payload_schema_for
+from .operation_registry import get_operation_spec
+from .contracts import require_mapping, require_non_empty_string
 from .runtime import enabled_features, thin_tool
 
 
 VALID_RESPONSE_OPTION_FIELDS = {"allow_heavy", "mode"}
-
-
-@thin_tool()
-def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
-    """Return thin facade status, enabled groups, and the recommended first capability query."""
-    features = enabled_features()
-    specs = enabled_operation_specs(features)
-    groups: dict[str, int] = {}
-    for spec in specs.values():
-        groups[spec.group] = groups.get(spec.group, 0) + 1
-    try:
-        available_instances = instance_manager.list_instances()
-    except BridgeError:
-        available_instances = []
-    data: dict[str, Any] = {
-        "bridge": "named_pipe",
-        "active_instance": instance_manager.current(),
-        "available_instances": available_instances,
-        "groups": sorted(groups.items()) if include_counts else sorted(groups),
-        "facade_tools": [
-            "ue_context_get",
-            "ue_capability_get",
-            "ue_execute",
-            "ue_read",
-            "ue_diff_get",
-            "ue_plan_validate",
-        ],
-        "recommended_next": "ue_capability_get",
-    }
-    return {"ok": True, "data": data}
-
-
-@thin_tool()
-def ue_capability_get(
-    group: str | None = None,
-    operation: str | None = None,
-    detail: Literal["index", "schema", "examples", "full"] = "index",
-) -> dict[str, Any]:
-    """Return thin facade operation index or one internal operation schema."""
-    features = enabled_features()
-    if group is not None and group not in features:
-        return minimal_error("feature_disabled", f"feature group is not enabled: {group}", {"group": group})
-    if operation:
-        try:
-            spec = get_operation_spec(operation)
-        except ValueError as exc:
-            return minimal_error("invalid_operation", str(exc), {"operation": operation})
-        if spec.group not in features:
-            return minimal_error("feature_disabled", f"feature group is not enabled: {spec.group}", {"operation": operation})
-        schema = operation_schema(spec)
-        if detail == "index":
-            data: dict[str, Any] = {
-                "operation": spec.name,
-                "group": spec.group,
-                "kind": spec.kind,
-                "risk": spec.risk,
-                "summary": spec.summary,
-            }
-        elif detail == "examples":
-            data = {
-                "operation": spec.name,
-                "examples": [{"payload": example_payload_for(spec.name)}],
-                "next_read": {"tool": "ue_capability_get", "args": {"operation": spec.name, "detail": "schema"}},
-            }
-        else:
-            data = schema
-        return {"ok": True, "data": data}
-
-    return {
-        "ok": True,
-        "data": {
-            "group": group,
-            "detail": "index",
-            "operations": capability_index(features, group),
-        }
-    }
 
 
 @thin_tool()
@@ -256,57 +178,3 @@ def ue_diff_get(
         "next_cursor": str(limit) if truncated else None,
     }
     return {"ok": True, "data": data}
-
-
-@thin_tool()
-def ue_plan_validate(
-    operations: list[dict[str, Any]],
-    mode: Literal["dry_run"] = "dry_run",
-) -> dict[str, Any]:
-    """Validate a batch of internal operations without mutating UE state."""
-    require_list(operations, "operations")
-    errors: list[dict[str, Any]] = []
-    estimated_changes: list[list[Any]] = []
-    highest_risk = "low"
-    risk_rank = {"low": 0, "medium": 1, "high": 2}
-    for index, item in enumerate(operations):
-        operation = item.get("operation")
-        payload = item.get("payload", {})
-        if not isinstance(operation, str) or not operation:
-            errors.append({"index": index, "code": "missing_operation", "message": "operation is required"})
-            continue
-        if not isinstance(payload, dict):
-            errors.append({"index": index, "code": "invalid_payload", "message": "payload must be an object"})
-            continue
-        try:
-            spec = get_operation_spec(operation)
-        except ValueError as exc:
-            errors.append({"index": index, "code": "unknown_operation", "message": str(exc)})
-            continue
-        if spec.group not in enabled_features():
-            errors.append({"index": index, "code": "feature_disabled", "message": f"feature group is not enabled: {spec.group}"})
-            continue
-        missing_fields = [field for field in payload_schema_for(operation).get("required", []) if field not in payload]
-        if missing_fields:
-            errors.append({
-                "index": index,
-                "code": "missing_required_field",
-                "message": f"missing required field(s): {', '.join(missing_fields)}",
-                "fields": missing_fields,
-            })
-            continue
-        if risk_rank[spec.risk] > risk_rank[highest_risk]:
-            highest_risk = spec.risk
-        estimated_changes.append([spec.kind, spec.name, asset_path_from_payload(payload)])
-    return {
-        "ok": not errors,
-        "data": {
-            "valid": not errors,
-            "mode": mode,
-            "operation_count": len(operations),
-            "risk": highest_risk,
-            "estimated_changes": estimated_changes,
-            "errors": errors,
-            "warnings": [],
-        }
-    }
