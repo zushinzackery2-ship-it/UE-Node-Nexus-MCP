@@ -2,10 +2,26 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.helpers import RecordingBridge
-
-from tests import internal_tools
 from ue_node_nexus_mcp import runtime
+from ue_node_nexus_mcp.tools_graph_writes import graph_patch_apply
+
+
+class RecordingBridge:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.response: dict[str, Any] = {
+            "ok": True,
+            "operation": "",
+            "data": {},
+            "diagnostics": [],
+            "warnings": [],
+        }
+
+    def call(self, operation: str, payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+        self.calls.append((operation, payload))
+        response = dict(self.response)
+        response["operation"] = response.get("operation") or operation
+        return response
 
 
 class SequencedBridge:
@@ -39,7 +55,7 @@ def test_material_graph_patch_expands_create_node_client_ids(monkeypatch: Any) -
     )
     monkeypatch.setattr(runtime, "bridge", bridge)
 
-    response = internal_tools.graph_patch_apply(
+    response = graph_patch_apply(
         asset_path="/Game/Materials/M_Test.M_Test",
         graph_kind="material",
         dry_run=False,
@@ -97,7 +113,7 @@ def test_material_graph_patch_does_not_replace_pin_names_that_match_client_ids(m
     )
     monkeypatch.setattr(runtime, "bridge", bridge)
 
-    response = internal_tools.graph_patch_apply(
+    response = graph_patch_apply(
         asset_path="/Game/Materials/M_Test.M_Test",
         graph_kind="material",
         dry_run=False,
@@ -139,7 +155,7 @@ def test_material_graph_patch_client_id_dry_run_returns_clear_error(monkeypatch:
     recording_bridge = RecordingBridge()
     monkeypatch.setattr(runtime, "bridge", recording_bridge)
 
-    response = internal_tools.graph_patch_apply(
+    response = graph_patch_apply(
         asset_path="/Game/Materials/M_Test.M_Test",
         graph_kind="material",
         operations=[
@@ -187,7 +203,7 @@ def test_graph_patch_nonfatal_material_attribute_pin_integrity_does_not_fail_roo
     }
     monkeypatch.setattr(runtime, "bridge", recording_bridge)
 
-    response = internal_tools.graph_patch_apply(
+    response = graph_patch_apply(
         asset_path="/Game/Materials/M_Test.M_Test",
         operations=[],
         dry_run=False,
