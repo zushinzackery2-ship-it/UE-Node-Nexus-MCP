@@ -4,7 +4,6 @@ from typing import Any
 
 from .runtime import call_bridge as _call
 
-
 _VERBOSE_DATA_FIELDS = {
     "capabilities",
     "limitations",

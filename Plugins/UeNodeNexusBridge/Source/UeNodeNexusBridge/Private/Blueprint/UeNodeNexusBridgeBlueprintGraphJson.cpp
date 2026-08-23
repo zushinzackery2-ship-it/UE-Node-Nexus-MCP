@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeBlueprintGraphJson.h"
 
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
 #include "UeNodeNexusBridgeBlueprintGraphFilter.h"

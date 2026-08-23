@@ -4,7 +4,10 @@ import os
 import sys
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ModuleNotFoundError:  # MCP 2.x renamed FastMCP to MCPServer.
+    from mcp.server import MCPServer as FastMCP
 
 from .bridge import BridgeError, UeBridgeClient
 from .contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
@@ -93,7 +96,6 @@ def reset_feature_cache() -> None:
 
 
 def response_mode() -> str:
-    global _response_mode
     if _response_mode is None:
         _ensure_profile_args_consumed()
     return str(_response_mode)

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ue_node_nexus_mcp import runtime
+from tests.helpers import RecordingBridge
 
 from tests import internal_tools
-from tests.helpers import RecordingBridge
+from ue_node_nexus_mcp import runtime
 
 
 class SequencedBridge:

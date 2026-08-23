@@ -60,7 +60,7 @@ def parse_pid_from_pipe_name(name: str) -> int | None:
 
 # --- Win32 bindings (lazy) -------------------------------------------------
 
-_WIN: "_Win32 | None" = None
+_WIN: _Win32 | None = None
 
 
 class _Win32:
@@ -204,7 +204,6 @@ class NamedPipeTransport:
 
     def send(self, pipe_name: str, envelope: dict[str, Any], timeout_seconds: float) -> dict[str, Any]:
         win = _win()
-        ctypes = win.ctypes
         timeout_ms = max(1, int(timeout_seconds * 1000))
 
         handle = self._connect(win, pipe_name, timeout_ms)

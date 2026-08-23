@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .contracts import BRIDGE_OPERATIONS, DEFAULT_HIDDEN_OPERATIONS, OPERATION_FEATURES, require_non_empty_string
+from .contracts import (
+    BRIDGE_OPERATIONS,
+    DEFAULT_HIDDEN_OPERATIONS,
+    OPERATION_FEATURES,
+    require_non_empty_string,
+)
 from .diagnostics_logs import enrich_with_material_log_diagnostics
 from .errors import BridgeError
 from .instance import instance_manager
 from .runtime import call_bridge as _call
-from .runtime import default_tool
-from .runtime import enabled_features
-from .runtime import hidden_tool
+from .runtime import default_tool, enabled_features, hidden_tool
 
 
 @default_tool()

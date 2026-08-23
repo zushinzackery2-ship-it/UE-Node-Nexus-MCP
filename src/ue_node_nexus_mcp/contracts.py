@@ -66,15 +66,16 @@ def require_non_empty_string(value: str, field_name: str) -> None:
 
 def require_mapping(value: dict[str, Any], field_name: str) -> None:
     if not isinstance(value, dict):
-        raise ValueError(f"{field_name} must be an object")
+        # Public payload validation consistently reports ValueError to callers.
+        raise ValueError(f"{field_name} must be an object")  # noqa: TRY004
 
 
 def require_list(value: list[dict[str, Any]], field_name: str) -> None:
     if not isinstance(value, list):
-        raise ValueError(f"{field_name} must be an array")
+        raise ValueError(f"{field_name} must be an array")  # noqa: TRY004
     for index, item in enumerate(value):
         if not isinstance(item, dict):
-            raise ValueError(f"{field_name}[{index}] must be an object")
+            raise ValueError(f"{field_name}[{index}] must be an object")  # noqa: TRY004
 
 
 def require_exactly_one(present: dict[str, bool], group_label: str) -> None:

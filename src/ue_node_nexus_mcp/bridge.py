@@ -11,7 +11,7 @@ from .instance import instance_manager
 from .transport import named_pipe_transport
 
 # Re-exported so existing callers keep importing it from this module.
-__all__ = ["BridgeError", "BridgeConfig", "UeBridgeClient"]
+__all__ = ["BridgeConfig", "BridgeError", "UeBridgeClient"]
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class BridgeConfig:
     timeout_seconds: float
 
     @staticmethod
-    def from_environment() -> "BridgeConfig":
+    def from_environment() -> BridgeConfig:
         return BridgeConfig(
             timeout_seconds=float(os.environ.get("UE_NEXUS_TIMEOUT_SECONDS", "30")),
         )

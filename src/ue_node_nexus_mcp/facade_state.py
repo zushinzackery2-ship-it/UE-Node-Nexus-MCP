@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from itertools import count
-import time
 from typing import Any
 
 

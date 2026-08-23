@@ -7,7 +7,6 @@ from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
 from .runtime import default_tool
 
-
 _MATERIAL_GRAPH_KINDS = {"material", "material_function"}
 _NODE_REFERENCE_FIELDS = {
     "from_node_id",

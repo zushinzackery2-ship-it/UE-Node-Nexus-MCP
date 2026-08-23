@@ -6,7 +6,6 @@ from .contracts import BRIDGE_OPERATIONS
 from .operation_registry import get_operation_spec
 from .runtime import call_bridge as _call
 
-
 VALID_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full", "debug"}
 
 

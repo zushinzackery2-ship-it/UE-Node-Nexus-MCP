@@ -6,7 +6,12 @@ from .contracts import require_list, require_non_empty_string
 from .runtime import call_bridge as _call
 from .runtime import default_tool
 from .tools_niagara_common import _call_niagara
-from .tools_niagara_properties import niagara_renderer_properties_get, niagara_renderer_properties_set, niagara_system_properties_get, niagara_system_properties_set  # noqa: F401
+from .tools_niagara_properties import (  # noqa: F401
+    niagara_renderer_properties_get,
+    niagara_renderer_properties_set,
+    niagara_system_properties_get,
+    niagara_system_properties_set,
+)
 
 
 @default_tool()

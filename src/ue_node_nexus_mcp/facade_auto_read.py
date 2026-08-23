@@ -4,7 +4,6 @@ from typing import Any
 
 from .facade_execute import execute_operation
 
-
 GRAPH_CLASS_KINDS = {
     "/Script/Engine.Material": "material",
     "/Script/Engine.MaterialFunction": "material_function",

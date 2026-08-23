@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from .contracts import require_mapping, require_non_empty_string
 from .facade_auto_read import execute_auto_read
-from .facade_capabilities import ue_capability_get, ue_context_get
-from .facade_execute import VALID_RESPONSE_MODES, execute_operation, preflight_execute_request
-from .facade_plan import ue_plan_validate
+from .facade_execute import (
+    VALID_RESPONSE_MODES,
+    execute_operation,
+    preflight_execute_request,
+)
+from .facade_read import (
+    apply_read_format_defaults,
+    resolve_read_operation,
+    unsupported_target_details,
+)
 from .facade_response import (
     artifact_handle,
     compact_data_summary,
@@ -15,12 +23,9 @@ from .facade_response import (
     summarize_response,
     with_optional_remaining_errors,
 )
-from .facade_read import apply_read_format_defaults, resolve_read_operation, unsupported_target_details
 from .facade_state import facade_state
 from .operation_registry import get_operation_spec
-from .contracts import require_mapping, require_non_empty_string
 from .runtime import enabled_features, thin_tool
-
 
 VALID_RESPONSE_OPTION_FIELDS = {"allow_heavy", "mode"}
 
