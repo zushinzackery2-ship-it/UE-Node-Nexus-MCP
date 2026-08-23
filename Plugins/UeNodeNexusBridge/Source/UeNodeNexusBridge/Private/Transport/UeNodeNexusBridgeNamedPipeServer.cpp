@@ -1,14 +1,12 @@
 #include "UeNodeNexusBridgeNamedPipeServer.h"
 
-#include "Async/Async.h"
-#include "Async/Future.h"
 #include "Containers/StringConv.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/Runnable.h"
 #include "HAL/RunnableThread.h"
 #include "HAL/ThreadSafeBool.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeRequestDispatch.h"
+#include "UeNodeNexusBridgeNamedPipeIo.h"
 
 #if PLATFORM_WINDOWS
 #include "Windows/AllowWindowsPlatformTypes.h"
@@ -32,10 +30,6 @@ static FString MakePipeName()
     return FString::Printf(TEXT("\\\\.\\pipe\\UeNodeNexusBridge.%u"), FPlatformProcess::GetCurrentProcessId());
 }
 }
-
-// ---------------------------------------------------------------------------
-// Worker
-// ---------------------------------------------------------------------------
 class FUeNodeNexusBridgeNamedPipeServer::FWorker : public FRunnable
 {
 public:
@@ -72,14 +66,10 @@ private:
 
 #if PLATFORM_WINDOWS
     bool ServeConnection(HANDLE Pipe, HANDLE IoEvent);
-    bool ReadExact(HANDLE Pipe, HANDLE IoEvent, uint8* Buffer, uint32 NumBytes);
-    bool WriteAll(HANDLE Pipe, HANDLE IoEvent, const uint8* Buffer, uint32 NumBytes);
-    bool DispatchWithStopGuard(const FString& Body, FString& OutResponse);
 #endif
 };
 
 #if PLATFORM_WINDOWS
-
 uint32 FUeNodeNexusBridgeNamedPipeServer::FWorker::Run()
 {
     // Manual-reset event for overlapped I/O completion; reset before each op.
@@ -168,7 +158,13 @@ bool FUeNodeNexusBridgeNamedPipeServer::FWorker::ServeConnection(HANDLE Pipe, HA
 {
     // Frame = 4-byte little-endian length + UTF-8 JSON body.
     uint8 LengthBytes[4];
-    if (!ReadExact(Pipe, IoEvent, LengthBytes, 4))
+    if (!UeNodeNexusBridge::ReadNamedPipeExact(
+        Pipe,
+        IoEvent,
+        StopEvent,
+        bStopping,
+        LengthBytes,
+        4))
     {
         return false;
     }
@@ -186,7 +182,13 @@ bool FUeNodeNexusBridgeNamedPipeServer::FWorker::ServeConnection(HANDLE Pipe, HA
 
     TArray<uint8> BodyBytes;
     BodyBytes.SetNumUninitialized(static_cast<int32>(BodyLength));
-    if (!ReadExact(Pipe, IoEvent, BodyBytes.GetData(), BodyLength))
+    if (!UeNodeNexusBridge::ReadNamedPipeExact(
+        Pipe,
+        IoEvent,
+        StopEvent,
+        bStopping,
+        BodyBytes.GetData(),
+        BodyLength))
     {
         return false;
     }
@@ -194,7 +196,7 @@ bool FUeNodeNexusBridgeNamedPipeServer::FWorker::ServeConnection(HANDLE Pipe, HA
     const FString Body = UeNodeNexusBridge::BodyToString(BodyBytes);
 
     FString ResponseString;
-    if (!DispatchWithStopGuard(Body, ResponseString))
+    if (!UeNodeNexusBridge::DispatchNamedPipeRequest(Body, bStopping, ResponseString))
     {
         return false;   // stopping mid-flight
     }
@@ -207,151 +209,35 @@ bool FUeNodeNexusBridgeNamedPipeServer::FWorker::ServeConnection(HANDLE Pipe, HA
     RespLengthBytes[2] = static_cast<uint8>((RespLength >> 16) & 0xFF);
     RespLengthBytes[3] = static_cast<uint8>((RespLength >> 24) & 0xFF);
 
-    if (!WriteAll(Pipe, IoEvent, RespLengthBytes, 4))
+    if (!UeNodeNexusBridge::WriteNamedPipeAll(
+        Pipe,
+        IoEvent,
+        StopEvent,
+        bStopping,
+        RespLengthBytes,
+        4))
     {
         return false;
     }
-    if (RespLength > 0 && !WriteAll(Pipe, IoEvent, reinterpret_cast<const uint8*>(Utf8.Get()), RespLength))
+    if (RespLength > 0
+        && !UeNodeNexusBridge::WriteNamedPipeAll(
+            Pipe,
+            IoEvent,
+            StopEvent,
+            bStopping,
+            reinterpret_cast<const uint8*>(Utf8.Get()),
+            RespLength))
     {
         return false;
     }
     return true;
 }
-
-bool FUeNodeNexusBridgeNamedPipeServer::FWorker::ReadExact(HANDLE Pipe, HANDLE IoEvent, uint8* Buffer, uint32 NumBytes)
-{
-    const HANDLE StopHandle = static_cast<HANDLE>(StopEvent);
-    uint32 Total = 0;
-    while (Total < NumBytes)
-    {
-        if (bStopping)
-        {
-            return false;
-        }
-
-        OVERLAPPED Ov;
-        FMemory::Memzero(Ov);
-        ResetEvent(IoEvent);
-        Ov.hEvent = IoEvent;
-
-        DWORD Read = 0;
-        if (!ReadFile(Pipe, Buffer + Total, NumBytes - Total, &Read, &Ov))
-        {
-            const DWORD Err = GetLastError();
-            if (Err == ERROR_IO_PENDING)
-            {
-                HANDLE WaitHandles[2] = { IoEvent, StopHandle };
-                const DWORD Wait = WaitForMultipleObjects(2, WaitHandles, false, INFINITE);
-                if (Wait != WAIT_OBJECT_0)
-                {
-                    CancelIoEx(Pipe, &Ov);
-                    return false;
-                }
-                if (!GetOverlappedResult(Pipe, &Ov, &Read, false))
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                return false;   // ERROR_BROKEN_PIPE and friends
-            }
-        }
-
-        if (Read == 0)
-        {
-            return false;   // peer closed
-        }
-        Total += Read;
-    }
-    return true;
-}
-
-bool FUeNodeNexusBridgeNamedPipeServer::FWorker::WriteAll(HANDLE Pipe, HANDLE IoEvent, const uint8* Buffer, uint32 NumBytes)
-{
-    const HANDLE StopHandle = static_cast<HANDLE>(StopEvent);
-    uint32 Total = 0;
-    while (Total < NumBytes)
-    {
-        if (bStopping)
-        {
-            return false;
-        }
-
-        OVERLAPPED Ov;
-        FMemory::Memzero(Ov);
-        ResetEvent(IoEvent);
-        Ov.hEvent = IoEvent;
-
-        DWORD Written = 0;
-        if (!WriteFile(Pipe, Buffer + Total, NumBytes - Total, &Written, &Ov))
-        {
-            const DWORD Err = GetLastError();
-            if (Err == ERROR_IO_PENDING)
-            {
-                HANDLE WaitHandles[2] = { IoEvent, StopHandle };
-                const DWORD Wait = WaitForMultipleObjects(2, WaitHandles, false, INFINITE);
-                if (Wait != WAIT_OBJECT_0)
-                {
-                    CancelIoEx(Pipe, &Ov);
-                    return false;
-                }
-                if (!GetOverlappedResult(Pipe, &Ov, &Written, false))
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                return false;
-            }
-        }
-        Total += Written;
-    }
-    return true;
-}
-
-bool FUeNodeNexusBridgeNamedPipeServer::FWorker::DispatchWithStopGuard(const FString& Body, FString& OutResponse)
-{
-    // All operation handling runs on the game thread. We marshal the raw body
-    // there and ferry only the response FString back, so no UObject/JSON object
-    // crosses the thread boundary. The Promise is shared (not capturing `this`)
-    // so an orphaned task at shutdown stays self-contained and safe.
-    TSharedRef<TPromise<FString>, ESPMode::ThreadSafe> Promise = MakeShared<TPromise<FString>, ESPMode::ThreadSafe>();
-    TFuture<FString> Future = Promise->GetFuture();
-
-    AsyncTask(ENamedThreads::GameThread, [Body, Promise]()
-    {
-        Promise->SetValue(UeNodeNexusBridge::DispatchBodyToResponseString(Body));
-    });
-
-    // Poll for completion while staying responsive to a shutdown request. We
-    // must not block unconditionally on the future: ShutdownModule runs on the
-    // game thread and would deadlock waiting for a task it can never run.
-    while (!bStopping)
-    {
-        if (Future.IsReady())
-        {
-            OutResponse = Future.Get();
-            return true;
-        }
-        FPlatformProcess::Sleep(0.01f);
-    }
-    return false;
-}
-
 #else  // !PLATFORM_WINDOWS
-
 uint32 FUeNodeNexusBridgeNamedPipeServer::FWorker::Run()
 {
     return 0;
 }
-
 #endif  // PLATFORM_WINDOWS
-
-// ---------------------------------------------------------------------------
-// Server
-// ---------------------------------------------------------------------------
 FUeNodeNexusBridgeNamedPipeServer::FUeNodeNexusBridgeNamedPipeServer() = default;
 
 FUeNodeNexusBridgeNamedPipeServer::~FUeNodeNexusBridgeNamedPipeServer()

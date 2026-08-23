@@ -12,113 +12,14 @@
 #include "K2Node_Variable.h"
 #include "Engine/Blueprint.h"
 #include "Engine/SCS_Node.h"
-#include "Engine/SimpleConstructionScript.h"
-#include "UObject/UnrealType.h"
+#include "UeNodeNexusBridgeBlueprintNodeCreateFields.h"
 
 namespace UeNodeNexusBridge
 {
-static bool ReadStringFieldOrParam(const TSharedPtr<FJsonObject>& Payload, const FString& FieldName, FString& OutValue)
-{
-    if (Payload->TryGetStringField(FieldName, OutValue))
-    {
-        return true;
-    }
-
-    const TSharedPtr<FJsonObject>* Params = nullptr;
-    return Payload->TryGetObjectField(TEXT("params"), Params) && Params != nullptr && (*Params)->TryGetStringField(FieldName, OutValue);
-}
-
-static bool ReadBoolFieldOrParam(const TSharedPtr<FJsonObject>& Payload, const FString& FieldName, bool& OutValue)
-{
-    if (Payload->TryGetBoolField(FieldName, OutValue))
-    {
-        return true;
-    }
-
-    const TSharedPtr<FJsonObject>* Params = nullptr;
-    return Payload->TryGetObjectField(TEXT("params"), Params) && Params != nullptr && (*Params)->TryGetBoolField(FieldName, OutValue);
-}
-
-static bool ReadVariableNameFieldOrParam(const TSharedPtr<FJsonObject>& Payload, FString& OutValue)
-{
-    if (ReadStringFieldOrParam(Payload, TEXT("variable_name"), OutValue)
-        || ReadStringFieldOrParam(Payload, TEXT("VariableName"), OutValue)
-        || ReadStringFieldOrParam(Payload, TEXT("member_name"), OutValue))
-    {
-        return !OutValue.IsEmpty();
-    }
-
-    const TSharedPtr<FJsonObject>* VariableReference = nullptr;
-    if (Payload->TryGetObjectField(TEXT("variable_reference"), VariableReference) && VariableReference != nullptr)
-    {
-        return (*VariableReference)->TryGetStringField(TEXT("member_name"), OutValue) && !OutValue.IsEmpty();
-    }
-
-    const TSharedPtr<FJsonObject>* Params = nullptr;
-    if (Payload->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)
-    {
-        if ((*Params)->TryGetObjectField(TEXT("variable_reference"), VariableReference) && VariableReference != nullptr)
-        {
-            return (*VariableReference)->TryGetStringField(TEXT("member_name"), OutValue) && !OutValue.IsEmpty();
-        }
-    }
-    return false;
-}
-
-static USCS_Node* FindComponentNodeByVariableName(UBlueprint* Blueprint, const FName VariableName)
-{
-    USimpleConstructionScript* Script = Blueprint ? Blueprint->SimpleConstructionScript : nullptr;
-    if (Script == nullptr || VariableName.IsNone())
-    {
-        return nullptr;
-    }
-    if (USCS_Node* ExactNode = Script->FindSCSNode(VariableName))
-    {
-        return ExactNode;
-    }
-    for (USCS_Node* Node : Script->GetAllNodes())
-    {
-        if (Node != nullptr && Node->GetVariableName().IsEqual(VariableName, ENameCase::IgnoreCase))
-        {
-            return Node;
-        }
-    }
-    return nullptr;
-}
-
-static FProperty* FindBlueprintProperty(UBlueprint* Blueprint, const FName VariableName)
-{
-    if (Blueprint == nullptr || VariableName.IsNone())
-    {
-        return nullptr;
-    }
-    if (UClass* SkeletonClass = Blueprint->SkeletonGeneratedClass)
-    {
-        if (FProperty* Property = FindFProperty<FProperty>(SkeletonClass, VariableName))
-        {
-            return Property;
-        }
-    }
-    if (UClass* GeneratedClass = Blueprint->GeneratedClass)
-    {
-        if (FProperty* Property = FindFProperty<FProperty>(GeneratedClass, VariableName))
-        {
-            return Property;
-        }
-    }
-    return nullptr;
-}
-
-static bool BlueprintVariableExists(UBlueprint* Blueprint, const FString& VariableName)
-{
-    const FName VariableFName(*VariableName);
-    return FindBlueprintProperty(Blueprint, VariableFName) != nullptr || FindComponentNodeByVariableName(Blueprint, VariableFName) != nullptr;
-}
-
 static bool ConfigureVariableNode(UK2Node_Variable* Node, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
     FString VariableName;
-    if (!ReadVariableNameFieldOrParam(Payload, VariableName))
+    if (!ReadBlueprintVariableName(Payload, VariableName))
     {
         OutError = TEXT("variable_name is required for K2Node_VariableGet/K2Node_VariableSet");
         return false;
@@ -131,7 +32,7 @@ static bool ConfigureVariableNode(UK2Node_Variable* Node, UBlueprint* Blueprint,
         return true;
     }
 
-    if (USCS_Node* ComponentNode = FindComponentNodeByVariableName(Blueprint, VariableFName))
+    if (USCS_Node* ComponentNode = FindBlueprintComponentNode(Blueprint, VariableFName))
     {
         Node->VariableReference.SetSelfMember(ComponentNode->GetVariableName(), ComponentNode->VariableGuid);
         return true;
@@ -145,7 +46,8 @@ static bool ConfigureCallFunctionNode(UK2Node_CallFunction* Node, const TSharedP
 {
     FString FunctionName;
     FString FunctionOwner;
-    if (!ReadStringFieldOrParam(Payload, TEXT("function_name"), FunctionName) || !ReadStringFieldOrParam(Payload, TEXT("function_owner"), FunctionOwner))
+    if (!ReadBlueprintNodeStringField(Payload, TEXT("function_name"), FunctionName)
+        || !ReadBlueprintNodeStringField(Payload, TEXT("function_owner"), FunctionOwner))
     {
         OutError = TEXT("function_name and function_owner are required for K2Node_CallFunction");
         return false;
@@ -178,7 +80,8 @@ static bool ConfigureGenericEventNode(UK2Node_Event* Node, const TSharedPtr<FJso
 
     FString FunctionName;
     FString FunctionOwner;
-    if (!ReadStringFieldOrParam(Payload, TEXT("function_name"), FunctionName) || !ReadStringFieldOrParam(Payload, TEXT("function_owner"), FunctionOwner))
+    if (!ReadBlueprintNodeStringField(Payload, TEXT("function_name"), FunctionName)
+        || !ReadBlueprintNodeStringField(Payload, TEXT("function_owner"), FunctionOwner))
     {
         OutError = TEXT("function_name and function_owner are required for K2Node_Event; use K2Node_CustomEvent with event_name for custom events");
         return false;
@@ -206,7 +109,7 @@ static bool ConfigureGenericEventNode(UK2Node_Event* Node, const TSharedPtr<FJso
 static bool ConfigureInputKeyNode(UK2Node_InputKey* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
     FString KeyName;
-    if (!ReadStringFieldOrParam(Payload, TEXT("input_key"), KeyName))
+    if (!ReadBlueprintNodeStringField(Payload, TEXT("input_key"), KeyName))
     {
         OutError = TEXT("input_key is required for K2Node_InputKey");
         return false;
@@ -220,13 +123,13 @@ static bool ConfigureInputKeyNode(UK2Node_InputKey* Node, const TSharedPtr<FJson
     bool bAlt = Node->bAlt;
     bool bShift = Node->bShift;
     bool bCommand = Node->bCommand;
-    ReadBoolFieldOrParam(Payload, TEXT("consume_input"), bConsumeInput);
-    ReadBoolFieldOrParam(Payload, TEXT("execute_when_paused"), bExecuteWhenPaused);
-    ReadBoolFieldOrParam(Payload, TEXT("override_parent_binding"), bOverrideParentBinding);
-    ReadBoolFieldOrParam(Payload, TEXT("control"), bControl);
-    ReadBoolFieldOrParam(Payload, TEXT("alt"), bAlt);
-    ReadBoolFieldOrParam(Payload, TEXT("shift"), bShift);
-    ReadBoolFieldOrParam(Payload, TEXT("command"), bCommand);
+    ReadBlueprintNodeBoolField(Payload, TEXT("consume_input"), bConsumeInput);
+    ReadBlueprintNodeBoolField(Payload, TEXT("execute_when_paused"), bExecuteWhenPaused);
+    ReadBlueprintNodeBoolField(Payload, TEXT("override_parent_binding"), bOverrideParentBinding);
+    ReadBlueprintNodeBoolField(Payload, TEXT("control"), bControl);
+    ReadBlueprintNodeBoolField(Payload, TEXT("alt"), bAlt);
+    ReadBlueprintNodeBoolField(Payload, TEXT("shift"), bShift);
+    ReadBlueprintNodeBoolField(Payload, TEXT("command"), bCommand);
     Node->bConsumeInput = bConsumeInput;
     Node->bExecuteWhenPaused = bExecuteWhenPaused;
     Node->bOverrideParentBinding = bOverrideParentBinding;
@@ -240,7 +143,7 @@ static bool ConfigureInputKeyNode(UK2Node_InputKey* Node, const TSharedPtr<FJson
 static bool ConfigureInputAxisEventNode(UK2Node_InputAxisEvent* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
     FString AxisName;
-    if (!ReadStringFieldOrParam(Payload, TEXT("axis_name"), AxisName))
+    if (!ReadBlueprintNodeStringField(Payload, TEXT("axis_name"), AxisName))
     {
         OutError = TEXT("axis_name is required for K2Node_InputAxisEvent");
         return false;
@@ -250,9 +153,9 @@ static bool ConfigureInputAxisEventNode(UK2Node_InputAxisEvent* Node, const TSha
     bool bConsumeInput = Node->bConsumeInput;
     bool bExecuteWhenPaused = Node->bExecuteWhenPaused;
     bool bOverrideParentBinding = Node->bOverrideParentBinding;
-    ReadBoolFieldOrParam(Payload, TEXT("consume_input"), bConsumeInput);
-    ReadBoolFieldOrParam(Payload, TEXT("execute_when_paused"), bExecuteWhenPaused);
-    ReadBoolFieldOrParam(Payload, TEXT("override_parent_binding"), bOverrideParentBinding);
+    ReadBlueprintNodeBoolField(Payload, TEXT("consume_input"), bConsumeInput);
+    ReadBlueprintNodeBoolField(Payload, TEXT("execute_when_paused"), bExecuteWhenPaused);
+    ReadBlueprintNodeBoolField(Payload, TEXT("override_parent_binding"), bOverrideParentBinding);
     Node->bConsumeInput = bConsumeInput;
     Node->bExecuteWhenPaused = bExecuteWhenPaused;
     Node->bOverrideParentBinding = bOverrideParentBinding;
@@ -262,7 +165,7 @@ static bool ConfigureInputAxisEventNode(UK2Node_InputAxisEvent* Node, const TSha
 static bool ConfigureInputActionNode(UK2Node_InputAction* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
     FString ActionName;
-    if (!ReadStringFieldOrParam(Payload, TEXT("input_action_name"), ActionName))
+    if (!ReadBlueprintNodeStringField(Payload, TEXT("input_action_name"), ActionName))
     {
         OutError = TEXT("input_action_name is required for K2Node_InputAction");
         return false;
@@ -272,9 +175,9 @@ static bool ConfigureInputActionNode(UK2Node_InputAction* Node, const TSharedPtr
     bool bConsumeInput = Node->bConsumeInput;
     bool bExecuteWhenPaused = Node->bExecuteWhenPaused;
     bool bOverrideParentBinding = Node->bOverrideParentBinding;
-    ReadBoolFieldOrParam(Payload, TEXT("consume_input"), bConsumeInput);
-    ReadBoolFieldOrParam(Payload, TEXT("execute_when_paused"), bExecuteWhenPaused);
-    ReadBoolFieldOrParam(Payload, TEXT("override_parent_binding"), bOverrideParentBinding);
+    ReadBlueprintNodeBoolField(Payload, TEXT("consume_input"), bConsumeInput);
+    ReadBlueprintNodeBoolField(Payload, TEXT("execute_when_paused"), bExecuteWhenPaused);
+    ReadBlueprintNodeBoolField(Payload, TEXT("override_parent_binding"), bOverrideParentBinding);
     Node->bConsumeInput = bConsumeInput;
     Node->bExecuteWhenPaused = bExecuteWhenPaused;
     Node->bOverrideParentBinding = bOverrideParentBinding;
@@ -284,92 +187,13 @@ static bool ConfigureInputActionNode(UK2Node_InputAction* Node, const TSharedPtr
 static bool ConfigureCustomEventNode(UK2Node_CustomEvent* Node, const TSharedPtr<FJsonObject>& Payload)
 {
     FString EventName;
-    if (!ReadStringFieldOrParam(Payload, TEXT("event_name"), EventName))
+    if (!ReadBlueprintNodeStringField(Payload, TEXT("event_name"), EventName))
     {
-        ReadStringFieldOrParam(Payload, TEXT("name"), EventName);
+        ReadBlueprintNodeStringField(Payload, TEXT("name"), EventName);
     }
     if (!EventName.IsEmpty())
     {
         Node->CustomFunctionName = FName(*EventName);
-    }
-    return true;
-}
-
-bool ValidateBlueprintNodeCreateConfig(UClass* NodeClass, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
-{
-    if (NodeClass->IsChildOf(UK2Node_Variable::StaticClass()))
-    {
-        FString VariableName;
-        if (!ReadVariableNameFieldOrParam(Payload, VariableName))
-        {
-            OutError = TEXT("variable_name is required for K2Node_VariableGet/K2Node_VariableSet");
-            return false;
-        }
-        if (!BlueprintVariableExists(Blueprint, VariableName))
-        {
-            OutError = FString::Printf(TEXT("variable_name not found on Blueprint variables or components: %s"), *VariableName);
-            return false;
-        }
-    }
-    if (NodeClass->IsChildOf(UK2Node_CallFunction::StaticClass()))
-    {
-        FString FunctionName;
-        FString FunctionOwner;
-        if (!ReadStringFieldOrParam(Payload, TEXT("function_name"), FunctionName) || !ReadStringFieldOrParam(Payload, TEXT("function_owner"), FunctionOwner))
-        {
-            OutError = TEXT("function_name and function_owner are required for K2Node_CallFunction");
-            return false;
-        }
-    }
-    if (NodeClass->IsChildOf(UK2Node_InputKey::StaticClass()))
-    {
-        FString KeyName;
-        if (!ReadStringFieldOrParam(Payload, TEXT("input_key"), KeyName))
-        {
-            OutError = TEXT("input_key is required for K2Node_InputKey");
-            return false;
-        }
-    }
-    if (NodeClass->IsChildOf(UK2Node_InputAction::StaticClass()))
-    {
-        FString ActionName;
-        if (!ReadStringFieldOrParam(Payload, TEXT("input_action_name"), ActionName))
-        {
-            OutError = TEXT("input_action_name is required for K2Node_InputAction");
-            return false;
-        }
-    }
-    if (NodeClass->IsChildOf(UK2Node_InputAxisEvent::StaticClass()))
-    {
-        FString AxisName;
-        if (!ReadStringFieldOrParam(Payload, TEXT("axis_name"), AxisName))
-        {
-            OutError = TEXT("axis_name is required for K2Node_InputAxisEvent");
-            return false;
-        }
-    }
-    if (NodeClass == UK2Node_Event::StaticClass())
-    {
-        FString FunctionName;
-        FString FunctionOwner;
-        if (!ReadStringFieldOrParam(Payload, TEXT("function_name"), FunctionName) || !ReadStringFieldOrParam(Payload, TEXT("function_owner"), FunctionOwner))
-        {
-            OutError = TEXT("function_name and function_owner are required for K2Node_Event; use K2Node_CustomEvent with event_name for custom events");
-            return false;
-        }
-
-        UClass* OwnerClass = LoadClass<UObject>(nullptr, *FunctionOwner);
-        if (OwnerClass == nullptr)
-        {
-            OutError = FString::Printf(TEXT("Event owner class not found: %s"), *FunctionOwner);
-            return false;
-        }
-
-        if (OwnerClass->FindFunctionByName(FName(*FunctionName)) == nullptr)
-        {
-            OutError = FString::Printf(TEXT("Event function not found: %s.%s"), *OwnerClass->GetName(), *FunctionName);
-            return false;
-        }
     }
     return true;
 }

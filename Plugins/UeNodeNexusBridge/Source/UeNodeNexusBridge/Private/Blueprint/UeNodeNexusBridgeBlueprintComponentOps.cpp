@@ -1,23 +1,19 @@
 #include "UeNodeNexusBridgeOperations.h"
 
 #include "Components/ActorComponent.h"
-#include "Components/MeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Dom/JsonValue.h"
 #include "Engine/Blueprint.h"
-#include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SimpleConstructionScript.h"
-#include "GameFramework/Actor.h"
 #include "Kismet2/BlueprintEditorUtils.h"
-#include "Materials/MaterialInterface.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
+#include "UeNodeNexusBridgeBlueprintComponentDefaults.h"
+#include "UeNodeNexusBridgeBlueprintComponentHelpers.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeGraphPatchShared.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeObjectHelpers.h"
-#include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
 {
@@ -41,300 +37,6 @@ static TSharedPtr<FJsonObject> MakeBlueprintComponentInvalidParams(const FString
     return MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("operations must be an array"), Details);
 }
 
-static USCS_Node* FindComponentNode(USimpleConstructionScript* Script, const FString& Name)
-{
-    if (Script == nullptr || Name.IsEmpty())
-    {
-        return nullptr;
-    }
-    if (USCS_Node* ExactNode = Script->FindSCSNode(FName(*Name)))
-    {
-        return ExactNode;
-    }
-    for (USCS_Node* Node : Script->GetAllNodes())
-    {
-        if (Node != nullptr && Node->GetVariableName().ToString().Equals(Name, ESearchCase::IgnoreCase))
-        {
-            return Node;
-        }
-    }
-    return nullptr;
-}
-
-static USceneComponent* FindNativeSceneComponent(UBlueprint* Blueprint, const FString& Name)
-{
-    UBlueprintGeneratedClass* GeneratedClass = Blueprint ? Cast<UBlueprintGeneratedClass>(Blueprint->GeneratedClass.Get()) : nullptr;
-    AActor* DefaultActor = GeneratedClass ? Cast<AActor>(GeneratedClass->GetDefaultObject()) : nullptr;
-    if (DefaultActor == nullptr)
-    {
-        return nullptr;
-    }
-    if (Name.Equals(TEXT("RootComponent"), ESearchCase::IgnoreCase))
-    {
-        return DefaultActor->GetRootComponent();
-    }
-    for (TFieldIterator<FObjectProperty> It(GeneratedClass, EFieldIteratorFlags::IncludeSuper); It; ++It)
-    {
-        FObjectProperty* Property = *It;
-        if (Property != nullptr && Property->GetName().Equals(Name, ESearchCase::IgnoreCase))
-        {
-            if (USceneComponent* Component = Cast<USceneComponent>(Property->GetObjectPropertyValue_InContainer(DefaultActor)))
-            {
-                return Component;
-            }
-        }
-    }
-    TInlineComponentArray<USceneComponent*> Components(DefaultActor);
-    for (USceneComponent* Component : Components)
-    {
-        if (Component != nullptr && Component->GetName().Equals(Name, ESearchCase::IgnoreCase))
-        {
-            return Component;
-        }
-    }
-    return nullptr;
-}
-
-static TSharedPtr<FJsonObject> MakeComponentItem(USCS_Node* Node, const FString& ParentName)
-{
-    TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-    Item->SetStringField(TEXT("name"), Node ? Node->GetVariableName().ToString() : FString());
-    Item->SetStringField(TEXT("component_class"), Node && Node->ComponentClass ? Node->ComponentClass->GetPathName() : FString());
-    Item->SetStringField(TEXT("template_path"), Node && Node->ComponentTemplate ? Node->ComponentTemplate->GetPathName() : FString());
-    Item->SetStringField(TEXT("parent"), ParentName);
-    return Item;
-}
-
-static bool TryGetDefaultsObject(const TSharedPtr<FJsonObject>& Op, const TSharedPtr<FJsonObject>*& OutDefaults)
-{
-    if (Op->TryGetObjectField(TEXT("defaults"), OutDefaults) && OutDefaults != nullptr)
-    {
-        return true;
-    }
-    return Op->TryGetObjectField(TEXT("properties"), OutDefaults) && OutDefaults != nullptr;
-}
-
-static bool ReadVectorObject(const TSharedPtr<FJsonObject>& Object, FVector& OutValue)
-{
-    if (!Object.IsValid())
-    {
-        return false;
-    }
-    double X = 0.0;
-    double Y = 0.0;
-    double Z = 0.0;
-    if (!Object->TryGetNumberField(TEXT("x"), X))
-    {
-        Object->TryGetNumberField(TEXT("X"), X);
-    }
-    if (!Object->TryGetNumberField(TEXT("y"), Y))
-    {
-        Object->TryGetNumberField(TEXT("Y"), Y);
-    }
-    if (!Object->TryGetNumberField(TEXT("z"), Z))
-    {
-        Object->TryGetNumberField(TEXT("Z"), Z);
-    }
-    OutValue = FVector(X, Y, Z);
-    return true;
-}
-
-static bool ReadRotatorObject(const TSharedPtr<FJsonObject>& Object, FRotator& OutValue)
-{
-    if (!Object.IsValid())
-    {
-        return false;
-    }
-    double Pitch = 0.0;
-    double Yaw = 0.0;
-    double Roll = 0.0;
-    if (!Object->TryGetNumberField(TEXT("pitch"), Pitch))
-    {
-        Object->TryGetNumberField(TEXT("Pitch"), Pitch);
-    }
-    if (!Object->TryGetNumberField(TEXT("yaw"), Yaw))
-    {
-        Object->TryGetNumberField(TEXT("Yaw"), Yaw);
-    }
-    if (!Object->TryGetNumberField(TEXT("roll"), Roll))
-    {
-        Object->TryGetNumberField(TEXT("Roll"), Roll);
-    }
-    OutValue = FRotator(Pitch, Yaw, Roll);
-    return true;
-}
-
-static TSharedPtr<FJsonValueObject> MakeVectorValue(const FVector& Value)
-{
-    TSharedPtr<FJsonObject> Object = MakeShared<FJsonObject>();
-    Object->SetNumberField(TEXT("x"), Value.X);
-    Object->SetNumberField(TEXT("y"), Value.Y);
-    Object->SetNumberField(TEXT("z"), Value.Z);
-    return MakeShared<FJsonValueObject>(Object);
-}
-
-static TSharedPtr<FJsonValueObject> MakeRotatorValue(const FRotator& Value)
-{
-    TSharedPtr<FJsonObject> Object = MakeShared<FJsonObject>();
-    Object->SetNumberField(TEXT("pitch"), Value.Pitch);
-    Object->SetNumberField(TEXT("yaw"), Value.Yaw);
-    Object->SetNumberField(TEXT("roll"), Value.Roll);
-    return MakeShared<FJsonValueObject>(Object);
-}
-
-static bool ApplyTemplateProperty(UActorComponent* ComponentTemplate, const FName PropertyName, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError)
-{
-    FProperty* Property = FindFProperty<FProperty>(ComponentTemplate->GetClass(), PropertyName);
-    if (Property == nullptr)
-    {
-        OutError = FString::Printf(TEXT("component_property_not_found: %s"), *PropertyName.ToString());
-        return false;
-    }
-    if (!ApplyPropertyJsonValue(ComponentTemplate, Property, Value, OutValueText, OutError))
-    {
-        OutError = FString::Printf(TEXT("component_property_apply_failed: %s (%s)"), *PropertyName.ToString(), *OutError);
-        return false;
-    }
-    return true;
-}
-
-static bool ApplyRelativeTransformDefault(USceneComponent* Component, const TSharedPtr<FJsonValue>& Value, FString& OutError)
-{
-    TSharedPtr<FJsonObject> TransformObject = Value.IsValid() ? Value->AsObject() : nullptr;
-    if (!TransformObject.IsValid())
-    {
-        OutError = TEXT("relative_transform_must_be_object");
-        return false;
-    }
-
-    const TSharedPtr<FJsonObject>* LocationObject = nullptr;
-    if (TransformObject->TryGetObjectField(TEXT("location"), LocationObject) && LocationObject != nullptr)
-    {
-        FVector Location;
-        FString ValueText;
-        if (!ReadVectorObject(*LocationObject, Location) || !ApplyTemplateProperty(Component, TEXT("RelativeLocation"), MakeVectorValue(Location), ValueText, OutError))
-        {
-            return false;
-        }
-    }
-
-    const TSharedPtr<FJsonObject>* RotationObject = nullptr;
-    if (TransformObject->TryGetObjectField(TEXT("rotation"), RotationObject) && RotationObject != nullptr)
-    {
-        FRotator Rotation;
-        FString ValueText;
-        if (!ReadRotatorObject(*RotationObject, Rotation) || !ApplyTemplateProperty(Component, TEXT("RelativeRotation"), MakeRotatorValue(Rotation), ValueText, OutError))
-        {
-            return false;
-        }
-    }
-
-    const TSharedPtr<FJsonObject>* ScaleObject = nullptr;
-    if (TransformObject->TryGetObjectField(TEXT("scale"), ScaleObject) && ScaleObject != nullptr)
-    {
-        FVector Scale;
-        FString ValueText;
-        if (!ReadVectorObject(*ScaleObject, Scale) || !ApplyTemplateProperty(Component, TEXT("RelativeScale3D"), MakeVectorValue(Scale), ValueText, OutError))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-static bool ApplyMaterialDefault(UMeshComponent* MeshComponent, const TSharedPtr<FJsonValue>& Value, const TSharedPtr<FJsonObject>& Defaults, FString& OutError)
-{
-    FString MaterialPath;
-    if (!Value.IsValid() || !Value->TryGetString(MaterialPath))
-    {
-        OutError = TEXT("material_value_must_be_path_string");
-        return false;
-    }
-    UMaterialInterface* Material = MaterialPath.IsEmpty() || MaterialPath.Equals(TEXT("None"), ESearchCase::IgnoreCase) ? nullptr : LoadObject<UMaterialInterface>(nullptr, *MaterialPath);
-    if (Material == nullptr && !MaterialPath.IsEmpty() && !MaterialPath.Equals(TEXT("None"), ESearchCase::IgnoreCase))
-    {
-        OutError = TEXT("material_not_found");
-        return false;
-    }
-    int32 SlotIndex = 0;
-    Defaults->TryGetNumberField(TEXT("material_slot"), SlotIndex);
-    MeshComponent->SetMaterial(SlotIndex, Material);
-    return true;
-}
-
-static bool ApplyComponentDefaults(UActorComponent* ComponentTemplate, const TSharedPtr<FJsonObject>& Defaults, bool bDryRun, TSharedPtr<FJsonObject> Diff, const FString& ComponentName, FString& OutError)
-{
-    if (!Defaults.IsValid())
-    {
-        return true;
-    }
-    if (ComponentTemplate == nullptr && !bDryRun)
-    {
-        OutError = TEXT("component_template_unavailable");
-        return false;
-    }
-
-    TArray<TSharedPtr<FJsonValue>> Applied;
-    for (const TPair<FString, TSharedPtr<FJsonValue>>& Field : Defaults->Values)
-    {
-        const FString& PropertyName = Field.Key;
-        if (PropertyName.Equals(TEXT("material_slot"), ESearchCase::IgnoreCase))
-        {
-            continue;
-        }
-
-        if (bDryRun)
-        {
-            TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-            Item->SetStringField(TEXT("component"), ComponentName);
-            Item->SetStringField(TEXT("property"), PropertyName);
-            AppendDiffItem(Diff, TEXT("component_defaults_set"), Item);
-            continue;
-        }
-
-        FString ValueText;
-        if (PropertyName.Equals(TEXT("RelativeTransform"), ESearchCase::IgnoreCase) || PropertyName.Equals(TEXT("relative_transform"), ESearchCase::IgnoreCase))
-        {
-            USceneComponent* SceneComponent = Cast<USceneComponent>(ComponentTemplate);
-            if (SceneComponent == nullptr || !ApplyRelativeTransformDefault(SceneComponent, Field.Value, OutError))
-            {
-                return false;
-            }
-            ValueText = TEXT("RelativeTransform");
-        }
-        else if (PropertyName.Equals(TEXT("Material"), ESearchCase::IgnoreCase) || PropertyName.Equals(TEXT("material"), ESearchCase::IgnoreCase))
-        {
-            UMeshComponent* MeshComponent = Cast<UMeshComponent>(ComponentTemplate);
-            if (MeshComponent == nullptr || !ApplyMaterialDefault(MeshComponent, Field.Value, Defaults, OutError))
-            {
-                return false;
-            }
-            ValueText = TEXT("Material");
-        }
-        else
-        {
-            if (!ApplyTemplateProperty(ComponentTemplate, FName(*PropertyName), Field.Value, ValueText, OutError))
-            {
-                return false;
-            }
-        }
-
-        TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-        Item->SetStringField(TEXT("component"), ComponentName);
-        Item->SetStringField(TEXT("property"), PropertyName);
-        Item->SetStringField(TEXT("value"), ValueText);
-        Applied.Add(MakeShared<FJsonValueObject>(Item));
-        ComponentTemplate->Modify();
-        ComponentTemplate->PostEditChange();
-    }
-
-    for (const TSharedPtr<FJsonValue>& Item : Applied)
-    {
-        AppendDiffItem(Diff, TEXT("component_defaults_set"), Item->AsObject());
-    }
-    return true;
-}
-
 static bool AddComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Op, bool bDryRun, TSharedPtr<FJsonObject> Diff, FString& OutError)
 {
     FString ComponentClassPath;
@@ -353,13 +55,17 @@ static bool AddComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& O
     FString ParentName;
     Op->TryGetStringField(TEXT("name"), Name);
     Op->TryGetStringField(TEXT("parent"), ParentName);
-    if (Script == nullptr || (!Name.IsEmpty() && FindComponentNode(Script, Name) != nullptr))
+    if (Script == nullptr
+        || (!Name.IsEmpty() && FindBlueprintSCSNode(Script, Name) != nullptr))
     {
         return false;
     }
 
-    USCS_Node* ParentNode = FindComponentNode(Script, ParentName);
-    USceneComponent* NativeParent = ParentNode == nullptr ? FindNativeSceneComponent(Blueprint, ParentName) : nullptr;
+    USCS_Node* ParentNode = FindBlueprintSCSNode(Script, ParentName);
+    USceneComponent* NativeParent =
+        ParentNode == nullptr
+        ? FindNativeBlueprintSceneComponent(Blueprint, ParentName)
+        : nullptr;
     if (!ParentName.IsEmpty() && ParentNode == nullptr && NativeParent == nullptr)
     {
         return false;
@@ -373,9 +79,9 @@ static bool AddComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& O
         Item->SetStringField(TEXT("parent"), ParentName);
         AppendDiffItem(Diff, TEXT("components_added"), Item);
         const TSharedPtr<FJsonObject>* Defaults = nullptr;
-        if (TryGetDefaultsObject(Op, Defaults))
+        if (TryGetComponentDefaultsObject(Op, Defaults))
         {
-            ApplyComponentDefaults(nullptr, *Defaults, true, Diff, Name, OutError);
+            ApplyBlueprintComponentDefaults(nullptr, *Defaults, true, Diff, Name, OutError);
         }
         return true;
     }
@@ -399,12 +105,22 @@ static bool AddComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& O
         Script->AddNode(NewNode);
     }
     const TSharedPtr<FJsonObject>* Defaults = nullptr;
-    if (TryGetDefaultsObject(Op, Defaults) && !ApplyComponentDefaults(NewNode->ComponentTemplate, *Defaults, false, Diff, NewNode->GetVariableName().ToString(), OutError))
+    if (TryGetComponentDefaultsObject(Op, Defaults)
+        && !ApplyBlueprintComponentDefaults(
+            NewNode->ComponentTemplate,
+            *Defaults,
+            false,
+            Diff,
+            NewNode->GetVariableName().ToString(),
+            OutError))
     {
         Script->RemoveNodeAndPromoteChildren(NewNode);
         return false;
     }
-    AppendDiffItem(Diff, TEXT("components_added"), MakeComponentItem(NewNode, ParentName));
+    AppendDiffItem(
+        Diff,
+        TEXT("components_added"),
+        MakeBlueprintComponentItem(NewNode, ParentName));
     return true;
 }
 
@@ -412,12 +128,17 @@ static bool RemoveComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>
 {
     FString Name;
     USimpleConstructionScript* Script = Blueprint ? Blueprint->SimpleConstructionScript : nullptr;
-    USCS_Node* Node = Op->TryGetStringField(TEXT("name"), Name) ? FindComponentNode(Script, Name) : nullptr;
+    USCS_Node* Node = Op->TryGetStringField(TEXT("name"), Name)
+        ? FindBlueprintSCSNode(Script, Name)
+        : nullptr;
     if (Node == nullptr)
     {
         return false;
     }
-    AppendDiffItem(Diff, TEXT("components_removed"), MakeComponentItem(Node, Node->ParentComponentOrVariableName.ToString()));
+    AppendDiffItem(
+        Diff,
+        TEXT("components_removed"),
+        MakeBlueprintComponentItem(Node, Node->ParentComponentOrVariableName.ToString()));
     if (!bDryRun)
     {
         Script->RemoveNodeAndPromoteChildren(Node);
@@ -429,7 +150,9 @@ static bool SetComponentDefaults(UBlueprint* Blueprint, const TSharedPtr<FJsonOb
 {
     FString Name;
     USimpleConstructionScript* Script = Blueprint ? Blueprint->SimpleConstructionScript : nullptr;
-    USCS_Node* Node = Op->TryGetStringField(TEXT("name"), Name) ? FindComponentNode(Script, Name) : nullptr;
+    USCS_Node* Node = Op->TryGetStringField(TEXT("name"), Name)
+        ? FindBlueprintSCSNode(Script, Name)
+        : nullptr;
     if (Node == nullptr)
     {
         OutError = FString::Printf(TEXT("component_not_found: %s"), *Name);
@@ -437,13 +160,19 @@ static bool SetComponentDefaults(UBlueprint* Blueprint, const TSharedPtr<FJsonOb
     }
 
     const TSharedPtr<FJsonObject>* Defaults = nullptr;
-    if (!TryGetDefaultsObject(Op, Defaults))
+    if (!TryGetComponentDefaultsObject(Op, Defaults))
     {
         OutError = TEXT("defaults object is required for set_component_defaults");
         return false;
     }
 
-    return ApplyComponentDefaults(Node->ComponentTemplate, *Defaults, bDryRun, Diff, Name, OutError);
+    return ApplyBlueprintComponentDefaults(
+        Node->ComponentTemplate,
+        *Defaults,
+        bDryRun,
+        Diff,
+        Name,
+        OutError);
 }
 
 static bool ApplyComponentOperation(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Op, bool bDryRun, TSharedPtr<FJsonObject> Diff, FString& OutError)
