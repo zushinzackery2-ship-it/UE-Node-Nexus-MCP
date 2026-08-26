@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .diagnostic_counting import count_diagnostic_errors, count_diagnostic_warnings
 from .facade_state import StoredDiff, facade_state
 from .runtime import response_mode
 
@@ -30,18 +31,8 @@ def with_optional_remaining_errors(result: dict[str, Any], response: dict[str, A
 def diagnostic_counts(response: dict[str, Any]) -> dict[str, int]:
     diagnostics = response.get("diagnostics")
     warnings = response.get("warnings")
-    error_count = 0
-    warning_count = 0
-
-    if isinstance(diagnostics, list):
-        for item in diagnostics:
-            if not isinstance(item, dict):
-                continue
-            severity = str(item.get("severity", "")).lower()
-            if severity in {"error", "fatal"}:
-                error_count += 1
-            elif severity == "warning":
-                warning_count += 1
+    error_count = count_diagnostic_errors(diagnostics)
+    warning_count = count_diagnostic_warnings(diagnostics)
     if isinstance(warnings, list):
         warning_count += len(warnings)
 

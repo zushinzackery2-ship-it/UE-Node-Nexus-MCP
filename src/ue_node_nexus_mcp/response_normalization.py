@@ -2,25 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-
-def _coerce_error_count(value: Any) -> int:
-    try:
-        return max(0, int(value))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _count_diagnostic_errors(items: Any) -> int:
-    if not isinstance(items, list):
-        return 0
-    total = 0
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        severity = str(item.get("severity", "")).strip().lower()
-        if severity in {"error", "fatal"}:
-            total += 1
-    return total
+from .diagnostic_counting import coerce_error_count, count_diagnostic_errors
 
 
 def _compile_post_check_is_clean(data: dict[str, Any]) -> bool:
@@ -30,7 +12,7 @@ def _compile_post_check_is_clean(data: dict[str, Any]) -> bool:
     compile_check = post_checks.get("compile")
     if not isinstance(compile_check, dict):
         return True
-    return _coerce_error_count(compile_check.get("error_count")) == 0
+    return coerce_error_count(compile_check.get("error_count")) == 0
 
 
 def _is_only_material_attribute_mode_pin_warning(response: dict[str, Any]) -> bool:
@@ -38,7 +20,7 @@ def _is_only_material_attribute_mode_pin_warning(response: dict[str, Any]) -> bo
         return False
     if isinstance(response.get("error"), dict):
         return False
-    if _count_diagnostic_errors(response.get("diagnostics")) > 0:
+    if count_diagnostic_errors(response.get("diagnostics")) > 0:
         return False
 
     data = response.get("data")
