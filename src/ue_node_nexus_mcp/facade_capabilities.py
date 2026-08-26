@@ -24,6 +24,8 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
     specs = enabled_operation_specs(features)
     groups: dict[str, int] = {}
     for spec in specs.values():
+        if spec.hidden:
+            continue
         groups[spec.group] = groups.get(spec.group, 0) + 1
     try:
         available_instances = instance_manager.list_instances()
@@ -52,8 +54,14 @@ def ue_capability_get(
     group: str | None = None,
     operation: str | None = None,
     detail: Literal["index", "schema", "examples", "full"] = "index",
+    include_hidden: bool = False,
 ) -> dict[str, Any]:
-    """Return thin facade operation index or one internal operation schema."""
+    """Return thin facade operation index or one internal operation schema.
+
+    High-risk compatibility operations flagged ``hidden`` in the manifest are
+    omitted from the index listing unless ``include_hidden`` is set; querying
+    one by name always works.
+    """
     features = enabled_features()
     if group is not None and group not in features:
         return minimal_error("feature_disabled", f"feature group is not enabled: {group}", {"group": group})
@@ -94,6 +102,6 @@ def ue_capability_get(
         "data": {
             "group": group,
             "detail": "index",
-            "operations": capability_index(features, group),
+            "operations": capability_index(features, group, include_hidden=include_hidden),
         },
     }

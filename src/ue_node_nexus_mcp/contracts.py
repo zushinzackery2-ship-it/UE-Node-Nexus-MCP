@@ -6,6 +6,9 @@ from typing import Any
 
 _OPERATIONS_MANIFEST = Path(__file__).with_name("operations.json")
 
+_VALID_RISKS = {"low", "medium", "high"}
+_VALID_DEFAULT_RESPONSES = {"summary", "delta", "full"}
+
 
 def _load_operation_records() -> list[dict[str, Any]]:
     with _OPERATIONS_MANIFEST.open(encoding="utf-8") as handle:
@@ -18,11 +21,23 @@ def _load_operation_records() -> list[dict[str, Any]]:
             raise ValueError(f"duplicate operation in manifest: {name}")
         if record["kind"] not in {"read", "write"}:
             raise ValueError(f"operation {name} has invalid kind: {record['kind']}")
+        if record["risk"] not in _VALID_RISKS:
+            raise ValueError(f"operation {name} has invalid risk: {record['risk']}")
+        if record["default_response"] not in _VALID_DEFAULT_RESPONSES:
+            raise ValueError(f"operation {name} has invalid default_response: {record['default_response']}")
+        summary = record["summary"]
+        if not isinstance(summary, str) or not summary.strip():
+            raise ValueError(f"operation {name} has an empty summary")
         seen.add(name)
     return records
 
 
 _OPERATION_RECORDS = _load_operation_records()
+
+
+def operation_records() -> list[dict[str, Any]]:
+    """Return the raw manifest records (the single source of operation metadata)."""
+    return list(_OPERATION_RECORDS)
 
 READ_OPERATIONS = {record["name"] for record in _OPERATION_RECORDS if record["kind"] == "read"}
 WRITE_OPERATIONS = {record["name"] for record in _OPERATION_RECORDS if record["kind"] == "write"}
@@ -49,14 +64,6 @@ OPERATION_FEATURES = {record["name"]: record["group"] for record in _OPERATION_R
 FEATURE_GROUPS = set(OPERATION_FEATURES.values())
 
 DEFAULT_FEATURE_GROUPS = set(FEATURE_GROUPS)
-
-DEFAULT_EXPOSED_OPERATIONS = {
-    operation
-    for operation in ALL_OPERATIONS - DEFAULT_HIDDEN_OPERATIONS
-    if OPERATION_FEATURES[operation] in DEFAULT_FEATURE_GROUPS
-}
-
-THIN_EXPOSED_OPERATIONS = set(THIN_MCP_OPERATIONS)
 
 
 def require_non_empty_string(value: str, field_name: str) -> None:
