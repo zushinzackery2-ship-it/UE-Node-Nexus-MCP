@@ -179,26 +179,37 @@ def editor_request_exit(
     )
 
 
+def execute_diagnostics_get(payload: dict[str, Any]) -> dict[str, Any]:
+    """Facade entrypoint for diagnostics_get.
+
+    Forwards the payload to the bridge unchanged, then enriches ok responses
+    with recent material compile entries parsed from the UE project log
+    (``data.related_log_items``).
+    """
+    response = _call("diagnostics_get", payload)
+    if response.get("ok") is not True:
+        return response
+
+    project_context = _call("project_context_get", {})
+    asset_path = payload.get("asset_path")
+    severity = payload.get("severity", "all")
+    return enrich_with_material_log_diagnostics(
+        response,
+        project_context,
+        asset_path=asset_path if isinstance(asset_path, str) else None,
+        severity=severity if isinstance(severity, str) else "all",
+    )
+
+
 @default_tool()
 def diagnostics_get(
     asset_path: str | None = None,
     severity: Literal["info", "warning", "error", "all"] = "all",
 ) -> dict[str, Any]:
     """Return UE message-log and asset compile diagnostics, optionally filtered by asset and severity."""
-    response = _call(
-        "diagnostics_get",
+    return execute_diagnostics_get(
         {
             "asset_path": asset_path,
             "severity": severity,
-        },
-    )
-    if response.get("ok") is not True:
-        return response
-
-    project_context = _call("project_context_get", {})
-    return enrich_with_material_log_diagnostics(
-        response,
-        project_context,
-        asset_path=asset_path,
-        severity=severity,
+        }
     )

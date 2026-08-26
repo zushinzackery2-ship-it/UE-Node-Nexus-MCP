@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .contracts import require_mapping, require_non_empty_string
+from .contracts import require_non_empty_string
 from .facade_auto_read import execute_auto_read
 from .facade_execute import (
-    VALID_RESPONSE_MODES,
+    EXECUTE_RESPONSE_MODES,
     execute_operation,
     preflight_execute_request,
 )
@@ -37,10 +37,13 @@ def ue_execute(
     response: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute one internal operation through the thin facade and return summary/delta by default."""
-    require_non_empty_string(operation, "operation")
-    require_mapping(payload, "payload")
+    if not isinstance(operation, str) or not operation.strip():
+        return minimal_error("invalid_request", "operation must be a non-empty string", {"operation": operation})
+    if not isinstance(payload, dict):
+        return minimal_error("invalid_request", "payload must be an object", {"operation": operation})
     response_options = response or {}
-    require_mapping(response_options, "response")
+    if not isinstance(response_options, dict):
+        return minimal_error("invalid_request", "response must be an object", {"operation": operation})
     response_error = _validate_response_options(response_options)
     if response_error is not None:
         return response_error
@@ -51,7 +54,7 @@ def ue_execute(
     if spec.group not in enabled_features():
         return minimal_error("feature_disabled", f"feature group is not enabled: {spec.group}", {"operation": operation})
     mode = str(response_options.get("mode", spec.default_response))
-    if mode not in VALID_RESPONSE_MODES:
+    if mode not in EXECUTE_RESPONSE_MODES:
         return minimal_error("invalid_response_mode", f"unsupported response mode: {mode}", {"mode": mode})
     preflight_response = preflight_execute_request(operation, payload, response_options)
     if preflight_response is not None:
@@ -71,16 +74,15 @@ def ue_read(
     format: Literal["summary", "index", "detail", "debug"] = "summary",
 ) -> dict[str, Any]:
     """Read common UE state through one thin facade entrypoint."""
-    require_non_empty_string(target, "target")
-    if query is not None:
-        try:
-            require_mapping(query, "query")
-        except ValueError as exc:
-            return minimal_error("invalid_query", str(exc), {"target": target})
+    if not isinstance(target, str) or not target.strip():
+        return minimal_error("invalid_request", "target must be a non-empty string", {"target": target})
+    if query is not None and not isinstance(query, dict):
+        return minimal_error("invalid_query", "query must be an object", {"target": target})
     query_payload = dict(query or {})
     if target == "artifact":
         artifact_id = str(query_payload.get("artifact_id", ""))
-        require_non_empty_string(artifact_id, "artifact_id")
+        if not artifact_id.strip():
+            return minimal_error("invalid_request", "artifact_id must be a non-empty string", {"target": target})
         artifact = facade_state.get_artifact(artifact_id)
         if artifact is None:
             return minimal_error("token_expired", "artifact was not found or expired", {"artifact_id": artifact_id})
@@ -162,24 +164,37 @@ def ue_diff_get(
     asset_path: str | None = None,
     since_token: str | None = None,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Return compact changes stored by a previous thin facade read or execute call."""
-    require_non_empty_string(since_token or "", "since_token")
-    if not isinstance(limit, int) or limit < 1:
+    """Return compact changes stored by a previous thin facade read or execute call.
+
+    ``scope`` and ``asset_path`` label the query and are echoed back; the diff
+    itself is always the one recorded under ``since_token``. Pass a returned
+    ``next_cursor`` back as ``cursor`` to page through truncated change lists.
+    """
+    if not isinstance(since_token, str) or not since_token.strip():
+        return minimal_error("invalid_request", "since_token must be a non-empty string", {"since_token": since_token})
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
         return minimal_error("invalid_limit", "limit must be a positive integer", {"limit": limit})
-    diff = facade_state.get_diff(str(since_token))
+    offset = 0
+    if cursor is not None:
+        if not isinstance(cursor, str) or not cursor.isdigit():
+            return minimal_error("invalid_cursor", "cursor must be a next_cursor value from a previous call", {"cursor": cursor})
+        offset = int(cursor)
+    diff = facade_state.get_diff(since_token)
     if diff is None:
         return minimal_error("token_expired", "diff token was not found or expired", {"since_token": since_token})
     changes = diff_changes(diff)
-    truncated = len(changes) > limit
+    window = changes[offset:offset + limit]
+    truncated = offset + limit < len(changes)
     data = {
         "scope": scope,
         "asset_path": asset_path,
         "since_token": since_token,
         "current_token": diff.diff_token,
-        "changes": changes[:limit],
+        "changes": window,
         "diagnostics": diagnostic_counts(diff.response),
         "truncated": truncated,
-        "next_cursor": str(limit) if truncated else None,
+        "next_cursor": str(offset + limit) if truncated else None,
     }
     return {"ok": True, "data": data}

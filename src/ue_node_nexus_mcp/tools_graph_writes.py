@@ -99,14 +99,13 @@ def _replace_client_references(operation: dict[str, Any], id_map: dict[str, str]
 
 
 def _expand_material_client_ids(
-    asset_path: str,
+    payload: dict[str, Any],
     operations: list[dict[str, Any]],
-    graph_name: str | None,
     graph_kind: str,
-    dry_run: bool,
-    compile_after: bool,
-    format: str,
 ) -> dict[str, Any]:
+    asset_path = str(payload["asset_path"])
+    graph_name = payload.get("graph_name")
+    dry_run = bool(payload.get("dry_run", True))
     referenced = _referenced_created_client_ids(operations)
     if dry_run:
         return _client_error(
@@ -153,18 +152,14 @@ def _expand_material_client_ids(
             }
         )
 
-    response = _call(
-        "graph_patch_apply",
-        {
-            "asset_path": asset_path,
-            "operations": remaining_operations,
-            "graph_name": graph_name,
-            "graph_kind": graph_kind,
-            "dry_run": False,
-            "compile_after": compile_after,
-            "format": format,
-        },
-    )
+    final_payload = dict(payload)
+    final_payload["operations"] = remaining_operations
+    final_payload["graph_kind"] = graph_kind
+    final_payload["dry_run"] = False
+    final_payload.setdefault("graph_name", None)
+    final_payload.setdefault("compile_after", True)
+    final_payload.setdefault("format", "compact")
+    response = _call("graph_patch_apply", final_payload)
     data = response.get("data")
     if isinstance(data, dict):
         data["client_side_expansion"] = {
@@ -179,6 +174,23 @@ def _expand_material_client_ids(
     return response
 
 
+def execute_graph_patch_apply(payload: dict[str, Any]) -> dict[str, Any]:
+    """Facade entrypoint for graph_patch_apply.
+
+    Runs the Python-side material create_node client_id expansion when a
+    same-batch client_id is referenced (UE cannot resolve those for material
+    graphs in dry-run); otherwise forwards the payload to the bridge unchanged
+    so bridge-only fields keep passing through.
+    """
+    require_non_empty_string(payload.get("asset_path"), "asset_path")  # type: ignore[arg-type]
+    operations = payload.get("operations")
+    require_list(operations, "operations")  # type: ignore[arg-type]
+    graph_kind = payload.get("graph_kind") or "auto"
+    if isinstance(graph_kind, str) and _needs_material_client_id_expansion(graph_kind, operations or []):
+        return _expand_material_client_ids(payload, operations or [], graph_kind)
+    return _call("graph_patch_apply", payload)
+
+
 @default_tool()
 def graph_patch_apply(
     asset_path: str,
@@ -190,20 +202,7 @@ def graph_patch_apply(
     format: Literal["compact", "full"] = "compact",
 ) -> dict[str, Any]:
     """Apply a declarative graph patch, then return pin integrity and compile diagnostics."""
-    require_non_empty_string(asset_path, "asset_path")
-    require_list(operations, "operations")
-    if _needs_material_client_id_expansion(graph_kind, operations):
-        return _expand_material_client_ids(
-            asset_path,
-            operations,
-            graph_name,
-            graph_kind,
-            dry_run,
-            compile_after,
-            format,
-        )
-    return _call(
-        "graph_patch_apply",
+    return execute_graph_patch_apply(
         {
             "asset_path": asset_path,
             "operations": operations,
@@ -212,7 +211,7 @@ def graph_patch_apply(
             "dry_run": dry_run,
             "compile_after": compile_after,
             "format": format,
-        },
+        }
     )
 
 

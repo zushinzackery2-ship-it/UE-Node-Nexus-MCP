@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from .contracts import BRIDGE_OPERATIONS
 from .operation_registry import get_operation_spec
 from .runtime import call_bridge as _call
 
-VALID_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full", "debug"}
+EXECUTE_RESPONSE_MODES = {"silent", "brief", "ids_only", "delta", "summary", "full", "debug"}
 
 
 def execute_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -15,7 +15,33 @@ def execute_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]
         return execute_local_operation(operation, payload)
     if operation not in BRIDGE_OPERATIONS:
         raise ValueError(f"operation is not a bridge operation: {operation}")
+    handler = _client_side_handler(operation)
+    if handler is not None:
+        return handler(payload)
     return _call(operation, payload)
+
+
+def _client_side_handler(operation: str) -> Callable[[dict[str, Any]], dict[str, Any]] | None:
+    """Bridge operations that carry Python-side behavior on top of the raw call.
+
+    This dispatch table is the single place that guarantees client-side logic
+    (material client_id expansion, diagnostics log enrichment, Niagara verbose
+    field trimming) actually runs on the live ue_execute/ue_read path instead
+    of only inside unregistered legacy wrappers.
+    """
+    if operation == "graph_patch_apply":
+        from .tools_graph_writes import execute_graph_patch_apply
+
+        return execute_graph_patch_apply
+    if operation == "diagnostics_get":
+        from .tools_system import execute_diagnostics_get
+
+        return execute_diagnostics_get
+    if operation.startswith("niagara_"):
+        from .tools_niagara_common import call_niagara_trimmed
+
+        return lambda call_payload: call_niagara_trimmed(operation, call_payload)
+    return None
 
 
 def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
