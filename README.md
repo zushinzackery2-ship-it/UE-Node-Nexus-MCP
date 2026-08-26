@@ -162,7 +162,7 @@ MCP 公开面固定为 6 个 facade 工具，用少量入口承载完整 UE oper
 | **`ue_diff_get()`** | 按 diff token 读取 compact changes 和诊断计数 |
 | **`ue_plan_validate()`** | 验证一批 operation 的风险、错误和预计变更，不写 UE 状态 |
 
-Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 99 个 operation，并保留 group、read/write、risk、bridge/local、hidden、默认响应粒度等元数据。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`，超过 inline 阈值的大响应会自动存为 artifact handle。`ue_execute.response` 只接受 `mode` 和 `allow_heavy`；`response.format="full"` 会被拒绝并提示改用 `response.mode="full"`，读取格式应放在 operation payload 的 `format` 或 `ue_read(format="detail")`。
+Facade 不删除现有能力，也不新增任意 Python 或反射写入入口。内部 operation registry 覆盖现有 100 个 operation，全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `operations.json`。标记为 `hidden` 的高危兼容 operation（如 `editor_save_all`、`editor_request_exit`）默认不出现在 `ue_capability_get` 索引中，需 `include_hidden=true` 列出；按名称查询 schema 与通过 `ue_execute` 执行不受影响。写 operation 默认 `delta`，读 operation 默认 `summary`；完整 bridge envelope 需要显式 `response.mode="full"` 或 `debug`，超过 inline 阈值的大响应会自动存为 artifact handle。`ue_execute.response` 只接受 `mode` 和 `allow_heavy`；`response.format="full"` 会被拒绝并提示改用 `response.mode="full"`，读取格式应放在 operation payload 的 `format` 或 `ue_read(format="detail")`。
 
 常见资产读取可以走自动入口：
 

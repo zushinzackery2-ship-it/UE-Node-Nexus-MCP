@@ -8,7 +8,7 @@ description: Operate and diagnose the UE Node Nexus MCP bridge for Unreal Editor
 Live MCP results are the source of truth. Judge runtime behavior before trusting source comments or stale docs. Discover exact param schemas at runtime; use the Read cheatsheet below to pick the right operation instead of guessing by name.
 
 ## Public surface
-Fixed at 6 facade tools: `ue_context_get`, `ue_capability_get`, `ue_execute`, `ue_read`, `ue_diff_get`, `ue_plan_validate`. Low-level operations never appear in `list_tools`: discover them with `ue_capability_get`, run them through `ue_execute`, read common state through `ue_read`.
+Fixed at 6 facade tools: `ue_context_get`, `ue_capability_get`, `ue_execute`, `ue_read`, `ue_diff_get`, `ue_plan_validate`. Low-level operations never appear in `list_tools`: discover them with `ue_capability_get`, run them through `ue_execute`, read common state through `ue_read`. High-risk compatibility ops flagged `hidden` (e.g. `editor_save_all`, `editor_request_exit`, `auto_index_clear`) are omitted from the `ue_capability_get` index unless `include_hidden=true`; querying one by name and executing it still works. `ue_diff_get` pages truncated change lists: pass the returned `next_cursor` back as `cursor`.
 
 > If an operation named in this skill is missing from `ue_capability_get`, your MCP **server process is running stale code** — reinstall the plugin's `MCPServer` Python and restart the MCP client. The bridge plugin (UE editor) and the Python server must BOTH be current; updating one without restarting the other is the most common "feature X doesn't work" cause.
 

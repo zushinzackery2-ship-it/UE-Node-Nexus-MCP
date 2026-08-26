@@ -12,12 +12,10 @@ refApic/
 /Resources/
 scripts/
 *.egg-info/
-Task-Status.md
 Laffey.ico
 
 # Internal development material kept local only
 .clangd
-tests/
 docs/
 build_current_ue55.bat
 
