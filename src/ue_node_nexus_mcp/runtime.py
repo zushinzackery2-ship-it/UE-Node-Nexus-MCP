@@ -11,7 +11,9 @@ except ModuleNotFoundError:  # MCP 2.x renamed FastMCP to MCPServer.
 
 from .bridge import BridgeError, UeBridgeClient
 from .contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
+from .diagnostic_counting import coerce_error_count, count_diagnostic_errors
 from .features import consume_feature_args, read_feature_env, resolve_enabled_features
+from .instance import instance_manager
 from .profiles import (
     DEFAULT_RESPONSE_MODE,
     consume_profile_args,
@@ -24,10 +26,17 @@ bridge = UeBridgeClient()
 _enabled_features = None
 _response_mode = None
 _profile_args_consumed = False
+_cli_feature_args: tuple[set[str] | None, set[str], set[str], bool | None] | None = None
 _CAPABILITY_PROBE_TIMEOUT_SECONDS = 1.0
 
 
-def _bridge_vfx_available() -> bool:
+def _bridge_vfx_available() -> bool | None:
+    """Probe the bound editor for VFX module availability.
+
+    Returns True/False for a definitive editor answer, or None when the probe
+    was inconclusive (no editor reachable yet); inconclusive results must not
+    be cached so a later-started editor can still enable the vfx group.
+    """
     try:
         response = bridge.call(
             "bridge_capabilities_get",
@@ -35,7 +44,7 @@ def _bridge_vfx_available() -> bool:
             timeout_seconds=_CAPABILITY_PROBE_TIMEOUT_SECONDS,
         )
     except (BridgeError, OSError, TimeoutError, ValueError):
-        return False
+        return None
 
     data = response.get("data")
     if not isinstance(data, dict):
@@ -46,11 +55,26 @@ def _bridge_vfx_available() -> bool:
     return modules.get("vfx_available") is True
 
 
-def _read_enabled_features() -> set[str]:
-    explicit_features, enable_features, disable_features, vfx_support = read_feature_env(dict(os.environ))
-    arg_features, arg_enable, arg_disable, arg_vfx, remaining = consume_feature_args(sys.argv)
-    sys.argv[:] = remaining
+def consume_cli_arguments() -> None:
+    """Parse and remove this server's CLI arguments from sys.argv.
+
+    Called eagerly from ``server.main()`` so argv handling happens at startup;
+    lazy callers (tests, direct imports) hit the same idempotent path on first
+    feature/profile access.
+    """
+    global _cli_feature_args
     _ensure_profile_args_consumed()
+    if _cli_feature_args is None:
+        arg_features, arg_enable, arg_disable, arg_vfx, remaining = consume_feature_args(sys.argv)
+        sys.argv[:] = remaining
+        _cli_feature_args = (arg_features, arg_enable, arg_disable, arg_vfx)
+
+
+def _read_enabled_features() -> tuple[set[str], bool]:
+    """Resolve the enabled feature groups and whether the result is cacheable."""
+    explicit_features, enable_features, disable_features, vfx_support = read_feature_env(dict(os.environ))
+    consume_cli_arguments()
+    arg_features, arg_enable, arg_disable, arg_vfx = _cli_feature_args or (None, set(), set(), None)
     if arg_features is not None:
         explicit_features = arg_features
     enable_features |= arg_enable
@@ -59,9 +83,15 @@ def _read_enabled_features() -> set[str]:
         vfx_support = arg_vfx
 
     features = resolve_enabled_features(explicit_features, enable_features, disable_features, vfx_support)
-    if "vfx" in features and not _bridge_vfx_available():
-        features.discard("vfx")
-    return features
+    cacheable = True
+    if "vfx" in features:
+        vfx_available = _bridge_vfx_available()
+        if vfx_available is None:
+            features.discard("vfx")
+            cacheable = False
+        elif not vfx_available:
+            features.discard("vfx")
+    return features, cacheable
 
 
 def _set_cli_profile_args(response_mode: str | None) -> None:
@@ -82,15 +112,18 @@ def _ensure_profile_args_consumed() -> None:
 
 def enabled_features() -> set[str]:
     global _enabled_features
-    if _enabled_features is None:
-        _enabled_features = _read_enabled_features()
-    return set(_enabled_features)
+    if _enabled_features is not None:
+        return set(_enabled_features)
+    features, cacheable = _read_enabled_features()
+    if cacheable:
+        _enabled_features = features
+    return set(features)
 
 
 def reset_feature_cache() -> None:
     """Drop cached feature gating so it is recomputed against the active editor
-    instance. Called when the selected instance changes (different editors may
-    have different module availability, e.g. niagara)."""
+    instance. Called when the session binds to a (new) editor instance, since
+    different editors may have different module availability (e.g. niagara)."""
     global _enabled_features
     _enabled_features = None
 
@@ -152,26 +185,6 @@ def hidden_tool(feature: str | None = None):
     return decorator
 
 
-def _coerce_error_count(value: Any) -> int:
-    try:
-        return max(0, int(value))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _count_diagnostic_errors(items: Any) -> int:
-    if not isinstance(items, list):
-        return 0
-    total = 0
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        severity = str(item.get("severity", "")).strip().lower()
-        if severity in {"error", "fatal"}:
-            total += 1
-    return total
-
-
 def _max_nested_error_count(value: Any) -> int:
     if isinstance(value, list):
         maximum = 0
@@ -184,7 +197,7 @@ def _max_nested_error_count(value: Any) -> int:
     maximum = 0
     for key, child in value.items():
         if key == "error_count":
-            maximum = max(maximum, _coerce_error_count(child))
+            maximum = max(maximum, coerce_error_count(child))
             continue
         maximum = max(maximum, _max_nested_error_count(child))
     return maximum
@@ -206,7 +219,7 @@ def _strip_nested_remaining_errors(value: Any) -> None:
 
 
 def _count_response_errors(response: dict[str, Any]) -> int:
-    diagnostic_total = _count_diagnostic_errors(response.get("diagnostics"))
+    diagnostic_total = count_diagnostic_errors(response.get("diagnostics"))
     nested_total = _max_nested_error_count(response.get("data"))
     total = max(diagnostic_total, nested_total)
     if response.get("ok") is False and total == 0 and isinstance(response.get("error"), dict):
@@ -221,14 +234,10 @@ def _payload_asset_path(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _should_include_remaining_errors(operation: str, payload: dict[str, Any], response: dict[str, Any]) -> bool:
-    return _payload_asset_path(payload) is not None
-
-
 def _with_remaining_errors(operation: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
     response.pop("remaining_errors", None)
     _strip_nested_remaining_errors(response)
-    if _should_include_remaining_errors(operation, payload, response):
+    if _payload_asset_path(payload) is not None:
         response["remaining_errors"] = _count_response_errors(response)
     return response
 
@@ -248,3 +257,8 @@ def call_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
             "diagnostics": [],
             "warnings": [],
         })
+
+
+# Feature gating is per-editor; recompute it whenever the session (re)binds to
+# an instance. Injected as a callback so instance.py never imports runtime.
+instance_manager.set_on_bind_changed(reset_feature_cache)

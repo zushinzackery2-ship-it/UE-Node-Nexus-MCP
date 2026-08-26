@@ -31,6 +31,18 @@ class InstanceManager:
         self._transport = transport or named_pipe_transport
         self._active_target: str | None = None
         self._selection_mode: str | None = None   # "auto" | "explicit" | None
+        self._on_bind_changed: Any | None = None
+
+    def set_on_bind_changed(self, callback: Any) -> None:
+        """Register a callback fired whenever the session binds to an instance.
+
+        Injected by the runtime module (to reset per-editor feature gating)
+        so this module never has to import runtime and close a cycle."""
+        self._on_bind_changed = callback
+
+    def _notify_bind_changed(self) -> None:
+        if self._on_bind_changed is not None:
+            self._on_bind_changed()
 
     def reset(self) -> None:
         self._active_target = None
@@ -73,6 +85,7 @@ class InstanceManager:
             ((_pid, name),) = live.items()
             self._active_target = name
             self._selection_mode = "auto"
+            self._notify_bind_changed()
             return name
         raise BridgeError(
             f"multiple UE instances found (pids {sorted(live)}); "
@@ -122,12 +135,7 @@ class InstanceManager:
         self._active_target = make_pipe_name(chosen["pid"])
         self._selection_mode = "explicit"
         chosen["active"] = True
-
-        # Feature gating (e.g. niagara availability) is per-editor; recompute it
-        # against the newly-bound instance. Lazy import avoids an import cycle.
-        from . import runtime
-
-        runtime.reset_feature_cache()
+        self._notify_bind_changed()
         return chosen
 
 

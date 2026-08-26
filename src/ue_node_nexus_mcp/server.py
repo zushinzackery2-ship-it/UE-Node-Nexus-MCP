@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .facade_capabilities import ue_capability_get, ue_context_get
 from .facade_plan import ue_plan_validate
-from .runtime import mcp
+from .runtime import consume_cli_arguments, mcp
 from .tools_facade import ue_diff_get, ue_execute, ue_read
 
 __all__ = [
@@ -17,6 +17,7 @@ __all__ = [
 
 
 def main() -> None:
+    consume_cli_arguments()
     mcp.run()
 
 
