@@ -8,7 +8,7 @@ from .contracts import (
     OPERATION_FEATURES,
     require_non_empty_string,
 )
-from .diagnostics_logs import enrich_with_material_log_diagnostics
+from .diagnostics_logs import enrich_with_material_log_diagnostics, read_latest_project_log
 from .errors import BridgeError
 from .instance import instance_manager
 from .runtime import call_bridge as _call
@@ -19,6 +19,59 @@ from .runtime import default_tool, enabled_features, hidden_tool
 def bridge_capabilities_get() -> dict[str, Any]:
     """Return operations actually supported by the loaded Unreal bridge modules."""
     return _call("bridge_capabilities_get", {})
+
+
+@default_tool()
+def log_tail_get(
+    tail_kb: int = 64,
+    match: str | None = None,
+    max_lines: int = 200,
+) -> dict[str, Any]:
+    """MCP-local read of the newest UE project log tail, optionally filtered by substring."""
+    if not isinstance(tail_kb, int) or isinstance(tail_kb, bool) or not 1 <= tail_kb <= 1024:
+        raise ValueError("tail_kb must be an integer between 1 and 1024")
+    if not isinstance(max_lines, int) or isinstance(max_lines, bool) or not 1 <= max_lines <= 2000:
+        raise ValueError("max_lines must be an integer between 1 and 2000")
+    if match is not None and (not isinstance(match, str) or not match.strip()):
+        raise ValueError("match must be a non-empty string")
+
+    project_context = _call("project_context_get", {})
+    if project_context.get("ok") is not True:
+        return project_context
+    log_text, log_path = read_latest_project_log(project_context, tail_bytes=tail_kb * 1024)
+    if log_path is None:
+        return {
+            "ok": False,
+            "operation": "log_tail_get",
+            "error": {"code": "log_not_found", "message": "No project log file could be located", "details": {}},
+            "diagnostics": [],
+            "warnings": [],
+        }
+
+    lines = log_text.splitlines()
+    total_lines = len(lines)
+    if match is not None:
+        needle = match.lower()
+        lines = [line for line in lines if needle in line.lower()]
+    matched_lines = len(lines)
+    truncated = len(lines) > max_lines
+    lines = lines[-max_lines:]
+
+    return {
+        "ok": True,
+        "operation": "log_tail_get",
+        "data": {
+            "log_path": str(log_path),
+            "match": match,
+            "scanned_lines": total_lines,
+            "matched_lines": matched_lines,
+            "returned_lines": len(lines),
+            "truncated": truncated,
+            "text": "\n".join(lines),
+        },
+        "diagnostics": [],
+        "warnings": [],
+    }
 
 
 def _enabled_contract_operations() -> set[str]:

@@ -63,6 +63,19 @@ def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str
         if query is not None and not isinstance(query, str):
             raise ValueError("query must be a string")
         return workflow_guide_get(category=category, query=query)
+    if operation == "log_tail_get":
+        from .tools_system import log_tail_get
+
+        tail_kb = payload.get("tail_kb", 64)
+        match = payload.get("match")
+        max_lines = payload.get("max_lines", 200)
+        if not isinstance(tail_kb, int) or isinstance(tail_kb, bool):
+            raise ValueError("tail_kb must be an integer")
+        if not isinstance(max_lines, int) or isinstance(max_lines, bool):
+            raise ValueError("max_lines must be an integer")
+        if match is not None and not isinstance(match, str):
+            raise ValueError("match must be a string")
+        return log_tail_get(tail_kb=tail_kb, match=match, max_lines=max_lines)
     if operation == "bridge_contract_check":
         from .tools_system import bridge_contract_check
 

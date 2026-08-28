@@ -15,6 +15,64 @@ def level_actor_get(actor_path: str, include_components: bool = False) -> dict[s
 
 
 @default_tool()
+def level_open(
+    map_path: str,
+    dry_run: bool = True,
+    discard_changes: bool = False,
+) -> dict[str, Any]:
+    """Open another editor map; refuses to drop unsaved changes unless discard_changes."""
+    require_non_empty_string(map_path, "map_path")
+    return _call(
+        "level_open",
+        {"map_path": map_path, "dry_run": dry_run, "discard_changes": discard_changes},
+    )
+
+
+@default_tool()
+def level_actor_spawn(
+    class_path: str,
+    location: dict[str, Any] | None = None,
+    rotation: dict[str, Any] | None = None,
+    scale: dict[str, Any] | None = None,
+    label: str | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Spawn one actor (engine class or Blueprint) into the current editor level."""
+    require_non_empty_string(class_path, "class_path")
+    payload: dict[str, Any] = {"class_path": class_path, "dry_run": dry_run}
+    for key, value in (("location", location), ("rotation", rotation), ("scale", scale)):
+        if value is not None:
+            payload[key] = value
+    if label is not None:
+        payload["label"] = label
+    return _call("level_actor_spawn", payload)
+
+
+@default_tool()
+def level_actor_delete(actor_path: str, dry_run: bool = True) -> dict[str, Any]:
+    """Delete one placed actor from the current editor level."""
+    require_non_empty_string(actor_path, "actor_path")
+    return _call("level_actor_delete", {"actor_path": actor_path, "dry_run": dry_run})
+
+
+@default_tool()
+def level_actor_transform_set(
+    actor_path: str,
+    location: dict[str, Any] | None = None,
+    rotation: dict[str, Any] | None = None,
+    scale: dict[str, Any] | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Write one actor's world transform; provide at least one of location/rotation/scale."""
+    require_non_empty_string(actor_path, "actor_path")
+    payload: dict[str, Any] = {"actor_path": actor_path, "dry_run": dry_run}
+    for key, value in (("location", location), ("rotation", rotation), ("scale", scale)):
+        if value is not None:
+            payload[key] = value
+    return _call("level_actor_transform_set", payload)
+
+
+@default_tool()
 def level_actor_transform_get(actor_path: str) -> dict[str, Any]:
     """Return one placed actor's world transform."""
     require_non_empty_string(actor_path, "actor_path")

@@ -248,3 +248,38 @@ def asset_redirectors_fixup(
             "dry_run": dry_run,
         },
     )
+
+
+def _asset_links_payload(asset_path: str, include_soft: bool, include_engine: bool, limit: int, cursor: str | None) -> dict[str, Any]:
+    require_non_empty_string(asset_path, "asset_path")
+    return {
+        "asset_path": asset_path,
+        "include_soft": include_soft,
+        "include_engine": include_engine,
+        "limit": limit,
+        "cursor": cursor,
+    }
+
+
+@default_tool()
+def asset_dependencies_get(
+    asset_path: str,
+    include_soft: bool = True,
+    include_engine: bool = False,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """List packages the asset depends on (hard, and optionally soft) from the AssetRegistry."""
+    return _call("asset_dependencies_get", _asset_links_payload(asset_path, include_soft, include_engine, limit, cursor))
+
+
+@default_tool()
+def asset_referencers_get(
+    asset_path: str,
+    include_soft: bool = True,
+    include_engine: bool = False,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """List packages that reference the asset (hard, and optionally soft) from the AssetRegistry."""
+    return _call("asset_referencers_get", _asset_links_payload(asset_path, include_soft, include_engine, limit, cursor))

@@ -29,9 +29,15 @@ void RegisterCoreOperations()
     Register(TEXT("folder_create"), HandleFolderCreate);
     Register(TEXT("folder_delete"), HandleFolderDelete);
     Register(TEXT("asset_redirectors_fixup"), HandleAssetRedirectorsFixup);
+    Register(TEXT("asset_dependencies_get"), HandleAssetDependenciesGet);
+    Register(TEXT("asset_referencers_get"), HandleAssetReferencersGet);
+    Register(TEXT("level_open"), HandleLevelOpen);
     Register(TEXT("level_actors_list"), HandleLevelActorsList);
     Register(TEXT("level_actor_get"), HandleLevelActorGet);
+    Register(TEXT("level_actor_spawn"), HandleLevelActorSpawn);
+    Register(TEXT("level_actor_delete"), HandleLevelActorDelete);
     Register(TEXT("level_actor_transform_get"), HandleLevelActorTransformGet);
+    Register(TEXT("level_actor_transform_set"), HandleLevelActorTransformSet);
     Register(TEXT("object_properties_get"), HandleObjectPropertiesGet);
     Register(TEXT("landscape_layer_info_set"), HandleLandscapeLayerInfoSet);
     Register(TEXT("level_mesh_instances_list"), HandleLevelMeshInstancesList);
