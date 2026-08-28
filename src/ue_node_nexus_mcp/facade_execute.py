@@ -53,6 +53,34 @@ def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str
         if not isinstance(continue_on_error, bool):
             raise ValueError("continue_on_error must be a boolean")
         return batch_execute(payload.get("operations"), continue_on_error=continue_on_error)
+    if operation in ("task_submit", "task_status", "task_result", "task_cancel"):
+        from . import task_queue
+
+        if operation == "task_submit":
+            inner_operation = payload.get("operation")
+            inner_payload = payload.get("payload")
+            if not isinstance(inner_operation, str) or not inner_operation.strip():
+                raise ValueError("operation must be a non-empty string")
+            if inner_payload is not None and not isinstance(inner_payload, dict):
+                raise ValueError("payload must be an object")
+            return task_queue.task_submit(inner_operation, inner_payload)
+        task_id = payload.get("task_id")
+        if operation == "task_status":
+            if task_id is not None and not isinstance(task_id, str):
+                raise ValueError("task_id must be a string")
+            return task_queue.task_status(task_id)
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise ValueError("task_id must be a non-empty string")
+        if operation == "task_result":
+            return task_queue.task_result(task_id)
+        return task_queue.task_cancel(task_id)
+    if operation == "viewport_capture_status":
+        from .tools_viewport import viewport_capture_status
+
+        file_path = payload.get("file_path")
+        if not isinstance(file_path, str) or not file_path.strip():
+            raise ValueError("file_path must be a non-empty string")
+        return viewport_capture_status(file_path)
     if operation == "workflow_guide_get":
         from .workflow_guides import workflow_guide_get
 

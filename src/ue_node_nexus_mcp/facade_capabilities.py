@@ -50,6 +50,11 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
             "list_categories": {},
             "example": {"category": "getting_started"},
         },
+        "background_tasks": {
+            "operation": "task_submit",
+            "example": {"operation": "asset_compile", "payload": {"asset_path": "/Game/Path/M_X.M_X"}},
+            "poll_with": ["task_status", "task_result"],
+        },
     }
     return {"ok": True, "data": data}
 

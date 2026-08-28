@@ -14,48 +14,21 @@ from typing import Any
 from .contracts import require_list
 from .errors import BridgeError
 from .facade_response import asset_path_from_payload, compact_data_summary, diagnostic_counts
-from .operation_registry import get_operation_spec
-from .payload_schema import payload_schema_for
-from .runtime import default_tool, enabled_features
+from .operation_validation import validate_operation_call
+from .runtime import default_tool
 
 MAX_BATCH_OPERATIONS = 20
+
+# A batch may not contain itself; task_submit is allowed (it returns instantly).
+_FORBIDDEN_IN_BATCH = {"batch_execute": "nested_batch"}
 
 
 def _validate_items(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
-    features = enabled_features()
     for index, item in enumerate(operations):
-        name = item.get("operation")
-        payload = item.get("payload", {})
-        if not isinstance(name, str) or not name.strip():
-            errors.append({"index": index, "code": "missing_operation", "message": "operation is required"})
-            continue
-        if not isinstance(payload, dict):
-            errors.append({"index": index, "code": "invalid_payload", "message": "payload must be an object"})
-            continue
-        if name == "batch_execute":
-            errors.append({"index": index, "code": "nested_batch", "message": "batch_execute cannot contain itself"})
-            continue
-        try:
-            spec = get_operation_spec(name)
-        except ValueError as exc:
-            errors.append({"index": index, "code": "unknown_operation", "message": str(exc)})
-            continue
-        if spec.group not in features:
-            errors.append(
-                {"index": index, "code": "feature_disabled", "message": f"feature group is not enabled: {spec.group}"}
-            )
-            continue
-        missing = [field for field in payload_schema_for(name).get("required", []) if field not in payload]
-        if missing:
-            errors.append(
-                {
-                    "index": index,
-                    "code": "missing_required_field",
-                    "message": f"missing required field(s): {', '.join(missing)}",
-                    "fields": missing,
-                }
-            )
+        error = validate_operation_call(item.get("operation"), item.get("payload", {}), _FORBIDDEN_IN_BATCH)
+        if error is not None:
+            errors.append({"index": index, **error})
     return errors
 
 

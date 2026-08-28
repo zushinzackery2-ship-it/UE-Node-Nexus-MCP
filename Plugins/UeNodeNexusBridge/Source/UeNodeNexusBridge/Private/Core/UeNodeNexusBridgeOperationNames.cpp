@@ -66,6 +66,7 @@ TArray<FString> GetCoreOperationNames()
         TEXT("asset_compile"),
         TEXT("asset_validate"),
         TEXT("asset_save"),
+        TEXT("viewport_capture"),
         TEXT("editor_save_all"),
         TEXT("editor_request_exit"),
         TEXT("bridge_capabilities_get"),

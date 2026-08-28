@@ -6,6 +6,7 @@ from typing import Any
 
 WRAPPER_MODULES = (
     "batch_execute",
+    "task_queue",
     "tools_animation",
     "tools_assets",
     "tools_audio",
@@ -22,6 +23,7 @@ WRAPPER_MODULES = (
     "tools_project",
     "tools_system",
     "tools_texture",
+    "tools_viewport",
     "workflow_guides",
 )
 
@@ -218,6 +220,11 @@ OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
         "continue_on_error": False,
     },
     "workflow_guide_get": {"category": "getting_started"},
+    "task_submit": {
+        "operation": "asset_compile",
+        "payload": {"asset_path": "/Game/Path/M_Example.M_Example"},
+    },
+    "viewport_capture": {"filename": "before_fix", "dry_run": False},
     "blueprint_components_patch": {
         "asset_path": "/Game/BP/BP_Character.BP_Character",
         "operations": [

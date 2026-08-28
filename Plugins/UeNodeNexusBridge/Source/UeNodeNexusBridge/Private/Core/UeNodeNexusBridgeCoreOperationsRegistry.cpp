@@ -73,6 +73,7 @@ void RegisterCoreOperations()
     Register(TEXT("asset_compile"), HandleAssetCompile);
     Register(TEXT("asset_validate"), HandleAssetValidate);
     Register(TEXT("asset_save"), HandleAssetSave);
+    Register(TEXT("viewport_capture"), HandleViewportCapture);
     Register(TEXT("editor_save_all"), HandleEditorSaveAll);
     Register(TEXT("editor_request_exit"), HandleEditorRequestExit);
     Register(TEXT("bridge_capabilities_get"), HandleBridgeCapabilitiesGet);
