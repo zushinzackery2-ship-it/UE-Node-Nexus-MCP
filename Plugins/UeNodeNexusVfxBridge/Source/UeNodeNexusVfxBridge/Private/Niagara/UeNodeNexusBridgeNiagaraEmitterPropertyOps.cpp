@@ -10,30 +10,6 @@
 
 namespace UeNodeNexusBridge
 {
-static bool ReadIndex(const TSharedPtr<FJsonObject>& Payload, const TCHAR* Field, int32& OutValue)
-{
-    double Number = -1.0;
-    if (!Payload->TryGetNumberField(Field, Number))
-    {
-        OutValue = INDEX_NONE;
-        return false;
-    }
-    OutValue = static_cast<int32>(Number);
-    return true;
-}
-
-static FNiagaraEmitterHandle* ResolveEmitterHandle(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutError, const FString& Operation, const FString& RequestId)
-{
-    int32 EmitterIndex = INDEX_NONE;
-    if (!ReadIndex(Payload, TEXT("emitter_index"), EmitterIndex) || !System->GetEmitterHandles().IsValidIndex(EmitterIndex))
-    {
-        OutError = MakeEnvelope(Operation, RequestId, false);
-        OutError->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_emitter_index"), TEXT("emitter_index is required and must point to an existing emitter")));
-        return nullptr;
-    }
-    return &System->GetEmitterHandles()[EmitterIndex];
-}
-
 static void AddEmitterDataFields(FNiagaraEmitterHandle* Handle, TSharedPtr<FJsonObject> Data)
 {
     FVersionedNiagaraEmitterData* EmitterData = Handle ? Handle->GetEmitterData() : nullptr;
@@ -126,7 +102,7 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterPropertiesGet(const FString& Operati
     {
         return EarlyResponse;
     }
-    FNiagaraEmitterHandle* Handle = ResolveEmitterHandle(System, Payload, EarlyResponse, Operation, RequestId);
+    FNiagaraEmitterHandle* Handle = ResolveNiagaraEmitterHandle(System, Payload, EarlyResponse, Operation, RequestId);
     if (Handle == nullptr)
     {
         return EarlyResponse;
@@ -147,7 +123,7 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterPropertiesSet(const FString& Operati
     {
         return EarlyResponse;
     }
-    FNiagaraEmitterHandle* Handle = ResolveEmitterHandle(System, Payload, EarlyResponse, Operation, RequestId);
+    FNiagaraEmitterHandle* Handle = ResolveNiagaraEmitterHandle(System, Payload, EarlyResponse, Operation, RequestId);
     if (Handle == nullptr)
     {
         return EarlyResponse;

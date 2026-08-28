@@ -7,9 +7,16 @@
 class UMaterialInterface;
 class UNiagaraRendererProperties;
 class UNiagaraSystem;
+struct FNiagaraEmitterHandle;
 
 namespace UeNodeNexusBridge
 {
+// Reads an optional integer payload field; leaves INDEX_NONE and returns
+// false when missing. Shared by every emitter/renderer-indexed operation.
+bool ReadNiagaraIndexField(const TSharedPtr<FJsonObject>& Payload, const TCHAR* Field, int32& OutValue);
+// Resolves payload.emitter_index to an emitter handle or fills OutError with
+// the canonical invalid_emitter_index envelope.
+FNiagaraEmitterHandle* ResolveNiagaraEmitterHandle(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutError, const FString& Operation, const FString& RequestId);
 UNiagaraSystem* LoadNiagaraSystemFromPayload(
     const TSharedPtr<FJsonObject>& Payload,
     const FString& Operation,

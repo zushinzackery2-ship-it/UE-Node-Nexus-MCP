@@ -23,14 +23,6 @@ static void AddMaterialColumns(TSharedPtr<FJsonObject> Data)
     });
 }
 
-static FString ShortRendererClass(const FString& ClassName)
-{
-    FString Result = ClassName;
-    Result.RemoveFromStart(TEXT("Niagara"));
-    Result.RemoveFromEnd(TEXT("RendererProperties"));
-    return Result;
-}
-
 static TSharedPtr<FJsonObject> BuildMaterialIndexedData(UNiagaraSystem* System, const TArray<TSharedPtr<FJsonValue>>& Rows)
 {
     TMap<FString, int32> ClassDict;

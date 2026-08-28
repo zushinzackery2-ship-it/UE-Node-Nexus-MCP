@@ -12,17 +12,13 @@
 #include "Patch/UeNodeNexusBridgeMaterialPatchApplyOps.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchContext.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchShared.h"
 
 namespace UeNodeNexusBridge
 {
 bool IsMaterialPatchAsset(UObject* Asset)
 {
     return Cast<UMaterial>(Asset) != nullptr;
-}
-
-static void AddMaterialPatchDiagnostic(TArray<TSharedPtr<FJsonValue>>& Diagnostics, const FString& Code, const FString& Message, UMaterial* Material)
-{
-    Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), Code, Message, Material ? Material->GetPathName() : FString(), TEXT("UeNodeNexusBridge"))));
 }
 
 TSharedPtr<FJsonObject> HandleMaterialGraphPatch(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)

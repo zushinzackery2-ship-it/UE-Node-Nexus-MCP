@@ -7,7 +7,7 @@
 
 namespace UeNodeNexusBridge
 {
-static void CopyEndpointStringField(
+static void CopyFunctionEndpointStringField(
     const TSharedPtr<FJsonObject>& Source,
     const FString& SourceName,
     const TSharedPtr<FJsonObject>& Target,
@@ -32,7 +32,7 @@ static void CopyEndpointStringField(
     Target->SetStringField(TargetNodeField, Value);
 }
 
-static void CopyEndpointObjectFields(
+static void CopyFunctionEndpointObjectFields(
     const TSharedPtr<FJsonObject>& Source,
     const TSharedPtr<FJsonObject>& Target,
     const FString& TargetNodeField,
@@ -58,7 +58,7 @@ static void CopyEndpointObjectFields(
     }
 }
 
-static bool NormalizeBuildNodeSpecToCreateOp(const TSharedPtr<FJsonObject>& NodeSpec, TSharedPtr<FJsonObject>& OutOp)
+static bool NormalizeFunctionBuildNodeSpecToCreateOp(const TSharedPtr<FJsonObject>& NodeSpec, TSharedPtr<FJsonObject>& OutOp)
 {
     FString NodeClass;
     FString ClassPath;
@@ -86,19 +86,19 @@ static bool NormalizeBuildNodeSpecToCreateOp(const TSharedPtr<FJsonObject>& Node
     return true;
 }
 
-static bool NormalizeBuildLinkSpecToConnectOp(const TSharedPtr<FJsonObject>& LinkSpec, TSharedPtr<FJsonObject>& OutOp)
+static bool NormalizeFunctionBuildLinkSpecToConnectOp(const TSharedPtr<FJsonObject>& LinkSpec, TSharedPtr<FJsonObject>& OutOp)
 {
     OutOp = MakeShared<FJsonObject>();
     OutOp->SetStringField(TEXT("op"), TEXT("connect_pins"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("from_node_id"), OutOp, TEXT("from_node_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("from_node"), OutOp, TEXT("from_node_id"));
-    CopyEndpointStringField(LinkSpec, TEXT("from"), OutOp, TEXT("from_node_id"), TEXT("from_pin_id"));
+    CopyFunctionEndpointStringField(LinkSpec, TEXT("from"), OutOp, TEXT("from_node_id"), TEXT("from_pin_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("from_pin_id"), OutOp, TEXT("from_pin_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("from_pin"), OutOp, TEXT("from_pin_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("output"), OutOp, TEXT("from_pin_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("to_node_id"), OutOp, TEXT("to_node_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("to_node"), OutOp, TEXT("to_node_id"));
-    CopyEndpointStringField(LinkSpec, TEXT("to"), OutOp, TEXT("to_node_id"), TEXT("to_pin_id"));
+    CopyFunctionEndpointStringField(LinkSpec, TEXT("to"), OutOp, TEXT("to_node_id"), TEXT("to_pin_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("to_pin_id"), OutOp, TEXT("to_pin_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("to_pin"), OutOp, TEXT("to_pin_id"));
     CopyFunctionPatchOptionalStringField(LinkSpec, TEXT("input"), OutOp, TEXT("to_pin_id"));
@@ -106,12 +106,12 @@ static bool NormalizeBuildLinkSpecToConnectOp(const TSharedPtr<FJsonObject>& Lin
     const TSharedPtr<FJsonObject>* From = nullptr;
     if (LinkSpec->TryGetObjectField(TEXT("from"), From) && From != nullptr)
     {
-        CopyEndpointObjectFields(*From, OutOp, TEXT("from_node_id"), TEXT("from_pin_id"), TEXT("output"));
+        CopyFunctionEndpointObjectFields(*From, OutOp, TEXT("from_node_id"), TEXT("from_pin_id"), TEXT("output"));
     }
     const TSharedPtr<FJsonObject>* To = nullptr;
     if (LinkSpec->TryGetObjectField(TEXT("to"), To) && To != nullptr)
     {
-        CopyEndpointObjectFields(*To, OutOp, TEXT("to_node_id"), TEXT("to_pin_id"), TEXT("input"));
+        CopyFunctionEndpointObjectFields(*To, OutOp, TEXT("to_node_id"), TEXT("to_pin_id"), TEXT("input"));
     }
     return true;
 }
@@ -133,7 +133,7 @@ void AppendMaterialFunctionBuildSpecOperations(
         {
             TSharedPtr<FJsonObject> NodeSpec = Value->AsObject();
             TSharedPtr<FJsonObject> Op;
-            if (!NodeSpec.IsValid() || !NormalizeBuildNodeSpecToCreateOp(NodeSpec, Op))
+            if (!NodeSpec.IsValid() || !NormalizeFunctionBuildNodeSpecToCreateOp(NodeSpec, Op))
             {
                 AddFunctionPatchDiagnostic(Diagnostics, TEXT("invalid_graph_build_node"), TEXT("nodes entries must contain node_class/class_path and optional id/client_id"), Function);
                 continue;
@@ -153,7 +153,7 @@ void AppendMaterialFunctionBuildSpecOperations(
         {
             TSharedPtr<FJsonObject> LinkSpec = Value->AsObject();
             TSharedPtr<FJsonObject> Op;
-            if (!LinkSpec.IsValid() || !NormalizeBuildLinkSpecToConnectOp(LinkSpec, Op))
+            if (!LinkSpec.IsValid() || !NormalizeFunctionBuildLinkSpecToConnectOp(LinkSpec, Op))
             {
                 AddFunctionPatchDiagnostic(Diagnostics, TEXT("invalid_graph_build_link"), TEXT("links entries must be objects"), Function);
                 continue;

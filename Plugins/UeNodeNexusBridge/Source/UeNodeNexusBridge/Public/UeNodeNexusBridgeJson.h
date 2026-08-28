@@ -51,6 +51,14 @@ UENODENEXUSBRIDGE_API bool TryGetPayload(const TSharedPtr<FJsonObject>& Envelope
 UENODENEXUSBRIDGE_API int32 ReadCursor(const TSharedPtr<FJsonObject>& Payload);
 UENODENEXUSBRIDGE_API int32 ReadLimit(const TSharedPtr<FJsonObject>& Payload, int32 DefaultLimit, int32 MaxLimit);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeDiagnostic(const FString& Severity, const FString& Code, const FString& Message, const FString& AssetPath, const FString& Source);
+// Object->GetPathName() or empty string. Shared so per-file static copies do
+// not collide when unity builds merge translation units.
+UENODENEXUSBRIDGE_API FString ObjectPathOrEmpty(const UObject* Object);
+// Reads the optional numeric "index" field used by line-selection payloads.
+UENODENEXUSBRIDGE_API bool ReadPayloadIndex(const TSharedPtr<FJsonObject>& Payload, int32& OutIndex);
+// Appends either the payload-selected line or all lines; false when the
+// requested index is out of range.
+UENODENEXUSBRIDGE_API bool AppendSelectedLines(FString& Text, const TArray<FString>& Lines, const TSharedPtr<FJsonObject>& Payload);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeEmptyDiff();
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeDirtyState(UObject* Asset);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakePinIntegrity(bool bOk, const TArray<TSharedPtr<FJsonValue>>& BrokenLinks, const TArray<TSharedPtr<FJsonValue>>& MissingPins);

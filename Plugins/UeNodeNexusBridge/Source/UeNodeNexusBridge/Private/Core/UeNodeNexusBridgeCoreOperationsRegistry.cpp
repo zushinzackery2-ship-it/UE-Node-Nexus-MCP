@@ -7,7 +7,7 @@ namespace UeNodeNexusBridge
 {
 namespace
 {
-void Register(const TCHAR* Operation, FBridgeOperationHandler Handler)
+void RegisterCoreOp(const TCHAR* Operation, FBridgeOperationHandler Handler)
 {
     RegisterOperationHandler(FString(Operation), MoveTemp(Handler));
 }
@@ -15,82 +15,82 @@ void Register(const TCHAR* Operation, FBridgeOperationHandler Handler)
 
 void RegisterCoreOperations()
 {
-    Register(TEXT("sound_cue_summary_get"), HandleSoundCueSummaryGet);
-    Register(TEXT("texture_summary_get"), HandleTextureSummaryGet);
-    Register(TEXT("asset_list"), HandleAssetList);
-    Register(TEXT("asset_get"), HandleAssetGet);
-    Register(TEXT("asset_create"), HandleAssetCreate);
-    Register(TEXT("asset_delete"), HandleAssetDelete);
-    Register(TEXT("asset_move"), HandleAssetMove);
-    Register(TEXT("asset_rename"), HandleAssetRename);
-    Register(TEXT("asset_move_batch"), HandleAssetMoveBatch);
-    Register(TEXT("asset_rename_batch"), HandleAssetRenameBatch);
-    Register(TEXT("asset_duplicate"), HandleAssetDuplicate);
-    Register(TEXT("folder_create"), HandleFolderCreate);
-    Register(TEXT("folder_delete"), HandleFolderDelete);
-    Register(TEXT("asset_redirectors_fixup"), HandleAssetRedirectorsFixup);
-    Register(TEXT("asset_dependencies_get"), HandleAssetDependenciesGet);
-    Register(TEXT("asset_referencers_get"), HandleAssetReferencersGet);
-    Register(TEXT("level_open"), HandleLevelOpen);
-    Register(TEXT("level_actors_list"), HandleLevelActorsList);
-    Register(TEXT("level_actor_get"), HandleLevelActorGet);
-    Register(TEXT("level_actor_spawn"), HandleLevelActorSpawn);
-    Register(TEXT("level_actor_delete"), HandleLevelActorDelete);
-    Register(TEXT("level_actor_transform_get"), HandleLevelActorTransformGet);
-    Register(TEXT("level_actor_transform_set"), HandleLevelActorTransformSet);
-    Register(TEXT("object_properties_get"), HandleObjectPropertiesGet);
-    Register(TEXT("landscape_layer_info_set"), HandleLandscapeLayerInfoSet);
-    Register(TEXT("level_mesh_instances_list"), HandleLevelMeshInstancesList);
-    Register(TEXT("component_materials_get"), HandleComponentMaterialsGet);
-    Register(TEXT("component_materials_set"), HandleComponentMaterialsSet);
-    Register(TEXT("material_interface_resolve"), HandleMaterialInterfaceResolve);
-    Register(TEXT("material_usage_find"), HandleMaterialUsageFind);
-    Register(TEXT("component_material_instance_params_get"), HandleComponentMaterialInstanceParamsGet);
-    Register(TEXT("component_material_instance_params_set"), HandleComponentMaterialInstanceParamsSet);
-    Register(TEXT("project_input_mappings_get"), HandleProjectInputMappingsGet);
-    Register(TEXT("project_input_mappings_patch"), HandleProjectInputMappingsPatch);
-    Register(TEXT("blueprint_details_get"), HandleBlueprintDetailsGet);
-    Register(TEXT("blueprint_components_patch"), HandleBlueprintComponentsPatch);
-    Register(TEXT("anim_blueprint_summary_get"), HandleAnimBlueprintSummaryGet);
-    Register(TEXT("anim_state_machine_summary_get"), HandleAnimStateMachineSummaryGet);
-    Register(TEXT("anim_montage_summary_get"), HandleAnimMontageSummaryGet);
-    Register(TEXT("blend_space_summary_get"), HandleBlendSpaceSummaryGet);
-    Register(TEXT("graph_snapshot_get"), HandleGraphSnapshotGet);
-    Register(TEXT("graph_node_search"), HandleGraphNodeSearch);
-    Register(TEXT("graph_node_info_get"), HandleGraphNodeInfoGet);
-    Register(TEXT("node_class_params_get"), HandleNodeClassParamsGet);
-    Register(TEXT("graph_patch_apply"), HandleGraphPatchApply);
-    Register(TEXT("graph_build_apply"), HandleGraphBuildApply);
-    Register(TEXT("node_info_get"), HandleNodeInfoGet);
-    Register(TEXT("node_create"), HandleNodeCreate);
-    Register(TEXT("node_position_get"), HandleNodePositionGet);
-    Register(TEXT("node_position_set"), HandleNodePositionSet);
-    Register(TEXT("node_params_get"), HandleNodeParamsGet);
-    Register(TEXT("node_params_set"), HandleNodeParamsSet);
-    Register(TEXT("material_instance_params_get"), HandleMaterialInstanceParamsGet);
-    Register(TEXT("material_expression_classes_list"), HandleMaterialExpressionClassesList);
-    Register(TEXT("material_instance_params_set"), HandleMaterialInstanceParamsSet);
-    Register(TEXT("asset_compile"), HandleAssetCompile);
-    Register(TEXT("asset_validate"), HandleAssetValidate);
-    Register(TEXT("asset_save"), HandleAssetSave);
-    Register(TEXT("viewport_capture"), HandleViewportCapture);
-    Register(TEXT("editor_save_all"), HandleEditorSaveAll);
-    Register(TEXT("editor_request_exit"), HandleEditorRequestExit);
-    Register(TEXT("bridge_capabilities_get"), HandleBridgeCapabilitiesGet);
+    RegisterCoreOp(TEXT("sound_cue_summary_get"), HandleSoundCueSummaryGet);
+    RegisterCoreOp(TEXT("texture_summary_get"), HandleTextureSummaryGet);
+    RegisterCoreOp(TEXT("asset_list"), HandleAssetList);
+    RegisterCoreOp(TEXT("asset_get"), HandleAssetGet);
+    RegisterCoreOp(TEXT("asset_create"), HandleAssetCreate);
+    RegisterCoreOp(TEXT("asset_delete"), HandleAssetDelete);
+    RegisterCoreOp(TEXT("asset_move"), HandleAssetMove);
+    RegisterCoreOp(TEXT("asset_rename"), HandleAssetRename);
+    RegisterCoreOp(TEXT("asset_move_batch"), HandleAssetMoveBatch);
+    RegisterCoreOp(TEXT("asset_rename_batch"), HandleAssetRenameBatch);
+    RegisterCoreOp(TEXT("asset_duplicate"), HandleAssetDuplicate);
+    RegisterCoreOp(TEXT("folder_create"), HandleFolderCreate);
+    RegisterCoreOp(TEXT("folder_delete"), HandleFolderDelete);
+    RegisterCoreOp(TEXT("asset_redirectors_fixup"), HandleAssetRedirectorsFixup);
+    RegisterCoreOp(TEXT("asset_dependencies_get"), HandleAssetDependenciesGet);
+    RegisterCoreOp(TEXT("asset_referencers_get"), HandleAssetReferencersGet);
+    RegisterCoreOp(TEXT("level_open"), HandleLevelOpen);
+    RegisterCoreOp(TEXT("level_actors_list"), HandleLevelActorsList);
+    RegisterCoreOp(TEXT("level_actor_get"), HandleLevelActorGet);
+    RegisterCoreOp(TEXT("level_actor_spawn"), HandleLevelActorSpawn);
+    RegisterCoreOp(TEXT("level_actor_delete"), HandleLevelActorDelete);
+    RegisterCoreOp(TEXT("level_actor_transform_get"), HandleLevelActorTransformGet);
+    RegisterCoreOp(TEXT("level_actor_transform_set"), HandleLevelActorTransformSet);
+    RegisterCoreOp(TEXT("object_properties_get"), HandleObjectPropertiesGet);
+    RegisterCoreOp(TEXT("landscape_layer_info_set"), HandleLandscapeLayerInfoSet);
+    RegisterCoreOp(TEXT("level_mesh_instances_list"), HandleLevelMeshInstancesList);
+    RegisterCoreOp(TEXT("component_materials_get"), HandleComponentMaterialsGet);
+    RegisterCoreOp(TEXT("component_materials_set"), HandleComponentMaterialsSet);
+    RegisterCoreOp(TEXT("material_interface_resolve"), HandleMaterialInterfaceResolve);
+    RegisterCoreOp(TEXT("material_usage_find"), HandleMaterialUsageFind);
+    RegisterCoreOp(TEXT("component_material_instance_params_get"), HandleComponentMaterialInstanceParamsGet);
+    RegisterCoreOp(TEXT("component_material_instance_params_set"), HandleComponentMaterialInstanceParamsSet);
+    RegisterCoreOp(TEXT("project_input_mappings_get"), HandleProjectInputMappingsGet);
+    RegisterCoreOp(TEXT("project_input_mappings_patch"), HandleProjectInputMappingsPatch);
+    RegisterCoreOp(TEXT("blueprint_details_get"), HandleBlueprintDetailsGet);
+    RegisterCoreOp(TEXT("blueprint_components_patch"), HandleBlueprintComponentsPatch);
+    RegisterCoreOp(TEXT("anim_blueprint_summary_get"), HandleAnimBlueprintSummaryGet);
+    RegisterCoreOp(TEXT("anim_state_machine_summary_get"), HandleAnimStateMachineSummaryGet);
+    RegisterCoreOp(TEXT("anim_montage_summary_get"), HandleAnimMontageSummaryGet);
+    RegisterCoreOp(TEXT("blend_space_summary_get"), HandleBlendSpaceSummaryGet);
+    RegisterCoreOp(TEXT("graph_snapshot_get"), HandleGraphSnapshotGet);
+    RegisterCoreOp(TEXT("graph_node_search"), HandleGraphNodeSearch);
+    RegisterCoreOp(TEXT("graph_node_info_get"), HandleGraphNodeInfoGet);
+    RegisterCoreOp(TEXT("node_class_params_get"), HandleNodeClassParamsGet);
+    RegisterCoreOp(TEXT("graph_patch_apply"), HandleGraphPatchApply);
+    RegisterCoreOp(TEXT("graph_build_apply"), HandleGraphBuildApply);
+    RegisterCoreOp(TEXT("node_info_get"), HandleNodeInfoGet);
+    RegisterCoreOp(TEXT("node_create"), HandleNodeCreate);
+    RegisterCoreOp(TEXT("node_position_get"), HandleNodePositionGet);
+    RegisterCoreOp(TEXT("node_position_set"), HandleNodePositionSet);
+    RegisterCoreOp(TEXT("node_params_get"), HandleNodeParamsGet);
+    RegisterCoreOp(TEXT("node_params_set"), HandleNodeParamsSet);
+    RegisterCoreOp(TEXT("material_instance_params_get"), HandleMaterialInstanceParamsGet);
+    RegisterCoreOp(TEXT("material_expression_classes_list"), HandleMaterialExpressionClassesList);
+    RegisterCoreOp(TEXT("material_instance_params_set"), HandleMaterialInstanceParamsSet);
+    RegisterCoreOp(TEXT("asset_compile"), HandleAssetCompile);
+    RegisterCoreOp(TEXT("asset_validate"), HandleAssetValidate);
+    RegisterCoreOp(TEXT("asset_save"), HandleAssetSave);
+    RegisterCoreOp(TEXT("viewport_capture"), HandleViewportCapture);
+    RegisterCoreOp(TEXT("editor_save_all"), HandleEditorSaveAll);
+    RegisterCoreOp(TEXT("editor_request_exit"), HandleEditorRequestExit);
+    RegisterCoreOp(TEXT("bridge_capabilities_get"), HandleBridgeCapabilitiesGet);
 
     // Handlers that take no payload need a small adapter to match the registry
     // handler signature.
-    Register(TEXT("level_current_get"),
+    RegisterCoreOp(TEXT("level_current_get"),
         [](const FString& Op, const FString& ReqId, const TSharedPtr<FJsonObject>&)
         {
             return HandleLevelCurrentGet(Op, ReqId);
         });
-    Register(TEXT("project_context_get"),
+    RegisterCoreOp(TEXT("project_context_get"),
         [](const FString& Op, const FString& ReqId, const TSharedPtr<FJsonObject>&)
         {
             return HandleProjectContextGet(Op, ReqId);
         });
-    Register(TEXT("diagnostics_get"), HandleDiagnosticsGet);
+    RegisterCoreOp(TEXT("diagnostics_get"), HandleDiagnosticsGet);
 
     // Completeness guard: every operation reported by GetCoreOperationNames must
     // actually have a registered handler, or capabilities would advertise an

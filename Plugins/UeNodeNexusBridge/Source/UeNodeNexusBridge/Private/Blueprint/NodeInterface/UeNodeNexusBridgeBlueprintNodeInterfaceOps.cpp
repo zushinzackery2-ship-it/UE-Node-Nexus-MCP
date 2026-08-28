@@ -125,36 +125,6 @@ static TArray<FString> BlueprintParamLines(UEdGraphNode* Node)
     return Lines;
 }
 
-static bool ReadIndex(const TSharedPtr<FJsonObject>& Payload, int32& OutIndex)
-{
-    double Number = 0.0;
-    if (!Payload->TryGetNumberField(TEXT("index"), Number))
-    {
-        return false;
-    }
-    OutIndex = static_cast<int32>(Number);
-    return true;
-}
-
-static bool AppendSelected(FString& Text, const TArray<FString>& Lines, const TSharedPtr<FJsonObject>& Payload)
-{
-    int32 Index = 0;
-    if (ReadIndex(Payload, Index))
-    {
-        if (!Lines.IsValidIndex(Index))
-        {
-            return false;
-        }
-        Text += Lines[Index] + TEXT("\n");
-        return true;
-    }
-    for (const FString& Line : Lines)
-    {
-        Text += Line + TEXT("\n");
-    }
-    return true;
-}
-
 static TSharedPtr<FJsonObject> MakeBlueprintNodeData(UBlueprint* Blueprint, UEdGraph* Graph, UEdGraphNode* Node, const TSharedPtr<FJsonObject>& Payload, const FString& Format)
 {
     const FString Alias = BlueprintNodeAlias(Graph, Node);
@@ -175,33 +145,33 @@ static TSharedPtr<FJsonObject> MakeBlueprintNodeData(UBlueprint* Blueprint, UEdG
     bool bValid = true;
     if (Section == TEXT("brief"))
     {
-        bValid = AppendSelected(Text, Header, Payload);
+        bValid = AppendSelectedLines(Text, Header, Payload);
     }
     else if (Section == TEXT("input"))
     {
-        bValid = AppendSelected(Text, Inputs, Payload);
+        bValid = AppendSelectedLines(Text, Inputs, Payload);
     }
     else if (Section == TEXT("param"))
     {
-        bValid = AppendSelected(Text, Params, Payload);
+        bValid = AppendSelectedLines(Text, Params, Payload);
     }
     else if (Section == TEXT("output"))
     {
-        bValid = AppendSelected(Text, Outputs, Payload);
+        bValid = AppendSelectedLines(Text, Outputs, Payload);
     }
     else if (Section == TEXT("links"))
     {
-        bValid = AppendSelected(Text, Inputs, Payload) && AppendSelected(Text, Outputs, Payload);
+        bValid = AppendSelectedLines(Text, Inputs, Payload) && AppendSelectedLines(Text, Outputs, Payload);
     }
     else
     {
-        AppendSelected(Text, Header, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Header, MakeShared<FJsonObject>());
         Text += TEXT("\n");
-        AppendSelected(Text, Inputs, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Inputs, MakeShared<FJsonObject>());
         Text += TEXT("\n");
-        AppendSelected(Text, Params, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Params, MakeShared<FJsonObject>());
         Text += TEXT("\n");
-        AppendSelected(Text, Outputs, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Outputs, MakeShared<FJsonObject>());
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();

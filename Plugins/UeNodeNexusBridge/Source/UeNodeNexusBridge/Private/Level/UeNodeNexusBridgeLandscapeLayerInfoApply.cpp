@@ -4,9 +4,11 @@
 #include "Editor.h"
 #include "EditorModeManager.h"
 #include "EditorModes.h"
+#include "Landscape.h"
 #include "LandscapeInfo.h"
 #include "LandscapeLayerInfoObject.h"
 #include "LandscapeProxy.h"
+#include "Modules/ModuleManager.h"
 #include "UeNodeNexusBridgeLandscapeLayerInfoShared.h"
 #include "UObject/Package.h"
 
@@ -153,7 +155,9 @@ void RefreshLandscapeLayerInfoEditorState(ALandscapeProxy* Landscape)
         GEditor->RedrawLevelEditingViewports();
     }
 
-    if (GLevelEditorModeToolsIsValid())
+    // GLevelEditorModeToolsIsValid() is deprecated in 5.5; the global mode
+    // manager exists exactly when the LevelEditor module has been loaded.
+    if (FModuleManager::Get().IsModuleLoaded(TEXT("LevelEditor")))
     {
         FEditorModeTools& ModeTools = GLevelEditorModeTools();
         if (ModeTools.IsModeActive(FBuiltinEditorModes::EM_Landscape))

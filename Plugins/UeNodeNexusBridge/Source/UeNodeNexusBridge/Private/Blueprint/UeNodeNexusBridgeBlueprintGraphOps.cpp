@@ -13,11 +13,6 @@
 
 namespace UeNodeNexusBridge
 {
-static bool IsExecPin(const UEdGraphPin* Pin)
-{
-    return Pin != nullptr && Pin->PinType.PinCategory == TEXT("exec");
-}
-
 static UEdGraph* ResolveBlueprintGraph(UBlueprint* Blueprint, const FString& GraphName)
 {
     TArray<UEdGraph*> Graphs;

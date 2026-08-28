@@ -1,5 +1,7 @@
 #include "UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
@@ -8,6 +10,24 @@
 
 namespace UeNodeNexusBridge
 {
+TArray<FString> MaterialParamLines(UMaterialExpression* Expression)
+{
+    TArray<FString> Lines;
+    int32 Index = 0;
+    for (const TSharedPtr<FJsonValue>& Value : BuildMaterialExpressionParams(Expression))
+    {
+        const TSharedPtr<FJsonObject> Param = Value->AsObject();
+        FString ParamValue = Param->GetStringField(TEXT("value"));
+        ParamValue = ParamValue.IsEmpty() ? TEXT("\"\"") : ParamValue;
+        Lines.Add(FString::Printf(TEXT("-nodeparam_%02d.%s = %s"), Index++, *Param->GetStringField(TEXT("name")), *ParamValue));
+    }
+    if (Lines.Num() == 0)
+    {
+        Lines.Add(TEXT("none_nodeparam"));
+    }
+    return Lines;
+}
+
 FString ShortMaterialExpressionClass(UMaterialExpression* Expression)
 {
     FString Name = Expression ? Expression->GetClass()->GetName() : FString();

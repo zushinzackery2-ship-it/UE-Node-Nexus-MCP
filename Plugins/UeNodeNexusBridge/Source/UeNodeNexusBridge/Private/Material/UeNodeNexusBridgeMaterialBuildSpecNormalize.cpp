@@ -5,14 +5,10 @@
 #include "Materials/Material.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "Patch/UeNodeNexusBridgeMaterialPatchShared.h"
 
 namespace UeNodeNexusBridge
 {
-static void AddMaterialPatchDiagnostic(TArray<TSharedPtr<FJsonValue>>& Diagnostics, const FString& Code, const FString& Message, UMaterial* Material)
-{
-    Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), Code, Message, Material ? Material->GetPathName() : FString(), TEXT("UeNodeNexusBridge"))));
-}
-
 static void CopyOptionalStringField(const TSharedPtr<FJsonObject>& Source, const FString& SourceName, const TSharedPtr<FJsonObject>& Target, const FString& TargetName)
 {
     FString Value;

@@ -31,24 +31,6 @@ static TArray<FString> MaterialFunctionInputLines(UMaterialFunction* Function, U
     return Lines;
 }
 
-static TArray<FString> MaterialParamLines(UMaterialExpression* Expression)
-{
-    TArray<FString> Lines;
-    int32 Index = 0;
-    for (const TSharedPtr<FJsonValue>& Value : BuildMaterialExpressionParams(Expression))
-    {
-        const TSharedPtr<FJsonObject> Param = Value->AsObject();
-        FString ParamValue = Param->GetStringField(TEXT("value"));
-        ParamValue = ParamValue.IsEmpty() ? TEXT("\"\"") : ParamValue;
-        Lines.Add(FString::Printf(TEXT("-nodeparam_%02d.%s = %s"), Index++, *Param->GetStringField(TEXT("name")), *ParamValue));
-    }
-    if (Lines.Num() == 0)
-    {
-        Lines.Add(TEXT("none_nodeparam"));
-    }
-    return Lines;
-}
-
 static TArray<FString> MaterialFunctionOutputLines(UMaterialFunction* Function, UMaterialExpression* Expression)
 {
     TArray<FString> Lines;
@@ -80,36 +62,6 @@ static TArray<FString> MaterialFunctionOutputLines(UMaterialFunction* Function, 
     return Lines;
 }
 
-static bool ReadIndex(const TSharedPtr<FJsonObject>& Payload, int32& OutIndex)
-{
-    double Number = 0.0;
-    if (!Payload->TryGetNumberField(TEXT("index"), Number))
-    {
-        return false;
-    }
-    OutIndex = static_cast<int32>(Number);
-    return true;
-}
-
-static bool AppendSelected(FString& Text, const TArray<FString>& Lines, const TSharedPtr<FJsonObject>& Payload)
-{
-    int32 Index = 0;
-    if (ReadIndex(Payload, Index))
-    {
-        if (!Lines.IsValidIndex(Index))
-        {
-            return false;
-        }
-        Text += Lines[Index] + TEXT("\n");
-        return true;
-    }
-    for (const FString& Line : Lines)
-    {
-        Text += Line + TEXT("\n");
-    }
-    return true;
-}
-
 TSharedPtr<FJsonObject> BuildMaterialFunctionNodeInterfaceData(UMaterialFunction* Function, UMaterialExpression* Expression, const TSharedPtr<FJsonObject>& Payload, const FString& Prefix)
 {
     const FString Alias = MaterialNodeAlias(Function, Expression);
@@ -130,33 +82,33 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionNodeInterfaceData(UMaterialFunction
     bool bValid = true;
     if (Section == TEXT("brief"))
     {
-        bValid = AppendSelected(Text, Header, Payload);
+        bValid = AppendSelectedLines(Text, Header, Payload);
     }
     else if (Section == TEXT("input"))
     {
-        bValid = AppendSelected(Text, Inputs, Payload);
+        bValid = AppendSelectedLines(Text, Inputs, Payload);
     }
     else if (Section == TEXT("param"))
     {
-        bValid = AppendSelected(Text, Params, Payload);
+        bValid = AppendSelectedLines(Text, Params, Payload);
     }
     else if (Section == TEXT("output"))
     {
-        bValid = AppendSelected(Text, Outputs, Payload);
+        bValid = AppendSelectedLines(Text, Outputs, Payload);
     }
     else if (Section == TEXT("links"))
     {
-        bValid = AppendSelected(Text, Inputs, Payload) && AppendSelected(Text, Outputs, Payload);
+        bValid = AppendSelectedLines(Text, Inputs, Payload) && AppendSelectedLines(Text, Outputs, Payload);
     }
     else
     {
-        AppendSelected(Text, Header, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Header, MakeShared<FJsonObject>());
         Text += TEXT("\n");
-        AppendSelected(Text, Inputs, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Inputs, MakeShared<FJsonObject>());
         Text += TEXT("\n");
-        AppendSelected(Text, Params, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Params, MakeShared<FJsonObject>());
         Text += TEXT("\n");
-        AppendSelected(Text, Outputs, MakeShared<FJsonObject>());
+        AppendSelectedLines(Text, Outputs, MakeShared<FJsonObject>());
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();

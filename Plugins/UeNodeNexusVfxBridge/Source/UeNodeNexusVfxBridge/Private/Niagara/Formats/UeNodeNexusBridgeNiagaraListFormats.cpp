@@ -39,7 +39,7 @@ static void AddColumns(TSharedPtr<FJsonObject> Data, std::initializer_list<const
     Data->SetArrayField(TEXT("columns"), Values);
 }
 
-static FString ShortRendererClass(const FString& ClassName)
+FString ShortRendererClass(const FString& ClassName)
 {
     FString Result = ClassName;
     Result.RemoveFromStart(TEXT("Niagara"));

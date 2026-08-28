@@ -8,7 +8,7 @@
 
 namespace UeNodeNexusBridge
 {
-static bool IsExecPin(const UEdGraphPin* Pin)
+bool IsExecPin(const UEdGraphPin* Pin)
 {
     return Pin != nullptr && Pin->PinType.PinCategory == TEXT("exec");
 }

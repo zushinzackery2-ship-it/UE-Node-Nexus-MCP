@@ -12,38 +12,15 @@
 #include "UObject/UnrealType.h"
 namespace UeNodeNexusBridge
 {
-static bool ReadIndex(const TSharedPtr<FJsonObject>& Payload, const TCHAR* Field, int32& OutValue)
-{
-    double Number = -1.0;
-    if (!Payload->TryGetNumberField(Field, Number))
-    {
-        OutValue = INDEX_NONE;
-        return false;
-    }
-    OutValue = static_cast<int32>(Number);
-    return true;
-}
-
-static FNiagaraEmitterHandle* ResolveEmitterHandle(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutError, const FString& Operation, const FString& RequestId)
-{
-    int32 EmitterIndex = INDEX_NONE;
-    if (!ReadIndex(Payload, TEXT("emitter_index"), EmitterIndex) || !System->GetEmitterHandles().IsValidIndex(EmitterIndex))
-    {
-        OutError = MakeEnvelope(Operation, RequestId, false);
-        OutError->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_emitter_index"), TEXT("emitter_index is required and must point to an existing emitter")));
-        return nullptr;
-    }
-    return &System->GetEmitterHandles()[EmitterIndex];
-}
 static UNiagaraRendererProperties* ResolveRenderer(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutError, const FString& Operation, const FString& RequestId)
 {
-    FNiagaraEmitterHandle* Handle = ResolveEmitterHandle(System, Payload, OutError, Operation, RequestId);
+    FNiagaraEmitterHandle* Handle = ResolveNiagaraEmitterHandle(System, Payload, OutError, Operation, RequestId);
     if (Handle == nullptr)
     {
         return nullptr;
     }
     int32 RendererIndex = INDEX_NONE;
-    if (!ReadIndex(Payload, TEXT("renderer_index"), RendererIndex))
+    if (!ReadNiagaraIndexField(Payload, TEXT("renderer_index"), RendererIndex))
     {
         OutError = MakeEnvelope(Operation, RequestId, false);
         OutError->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_renderer_index"), TEXT("renderer_index is required")));

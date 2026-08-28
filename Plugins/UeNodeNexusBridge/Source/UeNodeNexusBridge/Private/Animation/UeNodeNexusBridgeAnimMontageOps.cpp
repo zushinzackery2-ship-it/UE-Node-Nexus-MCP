@@ -13,11 +13,6 @@ namespace UeNodeNexusBridge
 {
 namespace
 {
-FString PathOrEmpty(const UObject* Object)
-{
-    return Object ? Object->GetPathName() : FString();
-}
-
 TSharedPtr<FJsonValue> MakeSectionRow(const UAnimMontage* Montage, int32 Index)
 {
     TArray<TSharedPtr<FJsonValue>> Row;
@@ -42,7 +37,7 @@ TSharedPtr<FJsonValue> MakeSegmentRow(const FString& SlotName, const FAnimSegmen
 {
     TArray<TSharedPtr<FJsonValue>> Row;
     Row.Add(MakeShared<FJsonValueString>(SlotName));
-    Row.Add(MakeShared<FJsonValueString>(PathOrEmpty(Segment.GetAnimReference())));
+    Row.Add(MakeShared<FJsonValueString>(ObjectPathOrEmpty(Segment.GetAnimReference())));
     Row.Add(MakeShared<FJsonValueNumber>(Segment.StartPos));
     Row.Add(MakeShared<FJsonValueNumber>(Segment.AnimStartTime));
     Row.Add(MakeShared<FJsonValueNumber>(Segment.AnimEndTime));
@@ -54,7 +49,7 @@ TSharedPtr<FJsonValue> MakeSegmentObject(const FString& SlotName, const FAnimSeg
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     Json->SetStringField(TEXT("slot"), SlotName);
-    Json->SetStringField(TEXT("animation"), PathOrEmpty(Segment.GetAnimReference()));
+    Json->SetStringField(TEXT("animation"), ObjectPathOrEmpty(Segment.GetAnimReference()));
     Json->SetNumberField(TEXT("start_pos"), Segment.StartPos);
     Json->SetNumberField(TEXT("anim_start_time"), Segment.AnimStartTime);
     Json->SetNumberField(TEXT("anim_end_time"), Segment.AnimEndTime);

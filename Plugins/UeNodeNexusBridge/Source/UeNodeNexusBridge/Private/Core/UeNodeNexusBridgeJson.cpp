@@ -8,7 +8,9 @@ namespace UeNodeNexusBridge
 {
 TSharedPtr<FJsonObject> MakeError(const FString& Code, const FString& Message)
 {
-    return MakeError(Code, Message, nullptr);
+    // Qualified call: plain MakeError(...) would let ADL pull in the engine's
+    // global TValueOrError MakeError template, which wins overload resolution.
+    return UeNodeNexusBridge::MakeError(Code, Message, TSharedPtr<FJsonObject>());
 }
 
 TSharedPtr<FJsonObject> MakeError(const FString& Code, const FString& Message, const TSharedPtr<FJsonObject>& Details)
@@ -109,6 +111,41 @@ TSharedPtr<FJsonObject> MakeDiagnostic(const FString& Severity, const FString& C
     Diagnostic->SetStringField(TEXT("source"), Source);
     Diagnostic->SetStringField(TEXT("raw"), Message);
     return Diagnostic;
+}
+
+FString ObjectPathOrEmpty(const UObject* Object)
+{
+    return Object ? Object->GetPathName() : FString();
+}
+
+bool ReadPayloadIndex(const TSharedPtr<FJsonObject>& Payload, int32& OutIndex)
+{
+    double Number = 0.0;
+    if (!Payload->TryGetNumberField(TEXT("index"), Number))
+    {
+        return false;
+    }
+    OutIndex = static_cast<int32>(Number);
+    return true;
+}
+
+bool AppendSelectedLines(FString& Text, const TArray<FString>& Lines, const TSharedPtr<FJsonObject>& Payload)
+{
+    int32 Index = 0;
+    if (ReadPayloadIndex(Payload, Index))
+    {
+        if (!Lines.IsValidIndex(Index))
+        {
+            return false;
+        }
+        Text += Lines[Index] + TEXT("\n");
+        return true;
+    }
+    for (const FString& Line : Lines)
+    {
+        Text += Line + TEXT("\n");
+    }
+    return true;
 }
 
 TSharedPtr<FJsonObject> MakeEmptyDiff()

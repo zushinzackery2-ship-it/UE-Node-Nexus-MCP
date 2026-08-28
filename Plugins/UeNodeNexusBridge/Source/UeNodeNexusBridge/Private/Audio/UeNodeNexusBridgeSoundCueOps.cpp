@@ -21,11 +21,6 @@ FString NodeId(USoundNode* Node)
     return Node ? Node->GetName() : FString();
 }
 
-FString PathOrEmpty(const UObject* Object)
-{
-    return Object ? Object->GetPathName() : FString();
-}
-
 void AddFloatArray(TArray<FString>& Parts, const FString& Name, const TArray<float>& Values)
 {
     if (Values.Num() == 0)
@@ -45,7 +40,7 @@ FString BuildNodeSummary(USoundNode* Node)
     TArray<FString> Parts;
     if (USoundNodeWavePlayer* WavePlayer = Cast<USoundNodeWavePlayer>(Node))
     {
-        Parts.Add(FString::Printf(TEXT("wave=%s"), *PathOrEmpty(WavePlayer->GetSoundWave())));
+        Parts.Add(FString::Printf(TEXT("wave=%s"), *ObjectPathOrEmpty(WavePlayer->GetSoundWave())));
         Parts.Add(FString::Printf(TEXT("looping=%s"), WavePlayer->bLooping ? TEXT("true") : TEXT("false")));
     }
     if (USoundNodeModulator* Modulator = Cast<USoundNodeModulator>(Node))
@@ -73,7 +68,7 @@ FString BuildNodeSummary(USoundNode* Node)
     if (USoundNodeAttenuation* Attenuation = Cast<USoundNodeAttenuation>(Node))
     {
         Parts.Add(FString::Printf(TEXT("override_attenuation=%s"), Attenuation->bOverrideAttenuation ? TEXT("true") : TEXT("false")));
-        Parts.Add(FString::Printf(TEXT("attenuation=%s"), *PathOrEmpty(Attenuation->AttenuationSettings)));
+        Parts.Add(FString::Printf(TEXT("attenuation=%s"), *ObjectPathOrEmpty(Attenuation->AttenuationSettings)));
     }
     return FString::Join(Parts, TEXT(";"));
 }
@@ -83,7 +78,7 @@ TSharedPtr<FJsonValue> MakeNodeRow(USoundNode* Node)
     TArray<TSharedPtr<FJsonValue>> Row;
     Row.Add(MakeShared<FJsonValueString>(NodeId(Node)));
     Row.Add(MakeShared<FJsonValueString>(Node ? Node->GetClass()->GetName() : FString()));
-    Row.Add(MakeShared<FJsonValueString>(PathOrEmpty(Node)));
+    Row.Add(MakeShared<FJsonValueString>(ObjectPathOrEmpty(Node)));
     Row.Add(MakeShared<FJsonValueNumber>(Node ? Node->ChildNodes.Num() : 0));
     Row.Add(MakeShared<FJsonValueString>(BuildNodeSummary(Node)));
     return MakeShared<FJsonValueArray>(Row);
@@ -94,7 +89,7 @@ TSharedPtr<FJsonObject> MakeNodeObject(USoundNode* Node)
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     Json->SetStringField(TEXT("node_id"), NodeId(Node));
     Json->SetStringField(TEXT("class"), Node ? Node->GetClass()->GetPathName() : FString());
-    Json->SetStringField(TEXT("object_path"), PathOrEmpty(Node));
+    Json->SetStringField(TEXT("object_path"), ObjectPathOrEmpty(Node));
     Json->SetNumberField(TEXT("child_count"), Node ? Node->ChildNodes.Num() : 0);
     Json->SetStringField(TEXT("summary"), BuildNodeSummary(Node));
     return Json;

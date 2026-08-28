@@ -6,7 +6,7 @@ namespace UeNodeNexusBridge
 {
 namespace
 {
-void Register(const TCHAR* Operation, FBridgeOperationHandler Handler)
+void RegisterAutoIndexOp(const TCHAR* Operation, FBridgeOperationHandler Handler)
 {
     RegisterOperationHandler(FString(Operation), MoveTemp(Handler));
 }
@@ -32,18 +32,18 @@ TArray<FString> GetAutoIndexOperationNames()
 
 void RegisterAutoIndexOperations()
 {
-    Register(TEXT("auto_index_enable"), HandleAutoIndexEnable);
-    Register(TEXT("auto_index_disable"), HandleAutoIndexDisable);
-    Register(TEXT("auto_index_status"), HandleAutoIndexStatus);
-    Register(TEXT("auto_index_rebuild"), HandleAutoIndexRebuild);
-    Register(TEXT("auto_index_flush"), HandleAutoIndexFlush);
-    Register(TEXT("auto_index_clear"), HandleAutoIndexClear);
-    Register(TEXT("auto_index_overview"), HandleAutoIndexOverview);
-    Register(TEXT("auto_index_tree_get"), HandleAutoIndexTreeGet);
-    Register(TEXT("auto_index_query"), HandleAutoIndexQuery);
-    Register(TEXT("auto_index_get"), HandleAutoIndexGet);
-    Register(TEXT("auto_index_resolve_path"), HandleAutoIndexResolvePath);
-    Register(TEXT("auto_index_diff_registry"), HandleAutoIndexDiffRegistry);
+    RegisterAutoIndexOp(TEXT("auto_index_enable"), HandleAutoIndexEnable);
+    RegisterAutoIndexOp(TEXT("auto_index_disable"), HandleAutoIndexDisable);
+    RegisterAutoIndexOp(TEXT("auto_index_status"), HandleAutoIndexStatus);
+    RegisterAutoIndexOp(TEXT("auto_index_rebuild"), HandleAutoIndexRebuild);
+    RegisterAutoIndexOp(TEXT("auto_index_flush"), HandleAutoIndexFlush);
+    RegisterAutoIndexOp(TEXT("auto_index_clear"), HandleAutoIndexClear);
+    RegisterAutoIndexOp(TEXT("auto_index_overview"), HandleAutoIndexOverview);
+    RegisterAutoIndexOp(TEXT("auto_index_tree_get"), HandleAutoIndexTreeGet);
+    RegisterAutoIndexOp(TEXT("auto_index_query"), HandleAutoIndexQuery);
+    RegisterAutoIndexOp(TEXT("auto_index_get"), HandleAutoIndexGet);
+    RegisterAutoIndexOp(TEXT("auto_index_resolve_path"), HandleAutoIndexResolvePath);
+    RegisterAutoIndexOp(TEXT("auto_index_diff_registry"), HandleAutoIndexDiffRegistry);
 
     for (const FString& Name : GetAutoIndexOperationNames())
     {

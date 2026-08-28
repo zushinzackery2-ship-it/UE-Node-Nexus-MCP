@@ -5,9 +5,12 @@
 class FJsonObject;
 class UEdGraph;
 class UEdGraphNode;
+class UEdGraphPin;
 
 namespace UeNodeNexusBridge
 {
+bool IsExecPin(const UEdGraphPin* Pin);
+
 struct FBlueprintGraphFilter
 {
     FString Keyword;

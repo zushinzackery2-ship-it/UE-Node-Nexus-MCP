@@ -12,6 +12,30 @@
 
 namespace UeNodeNexusBridge
 {
+bool ReadNiagaraIndexField(const TSharedPtr<FJsonObject>& Payload, const TCHAR* Field, int32& OutValue)
+{
+    double Number = -1.0;
+    if (!Payload->TryGetNumberField(Field, Number))
+    {
+        OutValue = INDEX_NONE;
+        return false;
+    }
+    OutValue = static_cast<int32>(Number);
+    return true;
+}
+
+FNiagaraEmitterHandle* ResolveNiagaraEmitterHandle(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutError, const FString& Operation, const FString& RequestId)
+{
+    int32 EmitterIndex = INDEX_NONE;
+    if (!ReadNiagaraIndexField(Payload, TEXT("emitter_index"), EmitterIndex) || !System->GetEmitterHandles().IsValidIndex(EmitterIndex))
+    {
+        OutError = MakeEnvelope(Operation, RequestId, false);
+        OutError->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_emitter_index"), TEXT("emitter_index is required and must point to an existing emitter")));
+        return nullptr;
+    }
+    return &System->GetEmitterHandles()[EmitterIndex];
+}
+
 TSharedPtr<FJsonObject> MakeNiagaraAssetData(UNiagaraSystem* System)
 {
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();

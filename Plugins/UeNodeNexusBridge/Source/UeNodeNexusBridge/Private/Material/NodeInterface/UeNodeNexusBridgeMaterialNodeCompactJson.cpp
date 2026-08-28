@@ -20,7 +20,7 @@ static TSharedPtr<FJsonValueArray> MakeStringRow(const TArray<FString>& Cells)
     return MakeShared<FJsonValueArray>(Row);
 }
 
-static TSharedPtr<FJsonValueArray> MakeNullLinkRow(const FString& PinName)
+static TSharedPtr<FJsonValueArray> MakeMaterialNullLinkRow(const FString& PinName)
 {
     TArray<TSharedPtr<FJsonValue>> Row;
     Row.Add(MakeShared<FJsonValueString>(PinName));
@@ -28,7 +28,7 @@ static TSharedPtr<FJsonValueArray> MakeNullLinkRow(const FString& PinName)
     return MakeShared<FJsonValueArray>(Row);
 }
 
-static TSharedPtr<FJsonValueArray> MakeLinkRow(const FString& PinName, const FString& Node, const FString& Pin)
+static TSharedPtr<FJsonValueArray> MakeMaterialLinkRow(const FString& PinName, const FString& Node, const FString& Pin)
 {
     TArray<TSharedPtr<FJsonValue>> Row;
     Row.Add(MakeShared<FJsonValueString>(PinName));
@@ -65,8 +65,8 @@ TArray<TSharedPtr<FJsonValue>> BuildMaterialCompactInputRows(UMaterial* Material
         FExpressionInput* Input = It.Input;
         const FString InputName = Expression->GetInputName(It.Index).ToString();
         Rows.Add((Input != nullptr && Input->Expression != nullptr)
-            ? MakeLinkRow(InputName, MaterialNodeAlias(Material, Input->Expression), MaterialOutputName(Input->Expression, Input->OutputIndex))
-            : MakeNullLinkRow(InputName));
+            ? MakeMaterialLinkRow(InputName, MaterialNodeAlias(Material, Input->Expression), MaterialOutputName(Input->Expression, Input->OutputIndex))
+            : MakeMaterialNullLinkRow(InputName));
     }
     return Rows;
 }
@@ -90,7 +90,7 @@ TArray<TSharedPtr<FJsonValue>> BuildMaterialCompactOutputRows(UMaterial* Materia
             {
                 if (It.Input != nullptr && It.Input->Expression == Expression && It.Input->OutputIndex == OutputIndex)
                 {
-                    Rows.Add(MakeLinkRow(OutputName, MaterialNodeAlias(Material, Other), Other->GetInputName(It.Index).ToString()));
+                    Rows.Add(MakeMaterialLinkRow(OutputName, MaterialNodeAlias(Material, Other), Other->GetInputName(It.Index).ToString()));
                 }
             }
         }
@@ -99,12 +99,12 @@ TArray<TSharedPtr<FJsonValue>> BuildMaterialCompactOutputRows(UMaterial* Materia
             FExpressionInput* Input = Material->GetExpressionInputForProperty(Property);
             if (Input != nullptr && Input->Expression == Expression && Input->OutputIndex == OutputIndex)
             {
-                Rows.Add(MakeLinkRow(OutputName, TEXT("MaterialOutput"), MaterialOutputPropertyName(Property)));
+                Rows.Add(MakeMaterialLinkRow(OutputName, TEXT("MaterialOutput"), MaterialOutputPropertyName(Property)));
             }
         }
         if (Rows.Num() == BeforeCount)
         {
-            Rows.Add(MakeNullLinkRow(OutputName));
+            Rows.Add(MakeMaterialNullLinkRow(OutputName));
         }
     }
     return Rows;
@@ -118,8 +118,8 @@ TArray<TSharedPtr<FJsonValue>> BuildMaterialFunctionCompactInputRows(UMaterialFu
         FExpressionInput* Input = It.Input;
         const FString InputName = Expression->GetInputName(It.Index).ToString();
         Rows.Add((Input != nullptr && Input->Expression != nullptr)
-            ? MakeLinkRow(InputName, MaterialNodeAlias(Function, Input->Expression), MaterialOutputName(Input->Expression, Input->OutputIndex))
-            : MakeNullLinkRow(InputName));
+            ? MakeMaterialLinkRow(InputName, MaterialNodeAlias(Function, Input->Expression), MaterialOutputName(Input->Expression, Input->OutputIndex))
+            : MakeMaterialNullLinkRow(InputName));
     }
     return Rows;
 }
@@ -143,13 +143,13 @@ TArray<TSharedPtr<FJsonValue>> BuildMaterialFunctionCompactOutputRows(UMaterialF
             {
                 if (It.Input != nullptr && It.Input->Expression == Expression && It.Input->OutputIndex == OutputIndex)
                 {
-                    Rows.Add(MakeLinkRow(OutputName, MaterialNodeAlias(Function, Other), Other->GetInputName(It.Index).ToString()));
+                    Rows.Add(MakeMaterialLinkRow(OutputName, MaterialNodeAlias(Function, Other), Other->GetInputName(It.Index).ToString()));
                 }
             }
         }
         if (Rows.Num() == BeforeCount)
         {
-            Rows.Add(MakeNullLinkRow(OutputName));
+            Rows.Add(MakeMaterialNullLinkRow(OutputName));
         }
     }
     return Rows;
