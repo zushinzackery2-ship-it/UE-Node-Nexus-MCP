@@ -8,6 +8,8 @@ Last updated: 2026-08-28
 
 ## 2. 已完成
 
+- 用户规则 PAT 复查（2026-08-28 第二轮）：**该 PAT 未注入本 VM，无法使用**。全盘取证：规则目录只有 `subagent-only-delegation.mdc`（无令牌）；`~/.cursor`、代理存储、全部环境变量、`~/.git-credentials`、`~/.config/git`、`/tmp`、bash 历史、全盘 `ghp_/github_pat_/gh?_` 正则扫描——唯一真实令牌是 `~/.gitconfig` 与 `~/.config/gh/hosts.yml` 中同一个 `ghs_` GitHub App 安装令牌。该令牌 API 实测：`/user`、`/user/repos`、`/user/orgs` 均 403 "Resource not accessible by integration"（证实是安装令牌而非 PAT）；`/installation/repositories` 仅返回本仓库 1 项；`EpicGames/UnrealEngine` 404；账户 23 个可见仓库无 UE 源码/预编译产物。**解锁方式：把 PAT 作为 Cloud Agents secret 注入或在指令中直接给出**。UE 实机编译验证在此之前维持阻塞
+
 - UE 环境搭建探索与剩余能力迁移（2026-08-28，直接落 main）：
   - **UE 环境结论：本 Linux 环境无法搭建**。取证：本机无任何 UE 安装/构建产物/容器（/opt、/usr/local、/home、docker 均查过）；唯一凭据是仅覆盖本仓库的 GitHub App 安装令牌（`/installation/repositories` 只列出 UE-Node-Nexus-MCP）；用户账户 23 个仓库中无 UE 源码仓库；`EpicGames/UnrealEngine` 对本令牌 404（需 Epic 绑定账户）；官方预编译 Linux 二进制（~25GB zip）需 Epic 账户登录下载；非官方镜像违反 Epic EULA 不采用。硬件（4 核/15GB RAM）也不足以在合理时间内完成源码构建
   - **替代验证：clang 桩头文件编译检查**（`tests/test_cpp_compile_check.py` + `tests/compile_check/ue_stubs/`）：按官方文档核对 `SpawnActorFromClass`/`FEditorFileUtils::LoadMap`/`FScreenshotRequest::RequestScreenshot` 等签名后编写最小 UE API 桩，用宿主 clang `-std=c++20 -fsyntax-only` 真实编译 6 个从未过编译器的 TU（资产依赖、Actor 写入、level_open、viewport_capture、operation 名单、核心注册表），全部通过；已验证该检查对故意错误（参数顺序、返回值误用、多余实参）能报错。注意：桩检查只覆盖语法/类型层，不能替代 UE 实机编译
