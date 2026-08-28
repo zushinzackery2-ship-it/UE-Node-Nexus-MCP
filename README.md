@@ -152,7 +152,7 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
 
 ## 响应与上下文控制
 
-- **写默认 dry-run**：写 operation 默认 `dry_run=true`；实际写入时单个响应返回已应用差异、引脚完整性、编译结果、脏标记和诊断。
+- **写默认 dry-run**：改动 UE 资产/关卡状态的写 operation 默认 `dry_run=true`；实际写入时单个响应返回已应用差异、引脚完整性、编译结果、脏标记和诊断。唯一例外是 `viewport_capture`（只向 `Saved/Screenshots/` 写 PNG，不触资产，默认直接请求）。
 - **默认压缩**：写 operation 默认响应 `delta`，读 operation 默认 `summary`。完整 bridge envelope 需要显式 `response={"mode": "full"}` 或 `"debug"`。`ue_execute.response` 只接受 `mode` 和 `allow_heavy` 两个字段；`response.format="full"` 是无效写法，会被拒绝并提示改用 `response.mode`。读取粒度放在 operation payload 的 `format` 或 `ue_read(format="detail")`。
 - **artifact**：超过 inline 阈值的大响应不直接进入 tool result，而是返回 `artifact.id`、payload 字节数和摘要，用 `ue_read(target="artifact", query={"artifact_id": "..."})` 取回完整内容。
 - **diff 分页**：`ue_diff_get` 的 change 列表超过 `limit` 时返回 `next_cursor`，把它作为 `cursor` 传回即可翻页。
