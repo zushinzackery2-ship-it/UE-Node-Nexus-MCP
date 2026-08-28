@@ -12,7 +12,9 @@
 `diagnostics_get` also attaches `data.related_log_items`: material compile
 fallbacks, sampler mismatches, and similar clues mined from the UE log. These
 are historical, carry `stale_possible=true`, and are NOT added to the current
-`error_count`.
+`error_count`. For raw log lines beyond those curated clues, use
+`log_tail_get` (or `ue_read(target="log")`) with a `match` substring filter —
+an MCP-local read of the newest project log file.
 
 ## Connection and contract triage
 

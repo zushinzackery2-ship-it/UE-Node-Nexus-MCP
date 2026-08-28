@@ -46,6 +46,8 @@ Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `u
 - Cascade (`UParticleSystem`) emitters/modules (+ normalized module param values: Spawn/Lifetime/Size/Color/Velocity/Location/Rotation/Light, in `format="full"`) → `cascade_system_summary_get`
 - Niagara → `ue_read(target="niagara_system"|"niagara_stack")` / `niagara_*`
 - level actors / component materials → `level_*` / `component_*`
+- asset dependency graph → `asset_dependencies_get` / `asset_referencers_get` / `ue_read(target="asset_dependencies"|"asset_referencers")` — AssetRegistry package links as `[package_name, hard|soft]` rows; engine/script packages excluded unless `include_engine=true`
+- **UE log tail** → `log_tail_get` / `ue_read(target="log")` — MCP-local read of the newest project log (`tail_kb`, `match` substring filter, `max_lines`); use for raw log lines when `diagnostics_get.related_log_items` is too narrow
 - Landscape Paint layer info binding → `landscape_layer_info_set` after reading `object_properties_get(TargetLayers)`; this is a narrow write for `LandscapeLayerInfoObject`, not a generic UObject property setter.
 - SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
 - Texture2D dimensions / source+pixel format / compression / sRGB / LOD group → `texture_summary_get` / `ue_read(target="texture")`
@@ -102,7 +104,7 @@ Never conclude "no active project" from one empty `assets`/`items`. Cross-check 
 Gotcha: `asset_list(format="indexed")` does not populate row `items`; use `format="compact"` (rows `[object_path, class, loaded, redirector]`) or `"full"` to read rows. Filter with `class_names` + `package_paths`.
 
 ## Safe writes
-`ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes. Use narrow domain writes such as `landscape_layer_info_set` instead of adding broad `object_properties_set`.
+`ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python/console execution, no broad `object_properties_set`-style reflection writes. Level-actor lifecycle uses narrow typed ops instead: `level_actor_spawn` (`class_path` accepts engine short names, `/Script/` paths, or Blueprint asset paths), `level_actor_delete`, `level_actor_transform_set` (at least one of location/rotation/scale) — all default `dry_run=true`. `level_open` switches maps and refuses to drop a dirty map unless `discard_changes=true`; after it, all previously read actor paths are stale — re-list before further writes.
 
 ## Concurrency & batching
 The bridge runs each request on the UE game thread, one at a time per editor instance — parallel MCP calls queue, they do not overlap UE work. Classes:

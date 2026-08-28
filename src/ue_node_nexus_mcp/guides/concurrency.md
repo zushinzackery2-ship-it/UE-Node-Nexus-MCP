@@ -16,8 +16,9 @@ queue. Plan accordingly.
   unrelated assets). Never target the same asset from two in-flight writes —
   order is not guaranteed once queued.
 - **Sequential only**: operations that change what other calls resolve against:
-  `bridge_instance_select` (rebinds the session), `asset_delete` /
-  `asset_move` / `asset_rename` for paths other calls are about to use,
+  `bridge_instance_select` (rebinds the session), `level_open` (invalidates
+  every previously read actor path), `asset_delete` / `asset_move` /
+  `asset_rename` for paths other calls are about to use, `level_actor_delete`,
   `auto_index_rebuild`, and the hidden editor-lifecycle ops. Run these alone
   and re-read state afterwards.
 

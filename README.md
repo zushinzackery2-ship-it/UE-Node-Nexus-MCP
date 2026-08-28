@@ -4,7 +4,7 @@
 
 **Unreal Engine 编辑器的 MCP 桥接器：资产、Material/Blueprint 图、Niagara、关卡材质的类型安全读写**
 
-*固定 6 工具 facade + 102 个内部 operation，先查 schema 再调用，无需模型自行编写 Python 脚本*
+*固定 6 工具 facade + 109 个内部 operation，先查 schema 再调用，无需模型自行编写 Python 脚本*
 
 ![C++](https://img.shields.io/badge/C%2B%2B-20-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-green?style=flat-square)
@@ -18,7 +18,7 @@
 
 ## 它是什么
 
-本项目让 MCP 客户端（Claude Code、Cursor 等）安全地检查和编辑打开中的 Unreal Editor：资产管理、Material/Blueprint 节点图读写、编译诊断、Material Instance 参数、Niagara authoring、关卡材质使用点。不包含场景布局自动化，也不提供任意 Python / 反射写入入口。
+本项目让 MCP 客户端（Claude Code、Cursor 等）安全地检查和编辑打开中的 Unreal Editor：资产管理与依赖图、Material/Blueprint 节点图读写、编译诊断与日志、Material Instance 参数、Niagara authoring、关卡材质使用点、关卡 Actor 生命周期（spawn/delete/transform，窄类型化写入）。不提供任意 Python/控制台命令执行，也不提供泛化的 UObject 反射写入入口。
 
 ```
 MCP Client (stdio)
@@ -105,30 +105,36 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
      graph_snapshot_get / material_interface_resolve / texture_summary_get / ...
 ```
 
-`ue_read` 支持的 target：`auto`、`artifact`、`asset`、`asset_index`、`graph`、`graph_node_search`、`node`、`blueprint`、`anim_blueprint`、`anim_state_machine`、`anim_montage`、`blend_space`、`material_instance`、`niagara_system`、`niagara_stack`、`cascade_system`、`level`、`diagnostics`、`project_input`、`sound_cue`、`texture`。注意没有 `target="material"`：材质实例参数用 `material_instance`，材质节点图用 `graph`，不确定类型用 `auto`。
+`ue_read` 支持的 target：`auto`、`artifact`、`asset`、`asset_dependencies`、`asset_referencers`、`asset_index`、`graph`、`graph_node_search`、`node`、`blueprint`、`anim_blueprint`、`anim_state_machine`、`anim_montage`、`blend_space`、`material_instance`、`niagara_system`、`niagara_stack`、`cascade_system`、`level`、`log`、`diagnostics`、`project_input`、`sound_cue`、`texture`。注意没有 `target="material"`：材质实例参数用 `material_instance`，材质节点图用 `graph`，不确定类型用 `auto`。
 
 ---
 
 ## 内部 operation registry
 
-102 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
+109 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
 
 | Group | 数量 | 覆盖范围 |
 |:------|:----:|:---------|
-| `core` | 13 | 桥接诊断、编译/校验/保存、MessageLog 诊断、编辑器实例管理、工作流指南、批量执行 |
-| `asset` | 12 | 创建/删除/移动/重命名/复制、批量操作、文件夹、redirector 修复 |
+| `core` | 14 | 桥接诊断、编译/校验/保存、MessageLog 诊断、UE 日志尾读取、编辑器实例管理、工作流指南、批量执行 |
+| `asset` | 14 | 创建/删除/移动/重命名/复制、批量操作、文件夹、redirector 修复、依赖/引用图查询 |
 | `auto_index` | 12 | UE 内持久资产索引：查询、树、概览、路径解析 |
 | `graph` | 12 | Material/Blueprint 图快照、整图节点信息、声明式 patch、整图 build、节点/参数读写 |
 | `material` | 4 | Material Instance 参数读写、材质表达式类枚举、本地只读 lint |
 | `blueprint` | 4 | 蓝图详情/变量/CDO/组件读取、SCS 组件树写入 |
-| `level` | 13 | Actor/网格实例枚举、transform、UObject 属性读取、material slot 与 MID 参数读写、Landscape LayerInfo |
+| `level` | 17 | Actor 枚举/spawn/delete、transform 读写、地图切换、UObject 属性读取、material slot 与 MID 参数读写、Landscape LayerInfo |
 | `vfx` | 26 | Niagara System/Emitter/Module Stack/Renderer/User 参数/材质/lint/编译 + Cascade 只读摘要 |
 | `animation` | 2 | AnimMontage、BlendSpace 结构化摘要 |
 | `audio` | 1 | SoundCue 摘要 |
 | `texture` | 1 | Texture 摘要 |
 | `project_input` | 2 | legacy Project Settings action/axis mappings 读写 |
 
-其中 55 个读、47 个写；96 个转发到 UE bridge，6 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`），在 server 内处理、不进 UE。
+其中 58 个读、51 个写；102 个转发到 UE bridge，7 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`、`log_tail_get`），在 server 内处理、不进 UE。
+
+**关卡 Actor 生命周期（窄类型化写入）**：`level_actor_spawn`（`class_path` 接受引擎类短名、`/Script/` 路径或蓝图资产路径，附带 location/rotation/scale/label）、`level_actor_delete`、`level_actor_transform_set`（至少给 location/rotation/scale 之一，返回前后 transform）。全部默认 `dry_run=true`，走编辑器 `UEditorActorSubsystem`，不开放泛化反射写入。`level_open` 切换编辑器地图：当前地图有未保存修改时拒绝执行，需显式 `discard_changes=true`。
+
+**资产依赖图**：`asset_dependencies_get` / `asset_referencers_get` 基于 AssetRegistry 返回 `[package_name, hard|soft]` 行（默认过滤 `/Script/`、`/Engine/` 包，`include_engine=true` 可包含），支持 cursor 分页，用于重命名/删除前的影响面分析。
+
+**UE 日志尾读取**：`log_tail_get` 是 MCP 本地 operation，读取最新项目日志尾部（`tail_kb`、`match` 子串过滤、`max_lines`），补足 `diagnostics_get.related_log_items` 之外的原始日志排查。
 
 **hidden operation**：6 个高危/兼容 operation（如 `editor_save_all`、`editor_request_exit`、`auto_index_clear`）默认不出现在 `ue_capability_get` 索引和 `ue_context_get` 计数中，需 `include_hidden=true` 列出；按名称查 schema 和通过 `ue_execute` 执行不受影响。
 
@@ -208,7 +214,7 @@ UE-Node-Nexus-MCP/
 pip install -e . && python -m pytest tests -q
 ```
 
-测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、operation registry 元数据读取、payload schema 派生、响应归一化，以及两个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**，和所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**。
+测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、`log_tail_get` 日志定位/过滤、关卡 Actor 与依赖图 operation 的载荷与路由、operation registry 元数据读取、payload schema 派生、响应归一化，以及两个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**，和所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**。
 
 ---
 
@@ -217,8 +223,9 @@ pip install -e . && python -m pytest tests -q
 | 项目 | 说明 |
 |:-----|:-----|
 | **实测环境** | UE 5.5 Launcher，Windows x64；材质整图复刻（85 节点/110 连线精确一致）、3C Blueprint 工作流、Niagara authoring 均在实机验收通过 |
+| **待编译验证** | 关卡 Actor 生命周期、`level_open`、资产依赖图共 6 个新 bridge operation 的 C++ handler 按现有插件惯例编写并通过 Python/C++ 契约对齐测试，但尚未经过 UE 5.5 实机编译验证；部署前请先完整编译插件一次 |
 | **跨版本** | 插件二进制与 UE 版本/编译器/模块 ABI 绑定；换 UE 版本请按源码重新编译，UE API 变化时按编译错误调整 |
-| **仓库边界** | 聚焦 asset discovery、graph 检查与编辑、编译诊断、MI 参数、安全 package save；不含场景布局自动化、Actor 实例化、任意 UObject 属性写入、任意 Python 执行 |
+| **仓库边界** | 聚焦 asset discovery 与依赖图、graph 检查与编辑、编译诊断与日志、MI 参数、窄类型化关卡 Actor 生命周期、安全 package save；不含任意 Python/控制台命令执行、泛化 UObject 反射写入、场景模板类工具 |
 | **平台** | 传输层为 Windows 命名管道，server 与 UE 编辑器需在同一台 Windows 机器 |
 
 ---

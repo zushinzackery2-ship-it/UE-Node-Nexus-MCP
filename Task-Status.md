@@ -1,12 +1,19 @@
 # Task Status
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
 
 ## 1. 当前任务
 
-- [x] 对照参考仓库 Natfii/UnrealClaude 借鉴设计并增强本项目（仅借鉴思路，未搬代码）
+- [x] UnrealClaude 能力全面对齐迁移（仅借鉴设计，自行实现）+ README 重写 + 仓库设为 private
 
 ## 2. 已完成
+
+- UnrealClaude 能力对齐迁移（2026-08-28，直接落 main）：
+  - 迁移（C++ + Python 全链路）：`asset_dependencies_get`/`asset_referencers_get`（AssetRegistry 硬/软依赖行）、`level_open`（脏地图保护）、`level_actor_spawn`/`level_actor_delete`/`level_actor_transform_set`（窄类型化 Actor 生命周期，默认 dry-run）、MCP 本地 `log_tail_get`（项目日志尾+子串过滤）；`ue_read` 新增 `asset_dependencies`/`asset_referencers`/`log` target
+  - operation 总数 102 → 109（58 读/51 写，102 bridge + 7 本地）；新增 tests/test_migrated_operations.py，全量 59 测试通过
+  - 边界调整：关卡 Actor 生命周期由"不提供"改为"窄类型化写入提供"；仍不提供任意 Python/控制台执行与泛化反射写入
+  - **遗留：6 个新 bridge op 的 C++ handler 未经 UE 实机编译验证（本环境无 UE 构建链），部署前需完整编译插件一次**
+  - 未迁移及原因：异步任务队列（需管道协议改造+并发基建，无法编译验证）、视口截图（异步渲染回读不适配同步管道协议）、Enhanced Input 资产创建（大体量资产工厂 C++，无法编译验证，legacy input 已覆盖）、AnimBP 状态机写入（超大图编辑 C++ 面）、任意脚本/控制台执行（安全边界，UnrealClaude 自身也在为其补安全门）、character/character_data（场景化工具，违背通用原语原则）、编辑器内嵌聊天面板（产品形态不同，非 MCP 能力）
 
 - 借鉴 UnrealClaude 增强（2026-08-27，直接落 main）：
   - 借鉴其"按需 UE 文档上下文系统"→ 新增 MCP 本地 operation `workflow_guide_get`：7 类任务级工作流指南（`src/ue_node_nexus_mcp/guides/*.md`），支持分类列表/取正文/关键词检索，Agent 无需安装 skill 也能会话内自取
