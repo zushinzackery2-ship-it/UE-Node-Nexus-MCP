@@ -95,3 +95,63 @@ def anim_state_machine_summary_get(
             "format": format,
         },
     )
+
+
+@default_tool()
+def anim_state_machine_state_add(
+    asset_path: str,
+    state_name: str,
+    machine_name: str | None = None,
+    x: float = 0.0,
+    y: float = 0.0,
+    set_as_entry: bool = False,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Add a state to an AnimBlueprint state machine.
+
+    machine_name may be omitted when the blueprint contains exactly one state
+    machine. set_as_entry rewires the machine entry node to the new state.
+    """
+    require_non_empty_string(asset_path, "asset_path")
+    require_non_empty_string(state_name, "state_name")
+    payload: dict[str, Any] = {
+        "asset_path": asset_path,
+        "state_name": state_name,
+        "x": x,
+        "y": y,
+        "set_as_entry": set_as_entry,
+        "dry_run": dry_run,
+    }
+    if machine_name is not None:
+        require_non_empty_string(machine_name, "machine_name")
+        payload["machine_name"] = machine_name
+    return _call("anim_state_machine_state_add", payload)
+
+
+@default_tool()
+def anim_state_machine_transition_add(
+    asset_path: str,
+    from_state: str,
+    to_state: str,
+    machine_name: str | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Add a transition between two named states of an AnimBlueprint state machine.
+
+    Duplicate from->to transitions are rejected; the created transition starts
+    with an empty rule graph (author the condition afterwards in the editor or
+    via graph operations).
+    """
+    require_non_empty_string(asset_path, "asset_path")
+    require_non_empty_string(from_state, "from_state")
+    require_non_empty_string(to_state, "to_state")
+    payload: dict[str, Any] = {
+        "asset_path": asset_path,
+        "from_state": from_state,
+        "to_state": to_state,
+        "dry_run": dry_run,
+    }
+    if machine_name is not None:
+        require_non_empty_string(machine_name, "machine_name")
+        payload["machine_name"] = machine_name
+    return _call("anim_state_machine_transition_add", payload)

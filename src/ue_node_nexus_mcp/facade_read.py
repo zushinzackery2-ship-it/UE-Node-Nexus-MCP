@@ -27,6 +27,7 @@ READ_TARGET_OPERATIONS: dict[str, str | None] = {
     "diagnostics": "diagnostics_get",
     "graph": "graph_snapshot_get",
     "graph_node_search": "graph_node_search",
+    "input_mapping_context": "input_mapping_context_get",
     "level": "level_actors_list",
     "log": "log_tail_get",
     "material_instance": "material_instance_params_get",

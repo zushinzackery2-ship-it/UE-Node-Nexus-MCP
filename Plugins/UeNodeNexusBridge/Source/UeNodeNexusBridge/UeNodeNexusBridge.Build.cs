@@ -45,6 +45,7 @@ public class UeNodeNexusBridge : ModuleRules
             "AssetTools",
             "BlueprintGraph",
             "EditorFramework",
+            "EnhancedInput",
             "InputCore",
             "JsonUtilities",
             "Landscape",

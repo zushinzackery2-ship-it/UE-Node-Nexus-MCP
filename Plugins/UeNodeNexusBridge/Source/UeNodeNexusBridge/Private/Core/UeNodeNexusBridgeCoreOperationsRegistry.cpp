@@ -49,10 +49,16 @@ void RegisterCoreOperations()
     RegisterCoreOp(TEXT("component_material_instance_params_set"), HandleComponentMaterialInstanceParamsSet);
     RegisterCoreOp(TEXT("project_input_mappings_get"), HandleProjectInputMappingsGet);
     RegisterCoreOp(TEXT("project_input_mappings_patch"), HandleProjectInputMappingsPatch);
+    RegisterCoreOp(TEXT("input_action_create"), HandleInputActionCreate);
+    RegisterCoreOp(TEXT("input_mapping_context_create"), HandleInputMappingContextCreate);
+    RegisterCoreOp(TEXT("input_mapping_context_entry_add"), HandleInputMappingContextEntryAdd);
+    RegisterCoreOp(TEXT("input_mapping_context_get"), HandleInputMappingContextGet);
     RegisterCoreOp(TEXT("blueprint_details_get"), HandleBlueprintDetailsGet);
     RegisterCoreOp(TEXT("blueprint_components_patch"), HandleBlueprintComponentsPatch);
     RegisterCoreOp(TEXT("anim_blueprint_summary_get"), HandleAnimBlueprintSummaryGet);
     RegisterCoreOp(TEXT("anim_state_machine_summary_get"), HandleAnimStateMachineSummaryGet);
+    RegisterCoreOp(TEXT("anim_state_machine_state_add"), HandleAnimStateMachineStateAdd);
+    RegisterCoreOp(TEXT("anim_state_machine_transition_add"), HandleAnimStateMachineTransitionAdd);
     RegisterCoreOp(TEXT("anim_montage_summary_get"), HandleAnimMontageSummaryGet);
     RegisterCoreOp(TEXT("blend_space_summary_get"), HandleBlendSpaceSummaryGet);
     RegisterCoreOp(TEXT("graph_snapshot_get"), HandleGraphSnapshotGet);
