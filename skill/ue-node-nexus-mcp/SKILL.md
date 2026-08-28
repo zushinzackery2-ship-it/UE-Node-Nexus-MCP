@@ -10,6 +10,8 @@ Live MCP results are the source of truth. Judge runtime behavior before trusting
 ## Public surface
 Fixed at 6 facade tools: `ue_context_get`, `ue_capability_get`, `ue_execute`, `ue_read`, `ue_diff_get`, `ue_plan_validate`. Low-level operations never appear in `list_tools`: discover them with `ue_capability_get`, run them through `ue_execute`, read common state through `ue_read`. High-risk compatibility ops flagged `hidden` (e.g. `editor_save_all`, `editor_request_exit`, `auto_index_clear`) are omitted from the `ue_capability_get` index unless `include_hidden=true`; querying one by name and executing it still works. `ue_diff_get` pages truncated change lists: pass the returned `next_cursor` back as `cursor`.
 
+Task-level recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists guide categories (getting_started, graph_editing, material_authoring, blueprint_authoring, niagara_authoring, diagnostics_repair, concurrency); `{"category": "..."}` returns one guide body, `{"query": "connect pins"}` keyword-routes to the best guide. Pull the matching guide before starting an unfamiliar multi-step workflow.
+
 > If an operation named in this skill is missing from `ue_capability_get`, your MCP **server process is running stale code** — reinstall the plugin's `MCPServer` Python and restart the MCP client. The bridge plugin (UE editor) and the Python server must BOTH be current; updating one without restarting the other is the most common "feature X doesn't work" cause.
 
 ## Instance selection (multi-editor)
@@ -101,6 +103,14 @@ Gotcha: `asset_list(format="indexed")` does not populate row `items`; use `forma
 
 ## Safe writes
 `ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python, no broad UObject or level-instance writes. Use narrow domain writes such as `landscape_layer_info_set` instead of adding broad `object_properties_set`.
+
+## Concurrency & batching
+The bridge runs each request on the UE game thread, one at a time per editor instance — parallel MCP calls queue, they do not overlap UE work. Classes:
+- **Parallel-safe**: all read ops. Overlap freely.
+- **Per-asset safe**: write ops on *different* assets. Never two in-flight writes on the same asset.
+- **Sequential only**: `bridge_instance_select`, `auto_index_rebuild`, deletes/moves/renames of paths other calls will use, hidden editor-lifecycle ops. Run alone, re-read state after.
+
+`batch_execute` (MCP-local) runs a short ordered list of operations in one call: `ue_execute("batch_execute", {"operations": [{"operation": ..., "payload": {...}}, ...]})`. The whole batch is validated first (invalid batch executes nothing); execution stops at the first failure unless `continue_on_error=true`; a bridge connection failure aborts the remainder; per-item `dry_run` keeps its meaning. It is a roundtrip saver, NOT a transaction — applied items stay applied. Prefer one `graph_patch_apply`/`graph_build_apply` over a batch when a single op covers the edit, and `ue_plan_validate` first for high-risk batches.
 
 ## Don't guess calls
 Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. Use `detail="examples"` for a valid payload example. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs EXACTLY one of `asset_path` / `material_path` / `component_path`+`slot_index`); an empty call is a request error (`invalid_request`), passing more than one is `target_conflict`, and an out-of-range slot is `invalid_slot` — none of these are `material_not_found`.

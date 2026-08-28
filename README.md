@@ -4,7 +4,7 @@
 
 **Unreal Engine 编辑器的 MCP 桥接器：资产、Material/Blueprint 图、Niagara、关卡材质的类型安全读写**
 
-*固定 6 工具 facade + 100 个内部 operation，先查 schema 再调用，无需模型自行编写 Python 脚本*
+*固定 6 工具 facade + 102 个内部 operation，先查 schema 再调用，无需模型自行编写 Python 脚本*
 
 ![C++](https://img.shields.io/badge/C%2B%2B-20-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-green?style=flat-square)
@@ -111,11 +111,11 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
 
 ## 内部 operation registry
 
-100 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
+102 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
 
 | Group | 数量 | 覆盖范围 |
 |:------|:----:|:---------|
-| `core` | 11 | 桥接诊断、编译/校验/保存、MessageLog 诊断、编辑器实例管理 |
+| `core` | 13 | 桥接诊断、编译/校验/保存、MessageLog 诊断、编辑器实例管理、工作流指南、批量执行 |
 | `asset` | 12 | 创建/删除/移动/重命名/复制、批量操作、文件夹、redirector 修复 |
 | `auto_index` | 12 | UE 内持久资产索引：查询、树、概览、路径解析 |
 | `graph` | 12 | Material/Blueprint 图快照、整图节点信息、声明式 patch、整图 build、节点/参数读写 |
@@ -128,9 +128,13 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
 | `texture` | 1 | Texture 摘要 |
 | `project_input` | 2 | legacy Project Settings action/axis mappings 读写 |
 
-其中 54 个读、46 个写；96 个转发到 UE bridge，4 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`），在 server 内处理、不进 UE。
+其中 55 个读、47 个写；96 个转发到 UE bridge，6 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`），在 server 内处理、不进 UE。
 
 **hidden operation**：6 个高危/兼容 operation（如 `editor_save_all`、`editor_request_exit`、`auto_index_clear`）默认不出现在 `ue_capability_get` 索引和 `ue_context_get` 计数中，需 `include_hidden=true` 列出；按名称查 schema 和通过 `ue_execute` 执行不受影响。
+
+**按需工作流指南**：`ue_execute("workflow_guide_get", {})` 列出 7 类任务级指南（入门、图编辑、材质、蓝图、Niagara、诊断修复、并发批量），`{"category": "..."}` 取指南正文，`{"query": "connect pins"}` 按关键词路由到最匹配的指南。指南正文维护在 `src/ue_node_nexus_mcp/guides/*.md`，Agent 不装 skill 文件也能在会话内自取工作流知识。
+
+**批量执行**：`batch_execute` 是 MCP 本地 operation，一次调用顺序执行一小批 registry operation（上限 20 条）：全批先校验（未知 operation、组未启用、缺必填字段时整批拒绝、不执行任何一条），执行时默认遇错即停并把其余标记为 skipped（`continue_on_error=true` 可继续），桥接连接失败则中止剩余项。逐项返回 `ok`、紧凑摘要和诊断计数。它是省往返的工具，不是事务——已执行项不会回滚。
 
 **facade 生产路径上的客户端逻辑**：`graph_patch_apply` 对 Material/MaterialFunction 在 `dry_run=false` 时由 Python 端展开同批 `create_node.client_id` 连线引用；`diagnostics_get` 附带 UE log 中的材质编译回退线索（`related_log_items`，标 `stale_possible=true`，不计入全局 `error_count`）；Niagara 读 operation 自动裁剪冗余字段。这些行为都在 `ue_execute` 实际走的路径上生效并有测试覆盖。
 
@@ -187,6 +191,7 @@ UE-Node-Nexus-MCP/
 │   └── UeNodeNexusVfxBridge/     Niagara/Cascade UE 插件（C++）
 ├── src/ue_node_nexus_mcp/        Python MCP server
 │   ├── operations.json           operation 元数据单一事实源
+│   ├── guides/                   按需工作流指南正文（workflow_guide_get 服务）
 │   ├── tools_facade.py           6 个 facade 入口
 │   ├── facade_*.py               capability / execute / read / plan / response / state
 │   └── tools_*.py                各 group 的 payload 构造与客户端逻辑
@@ -203,7 +208,7 @@ UE-Node-Nexus-MCP/
 pip install -e . && python -m pytest tests -q
 ```
 
-测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、operation registry 元数据读取、payload schema 派生、响应归一化，以及两个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**，和所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**。
+测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、operation registry 元数据读取、payload schema 派生、响应归一化，以及两个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**，和所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**。
 
 ---
 

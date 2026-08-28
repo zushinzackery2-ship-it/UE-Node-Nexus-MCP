@@ -1,12 +1,20 @@
 # Task Status
 
-Last updated: 2026-08-26
+Last updated: 2026-08-27
 
 ## 1. 当前任务
 
-- [x] 按架构审查报告修复设计问题：facade 生产路径接通客户端逻辑、operations.json 元数据单源化、hidden 操作生效、ue_diff_get 真分页、vfx 探测缓存修复、真实调用面测试与 C++ 契约对齐测试
+- [x] 对照参考仓库 Natfii/UnrealClaude 借鉴设计并增强本项目（仅借鉴思路，未搬代码）
 
 ## 2. 已完成
+
+- 借鉴 UnrealClaude 增强（2026-08-27，直接落 main）：
+  - 借鉴其"按需 UE 文档上下文系统"→ 新增 MCP 本地 operation `workflow_guide_get`：7 类任务级工作流指南（`src/ue_node_nexus_mcp/guides/*.md`），支持分类列表/取正文/关键词检索，Agent 无需安装 skill 也能会话内自取
+  - 借鉴其批量/队列工具面 → 新增 MCP 本地 operation `batch_execute`：整批先校验（无效批不执行任何一条）、顺序执行、默认遇错即停、逐项紧凑结果，上限 20 条，禁止嵌套
+  - 借鉴其 CLAUDE.md 工具并行分类 → SKILL.md 新增 Concurrency & batching 章节（读并行安全 / 写按资产隔离 / 需串行操作）
+  - 未采纳（需 UE 构建环境，无法编译验证）：异步任务队列、asset dependencies/referencers 查询、视口截图
+  - operation 总数 100 → 102（55 读 / 47 写，96 bridge + 6 本地）；新增 tests/test_workflow_guides.py、tests/test_batch_execute.py，全量 49 测试通过
+- 按架构审查报告修复设计问题：facade 生产路径接通客户端逻辑、operations.json 元数据单源化、hidden 操作生效、ue_diff_get 真分页、vfx 探测缓存修复、真实调用面测试与 C++ 契约对齐测试
 
 - 编写工作区规则：主代理禁止分析与编辑，统一委托单一 fable5xhigh 子代理（`.cursor/rules/subagent-only-delegation.mdc`，`alwaysApply: true`）
 - 架构审查修复（分支 `cursor/facade-review-fixes-bcbf`）：
