@@ -105,13 +105,13 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
      graph_snapshot_get / material_interface_resolve / texture_summary_get / ...
 ```
 
-`ue_read` 支持的 target：`auto`、`artifact`、`asset`、`asset_dependencies`、`asset_referencers`、`asset_index`、`graph`、`graph_node_search`、`node`、`blueprint`、`anim_blueprint`、`anim_state_machine`、`anim_montage`、`blend_space`、`material_instance`、`niagara_system`、`niagara_stack`、`cascade_system`、`level`、`log`、`diagnostics`、`project_input`、`sound_cue`、`texture`。注意没有 `target="material"`：材质实例参数用 `material_instance`，材质节点图用 `graph`，不确定类型用 `auto`。
+`ue_read` 支持的 target：`auto`、`artifact`、`asset`、`asset_dependencies`、`asset_referencers`、`asset_index`、`graph`、`graph_node_search`、`node`、`blueprint`、`anim_blueprint`、`anim_state_machine`、`anim_montage`、`blend_space`、`material_instance`、`niagara_system`、`niagara_stack`、`cascade_system`、`level`、`log`、`diagnostics`、`project_input`、`input_mapping_context`、`sound_cue`、`texture`。注意没有 `target="material"`：材质实例参数用 `material_instance`，材质节点图用 `graph`，不确定类型用 `auto`。
 
 ---
 
 ## 内部 operation registry
 
-115 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
+121 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
 
 | Group | 数量 | 覆盖范围 |
 |:------|:----:|:---------|
@@ -120,19 +120,23 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
 | `auto_index` | 12 | UE 内持久资产索引：查询、树、概览、路径解析 |
 | `graph` | 12 | Material/Blueprint 图快照、整图节点信息、声明式 patch、整图 build、节点/参数读写 |
 | `material` | 4 | Material Instance 参数读写、材质表达式类枚举、本地只读 lint |
-| `blueprint` | 4 | 蓝图详情/变量/CDO/组件读取、SCS 组件树写入 |
+| `blueprint` | 6 | 蓝图详情/变量/CDO/组件读取、SCS 组件树写入、AnimBP 状态机 state/transition 写入 |
 | `level` | 17 | Actor 枚举/spawn/delete、transform 读写、地图切换、UObject 属性读取、material slot 与 MID 参数读写、Landscape LayerInfo |
 | `vfx` | 26 | Niagara System/Emitter/Module Stack/Renderer/User 参数/材质/lint/编译 + Cascade 只读摘要 |
 | `animation` | 2 | AnimMontage、BlendSpace 结构化摘要 |
 | `audio` | 1 | SoundCue 摘要 |
 | `texture` | 1 | Texture 摘要 |
-| `project_input` | 2 | legacy Project Settings action/axis mappings 读写 |
+| `project_input` | 6 | legacy Project Settings action/axis mappings 读写、Enhanced Input 资产创建与映射读写 |
 
-其中 61 个读、54 个写；103 个转发到 UE bridge，12 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`、`log_tail_get`、`task_submit`/`task_status`/`task_result`/`task_cancel`、`viewport_capture_status`），在 server 内处理、不进 UE。
+其中 62 个读、59 个写；109 个转发到 UE bridge，12 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`、`log_tail_get`、`task_submit`/`task_status`/`task_result`/`task_cancel`、`viewport_capture_status`），在 server 内处理、不进 UE。
 
 **关卡 Actor 生命周期（窄类型化写入）**：`level_actor_spawn`（`class_path` 接受引擎类短名、`/Script/` 路径或蓝图资产路径，附带 location/rotation/scale/label）、`level_actor_delete`、`level_actor_transform_set`（至少给 location/rotation/scale 之一，返回前后 transform）。全部默认 `dry_run=true`，走编辑器 `UEditorActorSubsystem`，不开放泛化反射写入。`level_open` 切换编辑器地图：当前地图有未保存修改时拒绝执行，需显式 `discard_changes=true`。
 
 **资产依赖图**：`asset_dependencies_get` / `asset_referencers_get` 基于 AssetRegistry 返回 `[package_name, hard|soft]` 行（默认过滤 `/Script/`、`/Engine/` 包，`include_engine=true` 可包含），支持 cursor 分页，用于重命名/删除前的影响面分析。
+
+**Enhanced Input**：`input_action_create`（`value_type` 支持 `bool/axis1d/axis2d/axis3d`）与 `input_mapping_context_create` 创建 UInputAction / UInputMappingContext 资产；`input_mapping_context_entry_add` 把已有 InputAction 绑定到按键（键名如 `SpaceBar`、`W`、`Gamepad_FaceButton_Bottom`，无效键名和重复绑定会被拒绝）；`input_mapping_context_get` 列出 context 内全部映射（也可走 `ue_read(target="input_mapping_context")`）。写 operation 默认 `dry_run=true`，`save=true` 时落盘保存。
+
+**AnimBP 状态机写入**：`anim_state_machine_state_add` 向状态机添加命名状态（`set_as_entry=true` 时把入口节点重连到新状态），`anim_state_machine_transition_add` 在两个命名状态之间建立 transition（重复的 from→to 会被拒绝，新 transition 的条件图为空、需后续补充规则）。蓝图只有一个状态机时 `machine_name` 可省略，多个时必填、错误响应会列出可选名称。写入后自动标记蓝图结构性修改。读取侧配套 `anim_state_machine_summary_get`（或 `ue_read(target="anim_state_machine")`）。
 
 **UE 日志尾读取**：`log_tail_get` 是 MCP 本地 operation，读取最新项目日志尾部（`tail_kb`、`match` 子串过滤、`max_lines`），补足 `diagnostics_get.related_log_items` 之外的原始日志排查。
 
@@ -227,7 +231,8 @@ pip install -e . && python -m pytest tests -q
 | 项目 | 说明 |
 |:-----|:-----|
 | **实测环境** | UE 5.5 Launcher，Windows x64；材质整图复刻（85 节点/110 连线精确一致）、3C Blueprint 工作流、Niagara authoring 均在实机验收通过 |
-| **待实机验证** | 关卡 Actor 生命周期、`level_open`、资产依赖图、`viewport_capture` 共 7 个新 bridge operation 的 C++ handler 按现有插件惯例编写，已通过 Python/C++ 契约对齐测试和 clang 桩头文件编译检查（语法/类型层面），但尚未经过 UE 5.5 实机编译与运行验证；部署前请先完整编译插件一次 |
+| **编译验证** | 两个插件的全部 C++ TU 已在 Linux 上对照 UE 5.5 官方源码用 UnrealBuildTool 完整编译通过（unity 与非 unity 双模式，clang 18，零错误零警告）；期间修复的 ODR/unity 合并冲突、ADL 重载与弃用 API 问题均已进主干 |
+| **待运行验证** | 关卡 Actor 生命周期、`level_open`、资产依赖图、`viewport_capture`、Enhanced Input、AnimBP 状态机写入等新 bridge operation 已通过上述真实编译与 Python/C++ 契约对齐测试，但尚未在运行中的 UE 编辑器内做端到端功能验收 |
 | **跨版本** | 插件二进制与 UE 版本/编译器/模块 ABI 绑定；换 UE 版本请按源码重新编译，UE API 变化时按编译错误调整 |
 | **仓库边界** | 聚焦 asset discovery 与依赖图、graph 检查与编辑、编译诊断与日志、MI 参数、窄类型化关卡 Actor 生命周期、安全 package save；不含任意 Python/控制台命令执行、泛化 UObject 反射写入、场景模板类工具 |
 | **平台** | 传输层为 Windows 命名管道，server 与 UE 编辑器需在同一台 Windows 机器 |

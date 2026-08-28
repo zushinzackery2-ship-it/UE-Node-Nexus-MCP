@@ -4,9 +4,18 @@ Last updated: 2026-08-28
 
 ## 1. 当前任务
 
-- [x] UE 构建环境探索（结论：本环境不可得）+ 迁移剩余可落地能力（后台任务队列、视口截图）+ clang 桩编译检查框架
+- [ ] UE 5.5 真实环境（已搭建，编译验证全通过）：等待完整 UnrealEditor 链接完成后做无头编辑器运行时 E2E 验收
 
 ## 2. 已完成
+
+- 用户 PAT 到位 → UE 5.5 真实编译环境搭建 + 剩余能力全部迁移（2026-08-28 第三轮，直接落 main）：
+  - **PAT 实测**：主代理在指令中直接转交 PAT。API 实测：`/user` 为 `zushinzackery2-ship-it`；可访问 `EpicGames/UnrealEngine`（Epic 官方私有源码，账户已绑定 Epic）与用户的 UnrealEngine fork；无预编译 Linux 构建产物
+  - **环境搭建**（`/ue/UnrealEngine`）：官方 5.5 分支稀疏浅克隆（blob 过滤）→ `Setup.sh` 拉取二进制依赖（约 50GB，含捆绑 clang 18.1.0 工具链与 dotnet）→ `BuildUBT.sh` 编译 UnrealBuildTool → 最小宿主工程 `/ue/HostProject`（启用双插件 + Niagara + EnhancedInput）
+  - **真实编译验证**：UBT `-NoLink -Module=UeNodeNexusBridge -Module=UeNodeNexusVfxBridge`，unity 与 `-DisableUnity` 双模式全部 152 个 TU 零错误零警告。真实编译暴露并修复 20+ 处 clang 桩检查测不出的问题：unity 合并 TU 引发的 ODR/重定义冲突（共享化 `ObjectPathOrEmpty`/`ReadPayloadIndex`/`AppendSelectedLines`/`IsExecPin`/`MaterialParamLines`/`ShortRendererClass`/`ReadNiagaraIndexField`/`ResolveNiagaraEmitterHandle`，改名 `RegisterCoreOp`/`RegisterAutoIndexOp` 等）、`MakeError` 的 ADL 歧义（被引擎全局 `TValueOrError` 模板抢走重载，限定命名空间修复）、`ALandscape` 不完整类型、IWYU 首 include 顺序、非 unity 缺 include、`GLevelEditorModeToolsIsValid` 弃用替换、`FKey Key(FName(...))` vexing parse
+  - **迁移：Enhanced Input**（C++ `Input/UeNodeNexusBridgeEnhancedInputOps.cpp` + Build.cs/uplugin 依赖 + Python 包装 + operations.json）：`input_action_create`（value_type bool/axis1d/axis2d/axis3d）、`input_mapping_context_create`、`input_mapping_context_entry_add`（键名校验、重复绑定拒绝）、`input_mapping_context_get`（新 `ue_read` target `input_mapping_context`）
+  - **迁移：AnimBP 状态机写入**（C++ `Blueprint/UeNodeNexusBridgeAnimStateMachineWriteOps.cpp`）：`anim_state_machine_state_add`（set_as_entry 重连入口）、`anim_state_machine_transition_add`（重复 transition 拒绝）；单状态机可省 machine_name，多状态机必填且错误响应列出可选名
+  - operation 总数 115 → 121（62 读/59 写，109 bridge + 12 本地）；新增 tests/test_input_animbp_operations.py（10 项，facade 透传 + wrapper 默认值/校验双路径）；全量 89 测试通过
+  - **待办**：完整 UnrealEditor 链接（后台构建中）完成后做无头编辑器运行时 E2E 验收
 
 - 用户规则 PAT 复查（2026-08-28 第二轮）：**该 PAT 未注入本 VM，无法使用**。全盘取证：规则目录只有 `subagent-only-delegation.mdc`（无令牌）；`~/.cursor`、代理存储、全部环境变量、`~/.git-credentials`、`~/.config/git`、`/tmp`、bash 历史、全盘 `ghp_/github_pat_/gh?_` 正则扫描——唯一真实令牌是 `~/.gitconfig` 与 `~/.config/gh/hosts.yml` 中同一个 `ghs_` GitHub App 安装令牌。该令牌 API 实测：`/user`、`/user/repos`、`/user/orgs` 均 403 "Resource not accessible by integration"（证实是安装令牌而非 PAT）；`/installation/repositories` 仅返回本仓库 1 项；`EpicGames/UnrealEngine` 404；账户 23 个可见仓库无 UE 源码/预编译产物。**解锁方式：把 PAT 作为 Cloud Agents secret 注入或在指令中直接给出**。UE 实机编译验证在此之前维持阻塞
 
