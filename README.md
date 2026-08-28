@@ -231,8 +231,9 @@ pip install -e . && python -m pytest tests -q
 | 项目 | 说明 |
 |:-----|:-----|
 | **实测环境** | UE 5.5 Launcher，Windows x64；材质整图复刻（85 节点/110 连线精确一致）、3C Blueprint 工作流、Niagara authoring 均在实机验收通过 |
-| **编译验证** | 两个插件的全部 C++ TU 已在 Linux 上对照 UE 5.5 官方源码用 UnrealBuildTool 完整编译通过（unity 与非 unity 双模式，clang 18，零错误零警告）；期间修复的 ODR/unity 合并冲突、ADL 重载与弃用 API 问题均已进主干 |
-| **待运行验证** | 关卡 Actor 生命周期、`level_open`、资产依赖图、`viewport_capture`、Enhanced Input、AnimBP 状态机写入等新 bridge operation 已通过上述真实编译与 Python/C++ 契约对齐测试，但尚未在运行中的 UE 编辑器内做端到端功能验收 |
+| **编译验证** | 两个插件的全部 C++ TU 已在 Linux 上对照 UE 5.5 官方源码用 UnrealBuildTool 完整编译+链接通过（unity 与非 unity 双模式，clang 18，零错误零警告）；期间修复的 ODR/unity 合并冲突、ADL 重载与弃用 API 问题均已进主干 |
+| **实机运行验证（Linux 无头编辑器）** | 通过 smoke commandlet 在真实 UnrealEditor-Cmd 进程内 E2E 验收：Enhanced Input 全周期（创建/保存/映射/重复与无效键拒绝/跨会话持久化读回）、资产依赖图双向 hard 依赖、关卡 Actor 全生命周期（spawn→transform 写读→delete）、蓝图创建与图快照、诊断读取，以及各错误路径（`asset_not_found`/`asset_already_exists`/`mapping_already_exists`/`invalid_key`/`viewport_unavailable`） |
+| **仍待有资产环境验证** | AnimBP 状态机写入的成功路径（需含骨骼/AnimBP 的项目；注册、分发与错误路径已实机验证）、`viewport_capture` 成功路径（需真实视口，无头 `-nullrhi` 下正确返回 `viewport_unavailable`）、命名管道传输本身（Windows 专属，Linux 上为空实现；分发层已由 commandlet 按字节一致路径验证） |
 | **跨版本** | 插件二进制与 UE 版本/编译器/模块 ABI 绑定；换 UE 版本请按源码重新编译，UE API 变化时按编译错误调整 |
 | **仓库边界** | 聚焦 asset discovery 与依赖图、graph 检查与编辑、编译诊断与日志、MI 参数、窄类型化关卡 Actor 生命周期、安全 package save；不含任意 Python/控制台命令执行、泛化 UObject 反射写入、场景模板类工具 |
 | **平台** | 传输层为 Windows 命名管道，server 与 UE 编辑器需在同一台 Windows 机器 |

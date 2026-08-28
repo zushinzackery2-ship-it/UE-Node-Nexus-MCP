@@ -4,7 +4,19 @@ Last updated: 2026-08-28
 
 ## 1. 当前任务
 
-- [ ] UE 5.5 真实环境（已搭建，编译验证全通过）：等待完整 UnrealEditor 链接完成后做无头编辑器运行时 E2E 验收
+- [x] UE 5.5 真实环境全链路完成：编译+链接+无头编辑器实机 E2E 验收全部通过
+
+## 1.1 实机运行验证结果（2026-08-28，Linux 无头 UnrealEditor-Cmd）
+
+- 完整 UnrealEditor Linux 构建完成（4250 动作；首轮在 2901 处因并行 `-NoMutex` 插件编译干扰 ispc 生成头的动作顺序而失败 8 个模块，重试增量构建 1375 动作零错误收尾）；宿主工程链接两个插件 .so 无未解析符号
+- 新增无头 smoke commandlet（`-run=UeNodeNexusBridge.UeNodeNexusBridgeSmoke -RequestFile=req.jsonl -ResponseFile=resp.jsonl`，句点语法让引擎先加载 PostEngineInit 插件模块再解析 commandlet 类），走与命名管道完全相同的 `DispatchBodyToResponseString` 路径
+- 两阶段共 33 条真实请求全部按预期：
+  - Enhanced Input 全周期：IA/IMC 创建（dry-run 与真实+保存）、SpaceBar 映射写入、重复映射拒绝（`mapping_already_exists`）、无效键拒绝（`invalid_key`）、`input_mapping_context_get` 读回；**新会话读回已保存映射，持久化真实落盘**
+  - 依赖图：新会话中 `asset_dependencies_get(IMC)` → `[IA_Jump, hard]`，`asset_referencers_get(IA)` → `[IMC_Default, hard]`（同会话内新建资产依赖未入 AssetRegistry 属预期）
+  - 关卡 Actor 全生命周期：spawn（返回 transform 回显）→ `transform_set` z=555 → `transform_get` 读回 z=555 → delete → `level_actors_list` 归零
+  - `asset_create`(blueprint)+`graph_snapshot_get`、`blueprint_details_get`、`bridge_capabilities_get`、`project_context_get`、`level_current_get`、`project_input_mappings_get`、`diagnostics_get` 全部 ok
+  - AnimBP 状态机写入：注册/分发/错误路径实机验证（`asset_not_found`）；成功路径需含骨骼与 AnimBP 的项目（本环境无引擎 Content、无法造 AnimBP），留待 Windows 实机
+  - `viewport_capture`：无头 `-nullrhi` 下正确返回结构化 `viewport_unavailable`；成功路径需真实视口
 
 ## 2. 已完成
 
