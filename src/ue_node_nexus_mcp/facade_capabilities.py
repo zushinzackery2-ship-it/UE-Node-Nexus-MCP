@@ -45,6 +45,11 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
             "ue_plan_validate",
         ],
         "recommended_next": "ue_capability_get",
+        "workflow_guides": {
+            "operation": "workflow_guide_get",
+            "list_categories": {},
+            "example": {"category": "getting_started"},
+        },
     }
     return {"ok": True, "data": data}
 

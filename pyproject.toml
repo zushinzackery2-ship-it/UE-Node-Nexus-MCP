@@ -19,7 +19,7 @@ ue-node-nexus-mcp = "ue_node_nexus_mcp.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ue_node_nexus_mcp = ["operations.json"]
+ue_node_nexus_mcp = ["operations.json", "guides/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

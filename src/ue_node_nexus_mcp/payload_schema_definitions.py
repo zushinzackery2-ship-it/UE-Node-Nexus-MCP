@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 WRAPPER_MODULES = (
+    "batch_execute",
     "tools_animation",
     "tools_assets",
     "tools_audio",
@@ -21,6 +22,7 @@ WRAPPER_MODULES = (
     "tools_project",
     "tools_system",
     "tools_texture",
+    "workflow_guides",
 )
 
 PRIMITIVE_JSON_TYPES: dict[type, str] = {
@@ -38,6 +40,14 @@ GENERIC_OBJECT_SCHEMA: dict[str, Any] = {
 }
 
 OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
+    "batch_execute": {
+        "type": "object",
+        "required": ["operation"],
+        "properties": {
+            "operation": {"type": "string", "description": "Internal registry operation name (batch_execute itself is rejected)"},
+            "payload": {"type": "object", "description": "Payload for that operation; per-item dry_run keeps its normal meaning"},
+        },
+    },
     "blueprint_components_patch": {
         "type": "object",
         "required": ["op"],
@@ -200,6 +210,14 @@ OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
+    "batch_execute": {
+        "operations": [
+            {"operation": "asset_compile", "payload": {"asset_path": "/Game/Path/M_Example.M_Example"}},
+            {"operation": "asset_save", "payload": {"asset_path": "/Game/Path/M_Example.M_Example", "dry_run": False}},
+        ],
+        "continue_on_error": False,
+    },
+    "workflow_guide_get": {"category": "getting_started"},
     "blueprint_components_patch": {
         "asset_path": "/Game/BP/BP_Character.BP_Character",
         "operations": [

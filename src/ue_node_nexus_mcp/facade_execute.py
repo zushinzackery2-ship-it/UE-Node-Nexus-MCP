@@ -46,6 +46,23 @@ def _client_side_handler(operation: str) -> Callable[[dict[str, Any]], dict[str,
 
 def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Dispatch session-local control-plane ops handled inside the MCP server."""
+    if operation == "batch_execute":
+        from .batch_execute import batch_execute
+
+        continue_on_error = payload.get("continue_on_error", False)
+        if not isinstance(continue_on_error, bool):
+            raise ValueError("continue_on_error must be a boolean")
+        return batch_execute(payload.get("operations"), continue_on_error=continue_on_error)
+    if operation == "workflow_guide_get":
+        from .workflow_guides import workflow_guide_get
+
+        category = payload.get("category")
+        query = payload.get("query")
+        if category is not None and not isinstance(category, str):
+            raise ValueError("category must be a string")
+        if query is not None and not isinstance(query, str):
+            raise ValueError("query must be a string")
+        return workflow_guide_get(category=category, query=query)
     if operation == "bridge_contract_check":
         from .tools_system import bridge_contract_check
 
