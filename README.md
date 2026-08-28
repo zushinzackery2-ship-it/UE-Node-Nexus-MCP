@@ -222,7 +222,7 @@ UE-Node-Nexus-MCP/
 pip install -e . && python -m pytest tests -q
 ```
 
-测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、后台任务队列（提交/失败上报/取消/并发上限/批量嵌套）、视口截图两阶段流程、`log_tail_get` 日志定位/过滤、关卡 Actor 与依赖图 operation 的载荷与路由、operation registry 元数据读取、payload schema 派生、响应归一化，以及三个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**、所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**、以及对从未经过 UE 实机编译的新增 C++ TU 的 **clang 桩头文件编译检查**（`tests/test_cpp_compile_check.py` + `tests/compile_check/ue_stubs/`，用宿主机 clang 按文档化的 UE 5.5 API 形状做语法/类型检查，机器上没有可用编译器时自动跳过）。
+测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。需要在真实编辑器进程内验证 C++ handler 时（CI 或管道服务不可用的非 Windows 主机），用无头 smoke commandlet 回放请求：`UnrealEditor-Cmd Host.uproject -run=UeNodeNexusBridgeSmoke -RequestFile=req.jsonl -ResponseFile=resp.jsonl`（JSONL 每行一个 `{operation, request_id, payload}` envelope，走与命名管道完全相同的分发路径）。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、后台任务队列（提交/失败上报/取消/并发上限/批量嵌套）、视口截图两阶段流程、`log_tail_get` 日志定位/过滤、关卡 Actor 与依赖图 operation 的载荷与路由、operation registry 元数据读取、payload schema 派生、响应归一化，以及三个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**、所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**、以及对从未经过 UE 实机编译的新增 C++ TU 的 **clang 桩头文件编译检查**（`tests/test_cpp_compile_check.py` + `tests/compile_check/ue_stubs/`，用宿主机 clang 按文档化的 UE 5.5 API 形状做语法/类型检查，机器上没有可用编译器时自动跳过）。
 
 ---
 
