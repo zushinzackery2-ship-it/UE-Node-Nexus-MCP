@@ -4,7 +4,7 @@
 
 **Unreal Engine 编辑器的 MCP 桥接器：资产、Material/Blueprint 图、Niagara、关卡材质的类型安全读写**
 
-*固定 6 工具 facade + 109 个内部 operation，先查 schema 再调用，无需模型自行编写 Python 脚本*
+*固定 6 工具 facade + 115 个内部 operation，先查 schema 再调用，无需模型自行编写 Python 脚本*
 
 ![C++](https://img.shields.io/badge/C%2B%2B-20-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-green?style=flat-square)
@@ -111,11 +111,11 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
 
 ## 内部 operation registry
 
-109 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
+115 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
 
 | Group | 数量 | 覆盖范围 |
 |:------|:----:|:---------|
-| `core` | 14 | 桥接诊断、编译/校验/保存、MessageLog 诊断、UE 日志尾读取、编辑器实例管理、工作流指南、批量执行 |
+| `core` | 20 | 桥接诊断、编译/校验/保存、MessageLog 诊断、UE 日志尾读取、编辑器实例管理、工作流指南、批量执行、后台任务队列、视口截图 |
 | `asset` | 14 | 创建/删除/移动/重命名/复制、批量操作、文件夹、redirector 修复、依赖/引用图查询 |
 | `auto_index` | 12 | UE 内持久资产索引：查询、树、概览、路径解析 |
 | `graph` | 12 | Material/Blueprint 图快照、整图节点信息、声明式 patch、整图 build、节点/参数读写 |
@@ -128,7 +128,7 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
 | `texture` | 1 | Texture 摘要 |
 | `project_input` | 2 | legacy Project Settings action/axis mappings 读写 |
 
-其中 58 个读、51 个写；102 个转发到 UE bridge，7 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`、`log_tail_get`），在 server 内处理、不进 UE。
+其中 61 个读、54 个写；103 个转发到 UE bridge，12 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`、`log_tail_get`、`task_submit`/`task_status`/`task_result`/`task_cancel`、`viewport_capture_status`），在 server 内处理、不进 UE。
 
 **关卡 Actor 生命周期（窄类型化写入）**：`level_actor_spawn`（`class_path` 接受引擎类短名、`/Script/` 路径或蓝图资产路径，附带 location/rotation/scale/label）、`level_actor_delete`、`level_actor_transform_set`（至少给 location/rotation/scale 之一，返回前后 transform）。全部默认 `dry_run=true`，走编辑器 `UEditorActorSubsystem`，不开放泛化反射写入。`level_open` 切换编辑器地图：当前地图有未保存修改时拒绝执行，需显式 `discard_changes=true`。
 
@@ -141,6 +141,10 @@ ue_read(target="auto", asset_path="terrain_demo", format="detail")
 **按需工作流指南**：`ue_execute("workflow_guide_get", {})` 列出 7 类任务级指南（入门、图编辑、材质、蓝图、Niagara、诊断修复、并发批量），`{"category": "..."}` 取指南正文，`{"query": "connect pins"}` 按关键词路由到最匹配的指南。指南正文维护在 `src/ue_node_nexus_mcp/guides/*.md`，Agent 不装 skill 文件也能在会话内自取工作流知识。
 
 **批量执行**：`batch_execute` 是 MCP 本地 operation，一次调用顺序执行一小批 registry operation（上限 20 条）：全批先校验（未知 operation、组未启用、缺必填字段时整批拒绝、不执行任何一条），执行时默认遇错即停并把其余标记为 skipped（`continue_on_error=true` 可继续），桥接连接失败则中止剩余项。逐项返回 `ok`、紧凑摘要和诊断计数。它是省往返的工具，不是事务——已执行项不会回滚。
+
+**后台任务队列**：`task_submit` 先做与 `batch_execute` 相同的前置校验，然后把单个 operation 交给会话内唯一的后台工作线程排队执行并立即返回 `task_id`，适合大编译等长耗时调用（配合调高 `UE_NEXUS_TIMEOUT_SECONDS`）。任务严格按提交顺序串行执行，不会与其他任务交错写桥。`task_status` 查单个任务或列出全部任务，`task_result` 取已完成任务存储的完整响应，`task_cancel` 只能取消仍在排队的任务。任务里可以套 `batch_execute`（后台跑整批），但 `task_*` 之间不可互相嵌套。任务状态在内存中，server 重启即失效。
+
+**视口截图（两阶段）**：`viewport_capture` 请求编辑器主视口截图并立即返回目标 PNG 路径（写入发生在下一次视口重绘之后，异步完成）；`viewport_capture_status` 是 MCP 本地 operation，按返回的 `file_path` 检查文件是否已落盘及其大小。文件名限定为字母/数字/下划线/连字符的裸名，固定写入项目 `Saved/Screenshots/` 目录，不能指向任意路径。
 
 **facade 生产路径上的客户端逻辑**：`graph_patch_apply` 对 Material/MaterialFunction 在 `dry_run=false` 时由 Python 端展开同批 `create_node.client_id` 连线引用；`diagnostics_get` 附带 UE log 中的材质编译回退线索（`related_log_items`，标 `stale_possible=true`，不计入全局 `error_count`）；Niagara 读 operation 自动裁剪冗余字段。这些行为都在 `ue_execute` 实际走的路径上生效并有测试覆盖。
 
@@ -214,7 +218,7 @@ UE-Node-Nexus-MCP/
 pip install -e . && python -m pytest tests -q
 ```
 
-测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、`log_tail_get` 日志定位/过滤、关卡 Actor 与依赖图 operation 的载荷与路由、operation registry 元数据读取、payload schema 派生、响应归一化，以及两个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**，和所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**。
+测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、后台任务队列（提交/失败上报/取消/并发上限/批量嵌套）、视口截图两阶段流程、`log_tail_get` 日志定位/过滤、关卡 Actor 与依赖图 operation 的载荷与路由、operation registry 元数据读取、payload schema 派生、响应归一化，以及三个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**、所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**、以及对从未经过 UE 实机编译的新增 C++ TU 的 **clang 桩头文件编译检查**（`tests/test_cpp_compile_check.py` + `tests/compile_check/ue_stubs/`，用宿主机 clang 按文档化的 UE 5.5 API 形状做语法/类型检查，机器上没有可用编译器时自动跳过）。
 
 ---
 
@@ -223,7 +227,7 @@ pip install -e . && python -m pytest tests -q
 | 项目 | 说明 |
 |:-----|:-----|
 | **实测环境** | UE 5.5 Launcher，Windows x64；材质整图复刻（85 节点/110 连线精确一致）、3C Blueprint 工作流、Niagara authoring 均在实机验收通过 |
-| **待编译验证** | 关卡 Actor 生命周期、`level_open`、资产依赖图共 6 个新 bridge operation 的 C++ handler 按现有插件惯例编写并通过 Python/C++ 契约对齐测试，但尚未经过 UE 5.5 实机编译验证；部署前请先完整编译插件一次 |
+| **待实机验证** | 关卡 Actor 生命周期、`level_open`、资产依赖图、`viewport_capture` 共 7 个新 bridge operation 的 C++ handler 按现有插件惯例编写，已通过 Python/C++ 契约对齐测试和 clang 桩头文件编译检查（语法/类型层面），但尚未经过 UE 5.5 实机编译与运行验证；部署前请先完整编译插件一次 |
 | **跨版本** | 插件二进制与 UE 版本/编译器/模块 ABI 绑定；换 UE 版本请按源码重新编译，UE API 变化时按编译错误调整 |
 | **仓库边界** | 聚焦 asset discovery 与依赖图、graph 检查与编辑、编译诊断与日志、MI 参数、窄类型化关卡 Actor 生命周期、安全 package save；不含任意 Python/控制台命令执行、泛化 UObject 反射写入、场景模板类工具 |
 | **平台** | 传输层为 Windows 命名管道，server 与 UE 编辑器需在同一台 Windows 机器 |

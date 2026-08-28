@@ -48,3 +48,20 @@ operations sequentially in one tool call:
 Use it for short, ordered sequences on the same workflow (create → wire →
 compile). Prefer `ue_plan_validate` first for high-risk batches, and prefer a
 single patch/build op over a batch when one exists.
+
+## Background task queue
+
+For a long-running call you do not want to block on (a big `asset_compile`,
+a heavy `graph_build_apply`, a whole `batch_execute`), submit it instead:
+
+- `task_submit {"operation": ..., "payload": ...}` validates upfront exactly
+  like a batch item, queues the call, and returns a `task_id` immediately.
+- One background worker runs tasks strictly in submission order, so queued
+  writes never interleave with each other over the bridge.
+- Poll `task_status {"task_id": ...}` (or with no id to list all tasks), then
+  fetch the stored full response with `task_result`. `task_cancel` only works
+  while a task is still queued.
+- A task may wrap `batch_execute`, but `task_*` operations cannot wrap each
+  other. Task state is in-memory: ids do not survive a server restart.
+- The wrapped call still honors `UE_NEXUS_TIMEOUT_SECONDS`; raise it for big
+  compiles — the queue does not remove the per-call timeout.
