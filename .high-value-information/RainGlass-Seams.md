@@ -1,70 +1,63 @@
-# 雨玻璃接缝：blog 不变量在立方体上的对应
+﻿# 雨玻璃面边接缝（三面投影过渡带）
 
-公式源只认两棵 shrei-blog。接缝不变量写在：
+本文只讲**立方体面之间**的接缝。每颗水珠自己的格边接缝是另一件事，见 `RainGlass-CellSeams.md`。
+分辨方法：面边接缝是沿面边的一条固定带；格边接缝在面正中间也有、跟着水珠走、时隐时现。
 
-- `D:\Projects\shrei-blog\.high-value-information\Starlake-Surface-Invariants.md` §二 §三
-- 同文：`D:\AI\TEST\blog\shrei-blog\.high-value-information\Starlake-Surface-Invariants.md`
-- 成文：`src/content/posts/20-starlake-wallpaper-refraction-seam.md`（softRange / 过渡带）
-- 成文：`src/content/posts/15-ue-triplanar-material.md`（三面：三次采样 → `abs(N)^Sharpness` → 归一化混合）
+atan2 圆柱会在**单个面内部**切开（角度从 +π 接到 −π）。面内必须用线性坐标，不能用绕圈角度。
 
-壁纸矩形和立方体面不是同一套几何，但翻车的结构相同。
+## 运输层（当前）
 
-## 1. 覆盖度 vs 采样（§二）
+每个面自己的尺子，面心连续：
 
-折射偏移可以很大。用 **位移后的坐标** 做分区 / alpha，会在边界打出洞或一条暗线。
+- ±X：`(Y, Z)`
+- ±Y：`(X, Z)`
+- ±Z：`(X, Y)`
 
-正确切法：
-
-| 坐标 | 职责 |
-|:---|:---|
-| **coveragePixel**（未位移） | 分区归属、透明度、接缝权重 |
-| **samplePixel**（位移后） | 只决定取到的颜色 / 折射看到什么 |
-
-接缝采样行必须钉在 `coveragePixel.y`，只有允许扰动的那一轴跟位移走。玻璃扰动的是「看见的内容」，不是「页面自己的边界」。
-
-网格对应：
-
-- coverage：`WorldPosition(WPT_ExcludeAllShaderOffsets) - ActorPosition`，以及由它和 `VertexNormalWS` 算出的面权重。禁止让 PNO 偏移回头改 UV / 改权重。
-- sample：PNO 只写在 Pixel Normal 上，Refraction 针仍是「折射强度」0.3。
-
-`WPT_Default` 会把 shader offset 喂回位置，等于用 samplePixel 去判 coverage。禁止。
-
-## 2. soft mask 不能退化成布尔（§三）
-
-`if (insideWallpaper > 0.5)` 把 0..1 覆盖度砍成 1px 硬切。接缝层在 0.5 那一行盖不住的色差，就是用户看到的截断线。
-
-网格上同一结构是父材质的主轴 `If`：
+`P = WorldPosition(WPT_ExcludeAllShaderOffsets) - Actor`。三套 RainField 按覆盖度混**结果**。
 
 ```
-|Nx| > |Ny| ? UV_YZ : UV_XZ
-max(|Nx|,|Ny|) > |Nz| ? 那条 : UV_XY
+W = normalize(max(pow(|N|, 接缝锐度), sat(1 - (ext-|P|)/接缝宽度)))
+ext = max(|Px|, |Py|, |Pz|)
 ```
 
-立方体棱上 UV 空间跳变，雨滴场不对齐，就是那条接缝。`If` 是布尔面选择，不是 0..1 覆盖度。
+禁止主轴 `If`。禁止 `DDX/DDY(WorldPosition)`。禁止 PNO 回头改 UV。禁止 atan2。
 
-## 3. 三面要混结果，不要混 UV
+## 面内接缝不是必然的：它整条就是 `Praw` 那一项造的
 
-`15-ue-triplanar-material.md`：空间 P → 三套二维 UV → **三次采样** → `W = normalize(pow(abs(N), Sharpness))` → `Σ Sample_i * W_i`。
+硬法线立方体上 `Nraw = |N|^4` 已经是精确 one-hot，单面单套线性 UV，面内零接缝。
+`Praw = 1 - sat((ext-|P|)/接缝宽度)` 是给曲面留的过渡，在立方体上纯属倒贴。
 
-禁止 `UV = Σ UV_i * W_i` 再采一次：棱上会把两套格子剪成一条拉伸带。
+探针 `Water-Stains/Scripts/probe_align_seam.py`，实测（半边长 162.5uu，玻璃缩放 500）：
 
-Color / Mask 用同一套权重线性混。法线必须先变到世界再混：每面 `(ndx, ndy)` 乘该面的 T/B，得到世界偏移后再 `Σ off_i * W_i`。
+| 距面边 inset | 接缝宽度=8 邻面占比 | =0.5 | 只留法线项 |
+|:---|:---|:---|:---|
+| 8uu | 0.0% | 0% | 0% |
+| 4uu | **33.3%** | 0% | 0% |
+| 1uu | **46.7%** | 0% | 0% |
+| 0uu（棱） | 50% | 50% | 50% |
 
-## 4. 硬法线立方体：只靠 `abs(N)^k` 不够
+**带宽 = 接缝宽度，一比一。** 邻面在带内是被"挤出"的条纹：+Z 面上 `Pz` 恒等于 162.5，
+所以 X 面 UV 的 V 恒为 0.325，沿内法线方向**完全不变**——只随时间动、不下落的径向条纹。
+DropNormal 同样按 W 混，带内 PNO 透镜强度掉到一半，水珠还会变平。
 
-默认立方体面法线是轴对齐的。面上 `N=(1,0,0)`，`pow(abs(N), k)` 仍是 `(1,0,0)`，棱两侧各属于不同顶点，权重还是布尔。
+结论：立方体上接缝可以做到零。棱上那 50/50 落在 90° 几何硬边，本来就该断。
 
-所以权重取 **coverage 空间的棱距离** 与法线权重的分量 max，再归一化：
+已落地：`接缝宽度` 8 → **0.5**（两个 MI 都改，已 save）。0.5uu 在测试机位约 1px。
 
-```
-P = coverage 位置（未位移）
-ext = max(|P.x|, |P.y|, |P.z|)
-inward = ext - abs(P)          // 该轴的面为 0，往里为正
-Praw = saturate(1 - inward / 接缝宽度)
-Nraw = pow(abs(N), 接缝锐度)
-W = normalize(max(Nraw, Praw))
-```
+## 三条脆弱点（不是当前故障，改结构才治）
 
-面上内部 `W` 仍是单轴；棱上两侧都走到约 0.5/0.5，雨滴场软过渡。`接缝宽度` 控制立方体棱羽化（硬 N 时真正起作用的量）。`接缝锐度` 给圆角/斜面，太大又变硬切，太小斜面糊成三套场叠影。
+1. **非立方体盒子直接崩。** `ext` 是逐像素 `max(|P|)`，会塌到最薄那条半边长。
+   200×200×10 的墙：**面心**邻面占比 42.9%。判据：最薄半边长 < 接缝宽度 就全面翻车。
+   真要留 `Praw`，`ext` 得换成 `ObjectLocalBounds` 常量，不能用逐像素 max。
+2. **Actor 旋转吃掉 one-hot。** `|N|` 是世界法线：yaw 15° 邻面 0.4%（无所谓），
+   30° 5.9%，**45° 20% 且是整面**，不是带状。
+3. **`SoftDisc` 的 `DDX/DDY(D)` 在格边会尖峰。** `D` 依赖 `frac()`，中心珠跨格时
+   `k` 从 0 跳到 1、`inner` 跳到 0.28R，格边出 1~2px 硬线。导数改成取 `frac` 之前的
+   `g2` 可同时消掉这条线并省掉 3/4 的导数对。
+   注：这条只值约 4% 亮度台阶，**不是**格边接缝的主因，主因见 `RainGlass-CellSeams.md`。
 
-禁止 `DDX/DDY(WorldPosition)` 做融合。禁止再加主轴 `If`。
+## 剩下那条真硬线：珠串 `frac(UV.y*10)`
+
+`y2 = frac(UV.y*10) + (st.y-0.5)`，V 每 0.1 断一次 = 每 50uu 一条水平线，一个面 6.5 条。
+这条是 blog 原式（`raindropFieldChunk.js` 第 123 行），screen-space 下是刻意的珠间距。
+被 `r*trailFront` 挡在拖尾内，动它就偏离 blog。**留着，不算 bug。**
