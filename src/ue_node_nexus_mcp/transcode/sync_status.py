@@ -28,32 +28,66 @@ class AssetStatus:
         return [self.asset_path, self.kind, self.state]
 
 
+def _known_assets(context: ProjectContext, state: SyncState) -> set[str]:
+    known = set(mirrored_assets(context.project))
+    known.update(state.assets)
+    return known
+
+
+def _expand_game_path(text: str, known: set[str]) -> list[str]:
+    """A ``/Game`` path is an asset, a folder of known assets, or both.
+
+    ``/Game/ToonShade`` used to be coerced to the object path ``/Game/ToonShade.ToonShade``
+    and then reported as one ``unknown`` asset, so a folder selection silently matched
+    nothing. Folder expansion only knows assets already in the mirror or the state;
+    an unmirrored asset still has to be named exactly (that is how ``pull`` learns
+    about it).
+    """
+    asset = object_path(text)
+    package = asset.rsplit(".", 1)[0]
+    prefix = package.rstrip("/") + "/"
+    expanded = [path for path in known if path.startswith(prefix)]
+    if asset in known or not expanded:
+        expanded.append(asset)
+    return expanded
+
+
+def _locate_mirror_path(context: ProjectContext, text: str) -> Path | None:
+    """Resolve a filesystem-style path against the places a user actually types."""
+    path = Path(text)
+    candidates = [path] if path.is_absolute() else [context.project / path, context.root / path, Path.cwd() / path]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def resolve_selection(context: ProjectContext, paths: list[str] | None, state: SyncState) -> list[str]:
     """Turn user paths (asset paths, mirror files or directories) into object paths."""
+    known = _known_assets(context, state)
     if not paths:
-        selected = set(mirrored_assets(context.project))
-        selected.update(state.assets)
-        return sorted(selected)
+        return sorted(known)
     selected: list[str] = []
     for item in paths:
         text = item.strip()
         if not text:
             continue
-        if text.startswith("/Game/") or text.startswith("/Game"):
-            selected.append(object_path(text))
+        if text.startswith("/Game"):
+            selected.extend(_expand_game_path(text, known))
             continue
-        path = Path(text)
-        if not path.is_absolute():
-            path = context.project / path
+        path = _locate_mirror_path(context, text)
+        if path is None:
+            raise SyncError("invalid_path", f"no such mirror file or directory: {item}", {"tried": ["<absolute>", "<project dir>", "<mirror root>", "<cwd>"]})
         if path.is_dir():
-            for asset_path, (_, file) in mirrored_assets(context.project).items():
-                if file.resolve().is_relative_to(path.resolve()):
-                    selected.append(asset_path)
+            root = path.resolve()
+            selected.extend(asset_path for asset_path, (_, file) in mirrored_assets(context.project).items() if file.resolve().is_relative_to(root))
             continue
         parsed = parse_text_path(context.project, path)
         if parsed is None:
             raise SyncError("invalid_path", f"not a /Game asset path or a mirror file: {item}")
         selected.append(parsed[0])
+    if not selected:
+        raise SyncError("no_match", "selection matched no mirrored asset", {"paths": list(paths)})
     return sorted(set(selected))
 
 

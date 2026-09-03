@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .errors import Diagnostic
+from .errors import Diagnostic, error
 from .lint import lint_document
 from .parser import parse
 from .paths import display_path, parse_text_path
@@ -102,6 +102,10 @@ def _lint(context: ProjectContext, state: SyncState, paths: list[str] | None, re
     for asset_path in selected:
         entry = local.get(asset_path)
         if entry is None:
+            # Only an explicit selection can name an asset with no text; a silent
+            # skip here once let `lint /Game/Folder` report 0 files as success.
+            if paths:
+                diagnostics.append(error("not_mirrored", f"{asset_path} has no mirror file to lint; pull it first"))
             continue
         kind, file = entry
         label = display_path(context.project, file)
