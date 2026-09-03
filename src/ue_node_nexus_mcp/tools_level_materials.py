@@ -100,6 +100,32 @@ def object_properties_get(
 
 
 @default_tool()
+def level_actor_properties_set(
+    actor_path: str,
+    properties: dict[str, Any],
+    component: str | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Write editable reflected properties on one placed actor, or on one of its components.
+
+    ``properties`` maps dotted property paths to values, e.g. ``{"bUnbound": true,
+    "Settings.AutoExposureMethod": "AEM_Manual", "Settings.AutoExposureBias": 0}`` on a
+    PostProcessVolume. Values are JSON primitives, ``{x,y,z}`` / ``{pitch,yaw,roll}`` /
+    ``{r,g,b,a}`` objects, object paths for object references, or raw UE ExportText
+    strings for any other type. Every path is validated before the first write, so one
+    unknown or non-editable property fails the whole call with ``invalid_property``.
+    Level actors and their components only; assets belong to the text mirror.
+    """
+    require_non_empty_string(actor_path, "actor_path")
+    if not isinstance(properties, dict) or not properties:
+        raise ValueError("properties must be a non-empty object of dotted property paths")
+    payload: dict[str, Any] = {"actor_path": actor_path, "properties": properties, "dry_run": dry_run}
+    if component:
+        payload["component"] = component
+    return _call("level_actor_properties_set", payload)
+
+
+@default_tool()
 def level_mesh_instances_list(
     include_materials: bool = False,
     class_names: list[str] | None = None,

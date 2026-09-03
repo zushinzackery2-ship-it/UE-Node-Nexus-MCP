@@ -39,6 +39,7 @@ void RegisterCoreOperations()
     RegisterCoreOp(TEXT("level_actor_transform_get"), HandleLevelActorTransformGet);
     RegisterCoreOp(TEXT("level_actor_transform_set"), HandleLevelActorTransformSet);
     RegisterCoreOp(TEXT("object_properties_get"), HandleObjectPropertiesGet);
+    RegisterCoreOp(TEXT("level_actor_properties_set"), HandleLevelActorPropertiesSet);
     RegisterCoreOp(TEXT("landscape_layer_info_set"), HandleLandscapeLayerInfoSet);
     RegisterCoreOp(TEXT("level_mesh_instances_list"), HandleLevelMeshInstancesList);
     RegisterCoreOp(TEXT("component_materials_get"), HandleComponentMaterialsGet);
@@ -80,6 +81,8 @@ void RegisterCoreOperations()
     RegisterCoreOp(TEXT("asset_validate"), HandleAssetValidate);
     RegisterCoreOp(TEXT("asset_save"), HandleAssetSave);
     RegisterCoreOp(TEXT("viewport_capture"), HandleViewportCapture);
+    RegisterCoreOp(TEXT("viewport_camera_get"), HandleViewportCameraGet);
+    RegisterCoreOp(TEXT("viewport_camera_set"), HandleViewportCameraSet);
     RegisterCoreOp(TEXT("editor_save_all"), HandleEditorSaveAll);
     RegisterCoreOp(TEXT("editor_request_exit"), HandleEditorRequestExit);
     RegisterCoreOp(TEXT("bridge_capabilities_get"), HandleBridgeCapabilitiesGet);
