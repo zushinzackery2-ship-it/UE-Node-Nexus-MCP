@@ -26,7 +26,7 @@ Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; th
 | `ue_plan_validate(operations)` | Validate a batch without touching UE | — |
 | `ue_sync(action, paths, options)` | Text mirror: `init` / `status` / `pull` / `lint` / `push` / `schema` | rows + counts |
 
-- 129 registry operations sit behind `ue_execute`; 49 are `hidden` (asset-shaped ops replaced by the mirror, plus `editor_save_all`, `editor_request_exit`, `auto_index_clear`). Hidden ops still run by name; list them with `include_hidden=true`.
+- 132 registry operations sit behind `ue_execute`; 49 are `hidden` (asset-shaped ops replaced by the mirror, plus `editor_save_all`, `editor_request_exit`, `auto_index_clear`). Hidden ops still run by name; list them with `include_hidden=true`.
 - Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories (`getting_started`, `text_mirror`, `graph_editing`, `material_authoring`, `blueprint_authoring`, `niagara_authoring`, `diagnostics_repair`, `concurrency`); `{"category": ...}` returns one guide, `{"query": "connect pins"}` routes by keyword.
 - If an operation named here is missing from `ue_capability_get`, the MCP server process runs stale code: reinstall the Python package and restart the client. Plugin (editor) and server must both be current.
 
@@ -52,7 +52,8 @@ Run this before answering any "is the bridge working / what project is this" que
 | Level actors, components, material slots, landscape layer info | `level_*`, `component_*`, `landscape_layer_info_set` |
 | Compile, validate, save one asset | `asset_compile`, `asset_validate`, `asset_save` |
 | Project error list, UE log lines | `diagnostics_get`, `log_tail_get` |
-| Screenshot | `viewport_capture` then `viewport_capture_status` |
+| Screenshot | `viewport_capture` (level viewport, drawn synchronously; `data.exists`, absolute `file_path`); `viewport_capture_status` only if `exists=false` |
+| Look at something / second camera angle | `viewport_camera_get`, `viewport_camera_set` (`location` + `look_at` or `rotation`, `fov`) then `viewport_capture` |
 
 ## 4. Text mirror (`ue_sync`)
 
@@ -108,7 +109,7 @@ c_eps -> out.WorldPositionOffset
 | Material Instance params / parent chain | `ue_read(target="material_instance")` / `material_interface_resolve` |
 | AnimBP, state machines, montages, blend spaces | `anim_blueprint_summary_get`, `anim_state_machine_summary_get`, `anim_montage_summary_get`, `blend_space_summary_get` |
 | Niagara / Cascade | `ue_read(target="niagara_system")`, `target="niagara_stack"`, `target="cascade_system"` |
-| Level actors, component materials | `level_actors_list`, `level_actor_get`, `component_*` |
+| Level actors, component materials | `level_actors_list`, `level_actor_get`, `object_properties_get` (any actor / component property, `format="full"` for types), `component_*` |
 | Dependencies / referencers | `asset_dependencies_get` / `asset_referencers_get` → rows of `[package, hard-or-soft]` |
 | Sound cue, texture | `sound_cue_summary_get`, `texture_summary_get` |
 | Project diagnostics | `diagnostics_get` → `data.error_count / warning_count / items`; `related_log_items` are historical (`stale_possible=true`) |
@@ -143,6 +144,15 @@ Blueprint `create_node.client_id` works in dry run; for Material / MaterialFunct
 **landscape_layer_info_set** — binds or creates `LandscapeLayerInfoObject` per paint layer; `name` must match the material layer exactly.
 
 **Level actors** — `level_actor_spawn` (`class_path` = engine short name, `/Script/` path or Blueprint asset), `level_actor_delete`, `level_actor_transform_set` (at least one of location / rotation / scale). `level_open` refuses a dirty map unless `discard_changes=true`; every actor path read before it is stale afterwards.
+
+**level_actor_properties_set** — any editable property on a placed actor or one of its components, by dotted path. Values: JSON primitives, `{x,y,z}` / `{pitch,yaw,roll}` / `{r,g,b,a}` objects, object paths for references, or a raw UE ExportText string for anything else (enum names such as `AEM_Manual` are strings). All paths are validated before the first write; one bad path fails the call with `invalid_property` and lists it. Use `object_properties_get(format="full")` to discover names. This is the way to set exposure, fog, light or camera settings on a level actor — not `node_params_set`.
+
+```json
+{"actor_path": "/Game/Maps/L.L:PersistentLevel.PostProcessVolume_0", "dry_run": false,
+ "properties": {"bUnbound": true, "Settings.bOverride_AutoExposureMethod": true, "Settings.AutoExposureMethod": "AEM_Manual",
+                "Settings.bOverride_AutoExposureBias": true, "Settings.AutoExposureBias": 0}}
+{"actor_path": ".../DirectionalLight_1", "component": "LightComponent0", "properties": {"Intensity": 3.0}, "dry_run": false}
+```
 
 ## 7. Editor-safety contract
 

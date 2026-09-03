@@ -1,5 +1,48 @@
 # Task-Status
 
+## 0. 2026-09-03：lilToon ToonShade 排查中补的三件事（已实机验证）
+
+驱动场景：Shadetest 里的 Unlit 角色被自动曝光吹白，需要在关卡里放一个
+PostProcessVolume 并写 `Settings.AutoExposureMethod` 等嵌套属性——桥接没有任何 op
+能做这件事，只能手点编辑器。顺手撞出另外两条。非第一优先级的问题另记在
+`Summary-of-Issues.md`。
+
+- **新 op `level_actor_properties_set`**（`level` 组，write / medium / delta）。对关卡
+  actor 或其组件按点路径写可编辑属性：`{"bUnbound": true,
+  "Settings.AutoExposureMethod": "AEM_Manual", "Settings.AutoExposureBias": 0}`。
+  值接受 JSON 原语、`{x,y,z}`/`{pitch,yaw,roll}`/`{r,g,b,a}`、对象路径、或原生
+  ExportText 字符串。**先全部校验再写**：任一路径不存在 / 不可编辑 → 整个调用
+  `invalid_property` 并列出；写入走 `Modify → PreEditChange(root) → ImportText_Direct →
+  PostEditChangeProperty(leaf, MemberProperty=root)`，组件会像细节面板那样重注册。
+  只限关卡 actor / 组件——资产归文本镜像，不碰 CDO。实机：PPV 13 个属性一次写入，
+  before/after 回读一致；故意拼错 `Settings.NoSuchThing` 整调用失败并点名。
+  C++ `Private/Level/UeNodeNexusBridgeLevelActorPropertyOps.cpp`，Python
+  `tools_level_materials.py`，例子在新拆出的 `payload_examples.py`
+  （`payload_schema_definitions.py` 原本 299 行，塞不下了）。
+- **`viewport_capture` 改成截关卡视口 + 同步出图**。原先取
+  `GEditor->GetActiveViewport()`——编辑器重启后 active 往往是重新打开的材质编辑器预览，
+  截出来一张雨渍贴图；且只 `RedrawAllViewports`，后台节流的编辑器 2 s 到永远都有可能。
+  现在 `target="level"`（默认，`GCurrentLevelEditingViewportClient` → 透视关卡视口 →
+  任一关卡视口）/ `"active"`，请求后直接 `Viewport->Draw(true)` 让
+  `FViewport::Draw` 自己处理 `FScreenshotRequest`，返回 `exists` 和**绝对** `file_path`。
+- **`ue_sync` 的 `paths` 选择修好**：`/Game/Dir` 现在展开成目录下所有已镜像资产
+  （原先被拼成 `/Game/Dir.Dir` 当成一个 unknown 资产）；镜像相对路径依次试
+  project dir / mirror root / cwd；不存在的文件路径 → `invalid_path`；选中为空 →
+  `no_match`；`lint` 对显式选中却没有文本的资产报 `not_mirrored` error。原先
+  `lint /Game/ToonShade` 查 0 个文件还报成功。8 个回归测试在
+  `tests/transcode/test_sync_selection.py`。
+
+桩头补了 `FViewport::Draw`、`GetLevelViewportClients`、`LevelEditorViewport.h`、
+`HAL/FileManager.h`、`FPaths::ConvertRelativePathToFull`，让
+`UeNodeNexusBridgeViewportCaptureOps.cpp` 留在 `CHECKED_SOURCES` 里。
+`LevelActorPropertyOps.cpp` 用到 `UnrealType.h`，桩没覆盖，靠 UAT 真编译兜底
+（`Summary-of-Issues.md` #9）。
+
+编译时踩的坑（值得记）：namespace 内不加限定写 `MakeError(TEXT("x"), FString)`，
+ADL 会选中引擎 `TValueOrError` 的全局 `MakeError` 模板（TCHAR 数组完美匹配）而不是
+本命名空间的 `MakeError(const FString&, const FString&)`。`HandleEditorSaveAll` 里
+之所以写 `UeNodeNexusBridge::MakeError` 就是这个原因，新代码照做。
+
 ## 1. 当前任务 / 需求 / 待办
 
 **Content_Transcoded 文本镜像（`.plan/Transcode-Layer.md`）— 实现完成，实机验收通过（材质/MF/MI/BP/Niagara），结果记在 plan §16**

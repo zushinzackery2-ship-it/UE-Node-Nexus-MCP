@@ -18,14 +18,14 @@
 
 > [!NOTE]
 > **仓库边界**  
-> 资产发现与依赖图、Material / Blueprint / Niagara 图的检查与编辑、编译诊断与日志、Material Instance 参数、窄类型化的关卡 Actor 生命周期、文本镜像同步。不提供任意 Python / 控制台命令执行、泛化 UObject 反射写入或场景模板类工具。
+> 资产发现与依赖图、Material / Blueprint / Niagara 图的检查与编辑、编译诊断与日志、Material Instance 参数、窄类型化的关卡 Actor 生命周期（含按点路径写关卡 Actor / 组件的可编辑属性）、文本镜像同步。不提供任意 Python / 控制台命令执行、对资产或 CDO 的泛化 UObject 反射写入、场景模板类工具。
 
 ## 功能概览
 
 | 功能 | 说明 |
 |:-----|:-----|
 | **文本镜像（Content_Transcoded）** | Material / MaterialFunction / MaterialInstance / Blueprint / Niagara / DataAsset 导出为行式 `.nexus` 文本；`ue_sync` 做 `status / pull / lint / push`，push 是按稳定 id 的增量 patch，每资产一个编辑器事务 |
-| **7 工具 facade** | `list_tools` 固定 7 个入口，129 个内部 operation 先查 schema 再执行，压低上下文占用 |
+| **7 工具 facade** | `list_tools` 固定 7 个入口，132 个内部 operation 先查 schema 再执行，压低上下文占用 |
 | **图读写** | Material / MaterialFunction / Blueprint 图快照、节点信息、声明式 patch、整图 build |
 | **诊断** | MessageLog、资产编译诊断、UE 日志尾读取、离线材质 lint |
 | **Niagara / Cascade** | Niagara System / Emitter / Module Stack / Renderer / User 参数读写与编译，Cascade 只读摘要 |
@@ -39,7 +39,7 @@
 MCP Client (stdio)
     │
     ▼
-Python MCP Server  ue-node-nexus-mcp（7 个 facade 工具，129 个 operation）
+Python MCP Server  ue-node-nexus-mcp（7 个 facade 工具，132 个 operation）
     │  命名管道 \\.\pipe\UeNodeNexusBridge.<pid>        Content_Transcoded/<Project>/**.nexus
     ▼                                                   ▲ 磁盘到磁盘导出 / 事务化 apply
 UE Editor 插件（所有请求在 game thread 串行执行）        │
@@ -112,25 +112,25 @@ c_eps -> out.WorldPositionOffset
 
 ## 内部 operation registry
 
-129 个 operation 的元数据（group、读写、风险、bridge / local、hidden、默认响应粒度）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表与 payload schema 从它派生，测试保证与 C++ 注册表对齐。
+132 个 operation 的元数据（group、读写、风险、bridge / local、hidden、默认响应粒度）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表与 payload schema 从它派生，测试保证与 C++ 注册表对齐。
 
 | Group | 数量 | 覆盖范围 |
 |:------|:----:|:---------|
-| `core` | 20 | 桥接诊断、编译 / 校验 / 保存、MessageLog、日志尾、实例管理、工作流指南、批量执行、后台任务、视口截图 |
+| `core` | 22 | 桥接诊断、编译 / 校验 / 保存、MessageLog、日志尾、实例管理、工作流指南、批量执行、后台任务、关卡视口截图（同步出图）与视口相机读写 |
 | `transcode` | 6 | 文本镜像 UE 端：`transcode_root_set` `transcode_status` `transcode_export` `transcode_apply` `schema_export` `transcode_watch_set` |
 | `asset` | 14 | 创建 / 删除 / 移动 / 重命名 / 复制、批量、文件夹、redirector、依赖与引用图 |
 | `auto_index` | 12 | UE 内持久资产索引：查询、树、概览、路径解析 |
 | `graph` | 12 | 图快照、整图节点信息、声明式 patch、整图 build、节点参数读写（hidden，镜像覆盖） |
 | `material` | 4 | Material Instance 参数、表达式类枚举、离线 lint（hidden，镜像覆盖） |
 | `blueprint` | 6 | 蓝图详情 / 组件树（hidden，镜像覆盖）、AnimBP 状态机写入 |
-| `level` | 17 | Actor 枚举 / spawn / delete / transform、地图切换、UObject 属性读取、材质槽与 MID 参数、Landscape LayerInfo |
+| `level` | 18 | Actor 枚举 / spawn / delete / transform、地图切换、UObject 属性读取、**Actor / 组件属性按点路径写入**（`level_actor_properties_set`，如 PostProcessVolume 的 `Settings.AutoExposureMethod`）、材质槽与 MID 参数、Landscape LayerInfo |
 | `vfx` | 28 | Niagara System / Emitter / Stack / Renderer / User 参数 / 材质（hidden，镜像覆盖）、lint、编译、Cascade 摘要、`vfx_transcode_*` |
 | `animation` | 2 | AnimMontage、BlendSpace 摘要 |
 | `audio` | 1 | SoundCue 摘要 |
 | `texture` | 1 | Texture 摘要 |
 | `project_input` | 6 | 传统 action / axis mappings、Enhanced Input 资产创建与映射 |
 
-- 117 个转发到 UE，12 个为 MCP 本地 operation：`bridge_contract_check` `bridge_instance_list` `bridge_instance_select` `workflow_guide_get` `batch_execute` `task_submit` `task_status` `task_result` `task_cancel` `log_tail_get` `viewport_capture_status` `material_lint`。
+- 120 个转发到 UE，12 个为 MCP 本地 operation：`bridge_contract_check` `bridge_instance_list` `bridge_instance_select` `workflow_guide_get` `batch_execute` `task_submit` `task_status` `task_result` `task_cancel` `log_tail_get` `viewport_capture_status` `material_lint`。
 - 49 个 `hidden`：6 个高危 / 兼容 op（`editor_save_all` `editor_request_exit` `auto_index_clear` 等）和 43 个被文本镜像取代的资产形态读写 op。仍可按名查 schema 与执行，只是不进默认索引；`include_hidden=true` 列出。
 - 8 类任务级指南由 `workflow_guide_get` 在会话内提供：`getting_started` `text_mirror` `graph_editing` `material_authoring` `blueprint_authoring` `niagara_authoring` `diagnostics_repair` `concurrency`，正文在 `src/ue_node_nexus_mcp/guides/`。
 
