@@ -27,6 +27,7 @@ CHECKED_SOURCES = (
     "Private/Core/UeNodeNexusBridgeCoreOperationsRegistry.cpp",
     "Private/Core/UeNodeNexusBridgeOperationNames.cpp",
     "Private/Core/UeNodeNexusBridgeViewportCaptureOps.cpp",
+    "Private/Core/UeNodeNexusBridgeViewportCameraOps.cpp",
     "Private/Level/UeNodeNexusBridgeLevelActorWriteOps.cpp",
     "Private/Level/UeNodeNexusBridgeLevelOpenOps.cpp",
 )

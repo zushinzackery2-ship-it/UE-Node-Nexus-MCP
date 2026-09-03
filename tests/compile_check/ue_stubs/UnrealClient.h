@@ -8,6 +8,9 @@ class FViewport
 {
 public:
     virtual ~FViewport() = default;
+    // Runs one frame for this viewport on the calling (game) thread and services
+    // any pending FScreenshotRequest before returning.
+    void Draw(bool bShouldPresent = true);
 };
 
 class FScreenshotRequest

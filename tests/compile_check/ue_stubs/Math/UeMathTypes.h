@@ -10,6 +10,10 @@ struct FVector
     FVector() = default;
     FVector(double InX, double InY, double InZ);
 
+    bool IsNearlyZero(double Tolerance = 1.e-4) const;
+    struct FRotator Rotation() const;
+    FVector operator-(const FVector& Other) const;
+
     static const FVector ZeroVector;
     static const FVector OneVector;
 };

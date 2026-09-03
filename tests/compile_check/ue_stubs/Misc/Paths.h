@@ -9,4 +9,5 @@ public:
     static FString ScreenShotDir();
     static FString ProjectSavedDir();
     static FString Combine(const FString& PathA, const FString& PathB);
+    static FString ConvertRelativePathToFull(const FString& InPath);
 };
