@@ -1,10 +1,11 @@
-﻿#include "UeNodeNexusBridgeOperations.h"
+#include "UeNodeNexusBridgeOperations.h"
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Engine/Texture.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeMaterialInstanceParamSet.h"
 
 namespace UeNodeNexusBridge
 {
@@ -161,7 +162,8 @@ static bool ApplyScalar(UMaterialInstanceConstant* Instance, const TSharedPtr<FJ
     {
         return false;
     }
-    return UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, FName(*Name), static_cast<float>(Value));
+    FString Error;
+    return SetInstanceScalar(Instance, FName(*Name), static_cast<float>(Value), Error);
 }
 
 static bool ApplyVector(UMaterialInstanceConstant* Instance, const TSharedPtr<FJsonObject>& Param)
@@ -181,7 +183,8 @@ static bool ApplyVector(UMaterialInstanceConstant* Instance, const TSharedPtr<FJ
     (*Value)->TryGetNumberField(TEXT("g"), G);
     (*Value)->TryGetNumberField(TEXT("b"), B);
     (*Value)->TryGetNumberField(TEXT("a"), A);
-    return UMaterialEditingLibrary::SetMaterialInstanceVectorParameterValue(Instance, FName(*Name), FLinearColor(R, G, B, A));
+    FString Error;
+    return SetInstanceVector(Instance, FName(*Name), FLinearColor(R, G, B, A), Error);
 }
 
 static bool ApplyTexture(UMaterialInstanceConstant* Instance, const TSharedPtr<FJsonObject>& Param)
@@ -194,7 +197,8 @@ static bool ApplyTexture(UMaterialInstanceConstant* Instance, const TSharedPtr<F
     }
 
     UTexture* Texture = LoadObject<UTexture>(nullptr, *Value);
-    return Texture != nullptr && UMaterialEditingLibrary::SetMaterialInstanceTextureParameterValue(Instance, FName(*Name), Texture);
+    FString Error;
+    return Texture != nullptr && SetInstanceTexture(Instance, FName(*Name), Texture, Error);
 }
 
 static bool ApplyStaticSwitch(UMaterialInstanceConstant* Instance, const TSharedPtr<FJsonObject>& Param)
@@ -205,7 +209,8 @@ static bool ApplyStaticSwitch(UMaterialInstanceConstant* Instance, const TShared
     {
         return false;
     }
-    return UMaterialEditingLibrary::SetMaterialInstanceStaticSwitchParameterValue(Instance, FName(*Name), bValue);
+    FString Error;
+    return SetInstanceStaticSwitch(Instance, FName(*Name), bValue, Error);
 }
 
 TSharedPtr<FJsonObject> HandleMaterialInstanceParamsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)

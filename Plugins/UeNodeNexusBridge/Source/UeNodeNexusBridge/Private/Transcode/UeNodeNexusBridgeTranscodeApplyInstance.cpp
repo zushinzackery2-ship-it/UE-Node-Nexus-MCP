@@ -3,10 +3,15 @@
 #include "Engine/Texture.h"
 #include "MaterialEditingLibrary.h"
 #include "Materials/MaterialInstanceConstant.h"
+#include "UeNodeNexusBridgeMaterialInstanceParamSet.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
 
 namespace UeNodeNexusBridge::Transcode
 {
+using UeNodeNexusBridge::SetInstanceScalar;
+using UeNodeNexusBridge::SetInstanceTexture;
+using UeNodeNexusBridge::SetInstanceVector;
+
 namespace
 {
 FString ReadString(const TSharedPtr<FJsonObject>& Op, const TCHAR* Field)
@@ -86,7 +91,7 @@ bool SetParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FS
     const FName ParameterName(*Name);
     if (Kind == TEXT("scalar"))
     {
-        return UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, ParameterName, FCString::Atof(*Value));
+        return SetInstanceScalar(Instance, ParameterName, FCString::Atof(*Value), OutError);
     }
     if (Kind == TEXT("vector"))
     {
@@ -96,7 +101,7 @@ bool SetParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FS
             OutError = FString::Printf(TEXT("%s: expected (R=..,G=..,B=..,A=..), got %s"), *Name, *Value);
             return false;
         }
-        return UMaterialEditingLibrary::SetMaterialInstanceVectorParameterValue(Instance, ParameterName, Color);
+        return SetInstanceVector(Instance, ParameterName, Color, OutError);
     }
     if (Kind == TEXT("texture"))
     {
@@ -106,7 +111,7 @@ bool SetParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FS
             OutError = FString::Printf(TEXT("%s: texture not found: %s"), *Name, *Value);
             return false;
         }
-        return UMaterialEditingLibrary::SetMaterialInstanceTextureParameterValue(Instance, ParameterName, Texture);
+        return SetInstanceTexture(Instance, ParameterName, Texture, OutError);
     }
     if (Kind == TEXT("switch"))
     {

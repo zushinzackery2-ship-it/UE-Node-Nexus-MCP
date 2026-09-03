@@ -131,6 +131,52 @@ builder 留下的 `Shadow2ndBorder`。
 `level_current_get` 带上），脚本据此等待；或者干脆在 `bridge_capabilities_get`
 里暴露「编辑器就绪」状态。低优先级，知道就行。
 
+## 13. `ue_sync push` 不按依赖排序，被引用的 `local-new` 资产排在引用者后面
+
+**现象**：同一批里新建 `MI_Outline_*` 六个实例 + 把 `BP_ToonCharacter` 的
+`OverlayMaterial` 指向它们，push 按字母序先推 BP → 六个 `member_failed: object not found`，
+`stop_on_error` 停在第一个资产。分两次 push（先实例后 BP）才过。
+
+**建议**：plan 阶段扫一遍文本里的 `/Game/...` 引用，`local-new` 被引用者先建；
+或至少把 `local-new` 整体排到 `local-modified` 前面。
+
+## 14. push 失败后把 UE 状态重新导出覆盖了本地文本 —— **会丢编辑**
+
+**现象**：上面那次失败的 BP push 报 `pushed-with-errors`，随后把 BP 文本按 UE 当前
+状态「规范化」重写，我改的 `OverlayMaterial=MI_Outline_*` 六行被回滚成
+`M_ToonShade_Outline`。再 push 时状态是 `ue-modified → pull-first`，`--opt force=local`
+也没让它推（可能因为本地哈希已经等于被回滚后的文本）。
+
+**这是会让人丢工作的**：编辑 → push 失败 → 编辑消失，下一次要靠 `git diff` 或记忆重打。
+
+**建议**：只有 `error_count == 0` 才重导出并覆盖文本；失败时保留本地文本、把 UE 的
+部分应用结果记进 `.nexus/pending` 或 diagnostics。另外 `force=local` 对 `ue-modified`
+态应当照样推（现在只对 `both-modified` 生效？需要看 `sync_push.py` 的判定）。
+
+## 15. `blueprint_details_get(include_components=true)` 不列 `OverlayMaterial`
+
+设了之后从这个 op 读不到（JSON 里完全没这个键），导致我一度以为 push 没生效，
+实际 spawn 一个实例读组件属性是有的。组件属性列表应当至少覆盖 `OverlayMaterial` /
+`OverrideMaterials` 这类渲染相关的常用键，或者提供 `include_all_properties`。
+
+## 16. 同步截图的第一帧带着相机跳变的运动模糊
+
+**现象**：`viewport_camera_set` 后立刻 `viewport_capture`，因为现在是同步 `Draw`，
+这一帧的 motion vector / TAA 历史还是跳变前的，画面整片拖影。多 Draw 两帧就好
+（`orbit_capture.py` 现在这么做）。
+
+**建议**：`viewport_capture` 加 `warmup_frames`（默认 2），或 `viewport_camera_set`
+自己多 Draw 一帧；或截图时临时 `r.MotionBlur.Max=0` / `r.TemporalAA...` 关掉。
+
+## 17. `UMaterialEditingLibrary::SetMaterialInstance*ParameterValue` 永远返回 false（引擎 bug，已绕过）
+
+UE 5.5 `MaterialEditingLibrary.cpp:1061-1180` 四个 Set 函数都是
+`bool bResult = false; ... return bResult;`，值设进去了、返回失败。
+`transcode_apply` 据此报 `apply_failed` 并停批；`material_instance_params_set` 报 `changed=0`。
+已改成直接走 `Instance->Set*ParameterValueEditorOnly` + 回读校验
+（`UeNodeNexusBridgeMaterialInstanceParamSet.cpp`）。记在这里是因为**任何**新代码
+都不要再信这四个函数的返回值。
+
 ## 12. `viewport_capture` 的 `filename` 只认 `[A-Za-z0-9_-]`
 
 不是 bug，是安全边界（防止逃出 ScreenShotDir），但 `+` 都不给过，拿角度拼文件名
