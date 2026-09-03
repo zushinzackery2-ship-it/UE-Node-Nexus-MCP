@@ -35,7 +35,11 @@ UMaterialExpression* FindMaterialExpression(UMaterial* Material, const FString& 
 
 UClass* ResolveMaterialExpressionClass(const FString& NodeClass)
 {
-    if (UClass* Direct = LoadClass<UMaterialExpression>(nullptr, *NodeClass))
+    // Only path-like names go through LoadClass: a bare "MaterialExpressionMultiply" would
+    // log a misleading "failed to find Class None.MaterialExpressionMultiply" warning before
+    // the class iterator below resolves it anyway.
+    const bool bPathLike = NodeClass.Contains(TEXT("/")) || NodeClass.Contains(TEXT("."));
+    if (UClass* Direct = bPathLike ? LoadClass<UMaterialExpression>(nullptr, *NodeClass) : nullptr)
     {
         return Direct->IsChildOf(UMaterialExpression::StaticClass()) ? Direct : nullptr;
     }

@@ -27,6 +27,7 @@ public class UeNodeNexusBridge : ModuleRules
             System.IO.Path.Combine(ModuleDirectory, "Private", "Module"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Object"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Texture"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Transcode"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Transport")
         });
 
@@ -51,6 +52,7 @@ public class UeNodeNexusBridge : ModuleRules
             "Landscape",
             "MaterialEditor",
             "MessageLog",
+            "PhysicsCore",
             "Projects",
             "UnrealEd"
         });

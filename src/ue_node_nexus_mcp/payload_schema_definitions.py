@@ -23,6 +23,7 @@ WRAPPER_MODULES = (
     "tools_project",
     "tools_system",
     "tools_texture",
+    "tools_transcode",
     "tools_viewport",
     "workflow_guides",
 )
@@ -293,4 +294,6 @@ OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
         "params": {"InputPinName": "value_as_string_or_number"},
         "dry_run": True,
     },
+    "transcode_apply": {"asset_path": "/Game/Materials/M_Glass.M_Glass", "kind": "material", "ids": {"c_eps": "<node_GUID>"}, "dry_run": True,
+                        "plan": [{"op": "set_node_param", "id": "c_eps", "name": "R", "value": "0.000002"}, {"op": "connect_pins", "from": "c_eps", "from_pin": None, "to": "out", "to_pin": "BaseColor"}]},
 }

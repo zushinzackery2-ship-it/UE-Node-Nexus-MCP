@@ -1,11 +1,11 @@
 #include "UeNodeNexusBridgeOperations.h"
 
 #include "AssetToolsModule.h"
-#include "FileHelpers.h"
 #include "IAssetTools.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeAssetManagementShared.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 
 namespace UeNodeNexusBridge
 {
@@ -51,7 +51,8 @@ TSharedPtr<FJsonObject> HandleAssetDuplicate(const FString& Operation, const FSt
         DuplicatedAsset = AssetToolsModule.Get().DuplicateAsset(DestinationAssetName, DestinationPackagePath, SourceAsset);
         if (DuplicatedAsset != nullptr && bSave)
         {
-            bSaved = UEditorLoadingAndSavingUtils::SavePackages({ DuplicatedAsset->GetOutermost() }, false);
+            FString SaveError;
+            bSaved = Transcode::SavePackageDirect(DuplicatedAsset, SaveError);
         }
     }
 

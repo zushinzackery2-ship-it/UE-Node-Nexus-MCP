@@ -2,9 +2,9 @@
 
 # UE Node Nexus MCP
 
-**Unreal Engine 编辑器的 MCP 桥接器：资产、Material/Blueprint 图、Niagara、关卡材质的类型安全读写**
+**Unreal Editor 的 MCP 桥接：7 个 facade 工具读写运行中的编辑器，`.nexus` 文本镜像把材质、蓝图、Niagara 变成可 grep、可 diff、可回滚的源文件**
 
-*固定 6 工具 facade + 115 个内部 operation，先查 schema 再调用，无需模型自行编写 Python 脚本*
+*UE 只做编译器；Agent 用普通文件工具改资产，`ue_sync` 负责三方同步*
 
 ![C++](https://img.shields.io/badge/C%2B%2B-20-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-green?style=flat-square)
@@ -16,32 +16,162 @@
 
 ---
 
-## 它是什么
+> [!NOTE]
+> **仓库边界**  
+> 资产发现与依赖图、Material / Blueprint / Niagara 图的检查与编辑、编译诊断与日志、Material Instance 参数、窄类型化的关卡 Actor 生命周期、文本镜像同步。不提供任意 Python / 控制台命令执行、泛化 UObject 反射写入或场景模板类工具。
 
-本项目让 MCP 客户端（Claude Code、Cursor 等）安全地检查和编辑打开中的 Unreal Editor：资产管理与依赖图、Material/Blueprint 节点图读写、编译诊断与日志、Material Instance 参数、Niagara authoring、关卡材质使用点、关卡 Actor 生命周期（spawn/delete/transform，窄类型化写入）。不提供任意 Python/控制台命令执行，也不提供泛化的 UObject 反射写入入口。
+## 功能概览
 
-```
+| 功能 | 说明 |
+|:-----|:-----|
+| **文本镜像（Content_Transcoded）** | Material / MaterialFunction / MaterialInstance / Blueprint / Niagara / DataAsset 导出为行式 `.nexus` 文本；`ue_sync` 做 `status / pull / lint / push`，push 是按稳定 id 的增量 patch，每资产一个编辑器事务 |
+| **7 工具 facade** | `list_tools` 固定 7 个入口，129 个内部 operation 先查 schema 再执行，压低上下文占用 |
+| **图读写** | Material / MaterialFunction / Blueprint 图快照、节点信息、声明式 patch、整图 build |
+| **诊断** | MessageLog、资产编译诊断、UE 日志尾读取、离线材质 lint |
+| **Niagara / Cascade** | Niagara System / Emitter / Module Stack / Renderer / User 参数读写与编译，Cascade 只读摘要 |
+| **关卡** | Actor 枚举、spawn / delete / transform、地图切换、组件材质槽与 MID 参数、Landscape LayerInfo |
+| **资产管理** | 创建 / 删除 / 移动 / 重命名 / 复制、redirector 修复、依赖与引用图、AutoIndex 持久索引 |
+| **编辑器安全** | 所有保存直写 `UPackage::SavePackage`，不弹源码管理对话框；材质写入前取消在途着色器编译；拒绝嵌套请求 |
+
+## 架构
+
+```text
 MCP Client (stdio)
     │
     ▼
-Python MCP Server  (ue-node-nexus-mcp, 6 个 facade 工具)
-    │  本地命名管道 \\.\pipe\UeNodeNexusBridge.<pid>
-    ▼
-UE Editor 插件
-    ├── UeNodeNexusBridge      核心：资产 / 图 / 蓝图 / 关卡 / 诊断
-    └── UeNodeNexusVfxBridge   VFX：Niagara authoring + Cascade 只读摘要
+Python MCP Server  ue-node-nexus-mcp（7 个 facade 工具，129 个 operation）
+    │  命名管道 \\.\pipe\UeNodeNexusBridge.<pid>        Content_Transcoded/<Project>/**.nexus
+    ▼                                                   ▲ 磁盘到磁盘导出 / 事务化 apply
+UE Editor 插件（所有请求在 game thread 串行执行）        │
+    ├── UeNodeNexusBridge      核心：资产 / 图 / 蓝图 / 关卡 / 诊断 / transcode
+    └── UeNodeNexusVfxBridge   VFX：Niagara authoring、Cascade 摘要、vfx_transcode
 ```
 
-- **Python 端**：纯标准库 + `mcp` SDK 的 MCP server。只注册 6 个 facade 工具，完整能力放在内部 operation registry 中按需查询和执行，最大限度压低 `list_tools` 和历史 tool result 的上下文占用。
-- **UE 端**：两个编辑器插件通过每实例一条、按 pid 命名的命名管道提供服务，无端口占用；所有 UE 操作在 game thread 上安全执行。
+---
+
+## 核心 API
+
+| 分类 | API | 说明 |
+|:-----|:----|:-----|
+| **上下文** | `ue_context_get(include_counts)` | 启用的 group、绑定的编辑器实例、推荐下一跳 |
+| **能力** | `ue_capability_get(group, operation, detail)` | operation 索引（`index`）、单个 operation 的 `schema` / `examples` |
+| **执行** | `ue_execute(operation, payload, response)` | 执行任一 operation；写默认 `delta`，读默认 `summary` |
+| **读取** | `ue_read(target, asset_path, format, query)` | 类型化读取，大响应以 artifact 句柄返回 |
+| **变更** | `ue_diff_get(since_token, cursor, limit)` | 按 diff token 读取变更，`next_cursor` 分页 |
+| **校验** | `ue_plan_validate(operations)` | 批量校验存在性、风险等级、预计变更，不写 UE |
+| **同步** | `ue_sync(action, paths, options)` | 文本镜像：`init` / `status` / `pull` / `lint` / `push` / `schema` |
+
+`ue_read` 的 target：`auto` `artifact` `asset` `asset_dependencies` `asset_referencers` `asset_index` `graph` `graph_node_search` `node` `blueprint` `anim_blueprint` `anim_state_machine` `anim_montage` `blend_space` `material_instance` `niagara_system` `niagara_stack` `cascade_system` `level` `log` `diagnostics` `project_input` `input_mapping_context` `sound_cue` `texture`。没有 `target="material"`：材质图用 `graph`，实例参数用 `material_instance`，类型未知用 `auto`。
+
+---
+
+## 文本镜像（`ue_sync`）
+
+镜像根目录默认为 MCP server cwd 下的 `Content_Transcoded/`（`UE_NEXUS_TRANSCODE_DIR` 覆盖），每个 UE 工程一个子目录：
+
+```
+Content_Transcoded/
+├── .nexus/schema/<engine>-<plugins_hash>/   schema lock：类 → 可编辑属性 / 默认值 / 枚举、MF 签名、Niagara 模块索引
+└── <Project>/
+    ├── Materials/M_Glass.mat.nexus          .mf 材质函数  .mi 材质实例  .bp 蓝图  .ns/.ne Niagara  .asset 属性包  .stub 只读桩
+    ├── .nexus/base/                         上次同步的全保真导出（id ↔ GUID、opaque 节点原文）= 三方合并基准
+    └── .nexus/state.json                    每资产的 base / 文本 / UE 三方哈希
+```
+
+| 动作 | 作用 | 常用 options |
+|:-----|:-----|:-------------|
+| **`init`** | 绑定根目录、导出 schema、全量 pull | `include_stubs` `refresh_schema` |
+| **`status`** | 三方状态：`clean` `local-modified` `ue-modified` `both-modified` `local-new` `ue-new` `local-deleted` `ue-deleted` | `discover` `include_clean` |
+| **`pull`** | UE → 文本；冲突需 `force="ue"` | `force` `discover` |
+| **`lint`** | 离线校验：未知类 / 属性 / 枚举 / 引脚 / 类型、悬空连线、opaque 编辑 | — |
+| **`push`** | 文本 → UE：默认 dry run 回 plan；`dry_run=false` 时一资产一事务、编译、只保存被碰的包、重导出规范文本 | `dry_run` `compile` `save` `force` `allow_delete` `stop_on_error` |
+| **`schema`** | 重导 schema lock（引擎或插件集变化后） | — |
+
+文本一行一个事实，只写非默认值，值文法直接用 UE `ExportText`，文件里不出现 GUID：
+
+```
+[asset]
+BlendMode = BLEND_Translucent
+
+[graph]
+c_eps : Constant(R=0.000001) @ -1000,220
+call  : MaterialFunctionCall(MaterialFunction=/Game/F/MF_A.MF_A)
+old   : @opaque(/Script/Engine.MaterialExpressionCustom) @ 0,0      # 只能移动 / 删除 / 连线
+
+c_eps -> call.A
+call -> out.BaseColor                                                # 材质的隐含 out 节点
+c_eps -> out.WorldPositionOffset
+```
+
+- 新建资产：直接写 `.nexus` 文件再 push，材质 / 材质函数 / 材质实例 / 蓝图（含 `ParentClass`）/ DataAsset 会被创建。
+- MaterialFunction 输入输出接口变化时自动刷新全部调用者并重新 pull。
+- 蓝图未识别节点类、Niagara 的 Event / Stage 栈、`@link` / `@dynamic` 输入、继承组件属性以 opaque / 只读形式保真往返。
+- 完整格式：`ue_execute("workflow_guide_get", {"category": "text_mirror"})`，设计文档 `.plan/Transcode-Layer.md`。
+
+---
+
+## 内部 operation registry
+
+129 个 operation 的元数据（group、读写、风险、bridge / local、hidden、默认响应粒度）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表与 payload schema 从它派生，测试保证与 C++ 注册表对齐。
+
+| Group | 数量 | 覆盖范围 |
+|:------|:----:|:---------|
+| `core` | 20 | 桥接诊断、编译 / 校验 / 保存、MessageLog、日志尾、实例管理、工作流指南、批量执行、后台任务、视口截图 |
+| `transcode` | 6 | 文本镜像 UE 端：`transcode_root_set` `transcode_status` `transcode_export` `transcode_apply` `schema_export` `transcode_watch_set` |
+| `asset` | 14 | 创建 / 删除 / 移动 / 重命名 / 复制、批量、文件夹、redirector、依赖与引用图 |
+| `auto_index` | 12 | UE 内持久资产索引：查询、树、概览、路径解析 |
+| `graph` | 12 | 图快照、整图节点信息、声明式 patch、整图 build、节点参数读写（hidden，镜像覆盖） |
+| `material` | 4 | Material Instance 参数、表达式类枚举、离线 lint（hidden，镜像覆盖） |
+| `blueprint` | 6 | 蓝图详情 / 组件树（hidden，镜像覆盖）、AnimBP 状态机写入 |
+| `level` | 17 | Actor 枚举 / spawn / delete / transform、地图切换、UObject 属性读取、材质槽与 MID 参数、Landscape LayerInfo |
+| `vfx` | 28 | Niagara System / Emitter / Stack / Renderer / User 参数 / 材质（hidden，镜像覆盖）、lint、编译、Cascade 摘要、`vfx_transcode_*` |
+| `animation` | 2 | AnimMontage、BlendSpace 摘要 |
+| `audio` | 1 | SoundCue 摘要 |
+| `texture` | 1 | Texture 摘要 |
+| `project_input` | 6 | 传统 action / axis mappings、Enhanced Input 资产创建与映射 |
+
+- 117 个转发到 UE，12 个为 MCP 本地 operation：`bridge_contract_check` `bridge_instance_list` `bridge_instance_select` `workflow_guide_get` `batch_execute` `task_submit` `task_status` `task_result` `task_cancel` `log_tail_get` `viewport_capture_status` `material_lint`。
+- 49 个 `hidden`：6 个高危 / 兼容 op（`editor_save_all` `editor_request_exit` `auto_index_clear` 等）和 43 个被文本镜像取代的资产形态读写 op。仍可按名查 schema 与执行，只是不进默认索引；`include_hidden=true` 列出。
+- 8 类任务级指南由 `workflow_guide_get` 在会话内提供：`getting_started` `text_mirror` `graph_editing` `material_authoring` `blueprint_authoring` `niagara_authoring` `diagnostics_repair` `concurrency`，正文在 `src/ue_node_nexus_mcp/guides/`。
+
+---
+
+## 响应与上下文控制
+
+| 机制 | 说明 |
+|:-----|:-----|
+| **写默认 dry-run** | 改 UE 状态的写 operation 默认 `dry_run=true`；实际写入返回差异、引脚完整性、编译结果、脏标记与诊断 |
+| **响应模式** | `ue_execute.response.mode` ∈ `silent` `brief` `ids_only` `delta` `summary` `full` `debug`；`response` 只接受 `mode` 与 `allow_heavy`，读取粒度放在 payload 的 `format` |
+| **artifact** | 超阈值的大响应返回 `artifact.id` 与摘要，`ue_read(target="artifact", query={"artifact_id": ...})` 取回 |
+| **diff 分页** | `ue_diff_get` 超过 `limit` 时返回 `next_cursor` |
+| **重读拦截** | 整图 `node_params_format="full"` 等重负载读取需显式 `response.allow_heavy=true` |
+| **批量与后台** | `batch_execute` 顺序执行 ≤ 20 条（先整批校验，遇错即停，非事务）；`task_submit` 把长调用排到后台工作线程，`task_status` / `task_result` / `task_cancel` 跟踪 |
+
+## 编辑器安全保证
+
+| 保证 | 实现 |
+|:-----|:-----|
+| **不弹对话框** | 所有保存（`asset_save`、`editor_save_all`、写 op 的 `save=true`、`ue_sync push`）直接走 `UPackage::SavePackage`；文件只读（源码管理未检出）时返回 `save_blocked_read_only` 而不是弹「无法检出」模态框 |
+| **不撞着色器编译** | 材质图写入前调用 `CancelOutstandingCompilation()`，整批只在末尾编译一次 |
+| **不嵌套请求** | 一个请求执行中到达的请求返回 `bridge_busy`，MCP server 自动重试约 2 秒 |
+| **不 SaveAll** | 只保存被写入的包；`editor_save_all` 逐包直写并列出失败项 |
+| **类名不含糊** | 材质节点类接受 `/Script/Engine.MaterialExpressionX` / `MaterialExpressionX` / `X`，解析失败返回 `unknown_node_class` |
 
 ---
 
 ## 快速开始
 
-**1. 编译并启用 UE 插件**
+**1. 编译并安装 UE 插件**
 
-本仓库不发布预编译二进制。把 `Plugins/UeNodeNexusBridge` 和 `Plugins/UeNodeNexusVfxBridge`（只要核心能力可不装后者）复制到项目 `Plugins/` 目录，打开项目触发 UE 编译提示，或右键 `.uproject` 生成项目文件后编译。也可以作为 Engine Plugin 放到 `Engine/Plugins/` 下随引擎编译。
+仓库不发布二进制。最简单的方式是把 `Plugins/UeNodeNexusBridge`（必需）和 `Plugins/UeNodeNexusVfxBridge`（Niagara 需要）复制到工程 `Plugins/`，打开工程触发编译。作为引擎插件安装时用 UAT 打包，先核心再 VFX（VFX 依赖核心）：
+
+```bat
+"<UE_5.5>\Engine\Build\BatchFiles\RunUAT.bat" BuildPlugin -Plugin="<repo>\Plugins\UeNodeNexusBridge\UeNodeNexusBridge.uplugin" -Package="<out>\UeNodeNexusBridge" -TargetPlatforms=Win64 -Rocket
+```
+
+> [!IMPORTANT]
+> **BuildPlugin 会改写 `.uplugin`**  
+> 打包产物里的 `.uplugin` 丢失 `EnabledByDefault`，装进 `Engine/Plugins/Editor/` 后要把仓库里的 `.uplugin` 拷回去，否则插件不会随工程加载。
 
 **2. 安装 Python server**
 
@@ -62,137 +192,37 @@ pip install .
 }
 ```
 
-没有 console entry 时可用 `"command": "python", "args": ["-m", "ue_node_nexus_mcp.server"]`。
+没有 console entry 时用 `"command": "python", "args": ["-m", "ue_node_nexus_mcp.server"]`。
 
-**4. 安装 Agent skill（强烈建议）**
+**4. 安装 Agent skill**
 
-把 `skill/ue-node-nexus-mcp/SKILL.md` 装进 Agent 的 skill 目录（Claude Code：`~/.claude/skills/ue-node-nexus-mcp/` 或项目 `.claude/skills/`）。它教 Agent **先查 schema 再调用**、正确区分读/写 operation。不装的话模型容易凭工具名猜参数导致调用失败。
+把 `skill/ue-node-nexus-mcp/` 复制到 Agent 的 skill 目录（Cursor：`~/.cursor/skills/`；Claude Code：`~/.claude/skills/`）。它约定「先查 schema 再调用」、读写 operation 的区分和文本镜像工作流。
 
 **5. 验收连接**
 
-UE 项目打开且插件启用后，先 `ue_execute("project_context_get", {})` 确认 `.uproject` 和 `/Game` mount，再 `ue_execute("bridge_contract_check", {})` 确认 Python 合同与 UE 端 operation 一致、模块加载正常。
-
----
-
-## 公开工具面：6 个 facade 工具
-
-MCP `list_tools` 固定只暴露这 6 个入口：
-
-| 工具 | 说明 |
-|:-----|:-----|
-| **`ue_context_get()`** | 返回启用的 operation group、facade 工具清单、当前绑定的 UE 实例和推荐下一跳 |
-| **`ue_capability_get()`** | 按 group 查 operation 索引，或按 operation 名查参数 schema |
-| **`ue_execute(operation, payload)`** | 执行内部 operation，默认返回 delta summary + diff token |
-| **`ue_read(target, ...)`** | 统一读取 asset、graph、diagnostics、Niagara 等常见状态，默认 summary |
-| **`ue_diff_get(since_token, ...)`** | 按 diff token 读取 compact changes，支持 cursor 分页 |
-| **`ue_plan_validate(operations)`** | 批量验证 operation 的存在性、风险等级和预计变更，不写 UE 状态 |
-
-推荐工作流：
-
 ```text
-ue_context_get()
-  -> ue_capability_get(group="graph", detail="index")
-  -> ue_capability_get(operation="node_params_set", detail="schema")
-  -> ue_execute(operation="node_params_set", payload={...})
-  -> ue_diff_get(since_token="diff_...")
+ue_execute("project_context_get", {})      # .uproject 与 /Game mount
+ue_execute("bridge_contract_check", {})    # Python 合同与 UE 端 operation 一致
+ue_sync("init")                            # 拉取整个工程到文本镜像
 ```
 
-常见资产读取可以走自动路由，短名即可：
-
-```text
-ue_read(target="auto", asset_path="terrain_demo", format="detail")
-  -> auto_index_resolve_path -> asset_get -> 按资产类型路由到
-     graph_snapshot_get / material_interface_resolve / texture_summary_get / ...
-```
-
-`ue_read` 支持的 target：`auto`、`artifact`、`asset`、`asset_dependencies`、`asset_referencers`、`asset_index`、`graph`、`graph_node_search`、`node`、`blueprint`、`anim_blueprint`、`anim_state_machine`、`anim_montage`、`blend_space`、`material_instance`、`niagara_system`、`niagara_stack`、`cascade_system`、`level`、`log`、`diagnostics`、`project_input`、`input_mapping_context`、`sound_cue`、`texture`。注意没有 `target="material"`：材质实例参数用 `material_instance`，材质节点图用 `graph`，不确定类型用 `auto`。
-
 ---
 
-## 内部 operation registry
-
-121 个 operation 的全部元数据（group、read/write、risk、bridge/local、hidden、默认响应粒度、summary）单源维护在 `src/ue_node_nexus_mcp/operations.json`，Python 注册表和参数 schema 从它派生，并有测试保证与 UE C++ 插件的注册表静态对齐。
-
-| Group | 数量 | 覆盖范围 |
-|:------|:----:|:---------|
-| `core` | 20 | 桥接诊断、编译/校验/保存、MessageLog 诊断、UE 日志尾读取、编辑器实例管理、工作流指南、批量执行、后台任务队列、视口截图 |
-| `asset` | 14 | 创建/删除/移动/重命名/复制、批量操作、文件夹、redirector 修复、依赖/引用图查询 |
-| `auto_index` | 12 | UE 内持久资产索引：查询、树、概览、路径解析 |
-| `graph` | 12 | Material/Blueprint 图快照、整图节点信息、声明式 patch、整图 build、节点/参数读写 |
-| `material` | 4 | Material Instance 参数读写、材质表达式类枚举、本地只读 lint |
-| `blueprint` | 6 | 蓝图详情/变量/CDO/组件读取、SCS 组件树写入、AnimBP 状态机 state/transition 写入 |
-| `level` | 17 | Actor 枚举/spawn/delete、transform 读写、地图切换、UObject 属性读取、material slot 与 MID 参数读写、Landscape LayerInfo |
-| `vfx` | 26 | Niagara System/Emitter/Module Stack/Renderer/User 参数/材质/lint/编译 + Cascade 只读摘要 |
-| `animation` | 2 | AnimMontage、BlendSpace 结构化摘要 |
-| `audio` | 1 | SoundCue 摘要 |
-| `texture` | 1 | Texture 摘要 |
-| `project_input` | 6 | legacy Project Settings action/axis mappings 读写、Enhanced Input 资产创建与映射读写 |
-
-其中 62 个读、59 个写；109 个转发到 UE bridge，12 个是 MCP 本地 operation（`bridge_contract_check`、`bridge_instance_list`、`bridge_instance_select`、`material_lint`、`workflow_guide_get`、`batch_execute`、`log_tail_get`、`task_submit`/`task_status`/`task_result`/`task_cancel`、`viewport_capture_status`），在 server 内处理、不进 UE。
-
-**关卡 Actor 生命周期（窄类型化写入）**：`level_actor_spawn`（`class_path` 接受引擎类短名、`/Script/` 路径或蓝图资产路径，附带 location/rotation/scale/label）、`level_actor_delete`、`level_actor_transform_set`（至少给 location/rotation/scale 之一，返回前后 transform）。全部默认 `dry_run=true`，走编辑器 `UEditorActorSubsystem`，不开放泛化反射写入。`level_open` 切换编辑器地图：当前地图有未保存修改时拒绝执行，需显式 `discard_changes=true`。
-
-**资产依赖图**：`asset_dependencies_get` / `asset_referencers_get` 基于 AssetRegistry 返回 `[package_name, hard|soft]` 行（默认过滤 `/Script/`、`/Engine/` 包，`include_engine=true` 可包含），支持 cursor 分页，用于重命名/删除前的影响面分析。
-
-**Enhanced Input**：`input_action_create`（`value_type` 支持 `bool/axis1d/axis2d/axis3d`）与 `input_mapping_context_create` 创建 UInputAction / UInputMappingContext 资产；`input_mapping_context_entry_add` 把已有 InputAction 绑定到按键（键名如 `SpaceBar`、`W`、`Gamepad_FaceButton_Bottom`，无效键名和重复绑定会被拒绝）；`input_mapping_context_get` 列出 context 内全部映射（也可走 `ue_read(target="input_mapping_context")`）。写 operation 默认 `dry_run=true`，`save=true` 时落盘保存。
-
-**AnimBP 状态机写入**：`anim_state_machine_state_add` 向状态机添加命名状态（`set_as_entry=true` 时把入口节点重连到新状态），`anim_state_machine_transition_add` 在两个命名状态之间建立 transition（重复的 from→to 会被拒绝，新 transition 的条件图为空、需后续补充规则）。蓝图只有一个状态机时 `machine_name` 可省略，多个时必填、错误响应会列出可选名称。写入后自动标记蓝图结构性修改。读取侧配套 `anim_state_machine_summary_get`（或 `ue_read(target="anim_state_machine")`）。
-
-**UE 日志尾读取**：`log_tail_get` 是 MCP 本地 operation，读取最新项目日志尾部（`tail_kb`、`match` 子串过滤、`max_lines`），补足 `diagnostics_get.related_log_items` 之外的原始日志排查。
-
-**hidden operation**：6 个高危/兼容 operation（如 `editor_save_all`、`editor_request_exit`、`auto_index_clear`）默认不出现在 `ue_capability_get` 索引和 `ue_context_get` 计数中，需 `include_hidden=true` 列出；按名称查 schema 和通过 `ue_execute` 执行不受影响。
-
-**按需工作流指南**：`ue_execute("workflow_guide_get", {})` 列出 7 类任务级指南（入门、图编辑、材质、蓝图、Niagara、诊断修复、并发批量），`{"category": "..."}` 取指南正文，`{"query": "connect pins"}` 按关键词路由到最匹配的指南。指南正文维护在 `src/ue_node_nexus_mcp/guides/*.md`，Agent 不装 skill 文件也能在会话内自取工作流知识。
-
-**批量执行**：`batch_execute` 是 MCP 本地 operation，一次调用顺序执行一小批 registry operation（上限 20 条）：全批先校验（未知 operation、组未启用、缺必填字段时整批拒绝、不执行任何一条），执行时默认遇错即停并把其余标记为 skipped（`continue_on_error=true` 可继续），桥接连接失败则中止剩余项。逐项返回 `ok`、紧凑摘要和诊断计数。它是省往返的工具，不是事务——已执行项不会回滚。
-
-**后台任务队列**：`task_submit` 先做与 `batch_execute` 相同的前置校验，然后把单个 operation 交给会话内唯一的后台工作线程排队执行并立即返回 `task_id`，适合大编译等长耗时调用（配合调高 `UE_NEXUS_TIMEOUT_SECONDS`）。任务严格按提交顺序串行执行，不会与其他任务交错写桥。`task_status` 查单个任务或列出全部任务，`task_result` 取已完成任务存储的完整响应，`task_cancel` 只能取消仍在排队的任务。任务里可以套 `batch_execute`（后台跑整批），但 `task_*` 之间不可互相嵌套。任务状态在内存中，server 重启即失效。
-
-**视口截图（两阶段）**：`viewport_capture` 请求编辑器主视口截图并立即返回目标 PNG 路径（写入发生在下一次视口重绘之后，异步完成）；`viewport_capture_status` 是 MCP 本地 operation，按返回的 `file_path` 检查文件是否已落盘及其大小。文件名限定为字母/数字/下划线/连字符的裸名，固定写入项目 `Saved/Screenshots/` 目录，不能指向任意路径。
-
-**facade 生产路径上的客户端逻辑**：`graph_patch_apply` 对 Material/MaterialFunction 在 `dry_run=false` 时由 Python 端展开同批 `create_node.client_id` 连线引用；`diagnostics_get` 附带 UE log 中的材质编译回退线索（`related_log_items`，标 `stale_possible=true`，不计入全局 `error_count`）；Niagara 读 operation 自动裁剪冗余字段。这些行为都在 `ue_execute` 实际走的路径上生效并有测试覆盖。
-
----
-
-## 响应与上下文控制
-
-- **写默认 dry-run**：改动 UE 资产/关卡状态的写 operation 默认 `dry_run=true`；实际写入时单个响应返回已应用差异、引脚完整性、编译结果、脏标记和诊断。唯一例外是 `viewport_capture`（只向 `Saved/Screenshots/` 写 PNG，不触资产，默认直接请求）。
-- **默认压缩**：写 operation 默认响应 `delta`，读 operation 默认 `summary`。完整 bridge envelope 需要显式 `response={"mode": "full"}` 或 `"debug"`。`ue_execute.response` 只接受 `mode` 和 `allow_heavy` 两个字段；`response.format="full"` 是无效写法，会被拒绝并提示改用 `response.mode`。读取粒度放在 operation payload 的 `format` 或 `ue_read(format="detail")`。
-- **artifact**：超过 inline 阈值的大响应不直接进入 tool result，而是返回 `artifact.id`、payload 字节数和摘要，用 `ue_read(target="artifact", query={"artifact_id": "..."})` 取回完整内容。
-- **diff 分页**：`ue_diff_get` 的 change 列表超过 `limit` 时返回 `next_cursor`，把它作为 `cursor` 传回即可翻页。
-- **重读拦截**：`graph_snapshot_get(format="full", include_node_params=true, node_params_format="full")` 这类重负载读取会被前置拦截，需显式 `response.allow_heavy=true`。
-- **图快照格式**：`graph_snapshot_get` 支持 `wires_tiny`（默认）/`wires_min`/`wires`/`compact`/`full`；`graph_node_info_get` 支持 `indexed`（默认，`T/P/N/V/E/X/R` 字典行压缩整图）和 `grouped`；Niagara 读 operation 默认 `indexed`。真实 pin GUID、完整 issue 对象等重数据只在显式 `format="full"` 时返回。
-- **诊断计数语义**：带 `asset_path` 的具体资产写响应可在根级附带 `remaining_errors`（该资产写后检查剩余错误数）；全项目诊断走 `diagnostics_get`，以 `data.error_count` / `data.warning_count` / `data.items` 表达，两者不混用。
-
----
-
-## 多 UE 实例
-
-每个 UE 编辑器实例各自暴露一条 `\\.\pipe\UeNodeNexusBridge.<pid>` 管道，互不冲突。MCP 会话默认自动连接唯一在线实例；有多个实例时：
-
-```text
-ue_execute("bridge_instance_list", {})            # 查看在线实例
-ue_execute("bridge_instance_select", {"pid": 1234})   # 或 {"project": "工程名"}
-```
-
-`ue_context_get()` 显示当前 `active_instance` 和 `available_instances`。切换绑定实例会自动重置 VFX 等 feature 探测缓存。
-
----
-
-## 配置参考
+## 配置
 
 | 环境变量 | 默认值 | 说明 |
 |:---------|:-------|:-----|
-| `UE_NEXUS_TIMEOUT_SECONDS` | `30` | 桥接请求超时（秒） |
-| `UE_NEXUS_RESPONSE_MODE` | `minimal` | facade 响应模式：`minimal` 或 `full` |
-| `UE_NEXUS_FEATURES` | 全部 group | 显式指定启用的 operation group，如 `core,asset,material` |
-| `UE_NEXUS_ENABLE_FEATURES` | — | 在当前 group 集合上追加 |
-| `UE_NEXUS_DISABLE_FEATURES` | — | 从当前 group 集合中移除 |
-| `UE_NEXUS_VFX_SUPPORT` | — | `true`/`false`，VFX group 本地意图开关 |
+| `UE_NEXUS_TIMEOUT_SECONDS` | `30` | 桥接请求超时（秒），大编译请调高 |
+| `UE_NEXUS_RESPONSE_MODE` | `minimal` | facade 响应模式：`minimal` / `full` |
+| `UE_NEXUS_FEATURES` | 全部 group | 显式启用的 operation group，逗号分隔 |
+| `UE_NEXUS_ENABLE_FEATURES` | — | 在当前集合上追加 group |
+| `UE_NEXUS_DISABLE_FEATURES` | — | 从当前集合移除 group |
+| `UE_NEXUS_VFX_SUPPORT` | — | `true` / `false`，VFX group 本地意图开关 |
+| `UE_NEXUS_TRANSCODE_DIR` | `<cwd>/Content_Transcoded` | 文本镜像根目录 |
 
-CLI 支持同样的开关，server 启动时一次性解析：`--response-mode`、`--features`、`--enable-feature`、`--disable-feature`、`--vfx-support`。
+CLI 同名开关在 server 启动时解析：`--response-mode` `--features` `--enable-feature` `--disable-feature` `--vfx-support`。可用 group：`core asset auto_index graph material blueprint animation audio level project_input texture vfx`。VFX 由 UE 端最终裁决（`bridge_capabilities_get().data.modules.vfx_available`），本地配置只能关闭或表达意图。
 
-可用 group：`core,asset,auto_index,graph,material,blueprint,animation,audio,level,project_input,texture,vfx`。关闭某 group 后对应 operation 不进入 capability 索引也不可执行。**VFX 由 UE 插件状态最终裁决**：只有 `UeNodeNexusVfxBridge` 已加载且 UE Niagara 插件启用时才可用（以 `bridge_capabilities_get().data.modules.vfx_available` 为准）；本地配置只能关闭或表达启用意图，不能强行开启。探测结果不确定时（如 UE 未连接）不会缓存否定结论，下次调用会重新探测。
+多个编辑器同时在线时每个实例各有一条 `\\.\pipe\UeNodeNexusBridge.<pid>` 管道：`ue_execute("bridge_instance_list", {})` 查看，`ue_execute("bridge_instance_select", {"pid": 1234})` 或 `{"project": "工程名"}` 绑定。
 
 ---
 
@@ -201,20 +231,24 @@ CLI 支持同样的开关，server 启动时一次性解析：`--response-mode`�
 ```
 UE-Node-Nexus-MCP/
 ├── Plugins/
-│   ├── UeNodeNexusBridge/        核心 UE 编辑器插件（C++）
-│   └── UeNodeNexusVfxBridge/     Niagara/Cascade UE 插件（C++）
-├── src/ue_node_nexus_mcp/        Python MCP server
-│   ├── operations.json           operation 元数据单一事实源
-│   ├── guides/                   按需工作流指南正文（workflow_guide_get 服务）
-│   ├── tools_facade.py           6 个 facade 入口
-│   ├── facade_*.py               capability / execute / read / plan / response / state
-│   └── tools_*.py                各 group 的 payload 构造与客户端逻辑
-├── tests/                        pytest 测试（facade 真实调用面 + 契约对齐）
-├── skill/ue-node-nexus-mcp/      Agent skill 文档
+│   ├── UeNodeNexusBridge/            核心 UE 编辑器插件（C++）
+│   │   └── Source/.../Private/Transcode/   文本镜像的导出 / apply / schema
+│   └── UeNodeNexusVfxBridge/         Niagara / Cascade 插件（C++）
+├── src/ue_node_nexus_mcp/
+│   ├── operations.json               operation 元数据单一事实源
+│   ├── tools_facade.py               ue_context_get / ue_capability_get / ue_execute / ue_read / ue_diff_get / ue_plan_validate
+│   ├── tools_sync.py                 ue_sync
+│   ├── transcode/                    .nexus 解析 / 生成、raw 编解码、lint、diff → plan、三方 state、pull / push 编排
+│   ├── guides/                       workflow_guide_get 的指南正文
+│   ├── facade_*.py                   capability / execute / read / plan / response / state
+│   └── tools_*.py                    各 group 的 payload 构造与客户端逻辑
+├── tests/                            pytest（假 bridge 注入，不需要 UE）
+│   ├── transcode/                    文本格式与同步引擎的不变量测试
+│   └── compile_check/                新增 C++ TU 的 clang 桩编译检查
+├── skill/ue-node-nexus-mcp/          Agent skill
+├── .plan/Transcode-Layer.md          文本镜像设计与验收记录
 └── pyproject.toml
 ```
-
----
 
 ## 开发与测试
 
@@ -222,27 +256,29 @@ UE-Node-Nexus-MCP/
 pip install -e . && python -m pytest tests -q
 ```
 
-测试不需要 UE 实例：`tests/conftest.py` 提供假 bridge 注入。需要在真实编辑器进程内验证 C++ handler 时（CI 或管道服务不可用的非 Windows 主机），用无头 smoke commandlet 回放请求：`UnrealEditor-Cmd Host.uproject -run=UeNodeNexusBridgeSmoke -RequestFile=req.jsonl -ResponseFile=resp.jsonl`（JSONL 每行一个 `{operation, request_id, payload}` envelope，走与命名管道完全相同的分发路径）。覆盖面包括 facade 端到端路径（`ue_execute`/`ue_read`/`ue_diff_get` 分页/capability hidden 过滤/参数校验的结构化错误返回）、`graph_patch_apply` 的 client_id 展开、diagnostics 富化、Niagara 字段裁剪、`workflow_guide_get` 分类/检索、`batch_execute` 校验先行与遇错即停语义、后台任务队列（提交/失败上报/取消/并发上限/批量嵌套）、视口截图两阶段流程、`log_tail_get` 日志定位/过滤、关卡 Actor 与依赖图 operation 的载荷与路由、operation registry 元数据读取、payload schema 派生、响应归一化，以及三个结构性护栏：Python `operations.json` 与 C++ 插件注册表的**契约对齐测试**、所有源码文件（含 `.py/.h/.cpp/.cs/.inl`）的 **300 行预算检查**、以及对从未经过 UE 实机编译的新增 C++ TU 的 **clang 桩头文件编译检查**（`tests/test_cpp_compile_check.py` + `tests/compile_check/ue_stubs/`，用宿主机 clang 按文档化的 UE 5.5 API 形状做语法/类型检查，机器上没有可用编译器时自动跳过）。
+| 护栏 | 说明 |
+|:-----|:-----|
+| **契约对齐** | `operations.json` 与 C++ 注册表逐名对齐 |
+| **300 行预算** | 所有源码文件（`.py` `.h` `.cpp` `.cs` `.inl`）不超过 300 行 |
+| **clang 桩编译** | 新增 C++ TU 用宿主机 clang 对照 UE 5.5 桩头做语法 / 类型检查，无 clang 时跳过 |
+| **镜像不变量** | 每种资产 raw → 文本 → 解析 → 再生成逐字节一致，pull 后立即 push 的 plan 为空 |
+
+实机验收用无头编辑器：`UnrealEditor-Cmd <Project>.uproject -nullrhi -unattended -nosplash -NoSound`，约 80 秒后命名管道出现即可连接。Launcher 版引擎在 commandlet 阶段尚未加载插件模块，不要走 `-run=` commandlet。
 
 ---
 
-## 兼容性与边界
+## 兼容性
 
 | 项目 | 说明 |
 |:-----|:-----|
-| **实测环境** | UE 5.5 Launcher，Windows x64；材质整图复刻（85 节点/110 连线精确一致）、3C Blueprint 工作流、Niagara authoring 均在实机验收通过 |
-| **编译验证** | 两个插件的全部 C++ TU 已在 Linux 上对照 UE 5.5 官方源码用 UnrealBuildTool 完整编译+链接通过（unity 与非 unity 双模式，clang 18，零错误零警告）；期间修复的 ODR/unity 合并冲突、ADL 重载与弃用 API 问题均已进主干 |
-| **实机运行验证（Linux 无头编辑器）** | 通过 smoke commandlet 在真实 UnrealEditor-Cmd 进程内 E2E 验收：Enhanced Input 全周期（创建/保存/映射/重复与无效键拒绝/跨会话持久化读回）、资产依赖图双向 hard 依赖、关卡 Actor 全生命周期（spawn→transform 写读→delete）、蓝图创建与图快照、诊断读取，以及各错误路径（`asset_not_found`/`asset_already_exists`/`mapping_already_exists`/`invalid_key`/`viewport_unavailable`） |
-| **仍待有资产环境验证** | AnimBP 状态机写入的成功路径（需含骨骼/AnimBP 的项目；注册、分发与错误路径已实机验证）、`viewport_capture` 成功路径（需真实视口，无头 `-nullrhi` 下正确返回 `viewport_unavailable`）、命名管道传输本身（Windows 专属，Linux 上为空实现；分发层已由 commandlet 按字节一致路径验证） |
-| **跨版本** | 插件二进制与 UE 版本/编译器/模块 ABI 绑定；换 UE 版本请按源码重新编译，UE API 变化时按编译错误调整 |
-| **仓库边界** | 聚焦 asset discovery 与依赖图、graph 检查与编辑、编译诊断与日志、MI 参数、窄类型化关卡 Actor 生命周期、安全 package save；不含任意 Python/控制台命令执行、泛化 UObject 反射写入、场景模板类工具 |
-| **平台** | 传输层为 Windows 命名管道，server 与 UE 编辑器需在同一台 Windows 机器 |
-
----
+| **实测环境** | UE 5.5 Launcher，Windows x64。文本镜像在真实工程上验收：30 个资产 init → status 全 clean → pull 后 push 空 plan；从文本新建 MF / 材质 / 蓝图 / Niagara 并往返编辑，编译 0 错误 |
+| **跨版本** | 插件二进制与 UE 版本 / 编译器 / 模块 ABI 绑定，换版本请按源码重编；schema lock 以 `<引擎版本>-<插件集哈希>` 为 key，变化后 `ue_sync("schema")` |
+| **平台** | 传输层为 Windows 命名管道，server 与编辑器需在同一台 Windows 机器 |
+| **v1 边界** | Niagara emitter 资产只读、模块重排序不支持（删 + 加）、`SetVariables` 模块可编辑不可新建、蓝图 `ParentClass` 只在创建时生效、宏 / 委托 / 接口与 Event / Stage 栈只读 |
 
 ## 参考项目
 
-- [`bunkerboy258/ue-blueprint-dumper`](https://github.com/bunkerboy258/ue-blueprint-dumper) — 蓝图 CDO/默认值/组件检查和动画蓝图语义摘要功能的参考
+- [`bunkerboy258/ue-blueprint-dumper`](https://github.com/bunkerboy258/ue-blueprint-dumper) — 蓝图 CDO / 组件检查与动画蓝图语义摘要的参考
 
 ---
 

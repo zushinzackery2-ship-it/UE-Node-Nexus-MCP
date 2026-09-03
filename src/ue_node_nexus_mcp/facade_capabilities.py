@@ -43,8 +43,14 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
             "ue_read",
             "ue_diff_get",
             "ue_plan_validate",
+            "ue_sync",
         ],
-        "recommended_next": "ue_capability_get",
+        "recommended_next": "ue_sync",
+        "text_mirror": {
+            "tool": "ue_sync",
+            "flow": ["status", "edit .nexus files", "lint", "push (dry_run)", "push dry_run=false"],
+            "guide": {"operation": "workflow_guide_get", "payload": {"category": "text_mirror"}},
+        },
         "workflow_guides": {
             "operation": "workflow_guide_get",
             "list_categories": {},

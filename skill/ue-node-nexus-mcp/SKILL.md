@@ -1,124 +1,201 @@
 ---
 name: ue-node-nexus-mcp
-description: Operate and diagnose the UE Node Nexus MCP bridge for Unreal Editor asset, graph, AutoIndex, VFX (Niagara & Cascade), and thin facade workflows. Use when the user mentions UE Node Nexus MCP, UEMCP Bridge, ue-node-nexus-mcp, ue_execute, ue_read, ue_diff_get, auto_index, asset_list returning empty data, project_context_get, or MCP bridge context issues.
+description: Operate the UE Node Nexus MCP bridge to inspect and edit a running Unreal Editor — assets, Material/Blueprint graphs, Niagara, levels, diagnostics — and to author assets through the Content_Transcoded text mirror (ue_sync pull/push of .nexus files). Use when the user mentions UE Node Nexus MCP, UEMCP Bridge, ue-node-nexus-mcp, ue_sync, .nexus files, Content_Transcoded, L2U/U2L, ue_execute, ue_read, ue_diff_get, ue_capability_get, auto_index, project_context_get, empty asset lists, or any MCP-to-Unreal bridge question.
 ---
 
 # UE Node Nexus MCP
 
-Live MCP results are the source of truth. Judge runtime behavior before trusting source comments or stale docs. Discover exact param schemas at runtime; use the Read cheatsheet below to pick the right operation instead of guessing by name.
+Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; this skill tells you which door to use and what the bridge guarantees.
 
-## Public surface
-Fixed at 6 facade tools: `ue_context_get`, `ue_capability_get`, `ue_execute`, `ue_read`, `ue_diff_get`, `ue_plan_validate`. Low-level operations never appear in `list_tools`: discover them with `ue_capability_get`, run them through `ue_execute`, read common state through `ue_read`. High-risk compatibility ops flagged `hidden` (e.g. `editor_save_all`, `editor_request_exit`, `auto_index_clear`) are omitted from the `ue_capability_get` index unless `include_hidden=true`; querying one by name and executing it still works. `ue_diff_get` pages truncated change lists: pass the returned `next_cursor` back as `cursor`.
+**Ground rules**
 
-Task-level recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists guide categories (getting_started, graph_editing, material_authoring, blueprint_authoring, niagara_authoring, diagnostics_repair, concurrency); `{"category": "..."}` returns one guide body, `{"query": "connect pins"}` keyword-routes to the best guide. Pull the matching guide before starting an unfamiliar multi-step workflow.
+1. Live results beat everything: a fresh tool result outranks source comments, README text and this file.
+2. Never guess a payload. `ue_capability_get(operation, detail="schema")` first, `detail="examples"` for a valid body.
+3. Author assets through the text mirror (`ue_sync`); use graph ops only for what the mirror marks `@opaque`, for levels, and for asset management.
+4. Writes default to `dry_run=true`. Read the plan, then apply.
 
-> If an operation named in this skill is missing from `ue_capability_get`, your MCP **server process is running stale code** — reinstall the plugin's `MCPServer` Python and restart the MCP client. The bridge plugin (UE editor) and the Python server must BOTH be current; updating one without restarting the other is the most common "feature X doesn't work" cause.
+## 1. Public surface
 
-## Instance selection (multi-editor)
-Transport is a per-editor Windows named pipe (`\\.\pipe\UeNodeNexusBridge.<pid>`), not a TCP port — rapid editor restarts and multiple concurrent editors no longer collide. Each MCP (Agent) session binds to ONE editor:
-- One editor live → auto-bound on first call; nothing to do.
-- Two+ live → calls error until you pick: `ue_execute("bridge_instance_list", {})` then `ue_execute("bridge_instance_select", {"pid": <pid>})` (or `{"project": "<name substring>"}`). Both are MCP-local control ops (not forwarded to UE).
-- `ue_context_get` reports `active_instance` (pid + auto/explicit mode) and `available_instances`.
-- An auto-bound session re-binds transparently across an editor restart; an explicitly-selected instance that exits errors until you re-select. "selected instance is gone" / "no UE editor instance found" → the editor closed or the plugin is not loaded.
+| Tool | Purpose | Default response |
+|:-----|:--------|:-----------------|
+| `ue_context_get(include_counts)` | Enabled groups, bound editor instance, recommended next call | summary |
+| `ue_capability_get(group, operation, detail)` | Operation index (`detail="index"`), one op's `schema` / `examples` | summary |
+| `ue_execute(operation, payload, response)` | Run any registry operation | `delta` for writes, `summary` for reads |
+| `ue_read(target, asset_path, format, query)` | Typed reads with artifact handles for big payloads | summary |
+| `ue_diff_get(since_token, cursor, limit)` | Changes since a diff token, cursor-paged | — |
+| `ue_plan_validate(operations)` | Validate a batch without touching UE | — |
+| `ue_sync(action, paths, options)` | Text mirror: `init` / `status` / `pull` / `lint` / `push` / `schema` | rows + counts |
 
-## Getting actual data from read operations
-`ue_execute` **defaults to `response.mode="summary"` for reads** — returns a one-line text summary, NOT the bridge data payload. To get real data:
-- **`ue_execute(..., response={"mode":"full"})`** — requests the raw bridge envelope with full `data` field; large payloads are stored as artifact handles instead of entering tool context
-- **`ue_read(target=...)`** — the recommended path for reads; returns an artifact token for the full response
-- Do NOT use `ue_execute` without `response.mode="full"` and expect to see data fields
-- Do NOT use `response={"format":"full"}`. `response.format` is invalid; use `response={"mode":"full"}` for envelope detail, or put `format` in the operation payload / `ue_read(format="detail")` for read shape.
+- 129 registry operations sit behind `ue_execute`; 49 are `hidden` (asset-shaped ops replaced by the mirror, plus `editor_save_all`, `editor_request_exit`, `auto_index_clear`). Hidden ops still run by name; list them with `include_hidden=true`.
+- Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories (`getting_started`, `text_mirror`, `graph_editing`, `material_authoring`, `blueprint_authoring`, `niagara_authoring`, `diagnostics_repair`, `concurrency`); `{"category": ...}` returns one guide, `{"query": "connect pins"}` routes by keyword.
+- If an operation named here is missing from `ue_capability_get`, the MCP server process runs stale code: reinstall the Python package and restart the client. Plugin (editor) and server must both be current.
 
-## Read cheatsheet (intent → call)
-Prefer `ue_read(target=...)`; otherwise the operation via `ue_execute`. Query `ue_capability_get(operation, detail="schema")` for exact params; `detail="examples"` for a complete payload example.
-- asset metadata → `ue_read(target="asset")` / `asset_get`
-- fuzzy path / unknown asset type → `ue_read(target="auto", asset_path="terrain_demo", format="detail")` — resolves through AutoIndex, inspects asset class with `asset_get`, then routes to the narrow read op
-- **Material / Material Function / Blueprint node graph** → `ue_read(target="graph")` or `graph_snapshot_get(graph_kind="material"|"material_function"|"blueprint")` — this is the core node-graph reader, NOT a `*_summary` op
-- **Material static lint** → `material_lint` via `ue_execute`, a Python-local read operation that does not compile; it reads graph node params + texture summaries to flag sampler/texture compression/sRGB mismatches and placeholder texture risks
-- **Material Instance params / parent chain** → `ue_read(target="material_instance")`, `material_instance_params_get`, or `material_interface_resolve`
-- There is no `ue_read(target="material")`; use `auto` for unknown material-like assets, `graph` for Material/Material Function nodes, or `material_instance` for instance parameters.
-- **Graph params** → `graph_snapshot_get(format="full", include_node_params=true)` returns compact Material / Material Function param values by default (`node_params_format="compact"`), not full enum/metadata schema. Whole-graph full schema (`node_params_format="full"`) is blocked before UE execution unless `response={"allow_heavy": true}` is supplied; use `wires_tiny` first, then `node_params_get` for specific nodes.
-- **Large blueprint sub-graph drill** → `graph_snapshot_get(keyword="Damage")` or `graph_node_info_get(keyword="Damage")` for node-name substring, `trace_from="Event BeginPlay", trace_depth=5` for BFS neighborhood, `node_class_filter=["CallFunction"]` for class filtering, `exec_only=true` for exec-pin-only wires. All 5 filter params work on both `graph_snapshot_get` (topology) and `graph_node_info_get` (dense node info). Response includes `filter_stats` (total/matched/included nodes). Blueprint `graph_snapshot_get` responses always include `available_graphs` (name + node count) — use it to pick `graph_name` instead of guessing
-- Blueprint vars / defaults / components → `blueprint_details_get(include_components=true, include_inherited_components=true)`
-- AnimBlueprint graph nodes → `anim_blueprint_summary_get`
-- AnimBlueprint state machines (states / entry_state / transitions with from/to/rule/blend) → `anim_state_machine_summary_get` / `ue_read(target="anim_state_machine")` — graph_snapshot_get does NOT descend the state-machine sub-graph
-- AnimMontage sections/slots/segments/notifies → `anim_montage_summary_get`
-- BlendSpace axes/samples → `blend_space_summary_get`
-- Cascade (`UParticleSystem`) emitters/modules (+ normalized module param values: Spawn/Lifetime/Size/Color/Velocity/Location/Rotation/Light, in `format="full"`) → `cascade_system_summary_get`
-- Niagara → `ue_read(target="niagara_system"|"niagara_stack")` / `niagara_*`
-- level actors / component materials → `level_*` / `component_*`
-- asset dependency graph → `asset_dependencies_get` / `asset_referencers_get` / `ue_read(target="asset_dependencies"|"asset_referencers")` — AssetRegistry package links as `[package_name, hard|soft]` rows; engine/script packages excluded unless `include_engine=true`
-- **UE log tail** → `log_tail_get` / `ue_read(target="log")` — MCP-local read of the newest project log (`tail_kb`, `match` substring filter, `max_lines`); use for raw log lines when `diagnostics_get.related_log_items` is too narrow
-- **Viewport screenshot** → `viewport_capture` (returns the target PNG path immediately; the file is written asynchronously after the next viewport redraw) then poll `viewport_capture_status {"file_path": ...}` (MCP-local file check). `filename` must be a bare letters/digits/underscore/dash name; output always lands in the project `Saved/Screenshots/` dir
-- Landscape Paint layer info binding → `landscape_layer_info_set` after reading `object_properties_get(TargetLayers)`; this is a narrow write for `LandscapeLayerInfoObject`, not a generic UObject property setter.
-- SoundCue internal USoundNode tree → `sound_cue_summary_get` / `ue_read(target="sound_cue")`
-- Texture2D dimensions / source+pixel format / compression / sRGB / LOD group → `texture_summary_get` / `ue_read(target="texture")`
-- **Project diagnostics / current error items** → `diagnostics_get` / `ue_read(target="diagnostics")`. Global diagnostics report `data.error_count`, `data.warning_count`, and `data.items`; `remaining_errors` is reserved for concrete asset responses that carry `asset_path`. Python also adds `data.related_log_items` for UE log material compile fallback / sampler mismatch clues; these are historical and carry `stale_possible=true`, so do not treat them as current global errors.
+## 2. First probe
 
-## Patch operations cheatsheet
-All patch ops use `operations: [{"op": "<verb>", ...}]`. Always run `ue_capability_get(operation, detail="examples")` first. All default to `dry_run=true`.
+Run this before answering any "is the bridge working / what project is this" question:
 
-**blueprint_components_patch** — `op`: `add_component` | `remove_component` | `set_component_defaults` | `set_component_properties`. `defaults` and `properties` are aliases for component template defaults; reflected fields accept UE property names, plus convenience `RelativeTransform` and `material`.
-```json
-{"op":"add_component","component_class":"/Script/Niagara.NiagaraComponent","name":"AimVFX","parent":"Mesh","defaults":{"Asset":"/Game/FX/NS_AimMagicCircle.NS_AimMagicCircle","bAutoActivate":false,"RelativeTransform":{"location":{"x":0,"y":0,"z":50},"rotation":{"pitch":0,"yaw":0,"roll":0},"scale":{"x":1,"y":1,"z":1}}}}
-{"op":"set_component_defaults","name":"AimVFX","defaults":{"bAutoActivate":false}}
-{"op":"remove_component","name":"OldComponent"}
+1. `ue_context_get(include_counts=true)` — bound instance, enabled groups.
+2. `ue_execute("project_context_get", {}, response={"mode": "full"})` — `.uproject`, content dir, `/Game` mount.
+3. `ue_execute("bridge_capabilities_get", {}, response={"mode": "full"})` — modules, `vfx_available`, `schema_key`.
+4. `ue_execute("diagnostics_get", {"severity": "all"}, response={"mode": "full"})` — `data.error_count`, `data.items`.
+5. `ue_sync("status")` when the task involves asset content.
+
+## 3. Choose the path
+
+| Task | Use |
+|:-----|:----|
+| Edit Material / MaterialFunction / MaterialInstance / Blueprint / Niagara / DataAsset content | `ue_sync` loop (section 4) |
+| Create one of those from scratch | Write the `.nexus` file, `ue_sync("push")` — the asset is created |
+| Node the mirror shows as `@opaque` | `graph_patch_apply` on that node only |
+| Inspect a graph, instance parameters, an asset's metadata | `ue_read` (section 5) |
+| Create / delete / move / duplicate assets, fix redirectors | `asset_*` ops |
+| Level actors, components, material slots, landscape layer info | `level_*`, `component_*`, `landscape_layer_info_set` |
+| Compile, validate, save one asset | `asset_compile`, `asset_validate`, `asset_save` |
+| Project error list, UE log lines | `diagnostics_get`, `log_tail_get` |
+| Screenshot | `viewport_capture` then `viewport_capture_status` |
+
+## 4. Text mirror (`ue_sync`)
+
+Layout: `<UE_NEXUS_TRANSCODE_DIR or cwd/Content_Transcoded>/<Project>/<Path>/<Asset>.<kind>.nexus` with kinds `mat mf mi bp ns ne asset stub`; `.nexus/base/` is the merge base, `.nexus/schema/<key>/` the reflection lock.
+
+**Loop**
+
+1. `ue_sync("init")` once per mirror root (binds root, exports schema, pulls everything).
+2. `ue_sync("status")` — per-asset state: `clean`, `local-modified`, `ue-modified`, `both-modified`, `local-new`, `ue-new`, `local-deleted`, `ue-deleted`.
+3. Edit the `.nexus` file with Read / grep / StrReplace. Only non-default values are written; delete a line to reset.
+4. `ue_sync("lint", paths)` — offline: unknown class / property / enum / pin / type, dangling links, opaque edits.
+5. `ue_sync("push", paths)` — dry run returns the plan (verb counts, risky verbs).
+6. `ue_sync("push", paths, options={"dry_run": false})` — one editor transaction per asset, compile, save touched packages only, re-export, rewrite text to canonical form. Diagnostics come back as `file:line: message`.
+7. `ue_sync("pull", paths)` after the editor changed something (`ue-modified`).
+
+**Options**: `push` → `dry_run` `compile` `save` `force` `allow_delete` `stop_on_error`; `pull` → `discover` `include_stubs` `force`; `status` → `discover` `include_stubs` `include_clean`; `init` → `pull_all` `include_stubs` `auto_export` `refresh_schema`. `force` is `"local"` or `"ue"` and is the only way past `both-modified`.
+
+**Format essentials**
+
+```
+[asset]
+BlendMode = BLEND_Translucent
+
+[graph]
+c_eps : Constant(R=0.000001) @ -1000,220                # id : Class(param=value) @ x,y
+call  : MaterialFunctionCall(MaterialFunction=/Game/F/MF_A.MF_A)
+old   : @opaque(/Script/Engine.MaterialExpressionCustom) @ 0,0   # move / delete / link only
+
+c_eps -> call.A                                          # src[.pin] -> dst[.pin]
+call -> out.BaseColor                                    # materials: implicit `out` node
+c_eps -> out.WorldPositionOffset
 ```
 
-**graph_patch_apply** — `op`: `connect_pins` | `disconnect_pins` | `set_node_param` | `create_node` | `delete_node` | `set_node_position`. Pins accept **GUID** (`from_pin_id`/`to_pin_id`) OR **name** (`from_pin`/`to_pin`) — name is easier, GUID is unambiguous when a node has duplicate pin names. Blueprint supports same-batch `create_node.client_id` with dry-run transient nodes. Material/MaterialFunction same-batch `create_node.client_id` is expanded by the Python MCP layer only when `dry_run=false`; for dry-run, split create/read/connect or expect a client-side unsupported dry-run error.
+- Blueprint: `[variables] Health : float = 100 { Category=Stats, InstanceEditable }`, `[components] Mesh : StaticMeshComponent(parent=Root) { RelativeLocation=(X=0,Y=0,Z=50) }`, `[graph EventGraph]` nodes such as `Event(Actor.ReceiveBeginPlay)`, `CallFunction(KismetSystemLibrary.PrintString, InString="Hi")`, `VariableGet(Health)`, `Sequence(pins=3)`; exec pins are `execute` / `then`; `[function Name(A: double) -> (R: bool)]` has implicit `entry` / `result`; `@renamed(Old)` renames. `ParentClass` is honoured only when the asset is created.
+- Niagara: `[emitter Name]`, `[stack Name/ParticleUpdate]` lines like `spawn_rate : SpawnRate(SpawnRate=25, Spawn Probability=0.5) !disabled` list what the Stack panel shows; `[renderers Name] sprite : Sprite { SubImageSize=(X=2,Y=2) }`; `[user] Speed : float = 3` with types `float int bool Vector2 Vector Vector4 Color Position Quat` or a class name. `@link(...)` / `@dynamic` inputs are read-only; `SetVariables(...)` can be edited, not created.
+- Ids are yours and stable; GUIDs never appear. Renaming an id recreates the node. A link to a new multi-pin node must name the pin.
+- A MaterialFunction interface change refreshes every caller automatically.
+- `schema_stale` → `ue_sync("schema")` (engine or plugin set changed). `.stub.nexus` files are read-only registry tags.
+
+## 5. Reading state
+
+**Getting data out**: `ue_execute` reads default to a one-line summary. Use `ue_read(target=...)` (artifact token for the full body) or `ue_execute(..., response={"mode": "full"})`. `response` accepts only `mode` and `allow_heavy`; `response.format` is invalid — read shape goes into the operation payload (`format`) or `ue_read(format="detail")`. Modes: `silent | brief | ids_only | delta | summary | full | debug`.
+
+| Intent | Call |
+|:-------|:-----|
+| Asset metadata | `ue_read(target="asset")` / `asset_get` |
+| Unknown asset type, fuzzy name | `ue_read(target="auto", asset_path="terrain_demo", format="detail")` |
+| Material / MaterialFunction / Blueprint graph | `ue_read(target="graph")` / `graph_snapshot_get(graph_kind=...)` |
+| Graph params | `graph_snapshot_get(format="full", include_node_params=true)`; whole-graph `node_params_format="full"` needs `response.allow_heavy=true` |
+| Blueprint drill-down | `graph_snapshot_get` / `graph_node_info_get` with `keyword`, `trace_from` + `trace_depth`, `node_class_filter`, `exec_only`; responses list `available_graphs` |
+| Blueprint variables / defaults / components | `blueprint_details_get(include_components=true, include_inherited_components=true)` |
+| Material static lint (no compile) | `material_lint` |
+| Material Instance params / parent chain | `ue_read(target="material_instance")` / `material_interface_resolve` |
+| AnimBP, state machines, montages, blend spaces | `anim_blueprint_summary_get`, `anim_state_machine_summary_get`, `anim_montage_summary_get`, `blend_space_summary_get` |
+| Niagara / Cascade | `ue_read(target="niagara_system")`, `target="niagara_stack"`, `target="cascade_system"` |
+| Level actors, component materials | `level_actors_list`, `level_actor_get`, `component_*` |
+| Dependencies / referencers | `asset_dependencies_get` / `asset_referencers_get` → rows of `[package, hard-or-soft]` |
+| Sound cue, texture | `sound_cue_summary_get`, `texture_summary_get` |
+| Project diagnostics | `diagnostics_get` → `data.error_count / warning_count / items`; `related_log_items` are historical (`stale_possible=true`) |
+| UE log tail | `log_tail_get(tail_kb, match, max_lines)` |
+
+Gotchas: there is no `ue_read(target="material")`; `asset_list(format="indexed")` has no row items (use `compact` or `full`); `graph_snapshot_get` does not descend AnimBP state machines; a `*_patch` / `*_set` op never reads.
+
+## 6. Writing outside the mirror
+
+Sequence: `ue_capability_get(op, detail="schema")` → minimal payload → `ue_plan_validate` for high-risk or batch → `ue_execute` (`delta`) → verify with `ue_diff_get` or the narrowest read. Keep to typed primitives: no scenario templates, no arbitrary Python or console commands, no generic reflection writes.
+
+**graph_patch_apply** — `op`: `connect_pins | disconnect_pins | set_node_param | create_node | delete_node | set_node_position`. Pins by name (`from_pin` / `to_pin`) or GUID (`from_pin_id` / `to_pin_id`). `node_class` accepts `/Script/Engine.MaterialExpressionX`, `MaterialExpressionX` or `X`.
+
 ```json
 {"op": "create_node", "client_id": "branch", "node_class": "Branch", "position": {"x": 300, "y": 0}}
 {"op": "connect_pins", "from_node_id": "<GUID>", "from_pin": "Then", "to_node_id": "branch", "to_pin": "execute"}
-{"op": "connect_pins", "from_node_id": "<GUID>", "from_pin": "ReturnValue", "to_node_id": "<GUID>", "to_pin": "NewParam"}
-{"op": "connect_pins", "from_node_id": "<GUID>", "from_pin_id": "<PIN_GUID>", "to_node_id": "<GUID>", "to_pin_id": "<PIN_GUID>"}
 {"op": "set_node_param", "node_id": "<GUID>", "name": "PinName", "value": "string_or_number"}
 ```
 
-**project_input_mappings_patch** — `op`: `add_action_mapping` | `remove_action_mapping` | `add_axis_mapping` | `remove_axis_mapping`
+Blueprint `create_node.client_id` works in dry run; for Material / MaterialFunction the Python layer expands same-batch `client_id` links only when `dry_run=false`.
+
+**blueprint_components_patch** — `op`: `add_component | remove_component | set_component_defaults | set_component_properties`; `defaults` and `properties` are aliases, plus `RelativeTransform` and `material` conveniences.
+
 ```json
-{"op": "add_action_mapping", "action_name": "Aim", "key": "RightMouseButton"}
-{"op": "add_axis_mapping", "axis_name": "MoveForward", "key": "W", "scale": 1.0}
+{"op": "add_component", "component_class": "/Script/Niagara.NiagaraComponent", "name": "AimVFX", "parent": "Mesh", "defaults": {"bAutoActivate": false}}
 ```
 
-**landscape_layer_info_set** — binds or creates `ULandscapeLayerInfoObject` assets for named Landscape Paint target layers. Layer `name` must match the material layer name exactly. Defaults to `dry_run=true`.
-```json
-{"actor_path":"/Game/Maps/Demo.Demo:PersistentLevel.Landscape_0","layers":[{"name":"Cliff","layer_info_asset_path":"/Game/Maps/Demo_sharedassets/Cliff_LayerInfo.Cliff_LayerInfo","create_if_missing":true,"no_weight_blend":false}],"dry_run":true,"save":false}
-```
+**node_params_set** — `params` is an object `{"PinName": value}`; discover exact names with `node_params_get`. Material root properties (`ShadingModel`, `BlendMode`, `TwoSided`, ...) live on `node_id="MaterialOutput"` — or, better, in the mirror's `[asset]` section.
 
-**node_params_set** — `params` is `{"pin_name": value}` object (NOT array). Pin names must match exact UE pin names; use `node_params_get` to discover them.
+**project_input_mappings_patch** — `add_action_mapping | remove_action_mapping | add_axis_mapping | remove_axis_mapping`. Enhanced Input: `input_action_create`, `input_mapping_context_create`, `input_mapping_context_entry_add`.
 
-## Response modes
-`ue_execute.response.mode` ∈ `silent | brief | ids_only | delta | summary | full | debug`. Read ops default to `summary` (text-only); write ops default to `delta`. Use `full`/`debug` only when you need the raw bridge envelope; large payloads return `artifact.id`, byte size, estimated tokens, and summary instead of raw `data`. `ue_execute.response` only supports `mode` and `allow_heavy`; if `invalid_response_field` reports `format`, move `format` into the operation payload or change it to `response.mode`. `detail` is NOT an execute mode — it is `ue_read.format`.
+**landscape_layer_info_set** — binds or creates `LandscapeLayerInfoObject` per paint layer; `name` must match the material layer exactly.
 
-## First probe (any bridge/context question)
-1. `ue_context_get(include_counts=true)`
-2. `ue_capability_get(detail="index")`
-3. `ue_execute("bridge_capabilities_get", {}, response={"mode":"full"})`
-4. `ue_execute("project_context_get", {}, response={"mode":"full"})`
-5. `ue_execute("diagnostics_get", {"severity":"all"}, response={"mode":"full"})` — reads UE MessageLog and project asset compile diagnostics; use `data.error_count` for global count, and inspect `data.related_log_items` for stale-but-useful material log clues
+**Level actors** — `level_actor_spawn` (`class_path` = engine short name, `/Script/` path or Blueprint asset), `level_actor_delete`, `level_actor_transform_set` (at least one of location / rotation / scale). `level_open` refuses a dirty map unless `discard_changes=true`; every actor path read before it is stale afterwards.
 
-## Empty asset / AutoIndex diagnosis
-Never conclude "no active project" from one empty `assets`/`items`. Cross-check `project_context_get` (path, content dir, `/Game` mount), `asset_list` (`package_paths=["/Game"]`, small limit), `auto_index_status`/`auto_index_overview`, `diagnostics_get`. Read as:
-- context empty/mismatched → wrong editor instance or context.
-- assets present but AutoIndex empty → index lifecycle/persistence issue.
-- both empty + valid context → AssetRegistry scan/mount/filter issue.
+## 7. Editor-safety contract
 
-Gotcha: `asset_list(format="indexed")` does not populate row `items`; use `format="compact"` (rows `[object_path, class, loaded, redirector]`) or `"full"` to read rows. Filter with `class_names` + `package_paths`.
+What the bridge guarantees, so you do not need sleeps or manual-save workarounds:
 
-## Safe writes
-`ue_capability_get(operation, detail="schema")` → minimal typed payload → `ue_plan_validate` for high-risk/batch → `ue_execute` (default `delta`) → verify with `ue_diff_get` or the narrowest readback. Keep capabilities as generic primitives: no scenario template tools (e.g. `create_fire_effect`), no arbitrary Python/console execution, no broad `object_properties_set`-style reflection writes. Level-actor lifecycle uses narrow typed ops instead: `level_actor_spawn` (`class_path` accepts engine short names, `/Script/` paths, or Blueprint asset paths), `level_actor_delete`, `level_actor_transform_set` (at least one of location/rotation/scale) — all default `dry_run=true`. `level_open` switches maps and refuses to drop a dirty map unless `discard_changes=true`; after it, all previously read actor paths are stale — re-list before further writes.
+- No bridge call opens a modal dialog. Every save (`asset_save`, `editor_save_all`, `save=true` on create / move / duplicate / Niagara ops, `ue_sync push`) is a direct `UPackage::SavePackage`. A file that is read-only on disk (checked in under source control) returns `save_blocked_read_only` with the path — check it out in the editor and retry. `asset_save` is safe to call.
+- Material graph writes cancel that material's in-flight shader compilation before touching the graph and compile once at the end. One patch per asset, not many small ones.
+- An unknown node class is an `unknown_node_class` diagnostic, never a silently dangling node.
+- Material output pins include `WorldPositionOffset`, `ClearCoat`, `ClearCoatRoughness`, `SurfaceThickness`, `FrontMaterial`.
+- The editor refuses to nest a request inside a running one (`bridge_busy`); the server retries for about two seconds before surfacing it.
+- Bridge readback is editor memory, not disk. `ue_sync("status")` compares against the saved file (`ue-modified`, dirty flag) when on-disk state matters.
+- Only touched packages are saved; the bridge never runs SaveAll.
 
-## Concurrency & batching
-The bridge runs each request on the UE game thread, one at a time per editor instance — parallel MCP calls queue, they do not overlap UE work. Classes:
-- **Parallel-safe**: all read ops. Overlap freely.
-- **Per-asset safe**: write ops on *different* assets. Never two in-flight writes on the same asset.
-- **Sequential only**: `bridge_instance_select`, `auto_index_rebuild`, deletes/moves/renames of paths other calls will use, hidden editor-lifecycle ops. Run alone, re-read state after.
+## 8. Concurrency and batching
 
-`batch_execute` (MCP-local) runs a short ordered list of operations in one call: `ue_execute("batch_execute", {"operations": [{"operation": ..., "payload": {...}}, ...]})`. The whole batch is validated first (invalid batch executes nothing); execution stops at the first failure unless `continue_on_error=true`; a bridge connection failure aborts the remainder; per-item `dry_run` keeps its meaning. It is a roundtrip saver, NOT a transaction — applied items stay applied. Prefer one `graph_patch_apply`/`graph_build_apply` over a batch when a single op covers the edit, and `ue_plan_validate` first for high-risk batches.
+Every request runs on the UE game thread, one at a time per editor; parallel MCP calls queue.
 
-Background tasks (MCP-local): `task_submit {"operation": ..., "payload": ...}` validates like a batch item, queues the call on one background worker (strict submission order, no interleaved writes), and returns a `task_id` immediately — use it for long calls you do not want to block on (big compiles, a whole `batch_execute`). Poll `task_status`, fetch the stored full response with `task_result`, cancel a still-queued task with `task_cancel`. `task_*` ops cannot wrap each other; task ids are in-memory and die with the server. The wrapped call still honors `UE_NEXUS_TIMEOUT_SECONDS`.
+| Class | Ops | Rule |
+|:------|:----|:-----|
+| Parallel-safe | all reads | overlap freely |
+| Per-asset safe | writes on different assets | never two in-flight writes on one asset |
+| Sequential only | `bridge_instance_select`, `auto_index_rebuild`, deletes / moves / renames of paths other calls use, editor-lifecycle ops | run alone, re-read afterwards |
 
-## Don't guess calls
-Read the schema (`ue_capability_get(operation, detail="schema")`) before invoking — do not infer params from the name. Use `detail="examples"` for a valid payload example. A `*_patch`/`*_set` op never reads: to read use the matching `*_get`/`*_details` op (e.g. Blueprint components via `blueprint_details_get(include_components=true)`, NOT `blueprint_components_patch`). Read ops whose args are all optional still need at least one target (e.g. `material_interface_resolve` needs EXACTLY one of `asset_path` / `material_path` / `component_path`+`slot_index`); an empty call is a request error (`invalid_request`), passing more than one is `target_conflict`, and an out-of-range slot is `invalid_slot` — none of these are `material_not_found`.
+- `batch_execute` runs up to 20 ordered operations in one call: validated as a whole first, stops at the first failure unless `continue_on_error=true`, not a transaction. Prefer one `graph_patch_apply` or one `ue_sync push` when it covers the edit.
+- `task_submit` queues a long call on one background worker and returns `task_id`; poll `task_status`, fetch `task_result`, `task_cancel` while queued. Task ids die with the server; `task_*` cannot nest.
+- Long compiles: raise `UE_NEXUS_TIMEOUT_SECONDS` rather than splitting the work.
 
-## Evidence order
-live op result > bridge diagnostics > project context/mounts > AssetRegistry > AutoIndex state/index path > repo source & README > historical notes.
+## 9. Editor instances
+
+Transport is one Windows named pipe per editor: `\\.\pipe\UeNodeNexusBridge.<pid>`.
+
+- One editor live → bound automatically.
+- Several → calls fail until `ue_execute("bridge_instance_list", {})` then `ue_execute("bridge_instance_select", {"pid": ...})` or `{"project": "<substring>"}` (both MCP-local).
+- `ue_context_get` shows `active_instance` and `available_instances`. An auto-bound session survives an editor restart; an explicit selection that exits errors until re-selected.
+- "no UE editor instance found" → editor closed or plugin not loaded; `bridge_capabilities_get` says whether the VFX module is present.
+
+## 10. Diagnosis playbooks
+
+**Empty asset list**: never conclude "no project" from one empty result. Check `project_context_get` (path, `/Game` mount), `asset_list(package_paths=["/Game"], format="compact")`, `auto_index_status`, `diagnostics_get`. Context empty → wrong instance; assets present but index empty → AutoIndex lifecycle; both empty with valid context → registry scan / mount / filter.
+
+**Error codes worth recognising**
+
+| Code | Meaning | Do |
+|:-----|:--------|:---|
+| `invalid_request` | required field missing, or a read op called with no target | read the schema |
+| `target_conflict` | more than one target given (e.g. `material_interface_resolve`) | pass exactly one |
+| `invalid_response_field` | `response.format` or another unknown response key | use `response.mode` |
+| `bridge_busy` | request arrived while another one was executing | retried automatically; if it persists, wait |
+| `save_blocked_read_only` | file checked in / read-only | check out in the editor, retry |
+| `schema_stale` | mirror text written against an older schema key | `ue_sync("schema")` |
+| `both-modified` (status) | text and editor both changed | pull first, or push with `force="local"` |
+| `mcp_bridge_error` | pipe / transport failure | editor gone or plugin unloaded; re-probe |
+
+## 11. Evidence order
+
+Live op result > bridge diagnostics > project context and mounts > AssetRegistry > AutoIndex state > repo source and README > historical notes.

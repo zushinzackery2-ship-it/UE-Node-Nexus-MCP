@@ -2,11 +2,11 @@
 
 #include "AssetToolsModule.h"
 #include "Dom/JsonValue.h"
-#include "FileHelpers.h"
 #include "IAssetTools.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeAssetManagementShared.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 
 namespace UeNodeNexusBridge
 {
@@ -59,7 +59,8 @@ static TSharedPtr<FJsonObject> HandleAssetMoveLike(const FString& Operation, con
         UObject* MovedAsset = bMoved ? LoadObject<UObject>(nullptr, *DestinationAssetPath) : nullptr;
         if (MovedAsset != nullptr && bSave)
         {
-            bSaved = UEditorLoadingAndSavingUtils::SavePackages({ MovedAsset->GetOutermost() }, false);
+            FString SaveError;
+            bSaved = Transcode::SavePackageDirect(MovedAsset, SaveError);
         }
         if (bMoved && bFixRedirectors)
         {

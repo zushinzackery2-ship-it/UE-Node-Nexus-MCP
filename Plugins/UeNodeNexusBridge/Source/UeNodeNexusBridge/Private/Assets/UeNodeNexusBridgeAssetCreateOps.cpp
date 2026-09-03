@@ -3,9 +3,9 @@
 #include "UeNodeNexusBridgeAssetCreateHelpers.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "FileHelpers.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 #include "UObject/Package.h"
 
 namespace UeNodeNexusBridge
@@ -109,12 +109,14 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
     Package->MarkPackageDirty();
     Asset->PostEditChange();
 
-    const bool bSaved = bSave && UEditorLoadingAndSavingUtils::SavePackages({ Package }, false);
+    FString SaveError;
+    FString SaveCode;
+    const bool bSaved = bSave && Transcode::SavePackageDirect(Package, Asset, SaveError, &SaveCode);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, !bSave || bSaved);
     Response->SetObjectField(TEXT("data"), MakeCreateData(Asset->GetPathName(), AssetKind, Asset, false, bSaved));
     if (bSave && !bSaved)
     {
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("save_failed"), TEXT("Asset was created but package save failed")));
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(SaveCode, FString::Printf(TEXT("Asset was created but package save failed: %s"), *SaveError)));
     }
     return Response;
 }

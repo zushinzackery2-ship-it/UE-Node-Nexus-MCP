@@ -83,6 +83,12 @@ void RegisterCoreOperations()
     RegisterCoreOp(TEXT("editor_save_all"), HandleEditorSaveAll);
     RegisterCoreOp(TEXT("editor_request_exit"), HandleEditorRequestExit);
     RegisterCoreOp(TEXT("bridge_capabilities_get"), HandleBridgeCapabilitiesGet);
+    RegisterCoreOp(TEXT("transcode_root_set"), HandleTranscodeRootSet);
+    RegisterCoreOp(TEXT("transcode_status"), HandleTranscodeStatus);
+    RegisterCoreOp(TEXT("transcode_export"), HandleTranscodeExport);
+    RegisterCoreOp(TEXT("transcode_apply"), HandleTranscodeApply);
+    RegisterCoreOp(TEXT("schema_export"), HandleSchemaExport);
+    RegisterCoreOp(TEXT("transcode_watch_set"), HandleTranscodeWatchSet);
 
     // Handlers that take no payload need a small adapter to match the registry
     // handler signature.

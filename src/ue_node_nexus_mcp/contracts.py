@@ -53,6 +53,7 @@ THIN_MCP_OPERATIONS = {
     "ue_execute",
     "ue_plan_validate",
     "ue_read",
+    "ue_sync",
 }
 
 BRIDGE_OPERATIONS = ALL_OPERATIONS - LOCAL_MCP_OPERATIONS

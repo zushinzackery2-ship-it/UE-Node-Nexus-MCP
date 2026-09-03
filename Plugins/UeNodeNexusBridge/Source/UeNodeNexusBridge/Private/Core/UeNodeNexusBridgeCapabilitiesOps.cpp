@@ -6,6 +6,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeOperationRegistry.h"
+#include "UeNodeNexusBridgeTranscode.h"
 
 namespace UeNodeNexusBridge
 {
@@ -163,6 +164,9 @@ TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, co
     Data->SetBoolField(TEXT("contract_ok"), ExpectedOperations.IsEmpty() || (MissingExpectedOperations.IsEmpty() && UnexpectedExtraOperations.IsEmpty()));
     Data->SetObjectField(TEXT("counts"), Counts);
     Data->SetObjectField(TEXT("modules"), Modules);
+    Data->SetStringField(TEXT("schema_key"), Transcode::SchemaKey());
+    Data->SetStringField(TEXT("engine_version"), Transcode::EngineVersionString());
+    Data->SetStringField(TEXT("transcode_root"), Transcode::GetMirrorRoot());
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

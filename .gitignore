@@ -18,6 +18,8 @@ Laffey.ico
 .clangd
 docs/
 build_current_ue55.bat
+build-engine-plugins.bat
+build-vfx-combined.bat
 
 # Python caches
 *.py[cod]
@@ -25,6 +27,7 @@ build_current_ue55.bat
 
 # Local MCP / editor caches
 .auto-index-mcp/
+Content_Transcoded/
 .codex/
 .idea/
 .vscode/
@@ -53,3 +56,4 @@ logs/
 *.log
 *.tmp
 *.bak
+_ws_*.json

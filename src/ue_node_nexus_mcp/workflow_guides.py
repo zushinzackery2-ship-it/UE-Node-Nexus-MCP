@@ -22,6 +22,10 @@ GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
         "Thin facade basics: discover, execute, verify",
         ("facade", "schema", "response mode", "artifact", "dry run", "start", "workflow", "discover"),
     ),
+    "text_mirror": (
+        "Editing assets as .nexus text: ue_sync status/pull/lint/push",
+        ("sync", "mirror", "nexus", "text", "pull", "push", "lint", "transcode", "content_transcoded", "schema lock", "l2u", "u2l"),
+    ),
     "graph_editing": (
         "Reading and patching Material/Blueprint graphs",
         ("graph", "node", "pin", "wire", "patch", "snapshot", "connect", "client_id", "build"),

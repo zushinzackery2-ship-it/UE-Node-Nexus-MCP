@@ -1,6 +1,5 @@
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
 
-#include "FileHelpers.h"
 #include "NiagaraEmitter.h"
 #include "NiagaraEmitterHandle.h"
 #include "NiagaraMeshRendererProperties.h"
@@ -9,6 +8,7 @@
 #include "NiagaraSpriteRendererProperties.h"
 #include "NiagaraSystem.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 
 namespace UeNodeNexusBridge
 {
@@ -258,7 +258,8 @@ TSharedPtr<FJsonValue> MakeNiagaraMaterialRow(int32 EmitterIndex, int32 Renderer
 
 bool SaveAssetPackage(UObject* Asset)
 {
-    UPackage* Package = Asset ? Asset->GetOutermost() : nullptr;
-    return Package != nullptr && UEditorLoadingAndSavingUtils::SavePackages({ Package }, false);
+    // prompt-free; a checked-in read-only file fails instead of opening the SCC dialog
+    FString Error;
+    return Transcode::SavePackageDirect(Asset, Error);
 }
 }

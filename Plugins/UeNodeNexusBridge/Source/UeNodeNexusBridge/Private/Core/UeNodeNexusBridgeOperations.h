@@ -94,4 +94,11 @@ TSharedPtr<FJsonObject> HandleNodeParamsSet(const FString& Operation, const FStr
 TSharedPtr<FJsonObject> HandleMaterialExpressionClassesList(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleMaterialInstanceParamsGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleMaterialInstanceParamsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+// Text-mirror (transcode) operations; implementations live in Private/Transcode.
+TSharedPtr<FJsonObject> HandleTranscodeRootSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleTranscodeStatus(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleTranscodeExport(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleSchemaExport(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
+TSharedPtr<FJsonObject> HandleTranscodeWatchSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload);
 }

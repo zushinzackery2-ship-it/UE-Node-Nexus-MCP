@@ -1,9 +1,9 @@
 #include "UeNodeNexusBridgeLandscapeLayerInfoOps.h"
 
-#include "FileHelpers.h"
 #include "LandscapeProxy.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeOperations.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 
 namespace UeNodeNexusBridge
 {
@@ -60,7 +60,12 @@ TSharedPtr<FJsonObject> HandleLandscapeLayerInfoSet(const FString& Operation, co
         }
         RefreshLandscapeLayerInfoEditorState(Landscape);
         bApplied = true;
-        bSaved = !bSave || UEditorLoadingAndSavingUtils::SavePackages(PackagesToSave, false);
+        bSaved = true;
+        for (UPackage* Package : PackagesToSave)
+        {
+            FString SaveError;
+            bSaved = (!bSave || Transcode::SavePackageDirect(Package, nullptr, SaveError)) && bSaved;
+        }
     }
 
     TSharedPtr<FJsonObject> Data = MakeWriteData(

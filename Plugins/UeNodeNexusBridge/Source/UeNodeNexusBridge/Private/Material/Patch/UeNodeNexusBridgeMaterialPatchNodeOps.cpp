@@ -30,6 +30,7 @@ bool ApplyMaterialPatchCreateNode(UMaterial* Material, const TSharedPtr<FJsonObj
     UClass* ExpressionClass = ResolveMaterialExpressionClass(ClassPath);
     if (ExpressionClass == nullptr)
     {
+        AddMaterialPatchDiagnostic(Diagnostics, TEXT("unknown_node_class"), FString::Printf(TEXT("material expression class not found: %s (use /Script/Engine.MaterialExpressionX or the short name X)"), *ClassPath), Material);
         return false;
     }
 

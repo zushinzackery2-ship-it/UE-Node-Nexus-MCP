@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from typing import Any, get_type_hints
 
 try:
@@ -242,9 +243,25 @@ def _with_remaining_errors(operation: str, payload: dict[str, Any], response: di
     return response
 
 
+_BUSY_RETRIES = 8
+_BUSY_RETRY_SECONDS = 0.25
+
+
+def _is_busy(response: dict[str, Any]) -> bool:
+    error = response.get("error") if isinstance(response, dict) else None
+    return isinstance(error, dict) and error.get("code") == "bridge_busy"
+
+
 def call_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        return _with_remaining_errors(operation, payload, normalize_bridge_response(bridge.call(operation, payload)))
+        response = bridge.call(operation, payload)
+        # the editor refuses to nest requests while one is still executing (see RequestDispatch.cpp)
+        for _ in range(_BUSY_RETRIES):
+            if not _is_busy(response):
+                break
+            time.sleep(_BUSY_RETRY_SECONDS)
+            response = bridge.call(operation, payload)
+        return _with_remaining_errors(operation, payload, normalize_bridge_response(response))
     except (BridgeError, ValueError) as exc:
         return _with_remaining_errors(operation, payload, {
             "ok": False,

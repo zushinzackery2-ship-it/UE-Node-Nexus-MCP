@@ -1,12 +1,12 @@
 #include "UeNodeNexusBridgeOperations.h"
 
 #include "Engine/Blueprint.h"
-#include "FileHelpers.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeDiagnostics.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 
 namespace UeNodeNexusBridge
 {
@@ -96,12 +96,17 @@ TSharedPtr<FJsonObject> HandleAssetSave(const FString& Operation, const FString&
 
     UPackage* Package = Asset->GetOutermost();
     const bool bWasDirty = Package != nullptr && Package->IsDirty();
-    const bool bSaved = Package != nullptr && UEditorLoadingAndSavingUtils::SavePackages({ Package }, bOnlyIfDirty);
+    // Direct, prompt-free save: a checked-in (read-only) file is reported, never dialogued.
+    FString SaveError;
+    FString SaveCode;
+    const bool bSkipped = bOnlyIfDirty && !bWasDirty;
+    const bool bSaved = bSkipped || Transcode::SavePackageDirect(Package, Asset, SaveError, &SaveCode);
 
     TSharedPtr<FJsonObject> DirtyState = MakeShared<FJsonObject>();
     DirtyState->SetBoolField(TEXT("was_dirty"), bWasDirty);
     DirtyState->SetBoolField(TEXT("package_dirty"), Package != nullptr && Package->IsDirty());
-    DirtyState->SetBoolField(TEXT("saved"), bSaved);
+    DirtyState->SetBoolField(TEXT("saved"), bSaved && !bSkipped);
+    DirtyState->SetBoolField(TEXT("skipped_clean"), bSkipped);
     DirtyState->SetStringField(TEXT("package_name"), Package ? Package->GetName() : FString());
     DirtyState->SetStringField(TEXT("filename"), Package ? FPackageName::LongPackageNameToFilename(Package->GetName()) : FString());
 
@@ -113,7 +118,9 @@ TSharedPtr<FJsonObject> HandleAssetSave(const FString& Operation, const FString&
     Response->SetObjectField(TEXT("data"), Data);
     if (!bSaved)
     {
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("save_failed"), TEXT("Package save failed or package is unavailable")));
+        const FString Code = SaveCode.IsEmpty() ? FString(TEXT("save_failed")) : SaveCode;
+        const FString Message = SaveError.IsEmpty() ? FString(TEXT("Package save failed or package is unavailable")) : SaveError;
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(Code, Message));
     }
     return Response;
 }

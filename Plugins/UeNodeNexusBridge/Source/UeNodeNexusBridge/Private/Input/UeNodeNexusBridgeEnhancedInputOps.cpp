@@ -2,13 +2,13 @@
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Dom/JsonValue.h"
-#include "FileHelpers.h"
 #include "InputAction.h"
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 #include "UObject/Package.h"
 
 namespace UeNodeNexusBridge
@@ -90,8 +90,8 @@ TSharedPtr<FJsonObject> MakeInputWriteData(const FString& AssetPath, const TCHAR
 
 bool SaveInputAssetPackage(UObject* Asset)
 {
-    UPackage* Package = Asset ? Asset->GetOutermost() : nullptr;
-    return Package != nullptr && UEditorLoadingAndSavingUtils::SavePackages({ Package }, false);
+    FString Error;
+    return Transcode::SavePackageDirect(Asset, Error);
 }
 }
 

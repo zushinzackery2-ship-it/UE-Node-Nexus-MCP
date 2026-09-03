@@ -56,6 +56,10 @@ TSharedPtr<FJsonObject> HandleMaterialGraphPatch(const FString& Operation, const
     TUniquePtr<FScopedTransaction> Transaction;
     if (!bDryRun)
     {
+        // Mutating the graph while its shader maps are still compiling races the job
+        // cancellation path (mass "Cancelled job ... pending SubmitJob" then AV). Cancel first,
+        // exactly like the material editor does before applying edits.
+        Material->CancelOutstandingCompilation();
         Transaction = MakeUnique<FScopedTransaction>(FText::FromString(TEXT("UE Node Nexus Material Patch")));
         Material->Modify();
     }

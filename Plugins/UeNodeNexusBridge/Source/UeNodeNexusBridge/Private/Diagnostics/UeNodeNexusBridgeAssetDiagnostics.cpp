@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeDiagnostics.h"
 
+#include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
 #include "Kismet2/CompilerResultsLog.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -9,6 +10,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/UObjectToken.h"
 #include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
@@ -86,6 +88,20 @@ FBridgeAssetCompileDiagnostics CollectAssetCompileDiagnostics(UObject* Asset, co
         {
             TSharedPtr<FJsonObject> Diagnostic = MakeDiagnostic(SeverityToString(Message->GetSeverity()), TEXT("compile_message"), Message->ToText().ToString(), AssetPath, TEXT("Unreal"));
             Diagnostic->SetStringField(TEXT("raw"), Message->ToText().ToString());
+            // Node references let the text mirror map compiler messages back to file:line.
+            for (const TSharedRef<IMessageToken>& Token : Message->GetMessageTokens())
+            {
+                if (Token->GetType() != EMessageToken::Object)
+                {
+                    continue;
+                }
+                const TSharedRef<FUObjectToken> ObjectToken = StaticCastSharedRef<FUObjectToken>(Token);
+                if (const UEdGraphNode* Node = Cast<UEdGraphNode>(ObjectToken->GetObject().Get()))
+                {
+                    Diagnostic->SetStringField(TEXT("node_id"), Node->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
+                    break;
+                }
+            }
             Result.Diagnostics.Add(MakeShared<FJsonValueObject>(Diagnostic));
         }
         return Result;

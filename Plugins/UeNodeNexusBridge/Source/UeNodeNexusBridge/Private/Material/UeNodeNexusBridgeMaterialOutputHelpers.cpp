@@ -44,7 +44,13 @@ TArray<EMaterialProperty> MaterialOutputProperties()
         MP_CustomizedUVs7,
         MP_PixelDepthOffset,
         MP_ShadingModel,
-        MP_Displacement
+        MP_Displacement,
+        // appended (index-addressed pins stay stable): vertex offset, clear coat, Substrate
+        MP_WorldPositionOffset,
+        MP_CustomData0,
+        MP_CustomData1,
+        MP_SurfaceThickness,
+        MP_FrontMaterial
     };
 }
 
@@ -77,6 +83,11 @@ FString MaterialOutputPropertyName(EMaterialProperty Property)
     case MP_PixelDepthOffset: return TEXT("PixelDepthOffset");
     case MP_ShadingModel: return TEXT("ShadingModel");
     case MP_Displacement: return TEXT("Displacement");
+    case MP_WorldPositionOffset: return TEXT("WorldPositionOffset");
+    case MP_CustomData0: return TEXT("ClearCoat");
+    case MP_CustomData1: return TEXT("ClearCoatRoughness");
+    case MP_SurfaceThickness: return TEXT("SurfaceThickness");
+    case MP_FrontMaterial: return TEXT("FrontMaterial");
     default: return FString();
     }
 }
@@ -111,6 +122,19 @@ bool ResolveMaterialOutputProperty(const FString& PinId, EMaterialProperty& OutP
     Target.RemoveFromStart(TEXT("MP_"), ESearchCase::IgnoreCase);
     Target.ReplaceInline(TEXT(" "), TEXT(""));
     Target.ReplaceInline(TEXT("_"), TEXT(""));
+    // engine enum names / common shorthands for the appended pins
+    if (Target.Equals(TEXT("WPO"), ESearchCase::IgnoreCase))
+    {
+        Target = TEXT("WorldPositionOffset");
+    }
+    else if (Target.Equals(TEXT("CustomData0"), ESearchCase::IgnoreCase))
+    {
+        Target = TEXT("ClearCoat");
+    }
+    else if (Target.Equals(TEXT("CustomData1"), ESearchCase::IgnoreCase))
+    {
+        Target = TEXT("ClearCoatRoughness");
+    }
     for (EMaterialProperty Property : MaterialOutputProperties())
     {
         FString Name = MaterialOutputPropertyName(Property);

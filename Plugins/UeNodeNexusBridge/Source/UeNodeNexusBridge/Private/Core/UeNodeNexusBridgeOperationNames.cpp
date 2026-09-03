@@ -76,6 +76,12 @@ TArray<FString> GetCoreOperationNames()
         TEXT("editor_save_all"),
         TEXT("editor_request_exit"),
         TEXT("bridge_capabilities_get"),
+        TEXT("transcode_root_set"),
+        TEXT("transcode_status"),
+        TEXT("transcode_export"),
+        TEXT("transcode_apply"),
+        TEXT("schema_export"),
+        TEXT("transcode_watch_set"),
     };
 }
 }

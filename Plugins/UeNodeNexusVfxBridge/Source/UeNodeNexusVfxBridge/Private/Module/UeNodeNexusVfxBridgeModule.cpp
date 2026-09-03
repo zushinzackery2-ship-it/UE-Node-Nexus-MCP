@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeOperationRegistry.h"
 #include "UeNodeNexusNiagaraOps.h"
+#include "UeNodeNexusVfxTranscode.h"
 
 IMPLEMENT_MODULE(FUeNodeNexusVfxBridgeModule, UeNodeNexusVfxBridge)
 
@@ -44,6 +45,8 @@ const TArray<FVfxOperation>& VfxOperations()
         { TEXT("niagara_renderer_properties_set"), UeNodeNexusBridge::HandleNiagaraRendererPropertiesSet },
         { TEXT("niagara_compile"), UeNodeNexusBridge::HandleNiagaraCompile },
         { TEXT("niagara_asset_lint"), UeNodeNexusBridge::HandleNiagaraAssetLint },
+        { TEXT("vfx_transcode_export"), UeNodeNexusBridge::HandleVfxTranscodeExport },
+        { TEXT("vfx_transcode_apply"), UeNodeNexusBridge::HandleVfxTranscodeApply },
     };
     return Operations;
 }

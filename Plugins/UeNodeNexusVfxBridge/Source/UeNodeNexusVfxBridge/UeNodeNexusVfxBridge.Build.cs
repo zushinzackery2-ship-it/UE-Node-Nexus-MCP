@@ -14,7 +14,8 @@ public class UeNodeNexusVfxBridge : ModuleRules
             System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara", "Formats"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara", "Lint"),
-            System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara", "Modules")
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara", "Modules"),
+            System.IO.Path.Combine(ModuleDirectory, "Private", "Niagara", "Transcode")
         });
 
         PublicDependencyModuleNames.AddRange(new string[]
