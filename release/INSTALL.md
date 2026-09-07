@@ -10,7 +10,7 @@
 
    ```bat
    py -3 -m venv .venv
-   .venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.3.0-py3-none-any.whl
+   .venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.3.1-py3-none-any.whl
    ```
 
 3. Configure your MCP client to run the absolute path to

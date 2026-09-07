@@ -51,7 +51,7 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 
 ```bat
 py -3 -m venv .venv
-.venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.3.0-py3-none-any.whl
+.venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.3.1-py3-none-any.whl
 ```
 
 源码安装与构建流程如下。
@@ -233,6 +233,7 @@ ue_sync("status")
 
 ```
 UE-Node-Nexus-MCP/
+  assets/branding/         项目标识、透明标记和单色 SVG
   Plugins/
     UeNodeNexusBridge/       核心编辑器插件
     UeNodeNexusVfxBridge/    VFX 插件
