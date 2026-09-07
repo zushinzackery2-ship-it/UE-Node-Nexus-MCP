@@ -45,6 +45,17 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 
 ## 安装
 
+### 使用发行包
+
+[最新 Release](https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/releases/latest) 提供 UE 5.5 Windows x64 双插件 ZIP、Python Wheel 和 SHA256 校验文件。关闭编辑器，将 ZIP 中的 `Plugins/` 合并到工程根目录，再安装下载的 Wheel；配置 MCP 客户端时参照下方第 3 步。
+
+```bat
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.3.0-py3-none-any.whl
+```
+
+源码安装与构建流程如下。
+
 ### 1. 获取源码和 Python 服务
 
 ```bat
@@ -235,6 +246,7 @@ UE-Node-Nexus-MCP/
     compile_check/         编译桩与真实 UE 构建入口
     live/                  隔离编辑器集成验证
   skill/ue-node-nexus-mcp/  Agent skill
+  release/                发行包组装与发布说明
   pyproject.toml
   LICENSE
 ```

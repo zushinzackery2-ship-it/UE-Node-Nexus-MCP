@@ -46,6 +46,9 @@ def _write(project: Path, asset: str, kind: str, cls: str, schema: str, body: st
 
 
 def exercise(validation: Path) -> dict:
+    capabilities = call_bridge("bridge_capabilities_get", dict())
+    assert capabilities.get("ok"), capabilities
+    assert capabilities["data"]["modules"]["vfx_available"] is True, capabilities
     root = validation / "SyncMirror"
     env = dict(UE_NEXUS_TRANSCODE_DIR=str(root))
     initialized = run_sync(call_bridge, "init", options=dict(pull_all=False), env=env)
@@ -94,7 +97,7 @@ def exercise(validation: Path) -> dict:
 
 
 def main() -> None:
-    validation = REPO / "build/validation"
+    validation = Path(os.environ.get("UE_NEXUS_VALIDATION_DIR", REPO / "build/validation")).resolve()
     configured_engine = os.environ.get("UE_NEXUS_ENGINE_DIR")
     if not configured_engine:
         raise RuntimeError("set UE_NEXUS_ENGINE_DIR to your Unreal Engine 5.5 installation")

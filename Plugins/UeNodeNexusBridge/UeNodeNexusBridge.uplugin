@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 137891,
-  "VersionName": "13.78.91",
+  "Version": 137892,
+  "VersionName": "0.3.0",
   "FriendlyName": "UE Node Nexus Bridge",
   "Description": "Editor bridge for UE Node Nexus MCP fixed graph and asset operations.",
   "Category": "Editor",

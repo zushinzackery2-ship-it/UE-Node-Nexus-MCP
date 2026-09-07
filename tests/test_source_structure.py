@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_ROOTS = (ROOT / "src", ROOT / "Plugins", ROOT / "tests")
+SOURCE_ROOTS = (ROOT / "src", ROOT / "Plugins", ROOT / "tests", ROOT / "release")
 SOURCE_SUFFIXES = {".py", ".cpp", ".h", ".cs", ".inl"}
 MAX_SOURCE_LINES = 300
 
