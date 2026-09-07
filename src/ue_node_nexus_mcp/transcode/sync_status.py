@@ -25,7 +25,10 @@ class AssetStatus:
     local_hash: str | None
 
     def row(self) -> list[Any]:
-        return [self.asset_path, self.kind, self.state]
+        saved_changed = None
+        if self.ue is not None and self.record is not None:
+            saved_changed = bool(self.ue.saved_hash and self.ue.saved_hash != self.record.ue_saved_hash)
+        return [self.asset_path, self.kind, self.state, self.ue.dirty if self.ue else None, saved_changed]
 
 
 def _known_assets(context: ProjectContext, state: SyncState) -> set[str]:

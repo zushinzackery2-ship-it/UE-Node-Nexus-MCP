@@ -41,6 +41,7 @@ def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, op
     elif action == "push":
         _push(bridge, context, state, paths, options, report)
     report["schema_key"] = context.schema_key
+    report["warnings"] = list(dict.fromkeys([*report.get("warnings", []), *context.warnings]))
     return report
 
 
@@ -72,7 +73,7 @@ def _status(bridge: BridgeCall, context: ProjectContext, state: SyncState, paths
     counts: dict[str, int] = {}
     for status in statuses:
         counts[status.state] = counts.get(status.state, 0) + 1
-    report["columns"] = ["asset", "kind", "state"]
+    report["columns"] = ["asset", "kind", "state", "ue_dirty", "ue_saved_changed"]
     report["rows"] = [status.row() for status in statuses if status.state != "clean" or bool(options.get("include_clean", False))]
     report["counts"] = dict(sorted(counts.items()))
     report["total"] = len(statuses)
@@ -134,6 +135,8 @@ def _push(bridge: BridgeCall, context: ProjectContext, state: SyncState, paths: 
         ensure_schema(bridge, context)
     selected = _selection(context, state, paths)
     ue_infos, known = query_ue(bridge, context, selected)
+    if not known and not push_options.dry_run:
+        raise SyncError("ue_status_unavailable", "push requires current UE asset status")
     statuses = compute_status(context, state, selected, ue_infos, known)
     result = push_assets(bridge, context, state, statuses, push_options)
     report["dry_run"] = push_options.dry_run

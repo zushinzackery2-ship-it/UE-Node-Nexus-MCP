@@ -15,6 +15,7 @@ exports straight into the mirror directory.
   <Project>/A/B/DA_X.asset.nexus property-bag asset (DataAsset, InputAction, IMC, ...)
   <Project>/A/B/T_X.stub.nexus   read-only AssetRegistry tags (textures, meshes, ...)
   <Project>/.nexus/base/         last synced raw export (ids, opaque nodes) = merge base
+  <Project>/.nexus/pending/      raw exports and *.push.json recovery records
 ```
 
 ## Loop
@@ -22,6 +23,8 @@ exports straight into the mirror directory.
 1. `ue_sync("status")` — three-way state per asset: `clean`, `local-modified`,
    `ue-modified`, `both-modified` (conflict), `local-new`, `ue-new`, `local-deleted`.
    First time: `ue_sync("init")` pulls everything and writes the schema lock.
+   Rows also include `ue_dirty` and `ue_saved_changed` (unknown = null), so an
+   unsaved editor package is distinguishable from a changed saved file.
 2. Edit the `.nexus` files (Read / grep / StrReplace). Only non-default values
    are written; delete a line to reset to default.
 3. `ue_sync("lint")` — offline, no editor needed: unknown class/property/enum/pin,
@@ -70,7 +73,27 @@ tex.R -> out.Roughness         # materials: implicit `out` node = material outpu
 - Ids are yours; GUIDs stay in the base. Renaming an id recreates the node.
 - New nodes referenced by links must name the pin unless the node has one pin.
 - `both-modified` is refused; pull (or push with `force="local"`) first.
-- A MaterialFunction interface change refreshes every caller automatically and
-  re-pulls them.
+- A MaterialFunction interface change refreshes callers in UE. Callers with
+  local edits keep their text and accepted base; selected callers are replanned
+  against the refreshed graph before applying their changes.
 - Stub files are read-only; `@opaque` nodes cannot be created or edited.
 - If `schema_stale` appears, run `ue_sync("schema")` (engine/plugin set changed).
+
+## Push ordering and recovery
+
+- New referenced assets and material dependencies are pushed before consumers.
+  References include component properties, node arguments, defaults and nested
+  ExportText arrays. New-asset cycles return `dependency_cycle` before writes.
+  Include local new dependencies in the selection (`dependency_not_selected`).
+- Preflight errors stop the batch with the default `stop_on_error=true`.
+  With false, independent assets continue; consumers of failed assets remain blocked.
+- Apply, compile, save or export failures preserve local text and the accepted
+  base. Rows include `local_preserved`, `pending_file` when available, and
+  `recovery_file`; recovery records contain the response, plan, source text and IDs.
+- Correct the reported error, then push with `force="local"` for a conflict.
+  Force works for both `ue-modified` and `both-modified`, comparing local intent
+  against a fresh editor export. Recovery IDs prevent duplicate node creation.
+- Dry-run leaves text, base and sync state unchanged; schema/export staging may
+  still write into `.nexus`. Successful pushes normalize text and accept a new base.
+- A texture property omitted from text has its engine default, including
+  DefaultTexture. Remove a material-instance parameter line to clear its override.

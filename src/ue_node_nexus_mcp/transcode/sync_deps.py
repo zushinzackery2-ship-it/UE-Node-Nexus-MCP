@@ -1,54 +1,81 @@
-"""Dependency ordering for multi-asset pushes (leaves first)."""
+"""Dependencies from parsed document values, ordered before their consumers."""
 
 from __future__ import annotations
 
+import heapq
+import re
+from collections import defaultdict
+
+from .lexer import parse_kv_list
 from .model import Document
 from .paths import object_path
+from .sync_project import SyncError
+from .values import is_balanced_group, unquote
+
+_REFERENCE = re.compile(r"(?:[\w./]+')?(/Game/[^\s\"'(),{}\[\]<>:=]+)(?::[^\s\"'(),{}\[\]<>]+)?'?")
+
+
+def _value_dependencies(value: str | None) -> set[str]:
+    if not value:
+        return set()
+    value = unquote(value.strip())
+    match = _REFERENCE.fullmatch(value)
+    if match:
+        return set((object_path(match.group(1)),))
+    if is_balanced_group(value):
+        return set().union(*(_value_dependencies(item) for _, item in parse_kv_list(value[1:-1])))
+    for wrapper in ("Object", "Class", "SoftObject", "SoftClass"):
+        if value.startswith(wrapper + "(") and value.endswith(")"):
+            return _value_dependencies(value[len(wrapper) + 1:-1])
+    return set()
 
 
 def document_dependencies(document: Document, kind: str) -> set[str]:
-    """Object paths of /Game assets this document references structurally."""
-    deps: set[str] = set()
-    if kind in ("material", "material_function"):
-        graph = document.section("graph")
-        for decl in graph.decls() if graph else []:
-            path = decl.keyed().get("MaterialFunction")
-            if path:
-                deps.add(object_path(path))
-    elif kind == "material_instance":
-        parent = _asset_prop(document, "Parent")
-        if parent:
-            deps.add(object_path(parent))
-    elif kind == "niagara_system":
-        for section in document.find_sections("emitter"):
-            parent = section.prop_map().get("Parent")
-            if parent is not None and parent.value:
-                deps.add(object_path(parent.value))
-    elif kind == "blueprint":
-        parent = _asset_prop(document, "ParentClass")
-        if parent and parent.startswith("/Game/"):
-            deps.add(object_path(parent.removesuffix("_C")))
-    return {dep for dep in deps if dep.startswith("/Game/")}
+    """Inspect AST values, including UE import-text structs and object arrays."""
+    dependencies: set[str] = set()
+    for section in document.sections:
+        for prop in section.props():
+            dependencies.update(_value_dependencies(prop.value))
+        for decl in section.decls():
+            values = [decl.default, decl.type_name]
+            values.extend(value for _, value in decl.args)
+            values.extend(value for _, value in decl.props)
+            for value in values:
+                dependencies.update(_value_dependencies(value))
+    return dependencies
 
 
-def _asset_prop(document: Document, key: str) -> str | None:
-    section = document.section("asset")
-    if section is None:
-        return None
-    prop = section.prop_map().get(key)
-    return prop.value if prop else None
+def order_assets(documents: dict[str, tuple[str, Document]], required: set[str] | None = None) -> list[str]:
+    """Kahn ordering in O((V + E) log V); reject cycles before any writes.
 
-
-def order_assets(documents: dict[str, tuple[str, Document]]) -> list[str]:
-    """Kahn ordering over the push set: dependencies before dependents."""
-    pending = {asset: document_dependencies(document, kind) & set(documents) for asset, (kind, document) in documents.items()}
+    ``required`` restricts edges to assets whose new contents are needed by
+    consumers. Existing mutually referencing Blueprints need no creation order.
+    """
+    selected = set(documents)
+    required = selected if required is None else required
+    dependencies = dict(
+        (asset, document_dependencies(document, kind) & selected & required)
+        for asset, (kind, document) in documents.items()
+    )
+    consumers: dict[str, list[str]] = defaultdict(list)
+    indegrees = dict((asset, len(deps)) for asset, deps in dependencies.items())
+    for asset, deps in dependencies.items():
+        for dependency in deps:
+            consumers[dependency].append(asset)
+    ready = [asset for asset, count in indegrees.items() if count == 0]
+    heapq.heapify(ready)
     ordered: list[str] = []
-    while pending:
-        ready = sorted(asset for asset, deps in pending.items() if not deps - set(ordered))
-        if not ready:
-            ordered.extend(sorted(pending))
-            break
-        for asset in ready:
-            ordered.append(asset)
-            pending.pop(asset)
+    while ready:
+        asset = heapq.heappop(ready)
+        ordered.append(asset)
+        for consumer in consumers[asset]:
+            indegrees[consumer] -= 1
+            if indegrees[consumer] == 0:
+                heapq.heappush(ready, consumer)
+    blocked = sorted(asset for asset, count in indegrees.items() if count)
+    if blocked:
+        raise SyncError(
+            "dependency_cycle", "cyclic asset dependencies block: " + ", ".join(blocked),
+            dict(assets=blocked, dependencies=dict((asset, sorted(dependencies[asset])) for asset in blocked)),
+        )
     return ordered

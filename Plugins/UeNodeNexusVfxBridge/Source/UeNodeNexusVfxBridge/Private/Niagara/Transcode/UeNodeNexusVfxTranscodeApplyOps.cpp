@@ -3,6 +3,7 @@
 #include "NiagaraSystem.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
+#include "UObject/Package.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNiagaraModuleStack.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
@@ -73,7 +74,9 @@ TSharedPtr<FJsonObject> HandleVfxTranscodeApply(const FString& Operation, const 
     }
     bool bSaved = false;
     FString SaveError;
-    if (!bDryRun && bSave && Context.bChanged)
+    const bool bSaveRequired = !bDryRun && bSave
+        && (Context.bChanged || System->GetOutermost()->IsDirty());
+    if (bSaveRequired)
     {
         bSaved = SavePackageDirect(System, SaveError);
     }
@@ -98,6 +101,7 @@ TSharedPtr<FJsonObject> HandleVfxTranscodeApply(const FString& Operation, const 
     Data->SetObjectField(TEXT("compile"), Compile);
     Data->SetArrayField(TEXT("diagnostics"), TArray<TSharedPtr<FJsonValue>>());
     Data->SetBoolField(TEXT("saved"), bSaved);
+    Data->SetBoolField(TEXT("save_required"), bSaveRequired);
     if (!SaveError.IsEmpty())
     {
         Data->SetStringField(TEXT("save_error"), SaveError);
@@ -120,12 +124,22 @@ TSharedPtr<FJsonObject> HandleVfxTranscodeApply(const FString& Operation, const 
             Data->SetBoolField(TEXT("dirty"), Raw->GetBoolField(TEXT("dirty")));
         }
     }
-    Data->SetNumberField(TEXT("remaining_errors"), Context.Failures.Num() + (bReady ? 0 : 1));
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Context.Failures.Num() == 0);
+    const bool bSaveFailed = bSaveRequired && !bSaved;
+    Data->SetNumberField(TEXT("remaining_errors"), Context.Failures.Num() + (bReady ? 0 : 1) + (bSaveFailed ? 1 : 0));
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Context.Failures.Num() == 0 && bReady && !bSaveFailed);
     Response->SetObjectField(TEXT("data"), Data);
     if (Context.Failures.Num() > 0)
     {
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(FString(TEXT("plan_partially_failed")), FString::Printf(TEXT("%d of %d plan verbs failed; first: %s"), Context.Failures.Num(), Plan->Num(), *Context.Failures[0].Message)));
+    }
+    else if (bSaveFailed)
+    {
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(SaveErrorCode(SaveError), SaveError));
+    }
+    else if (!bReady)
+    {
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(
+            FString(TEXT("compile_failed")), FString(TEXT("Niagara compile reported errors"))));
     }
     return Response;
 }

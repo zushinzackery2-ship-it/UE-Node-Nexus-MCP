@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Apply/UeNodeNexusBridgeTranscodeApplyResult.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/Blueprint.h"
@@ -222,11 +223,16 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
     {
         Asset->MarkPackageDirty();
     }
+    const bool bSaveRequired =
+        !bDryRun && bSave
+        && (Context.bChanged || bCreated || Asset->GetOutermost()->IsDirty());
     bool bSaved = false;
     FString SaveError;
-    if (!bDryRun && bSave && (Context.bChanged || bCreated))
+    FString SaveCode;
+    if (bSaveRequired)
     {
-        bSaved = SavePackageDirect(Asset, SaveError);
+        bSaved = SavePackageDirect(
+            Asset->GetOutermost(), Asset, SaveError, &SaveCode);
     }
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -247,6 +253,7 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
     Data->SetArrayField(TEXT("diagnostics"), Compile.Diagnostics);
     Data->SetObjectField(TEXT("compile"), MakeCompileJson(Compile, bCompile && !bDryRun));
     Data->SetBoolField(TEXT("saved"), bSaved);
+    Data->SetBoolField(TEXT("save_required"), bSaveRequired);
     if (!SaveError.IsEmpty())
     {
         Data->SetStringField(TEXT("save_error"), SaveError);
@@ -274,13 +281,8 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
             Data->SetStringField(TEXT("export_error"), Error);
         }
     }
-    Data->SetNumberField(TEXT("remaining_errors"), Compile.ErrorCount + Context.Failures.Num());
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Context.Failures.Num() == 0);
-    Response->SetObjectField(TEXT("data"), Data);
-    if (Context.Failures.Num() > 0)
-    {
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(FString(TEXT("plan_partially_failed")), FString::Printf(TEXT("%d of %d plan verbs failed; first: %s"), Context.Failures.Num(), Plan->Num(), *Context.Failures[0].Message)));
-    }
-    return Response;
+    return MakeApplyResponse(
+        Operation, RequestId, Data, Context, Compile, Plan->Num(),
+        bSaveRequired, bSaved, SaveError, SaveCode);
 }
 }

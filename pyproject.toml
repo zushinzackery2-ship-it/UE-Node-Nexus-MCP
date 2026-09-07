@@ -12,6 +12,10 @@ dependencies = [
     "mcp>=1.13.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP"
+Issues = "https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/issues"
+
 [project.scripts]
 ue-node-nexus-mcp = "ue_node_nexus_mcp.server:main"
 

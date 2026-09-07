@@ -2,12 +2,14 @@
 
 #include "HAL/FileManager.h"
 #include "Misc/PackageName.h"
+#include "RenderAssetUpdate.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 
 namespace UeNodeNexusBridge::Transcode
 {
 static const TCHAR* GReadOnlyPrefix = TEXT("read-only on disk");
+static const TCHAR* GStreamingSuspendedPrefix = TEXT("asset streaming is suspended");
 
 static bool PackageFilename(const UPackage* Package, FString& OutFilename)
 {
@@ -27,7 +29,15 @@ bool IsPackageFileReadOnly(const UPackage* Package)
 
 FString SaveErrorCode(const FString& Error)
 {
-    return Error.StartsWith(GReadOnlyPrefix) ? TEXT("save_blocked_read_only") : TEXT("save_failed");
+    if (Error.StartsWith(GReadOnlyPrefix))
+    {
+        return TEXT("save_blocked_read_only");
+    }
+    if (Error.StartsWith(GStreamingSuspendedPrefix))
+    {
+        return TEXT("save_blocked_asset_streaming_suspended");
+    }
+    return TEXT("save_failed");
 }
 
 bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FString* OutCode)
@@ -49,6 +59,16 @@ bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FStr
     {
         // Never let the editor prompt for a source-control checkout from a bridge call.
         OutError = FString::Printf(TEXT("%s (source control checkout required): %s"), GReadOnlyPrefix, *Filename);
+    }
+    else if (Package != nullptr && IsAssetStreamingSuspended())
+    {
+        // SavePackage blocks on render-asset streaming and asserts while another
+        // engine operation owns the suspension. Never sleep or resume here:
+        // this helper does not own that global suspension.
+        OutError = FString::Printf(
+            TEXT("%s; retry after the owning operation resumes: %s"),
+            GStreamingSuspendedPrefix,
+            *Package->GetName());
     }
     else if (Package != nullptr)
     {

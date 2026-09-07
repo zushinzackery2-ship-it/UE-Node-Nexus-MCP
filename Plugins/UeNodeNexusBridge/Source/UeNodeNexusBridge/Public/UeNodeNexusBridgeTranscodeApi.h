@@ -65,10 +65,13 @@ UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> PropertySchemaJson(FProperty* Prop
 // dialog on the game thread, which re-enters the message pump while shader jobs are
 // in flight and has crashed the editor. A read-only file (checked-in under SCC) is
 // reported as OutCode == "save_blocked_read_only" instead of being attempted.
+// If another engine operation owns an asset-streaming suspension, the save is
+// rejected as "save_blocked_asset_streaming_suspended"; callers retry later.
 UENODENEXUSBRIDGE_API bool SavePackageDirect(UObject* Asset, FString& OutError);
 UENODENEXUSBRIDGE_API bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FString* OutCode = nullptr);
 // True when the package's .uasset/.umap exists on disk and is read-only.
 UENODENEXUSBRIDGE_API bool IsPackageFileReadOnly(const UPackage* Package);
-// Error code for a failed SavePackageDirect ("save_blocked_read_only" | "save_failed").
+// Error code for a failed SavePackageDirect ("save_blocked_read_only" |
+// "save_blocked_asset_streaming_suspended" | "save_failed").
 UENODENEXUSBRIDGE_API FString SaveErrorCode(const FString& Error);
 }

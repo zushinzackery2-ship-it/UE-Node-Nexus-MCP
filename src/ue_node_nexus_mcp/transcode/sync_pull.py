@@ -7,7 +7,7 @@ from typing import Any
 
 from .paths import base_path, pending_dir
 from .state import AssetState, SyncState, sha256_text
-from .sync_files import backup_text, load_base, materialize, read_json, read_text, remove_stale_text, write_text_atomic
+from .sync_files import backup_text, load_base, materialize, read_json, read_text, remove_stale_text, render_snapshot, write_text_atomic
 from .sync_project import BridgeCall, ProjectContext, SyncError, call_ok, ensure_root_registered, export_operation, now_iso
 from .sync_status import AssetStatus
 
@@ -92,14 +92,15 @@ def _finish_pull(context: ProjectContext, state: SyncState, status: AssetStatus,
     if raw is None:
         return _row(status.asset_path, status.kind, status.state, "failed", errors=[f"raw export unreadable: {raw_file}"])
     previous = load_base(context.project, status.asset_path)
+    if conflict:
+        snapshot = render_snapshot(context.project, raw, previous)
+        conflict_file = snapshot.text_file.with_name(snapshot.text_file.name.replace(".nexus", CONFLICT_SUFFIX))
+        write_text_atomic(conflict_file, snapshot.text)
+        return _row(status.asset_path, status.kind, status.state, "conflict", warnings=[f"UE version written to {conflict_file.name}; resolve then delete it"])
     _, text, text_file, _ = materialize(context.project, raw, previous)
     if raw_file.resolve() != base_path(context.project, status.asset_path).resolve():
         raw_file.unlink(missing_ok=True)
     kind = str(raw.get("kind", ""))
-    if conflict:
-        conflict_file = text_file.with_name(text_file.name.replace(".nexus", CONFLICT_SUFFIX))
-        write_text_atomic(conflict_file, text)
-        return _row(status.asset_path, kind, status.state, "conflict", warnings=[f"UE version written to {conflict_file.name}; resolve then delete it"])
     existing = read_text(text_file)
     if existing is not None and existing != text:
         backup_text(context.project, text_file, stamp)
@@ -127,8 +128,3 @@ def _row(asset_path: str, kind: str, state: str, action: str, *, file: str | Non
     if warnings:
         row["warnings"] = warnings
     return row
-
-
-def raise_if_bridge_missing(context: ProjectContext) -> None:
-    if not context.bridge_available:
-        raise SyncError("bridge_unavailable", "no UE editor is bound; pull/push need a live editor")

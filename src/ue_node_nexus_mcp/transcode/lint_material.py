@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .errors import DiagnosticSink
@@ -11,7 +12,9 @@ from .values import is_boolean, is_numeric, normalize_value
 
 TEXTURE_ALIASES = {"RGB": 0, "RGBA": 0, "R": 1, "G": 2, "B": 3, "A": 4}
 SYNTHETIC_PARAMS = {"NamedRerouteUsage": {"DeclarationName"}}
-SINGLE_OUTPUT_ALIASES = {"out", "output", "result", "value", "color", "rgb", "rgba"}
+SINGLE_OUTPUT_ALIASES = {"out", "output", "result", "value", "color", "rgb", "rgba", "return"}
+_CUSTOM_INPUT_NAME_RE = re.compile(r'InputName\s*=\s*"([^"]+)"')
+_CUSTOM_OUTPUT_NAME_RE = re.compile(r'OutputName\s*=\s*"([^"]+)"')
 
 
 def lint_material_graph(document: Document, kind: str, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
@@ -114,6 +117,42 @@ def _function_pins(decl: Decl, schema: SchemaLock | None) -> tuple[list[str], li
     return [str(item.get("name", "")) for item in record.get("inputs") or []], [str(item.get("name", "")) for item in record.get("outputs") or []]
 
 
+def _custom_input_names(decl: Decl) -> list[str] | None:
+    """Read dynamic MaterialExpressionCustom pins from its Inputs property.
+
+    The reflection schema intentionally exposes Custom.Inputs as a generic
+    array and therefore reports a placeholder ``None`` input.  The actual
+    names are part of the import-text value and are already required by the
+    editor when the node is created.
+    """
+    raw = decl.keyed().get("Inputs", "")
+    names = _CUSTOM_INPUT_NAME_RE.findall(raw)
+    return names or None
+
+
+def _custom_output_names(decl: Decl) -> list[str] | None:
+    """Return the editor-visible output names for a dynamic Custom node."""
+    raw = decl.keyed().get("AdditionalOutputs", "")
+    names = _CUSTOM_OUTPUT_NAME_RE.findall(raw)
+    return ["return", *names] if names else [""]
+
+
+def _input_names(decl: Decl, info: ClassInfo | None) -> list[str] | None:
+    if info is None:
+        return None
+    if info.name == "MaterialExpressionCustom":
+        return _custom_input_names(decl) or info.inputs
+    return info.inputs
+
+
+def _output_names(decl: Decl, info: ClassInfo | None) -> list[str] | None:
+    if info is None:
+        return None
+    if info.name == "MaterialExpressionCustom":
+        return _custom_output_names(decl)
+    return info.outputs
+
+
 def _lint_input_pin(link: Link, decl: Decl, info: ClassInfo | None, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
     if decl.opaque:
         return
@@ -122,7 +161,7 @@ def _lint_input_pin(link: Link, decl: Decl, info: ClassInfo | None, schema: Sche
         pins = _function_pins(decl, schema)
         inputs = pins[0] if pins else None
     elif info is not None:
-        inputs = info.inputs
+        inputs = _input_names(decl, info)
     if inputs is None:
         return
     if link.dst_pin is None:
@@ -154,7 +193,7 @@ def _lint_output_pin(link: Link, decl: Decl, info: ClassInfo | None, schema: Sch
         pins = _function_pins(decl, schema)
         outputs = pins[1] if pins else None
     elif info is not None:
-        outputs = info.outputs
+        outputs = _output_names(decl, info)
     if outputs is None:
         return
     if link.src_pin is None:

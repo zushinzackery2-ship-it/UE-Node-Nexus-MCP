@@ -74,8 +74,13 @@ class SyncState:
     def save(self, project: Path) -> None:
         path = state_path(project)
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"version": STATE_VERSION, "assets": {key: value.to_json() for key, value in sorted(self.assets.items())}}
-        path.write_text(json.dumps(payload, indent=1, ensure_ascii=False), encoding="utf-8")
+        temp = path.with_suffix(path.suffix + ".tmp")
+        temp.write_text(self.serialize(), encoding="utf-8")
+        temp.replace(path)
+
+    def serialize(self) -> str:
+        payload = dict(version=STATE_VERSION, assets=dict((key, value.to_json()) for key, value in sorted(self.assets.items())))
+        return json.dumps(payload, indent=1, ensure_ascii=False)
 
     def get(self, asset_path: str) -> AssetState | None:
         return self.assets.get(asset_path)

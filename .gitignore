@@ -1,59 +1,117 @@
+# Private workspace documents and agent state
+/Task-Status.md
+/Summary-of-Issues.md
+/AGENTS.md
+/CLAUDE.md
+/.high-value-information/
+/.plan/
+/.auto-index-mcp/
+/.codex/
+/.claude/
+/.cursor/
+/docs/
+/notes/
+/private/
+*.private.*
+*.local.*
+
+# Local credentials and machine configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+
+# Python environments, caches and build output
+.venv/
+venv/
+env/
 __pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.venv/
-venv/
-dist/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
 build/
+dist/
 bin/
 obj/
-refApic/
-/Resources/
-scripts/
-*.egg-info/
-Laffey.ico
 
-# Internal development material kept local only
-.clangd
-docs/
-build_current_ue55.bat
-build-engine-plugins.bat
-build-vfx-combined.bat
-
-# Python caches
-*.py[cod]
-*$py.class
-
-# Local MCP / editor caches
-.auto-index-mcp/
-Content_Transcoded/
-.codex/
-.idea/
-.vscode/
-
-# Unreal generated files
+# Unreal generated files and local asset mirrors
 Binaries/
 DerivedDataCache/
 Intermediate/
 Saved/
 Build/
-Plugins/**/Resources/*.ico
+Content_Transcoded/
+.nexus/
+*.uasset
+*.umap
+*.sln
 *.opensdf
 *.sdf
-*.sln
-*.suo
 *.VC.db
 *.VC.opendb
 
-# Packaged artifacts and local mirrors
+# IDE and operating-system files
+.vs/
+.idea/
+.vscode/
+.clangd
+*.suo
+*.user
+*.userosscache
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Compiled artifacts and archives
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.lib
+*.obj
+*.o
+*.a
+*.so
+*.dylib
+*.exp
 *.zip
 *.7z
 *.rar
+*.whl
+*.tar.gz
+*.bundle
 
-# Logs and temporary files
+# Private build/probe helpers and reference material
+/scripts/
+/refApic/
+/Resources/
+/build_current_ue55.bat
+/build-engine-plugins.bat
+/build-vfx-combined.bat
+/Laffey.ico
+/_ws_*.json
+Plugins/**/Resources/*.ico
+
+# Logs, captures and temporary files
 logs/
 *.log
 *.tmp
+*.push-tmp
 *.bak
-_ws_*.json
+*.cache
+*.dmp
+*.stackdump

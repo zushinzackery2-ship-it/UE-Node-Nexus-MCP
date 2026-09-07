@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -35,8 +36,7 @@ def read_json(path: Path) -> dict[str, Any] | None:
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+    write_text_atomic(path, json.dumps(data, indent=1, ensure_ascii=False))
 
 
 def canonical_hash(text: str) -> str:
@@ -83,8 +83,17 @@ def base_document(base: dict[str, Any]) -> Document:
     return document
 
 
-def materialize(project: Path, raw: dict[str, Any], previous: dict[str, Any] | None, order_override: dict[str, list[str]] | None = None, extra_ids: dict[str, str] | None = None) -> tuple[Document, str, Path, Path]:
-    """raw -> (document, text, text_path, base_path); writes base with bookkeeping."""
+@dataclass
+class MirrorSnapshot:
+    document: Document
+    text: str
+    text_file: Path
+    base_file: Path
+    stored: dict[str, Any]
+
+
+def render_snapshot(project: Path, raw: dict[str, Any], previous: dict[str, Any] | None, order_override: dict[str, list[str]] | None = None, extra_ids: dict[str, str] | None = None) -> MirrorSnapshot:
+    """Render text and bookkeeping without changing the accepted mirror."""
     ids, order = bookkeeping_from_base(previous)
     if extra_ids:
         ids = {**(ids or {}), **extra_ids}
@@ -98,8 +107,14 @@ def materialize(project: Path, raw: dict[str, Any], previous: dict[str, Any] | N
     base_file = base_path(project, asset_path)
     stored = with_bookkeeping(raw, new_ids, new_order)
     stored["text_sha256"] = sha256_text(text)
-    write_json(base_file, stored)
-    return document, text, text_file, base_file
+    return MirrorSnapshot(document, text, text_file, base_file, stored)
+
+
+def materialize(project: Path, raw: dict[str, Any], previous: dict[str, Any] | None, order_override: dict[str, list[str]] | None = None, extra_ids: dict[str, str] | None = None) -> tuple[Document, str, Path, Path]:
+    """raw -> (document, text, text_path, base_path); writes base with bookkeeping."""
+    snapshot = render_snapshot(project, raw, previous, order_override, extra_ids)
+    write_json(snapshot.base_file, snapshot.stored)
+    return snapshot.document, snapshot.text, snapshot.text_file, snapshot.base_file
 
 
 def local_order_from_document(document: Document) -> dict[str, list[str]]:

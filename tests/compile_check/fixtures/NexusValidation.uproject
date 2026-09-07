@@ -1,0 +1,14 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.5",
+  "Plugins": [
+    {
+      "Name": "UeNodeNexusBridge",
+      "Enabled": true
+    },
+    {
+      "Name": "UeNodeNexusVfxBridge",
+      "Enabled": true
+    }
+  ]
+}
