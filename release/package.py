@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from email.parser import BytesParser
 import hashlib
 import json
 import os
@@ -70,8 +71,8 @@ def plugin_files(build: Path, plugin: str, version: str, build_id: str) -> dict[
 
 def verify_wheel(wheel: Path, version: str) -> None:
     with zipfile.ZipFile(wheel) as archive:
-        metadata = archive.read(f"ue_node_nexus_mcp-{version}.dist-info/METADATA").decode()
-        if f"Version: {version}\n" not in metadata:
+        metadata = BytesParser().parsebytes(archive.read(f"ue_node_nexus_mcp-{version}.dist-info/METADATA"))
+        if metadata["Version"] != version:
             raise RuntimeError("wheel version mismatch")
         members = set(archive.namelist())
         for module in ("prepare", "apply", "commit", "diagnostics", "recovery", "refresh"):
