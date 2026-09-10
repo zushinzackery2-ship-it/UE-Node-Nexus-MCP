@@ -3,6 +3,8 @@
 #include "UeNodeNexusBridgeOperationRegistry.h"
 #include "UeNodeNexusNiagaraOps.h"
 #include "UeNodeNexusVfxTranscode.h"
+#include "BuildInfo/NexusVfxBuildInfo.h"
+#include "UeNodeNexusBridgeBuildInfo.h"
 
 IMPLEMENT_MODULE(FUeNodeNexusVfxBridgeModule, UeNodeNexusVfxBridge)
 
@@ -54,6 +56,7 @@ const TArray<FVfxOperation>& VfxOperations()
 
 void FUeNodeNexusVfxBridgeModule::StartupModule()
 {
+    UeNodeNexusBridge::RegisterVfxBuildIdentity();
     for (const FVfxOperation& Operation : VfxOperations())
     {
         UeNodeNexusBridge::RegisterOperationHandler(FString(Operation.Name), Operation.Handler);
@@ -62,6 +65,7 @@ void FUeNodeNexusVfxBridgeModule::StartupModule()
 
 void FUeNodeNexusVfxBridgeModule::ShutdownModule()
 {
+    UeNodeNexusBridge::UnregisterBuildIdentity(TEXT("UeNodeNexusVfxBridge"));
     for (const FVfxOperation& Operation : VfxOperations())
     {
         UeNodeNexusBridge::UnregisterOperationHandler(FString(Operation.Name));

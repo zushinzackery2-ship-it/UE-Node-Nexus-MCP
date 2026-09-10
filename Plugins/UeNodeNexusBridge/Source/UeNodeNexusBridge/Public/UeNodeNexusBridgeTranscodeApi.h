@@ -56,7 +56,7 @@ UENODENEXUSBRIDGE_API bool IsEditableProperty(const FProperty* Property);
 UENODENEXUSBRIDGE_API FString ExportPropertyValue(const UObject* Object, FProperty* Property);
 // [{name,type,value,default}] for every editable property; Defaults may be nullptr (class CDO is used).
 UENODENEXUSBRIDGE_API TArray<TSharedPtr<FJsonValue>> ExportEditableProps(UObject* Object, UObject* Defaults = nullptr);
-UENODENEXUSBRIDGE_API bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Value, FString& OutError);
+UENODENEXUSBRIDGE_API bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Value, FString& OutError, bool bNotify = true);
 UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> PropertySchemaJson(FProperty* Property, UObject* Cdo);
 
 // --- save ------------------------------------------------------------------

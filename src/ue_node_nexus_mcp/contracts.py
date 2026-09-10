@@ -13,7 +13,16 @@ _VALID_DEFAULT_RESPONSES = {"summary", "delta", "full"}
 def _load_operation_records() -> list[dict[str, Any]]:
     with _OPERATIONS_MANIFEST.open(encoding="utf-8") as handle:
         manifest = json.load(handle)
-    records = manifest["operations"]
+    if manifest.get("version") != 2 or not isinstance(manifest.get("files"), list):
+        raise ValueError("unsupported operation manifest index")
+    records = []
+    root = _OPERATIONS_MANIFEST.parent
+    for relative in manifest["files"]:
+        file = root / relative
+        if not file.resolve().is_relative_to((root / "operations").resolve()):
+            raise ValueError(f"operation manifest path leaves its directory: {relative}")
+        with file.open(encoding="utf-8") as handle:
+            records.extend(json.load(handle)["operations"])
     seen: set[str] = set()
     for record in records:
         name = record["name"]

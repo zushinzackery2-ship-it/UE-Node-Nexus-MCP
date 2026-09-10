@@ -31,17 +31,6 @@ static UObject* LoadRequiredAsset(const TSharedPtr<FJsonObject>& Payload, TShare
     return Asset;
 }
 
-static TSharedPtr<FJsonObject> MakeCompileData(bool bRequested, bool bRan, bool bOk, int32 ErrorCount, int32 WarningCount)
-{
-    TSharedPtr<FJsonObject> Compile = MakeShared<FJsonObject>();
-    Compile->SetBoolField(TEXT("requested"), bRequested);
-    Compile->SetBoolField(TEXT("ran"), bRan);
-    Compile->SetBoolField(TEXT("ok"), bOk);
-    Compile->SetNumberField(TEXT("error_count"), ErrorCount);
-    Compile->SetNumberField(TEXT("warning_count"), WarningCount);
-    return Compile;
-}
-
 TSharedPtr<FJsonObject> HandleAssetCompile(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     TSharedPtr<FJsonObject> EarlyResponse;
@@ -62,15 +51,15 @@ TSharedPtr<FJsonObject> HandleAssetCompile(const FString& Operation, const FStri
     FBridgeAssetCompileDiagnostics CompileDiagnostics = CollectAssetCompileDiagnostics(Asset, AssetPath, true);
     if (CompileDiagnostics.bSupported)
     {
-        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, CompileDiagnostics.bRan, CompileDiagnostics.bOk, CompileDiagnostics.ErrorCount, CompileDiagnostics.WarningCount));
+        Data->SetObjectField(TEXT("compile"), CompileDiagnosticsJson(CompileDiagnostics, true));
         Response->SetArrayField(TEXT("diagnostics"), CompileDiagnostics.Diagnostics);
         Response->SetBoolField(TEXT("ok"), CompileDiagnostics.bOk);
     }
     else
     {
         Response->SetBoolField(TEXT("ok"), false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("Only Blueprint, Material, and MaterialFunction assets support compile")));
-        Data->SetObjectField(TEXT("compile"), MakeCompileData(true, false, false, 0, 0));
+        Response->SetObjectField(TEXT("error"), MakeError(TEXT("unsupported_asset_class"), TEXT("Asset class does not support compile")));
+        Data->SetObjectField(TEXT("compile"), CompileDiagnosticsJson(CompileDiagnostics, true));
     }
 
     Response->SetObjectField(TEXT("data"), Data);

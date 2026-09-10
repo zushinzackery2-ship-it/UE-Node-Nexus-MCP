@@ -5,6 +5,7 @@
 #include "RenderAssetUpdate.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
+#include "UeNodeNexusBridgeRequestDispatch.h"
 
 namespace UeNodeNexusBridge::Transcode
 {
@@ -42,6 +43,8 @@ FString SaveErrorCode(const FString& Error)
 
 bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FString* OutCode)
 {
+    const double Started = FPlatformTime::Seconds();
+    OutError.Reset();
     if (OutCode != nullptr)
     {
         OutCode->Reset();
@@ -78,6 +81,8 @@ bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FStr
         Args.Error = GLog;
         if (UPackage::SavePackage(Package, Base, *Filename, Args))
         {
+            UE_LOG(LogTemp, Display, TEXT("Nexus request=%s phase=package_save package=%s ok=1 duration_ms=%.3f"),
+                *ActiveBridgeRequestId(), *Package->GetName(), (FPlatformTime::Seconds() - Started) * 1000.0);
             return true;
         }
         OutError = FString::Printf(TEXT("SavePackage failed for %s"), *Package->GetName());
@@ -86,6 +91,9 @@ bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FStr
     {
         *OutCode = SaveErrorCode(OutError);
     }
+    UE_LOG(LogTemp, Warning, TEXT("Nexus request=%s phase=package_save package=%s ok=0 error=%s duration_ms=%.3f"),
+        *ActiveBridgeRequestId(), Package ? *Package->GetName() : TEXT("null"), *OutError,
+        (FPlatformTime::Seconds() - Started) * 1000.0);
     return false;
 }
 

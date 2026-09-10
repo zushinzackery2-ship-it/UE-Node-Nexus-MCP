@@ -14,8 +14,10 @@ exports straight into the mirror directory.
   <Project>/A/B/BP_X.bp.nexus    blueprint       .ns/.ne = Niagara system/emitter
   <Project>/A/B/DA_X.asset.nexus property-bag asset (DataAsset, InputAction, IMC, ...)
   <Project>/A/B/T_X.stub.nexus   read-only AssetRegistry tags (textures, meshes, ...)
+  <Project>/Scenes/Maps/World/Block.scene.nexus  explicitly selected loaded scene group
   <Project>/.nexus/base/         last synced raw export (ids, opaque nodes) = merge base
   <Project>/.nexus/pending/      raw exports and *.push.json recovery records
+  <Project>/.nexus/scenes/       scene baselines, state, plans and recovery records
 ```
 
 ## Loop
@@ -37,6 +39,8 @@ exports straight into the mirror directory.
 5. `ue_sync("pull")` when the editor changed something (`ue-modified`).
 
 ## Format essentials
+
+For placed actors and ISM/HISM arrays, load `workflow_guide_get(category="scene_mirror")`.
 
 ```
 [graph]

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from conftest import RecordingBridge, SequencedBridge
+from tests.support.bridges import RecordingBridge, SequencedBridge
 
 from ue_node_nexus_mcp.server import ue_execute
 

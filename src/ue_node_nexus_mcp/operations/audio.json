@@ -1,0 +1,14 @@
+{
+  "operations": [
+    {
+      "name": "sound_cue_summary_get",
+      "kind": "read",
+      "group": "audio",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read SoundCue USoundNode tree structure."
+    }
+  ]
+}

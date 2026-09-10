@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeDiagnostics.h"
+#include "Compilation/UeNodeNexusBridgeCompilation.h"
 
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
@@ -10,6 +11,8 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceConstant.h"
+#include "RHI.h"
 #include "Misc/UObjectToken.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -39,7 +42,7 @@ TArray<FString> CollectMaterialCompileErrors(UMaterialInterface* MaterialInterfa
         return CompileErrors;
     }
 
-    FMaterialResource* MaterialResource = MaterialInterface->GetMaterialResource(ERHIFeatureLevel::SM6);
+    FMaterialResource* MaterialResource = MaterialInterface->GetMaterialResource(GMaxRHIFeatureLevel);
     if (MaterialResource == nullptr)
     {
         return CompileErrors;
@@ -83,6 +86,7 @@ FBridgeAssetCompileDiagnostics CollectAssetCompileDiagnostics(UObject* Asset, co
         Result.bOk = Results.NumErrors == 0 && Blueprint->Status != BS_Error;
         Result.ErrorCount = Results.NumErrors;
         Result.WarningCount = Results.NumWarnings;
+        Result.State = Result.bOk ? TEXT("ready") : TEXT("failed");
 
         for (const TSharedRef<FTokenizedMessage>& Message : Results.Messages)
         {
@@ -118,11 +122,7 @@ FBridgeAssetCompileDiagnostics CollectAssetCompileDiagnostics(UObject* Asset, co
             Material->MarkPackageDirty();
         }
 
-        const TArray<FString> CompileErrors = CollectMaterialCompileErrors(Material);
-        Result.bOk = CompileErrors.Num() == 0;
-        Result.ErrorCount = CompileErrors.Num();
-        AddMaterialCompileDiagnostics(CompileErrors, AssetPath, Result.Diagnostics);
-        return Result;
+        return MaterialResourceStatus(Material, true);
     }
 
     if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
@@ -132,11 +132,18 @@ FBridgeAssetCompileDiagnostics CollectAssetCompileDiagnostics(UObject* Asset, co
 
         UMaterialEditingLibrary::UpdateMaterialFunction(Function, nullptr);
         UMaterialInterface* PreviewMaterial = Function->GetPreviewMaterial();
-        const TArray<FString> CompileErrors = CollectMaterialCompileErrors(PreviewMaterial);
-        Result.bOk = CompileErrors.Num() == 0;
-        Result.ErrorCount = CompileErrors.Num();
-        AddMaterialCompileDiagnostics(CompileErrors, AssetPath, Result.Diagnostics);
-        return Result;
+        return MaterialResourceStatus(PreviewMaterial, true);
+    }
+
+    if (UMaterialInstanceConstant* Instance = Cast<UMaterialInstanceConstant>(Asset))
+    {
+        FBridgeAssetCompileDiagnostics Parent = MaterialResourceStatus(Instance->Parent, true);
+        if (!Parent.bOk)
+        {
+            return Parent;
+        }
+        UMaterialEditingLibrary::UpdateMaterialInstance(Instance);
+        return MaterialResourceStatus(Instance, true);
     }
 
     return Result;

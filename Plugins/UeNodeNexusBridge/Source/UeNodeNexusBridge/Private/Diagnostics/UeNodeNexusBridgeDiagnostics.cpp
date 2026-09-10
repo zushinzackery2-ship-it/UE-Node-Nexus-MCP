@@ -199,15 +199,15 @@ void CollectAssetDiagnostics(const FDiagnosticsRequest& Request, FBridgeDiagnost
             continue;
         }
 
-        UObject* Asset = AssetData.GetAsset();
+        UObject* Asset = FindObject<UObject>(nullptr, *AssetData.GetObjectPathString());
         if (Asset == nullptr)
         {
-            ++OutResult.AssetsFailedToLoad;
+            ++OutResult.AssetsNotLoaded;
             continue;
         }
 
         const FString AssetPath = AssetData.GetObjectPathString();
-        FBridgeAssetCompileDiagnostics CompileDiagnostics = CollectAssetCompileDiagnostics(Asset, AssetPath, false);
+        FBridgeAssetCompileDiagnostics CompileDiagnostics = InspectAssetDiagnostics(Asset, AssetPath);
         if (!CompileDiagnostics.bSupported)
         {
             ++OutResult.AssetsUnsupported;

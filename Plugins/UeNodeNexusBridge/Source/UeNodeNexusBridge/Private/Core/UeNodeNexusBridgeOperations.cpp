@@ -64,6 +64,8 @@ TSharedPtr<FJsonObject> HandleDiagnosticsGet(const FString& Operation, const FSt
     Data->SetNumberField(TEXT("assets_supported"), Diagnostics.AssetsSupported);
     Data->SetNumberField(TEXT("assets_unsupported"), Diagnostics.AssetsUnsupported);
     Data->SetNumberField(TEXT("assets_failed_to_load"), Diagnostics.AssetsFailedToLoad);
+    Data->SetNumberField(TEXT("assets_not_loaded"), Diagnostics.AssetsNotLoaded);
+    Data->SetStringField(TEXT("inspection_mode"), TEXT("loaded_objects_without_compilation"));
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Diagnostics.bOk);
     Response->SetObjectField(TEXT("data"), Data);

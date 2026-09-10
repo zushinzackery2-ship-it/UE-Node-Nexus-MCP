@@ -2,6 +2,7 @@
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
+#include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
 #include "ScopedTransaction.h"
@@ -68,12 +69,8 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionGraphPatch(const FString& Operatio
         bChanged = true;
     }
 
-    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, !bDryRun && bCompileAfter, true, 0, 0);
-    if (!bDryRun && bChanged && bCompileAfter)
-    {
-        UMaterialEditingLibrary::UpdateMaterialFunction(Function, nullptr);
-    }
-    else if (!bDryRun && bChanged)
+    TSharedPtr<FJsonObject> Compile = CompileAssetWrite(Function, bCompileAfter, !bDryRun && bChanged && bCompileAfter, Diagnostics);
+    if (!bDryRun && bChanged)
     {
         Function->MarkPackageDirty();
     }

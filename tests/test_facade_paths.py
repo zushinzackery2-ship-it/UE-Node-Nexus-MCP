@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import RecordingBridge, RoutingBridge
+from tests.support.bridges import RecordingBridge, RoutingBridge
 
 from ue_node_nexus_mcp import runtime
 from ue_node_nexus_mcp.errors import BridgeError

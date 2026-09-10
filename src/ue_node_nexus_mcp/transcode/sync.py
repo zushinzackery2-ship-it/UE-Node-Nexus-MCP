@@ -15,6 +15,8 @@ from .sync_project import BridgeCall, ProjectContext, SyncError, ensure_schema, 
 from .sync_pull import pull_assets
 from .sync_push import PushOptions, push_assets
 from .sync_status import compute_status, query_ue, resolve_selection
+from .scene.sync import SceneBatch
+from .transaction.lock import MirrorLock
 
 ACTIONS = ("init", "status", "pull", "lint", "push", "schema")
 MAX_INLINE_DIAGNOSTICS = 60
@@ -25,21 +27,33 @@ def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, op
     if action not in ACTIONS:
         raise SyncError("invalid_action", f"unknown action {action!r}; expected one of {', '.join(ACTIONS)}")
     context = resolve_context(bridge, env=env, cwd=cwd, require_bridge=action in ("init", "schema"))
+    with MirrorLock(context.root):
+        return _run_locked(bridge, context, action, paths, options)
+
+
+def _run_locked(bridge: BridgeCall, context: ProjectContext, action: str, paths: list[str] | None, options: dict[str, Any]) -> dict[str, Any]:
     state = SyncState.load(context.project)
     report: dict[str, Any] = {"action": action, **context.info(), "warnings": list(context.warnings)}
+    scenes = SceneBatch(context, paths, options, action)
+    paths = scenes.prepare_push() if action == "push" else scenes.asset_paths
+    has_assets = paths is None or bool(paths)
     if action == "init":
-        _init(bridge, context, state, options, report)
+        init_options = dict(options)
+        if options.get("scene") is not None:
+            init_options["pull_all"] = False
+        _init(bridge, context, state, init_options, report)
     elif action == "schema":
         schema = ensure_schema(bridge, context, force=True)
         report.update({"schema_key": schema.key, "schema_info": schema.info()})
-    elif action == "status":
+    elif action == "status" and has_assets:
         _status(bridge, context, state, paths, options, report)
-    elif action == "pull":
+    elif action == "pull" and has_assets:
         _pull(bridge, context, state, paths, options, report)
-    elif action == "lint":
+    elif action == "lint" and has_assets:
         _lint(context, state, paths, report)
-    elif action == "push":
+    elif action == "push" and has_assets and not scenes.abort_assets():
         _push(bridge, context, state, paths, options, report)
+    scenes.run(bridge, action, report)
     report["schema_key"] = context.schema_key
     report["warnings"] = list(dict.fromkeys([*report.get("warnings", []), *context.warnings]))
     return report
@@ -53,7 +67,7 @@ def _init(bridge: BridgeCall, context: ProjectContext, state: SyncState, options
     if options.get("auto_export"):
         from .sync_project import call_ok
 
-        call_ok(bridge, "transcode_watch_set", {"enabled": True, "out_dir": str(context.project / ".nexus" / "pending")})
+        call_ok(bridge, "transcode_watch_set", {"enabled": True, "out_dir": str(context.project / ".nexus" / "pending" / "watch")})
         report["auto_export"] = True
     if options.get("pull_all", True):
         _pull(bridge, context, state, None, {"include_stubs": bool(options.get("include_stubs", False)), "discover": True}, report)

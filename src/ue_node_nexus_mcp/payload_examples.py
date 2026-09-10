@@ -7,6 +7,7 @@ entry here; everything else is derived from the wrapper signature.
 from __future__ import annotations
 
 from typing import Any
+from .transcode.scene.schema import examples as scene_examples
 
 OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
     "batch_execute": {
@@ -99,3 +100,5 @@ OPERATION_EXAMPLES: dict[str, dict[str, Any]] = {
     "transcode_apply": {"asset_path": "/Game/Materials/M_Glass.M_Glass", "kind": "material", "ids": {"c_eps": "<node_GUID>"}, "dry_run": True,
                         "plan": [{"op": "set_node_param", "id": "c_eps", "name": "R", "value": "0.000002"}, {"op": "connect_pins", "from": "c_eps", "from_pin": None, "to": "out", "to_pin": "BaseColor"}]},
 }
+
+OPERATION_EXAMPLES.update(scene_examples())

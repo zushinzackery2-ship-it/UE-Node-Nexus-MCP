@@ -1,0 +1,14 @@
+{
+  "operations": [
+    {
+      "name": "texture_summary_get",
+      "kind": "read",
+      "group": "texture",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Texture2D dimensions, formats, sRGB, and LOD group."
+    }
+  ]
+}

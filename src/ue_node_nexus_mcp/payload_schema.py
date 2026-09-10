@@ -16,6 +16,7 @@ import types
 from typing import Any, Literal, Union, get_args, get_origin
 
 from .contracts import ALL_OPERATIONS
+from .transcode.scene.schema import augment as augment_scene_schema
 from .payload_schema_definitions import (
     GENERIC_OBJECT_SCHEMA,
     OPERATION_EXAMPLES,
@@ -117,10 +118,9 @@ def _apply_item_schema(operation: str, schema: dict[str, Any]) -> None:
     if item_schema is None:
         return
     properties = schema.get("properties", {})
-    if "operations" in properties and properties["operations"].get("type") == "array":
-        properties["operations"]["items"] = item_schema
-    if "layers" in properties and properties["layers"].get("type") == "array":
-        properties["layers"]["items"] = item_schema
+    for field in ("operations", "ops", "layers"):
+        if field in properties and properties[field].get("type") == "array":
+            properties[field]["items"] = item_schema
 
 
 def payload_schema_for(operation: str) -> dict[str, Any]:
@@ -130,6 +130,7 @@ def payload_schema_for(operation: str) -> dict[str, Any]:
     func = _get_wrapper_index().get(operation)
     schema = dict(GENERIC_OBJECT_SCHEMA) if func is None else derive_schema(func)
     _apply_item_schema(operation, schema)
+    augment_scene_schema(operation, schema)
     _schema_cache[operation] = schema
     return schema
 

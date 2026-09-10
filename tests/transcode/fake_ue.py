@@ -129,14 +129,17 @@ class FakeUe:
             self.assets[asset_path] = raw
         failed: list[dict[str, Any]] = []
         id_map: dict[str, str] = {}
+        applied = 0
         for index, verb in enumerate(payload.get("plan") or []):
             if self.fail_apply_index == index:
                 failed.append({"index": index, "code": "simulated_failure", "message": "simulated"})
-                continue
+                break
             self._apply_verb(raw, verb, payload.get("ids") or {}, id_map)
+            applied += 1
         raw["saved_hash"] = f"h-{len(self.applied)}"
         file = self._write_raw(payload["out_dir"], raw) if payload.get("out_dir") else ""
-        return {"applied": len(payload.get("plan") or []) - len(failed), "failed": failed, "diagnostics": [], "compile": {"ran": True, "ok": not failed, "error_count": 0}, "saved": True, "file": file, "saved_hash": raw["saved_hash"], "dirty": False, "id_map": id_map}
+        return dict(applied=applied, failed=failed, diagnostics=[], compile=dict(ran=True, ok=not failed, error_count=0),
+                    saved=True, file=file, saved_hash=raw["saved_hash"], dirty=False, id_map=id_map)
 
     op_vfx_transcode_apply = op_transcode_apply
 

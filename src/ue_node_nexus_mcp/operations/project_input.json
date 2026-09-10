@@ -1,0 +1,64 @@
+{
+  "operations": [
+    {
+      "name": "project_input_mappings_get",
+      "kind": "read",
+      "group": "project_input",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read legacy input mappings."
+    },
+    {
+      "name": "project_input_mappings_patch",
+      "kind": "write",
+      "group": "project_input",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Patch legacy project input mappings."
+    },
+    {
+      "name": "input_action_create",
+      "kind": "write",
+      "group": "project_input",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create an Enhanced Input UInputAction asset."
+    },
+    {
+      "name": "input_mapping_context_create",
+      "kind": "write",
+      "group": "project_input",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create an Enhanced Input UInputMappingContext asset."
+    },
+    {
+      "name": "input_mapping_context_entry_add",
+      "kind": "write",
+      "group": "project_input",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Map an InputAction to a key inside a mapping context."
+    },
+    {
+      "name": "input_mapping_context_get",
+      "kind": "read",
+      "group": "project_input",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List the action-to-key mappings of an InputMappingContext."
+    }
+  ]
+}

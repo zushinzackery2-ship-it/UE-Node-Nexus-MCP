@@ -1,0 +1,124 @@
+{
+  "operations": [
+    {
+      "name": "auto_index_status",
+      "kind": "read",
+      "group": "auto_index",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read persistent Auto-Index status."
+    },
+    {
+      "name": "auto_index_overview",
+      "kind": "read",
+      "group": "auto_index",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read compact indexed project asset map."
+    },
+    {
+      "name": "auto_index_tree_get",
+      "kind": "read",
+      "group": "auto_index",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Content Browser folder tree summary."
+    },
+    {
+      "name": "auto_index_query",
+      "kind": "read",
+      "group": "auto_index",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Query the persisted asset index."
+    },
+    {
+      "name": "auto_index_get",
+      "kind": "read",
+      "group": "auto_index",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read one asset record from Auto-Index."
+    },
+    {
+      "name": "auto_index_resolve_path",
+      "kind": "read",
+      "group": "auto_index",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Resolve a fuzzy asset name or path."
+    },
+    {
+      "name": "auto_index_diff_registry",
+      "kind": "read",
+      "group": "auto_index",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Compare Auto-Index with live AssetRegistry."
+    },
+    {
+      "name": "auto_index_enable",
+      "kind": "write",
+      "group": "auto_index",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Enable persistent UE asset/folder indexing."
+    },
+    {
+      "name": "auto_index_rebuild",
+      "kind": "write",
+      "group": "auto_index",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Force a full Auto-Index rebuild."
+    },
+    {
+      "name": "auto_index_disable",
+      "kind": "write",
+      "group": "auto_index",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Disable Auto-Index listeners."
+    },
+    {
+      "name": "auto_index_flush",
+      "kind": "write",
+      "group": "auto_index",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Flush Auto-Index state to disk."
+    },
+    {
+      "name": "auto_index_clear",
+      "kind": "write",
+      "group": "auto_index",
+      "risk": "high",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Clear Auto-Index state."
+    }
+  ]
+}

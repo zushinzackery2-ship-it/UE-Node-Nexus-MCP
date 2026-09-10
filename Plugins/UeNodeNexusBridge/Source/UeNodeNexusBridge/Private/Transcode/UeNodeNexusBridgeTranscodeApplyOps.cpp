@@ -1,9 +1,9 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "Apply/UeNodeNexusBridgeTranscodeApplyResult.h"
+#include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/Blueprint.h"
-#include "MaterialEditingLibrary.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialInstanceConstant.h"
@@ -92,17 +92,6 @@ UObject* CreateAssetForKind(const FString& AssetPath, const FString& Kind, const
 }
 }
 
-static TSharedPtr<FJsonObject> MakeCompileJson(const FBridgeAssetCompileDiagnostics& Compile, bool bRequested)
-{
-    TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
-    Json->SetBoolField(TEXT("requested"), bRequested);
-    Json->SetBoolField(TEXT("ran"), Compile.bRan);
-    Json->SetBoolField(TEXT("ok"), !Compile.bRan || Compile.bOk);
-    Json->SetNumberField(TEXT("error_count"), Compile.ErrorCount);
-    Json->SetNumberField(TEXT("warning_count"), Compile.WarningCount);
-    return Json;
-}
-
 static void ApplyPlanForKind(UObject* Asset, const FString& Kind, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context)
 {
     if (Kind == TEXT("material") || Kind == TEXT("material_function"))
@@ -150,6 +139,14 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
     }
 
     UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
+    if (Kind == TEXT("material_instance"))
+    {
+        FString ParentError;
+        if (!EnsureMaterialParentReady(Asset, *Plan, !bDryRun, ParentError))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("parent_material_not_ready"), ParentError);
+        }
+    }
     bool bCreated = false;
     if (Asset == nullptr)
     {
@@ -203,21 +200,12 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
         Asset->Modify();
     }
     ApplyPlanForKind(Asset, Kind, *Plan, Context);
+    Transaction.Reset();
 
     FBridgeAssetCompileDiagnostics Compile;
     if (!bDryRun && bCompile)
     {
-        if (UMaterialInstanceConstant* Instance = Cast<UMaterialInstanceConstant>(Asset))
-        {
-            UMaterialEditingLibrary::UpdateMaterialInstance(Instance);
-            Compile.bSupported = true;
-            Compile.bRan = true;
-            Compile.bOk = true;
-        }
-        else
-        {
-            Compile = CollectAssetCompileDiagnostics(Asset, AssetPath, true);
-        }
+        Compile = CollectAssetCompileDiagnostics(Asset, AssetPath, true);
     }
     if (!bDryRun && (Context.bChanged || bCreated))
     {
@@ -229,7 +217,7 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
     bool bSaved = false;
     FString SaveError;
     FString SaveCode;
-    if (bSaveRequired)
+    if (bSaveRequired && Context.Failures.IsEmpty() && (!Compile.bRan || Compile.bOk))
     {
         bSaved = SavePackageDirect(
             Asset->GetOutermost(), Asset, SaveError, &SaveCode);
@@ -251,7 +239,7 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
     }
     Data->SetArrayField(TEXT("failed"), Failed);
     Data->SetArrayField(TEXT("diagnostics"), Compile.Diagnostics);
-    Data->SetObjectField(TEXT("compile"), MakeCompileJson(Compile, bCompile && !bDryRun));
+    Data->SetObjectField(TEXT("compile"), CompileDiagnosticsJson(Compile, bCompile && !bDryRun));
     Data->SetBoolField(TEXT("saved"), bSaved);
     Data->SetBoolField(TEXT("save_required"), bSaveRequired);
     if (!SaveError.IsEmpty())

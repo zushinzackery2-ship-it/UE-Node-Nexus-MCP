@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 137893,
-  "VersionName": "0.3.1",
+  "Version": 137894,
+  "VersionName": "0.4.0",
   "FriendlyName": "UE Node Nexus VFX Bridge",
   "Description": "Optional VFX (Niagara + Cascade) operation provider for UE Node Nexus MCP.",
   "Category": "Editor",

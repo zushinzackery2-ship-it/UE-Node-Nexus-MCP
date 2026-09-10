@@ -1,0 +1,234 @@
+{
+  "operations": [
+    {
+      "name": "level_current_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read current editor level identity."
+    },
+    {
+      "name": "level_open",
+      "kind": "write",
+      "group": "level",
+      "risk": "high",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Open another editor map with dirty-map protection."
+    },
+    {
+      "name": "level_actor_spawn",
+      "kind": "write",
+      "group": "level",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Spawn one actor into the current editor level."
+    },
+    {
+      "name": "level_actor_delete",
+      "kind": "write",
+      "group": "level",
+      "risk": "high",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Delete one actor from the current editor level."
+    },
+    {
+      "name": "level_actors_list",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List actors in the current editor level."
+    },
+    {
+      "name": "level_actor_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read one level actor."
+    },
+    {
+      "name": "level_actor_transform_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read one level actor transform."
+    },
+    {
+      "name": "level_actor_transform_set",
+      "kind": "write",
+      "group": "level",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Write one level actor's world transform."
+    },
+    {
+      "name": "object_properties_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read selected UObject properties."
+    },
+    {
+      "name": "level_actor_properties_set",
+      "kind": "write",
+      "group": "level",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Write editable properties on one level actor or its component by dotted path."
+    },
+    {
+      "name": "level_mesh_instances_list",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List mesh instances in the current level."
+    },
+    {
+      "name": "component_materials_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read component material slots."
+    },
+    {
+      "name": "material_interface_resolve",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Resolve a material interface."
+    },
+    {
+      "name": "material_usage_find",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Find level material usage points."
+    },
+    {
+      "name": "component_material_instance_params_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read component material instance parameters."
+    },
+    {
+      "name": "landscape_layer_info_set",
+      "kind": "write",
+      "group": "level",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create or bind Landscape LayerInfo objects for paint layers."
+    },
+    {
+      "name": "component_materials_set",
+      "kind": "write",
+      "group": "level",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set component material slots."
+    },
+    {
+      "name": "component_material_instance_params_set",
+      "kind": "write",
+      "group": "level",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set component material instance parameters."
+    },
+    {
+      "name": "scene_export",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Export a selected loaded level scene group to the mirror."
+    },
+    {
+      "name": "scene_status",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read loaded scene group revision and availability."
+    },
+    {
+      "name": "scene_apply",
+      "kind": "write",
+      "group": "level",
+      "risk": "high",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Apply one validated scene group plan with actor and instance transactions."
+    },
+    {
+      "name": "component_instances_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read a paged ISM or HISM instance set with a revision token."
+    },
+    {
+      "name": "component_instances_patch",
+      "kind": "write",
+      "group": "level",
+      "risk": "high",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Batch add, update or remove ISM/HISM instances against a revision."
+    }
+  ]
+}

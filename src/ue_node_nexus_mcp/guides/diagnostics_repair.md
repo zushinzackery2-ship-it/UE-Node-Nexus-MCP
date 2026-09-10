@@ -1,5 +1,12 @@
 # Diagnostics and repair loops
 
+`diagnostics_get` inspects loaded objects without compiling or loading assets.
+`assets_not_loaded` reports the uninspected assets. Explicit `asset_compile`
+and material writes use the compilation service, which reports
+`submitted/pending/ready/failed`, `shader_ready`, `render_ready` and duration.
+`ready` after a requested compile covers target shader completion and an RHI
+thread resource-update fence; it is not a whole-frame GPU completion signal.
+
 ## Two kinds of error counts — do not mix them
 
 - **Project-wide**: `diagnostics_get` (or `ue_read(target="diagnostics")`)
@@ -26,6 +33,35 @@ an MCP-local read of the newest project log file.
 4. `ue_execute("project_context_get", {}, response={"mode":"full"})` — project
    path, content dir, `/Game` mount.
 
+`bridge_capabilities_get` includes `build` entries for Core and VFX: embedded
+version, source fingerprint, commit/dirty state, protocol version, loaded module
+path and engine BuildId. Python checks the loaded contract before writes.
+`bridge_contract_mismatch` or `bridge_build_identity_missing` requires matching
+plugin/Python packages and an editor restart. Source builds without recorded
+provenance identify that explicitly; they still embed their actual fingerprint.
+
+Request, compilation, fence, instance and save phases share a request ID in UE
+logs. Python rotates `bridge.log` under `UE_NEXUS_LOG_DIR` (Windows default:
+`%LOCALAPPDATA%/UE-Node-Nexus-MCP/Logs`). Filter by request ID for one operation.
+
+Mirror operations share a filesystem transaction lock; `sync_busy` means an
+existing owner must finish before another server writes the same state files.
+Save callbacks enqueue exports, processed outside saves/transactions in a
+bounded tick budget. Automatic exports use `.nexus/pending/watch/`.
+
+## Crash evidence and isolation
+
+The plugin and editor share an address space. Lifecycle ordering prevents
+bridge-originated reentrancy and premature completion claims; it does not make
+engine assertions or GPU driver faults recoverable. A dedicated UE worker can
+contain automation failures in a disposable project copy. Main-editor loading
+still creates its own RHI resources and retains engine/driver risk.
+
+An empty ComputePSO assertion identifies the failing state, not its producer.
+Root-cause attribution requires a reproducible state transition with matching
+DLL fingerprints, symbols and rendering backend. Keep compile-only validation
+separate from a real DX12 replay; NullRHI cannot validate that rendering path.
+
 ## Empty-result diagnosis
 
 Never conclude "no project" from one empty list. Cross-check
@@ -44,3 +80,9 @@ Never conclude "no project" from one empty list. Cross-check
    `material_instance_params_set`, ...), dry-run first.
 3. Re-compile; repeat until `0 errors`; `asset_save`.
 4. Confirm the change with `ue_diff_get(since_token=...)` or a targeted read.
+
+After a cold editor start, compile material parents before validating their
+instances. An instance compile waits for its parent's existing target resources;
+it does not submit a missing parent shader map. A parent readiness diagnostic
+names the parent asset that must be compiled first. This ordering also applies
+to instance parent changes and batch verification after reopening a project.

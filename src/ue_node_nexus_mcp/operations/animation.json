@@ -1,0 +1,24 @@
+{
+  "operations": [
+    {
+      "name": "anim_montage_summary_get",
+      "kind": "read",
+      "group": "animation",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read AnimMontage sections, slots, segments, and notifies."
+    },
+    {
+      "name": "blend_space_summary_get",
+      "kind": "read",
+      "group": "animation",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read BlendSpace axis ranges and sample points."
+    }
+  ]
+}

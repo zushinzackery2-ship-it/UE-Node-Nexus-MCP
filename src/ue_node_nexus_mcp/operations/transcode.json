@@ -1,0 +1,64 @@
+{
+  "operations": [
+    {
+      "name": "transcode_root_set",
+      "kind": "write",
+      "group": "transcode",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Register the mirror root directory the transcode ops may write into."
+    },
+    {
+      "name": "transcode_status",
+      "kind": "read",
+      "group": "transcode",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read saved-hash and dirty flags of mirrored assets, optionally discovering all /Game assets."
+    },
+    {
+      "name": "transcode_export",
+      "kind": "read",
+      "group": "transcode",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Write full-fidelity raw exports of Material/MaterialFunction/MaterialInstance/Blueprint/generic assets into the mirror."
+    },
+    {
+      "name": "transcode_apply",
+      "kind": "write",
+      "group": "transcode",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Apply a text-mirror plan to one asset in one editor transaction, then compile, save and re-export it."
+    },
+    {
+      "name": "schema_export",
+      "kind": "read",
+      "group": "transcode",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Write the reflection schema lock (classes, properties, defaults, enums, function signatures) into the mirror."
+    },
+    {
+      "name": "transcode_watch_set",
+      "kind": "write",
+      "group": "transcode",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Enable or disable automatic raw export of mirrored assets when the editor saves them."
+    }
+  ]
+}

@@ -26,7 +26,7 @@ Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; th
 | `ue_plan_validate(operations)` | Validate a batch without touching UE | — |
 | `ue_sync(action, paths, options)` | Text mirror: `init` / `status` / `pull` / `lint` / `push` / `schema` | rows + counts |
 
-- 132 registry operations sit behind `ue_execute`; 49 are `hidden` (asset-shaped ops replaced by the mirror, plus `editor_save_all`, `editor_request_exit`, `auto_index_clear`). Hidden ops still run by name; list them with `include_hidden=true`.
+- 137 registry operations sit behind `ue_execute`; 52 are `hidden`, including internal scene transport. Hidden ops still run by name; list them with `include_hidden=true`.
 - Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories (`getting_started`, `text_mirror`, `graph_editing`, `material_authoring`, `blueprint_authoring`, `niagara_authoring`, `diagnostics_repair`, `concurrency`); `{"category": ...}` returns one guide, `{"query": "connect pins"}` routes by keyword.
 - If an operation named here is missing from `ue_capability_get`, the MCP server process runs stale code: reinstall the Python package and restart the client. Plugin (editor) and server must both be current.
 
@@ -50,6 +50,8 @@ Run this before answering any "is the bridge working / what project is this" que
 | Inspect a graph, instance parameters, an asset's metadata | `ue_read` (section 5) |
 | Create / delete / move / duplicate assets, fix redirectors | `asset_*` ops |
 | Level actors, components, material slots, landscape layer info | `level_*`, `component_*`, `landscape_layer_info_set` |
+| Loaded Actor/Blueprint/ISM/HISM scene groups | `ue_sync` with `.scene.nexus`; load `workflow_guide_get(category="scene_mirror")` |
+| Paged instance reads and batch edits | `component_instances_get/patch`; use the read revision and persistent IDs |
 | Compile, validate, save one asset | `asset_compile`, `asset_validate`, `asset_save` |
 | Project error list, UE log lines | `diagnostics_get`, `log_tail_get` |
 | Screenshot | `viewport_capture` (level viewport, drawn synchronously; `data.exists`, absolute `file_path`); `viewport_capture_status` only if `exists=false` |
@@ -94,6 +96,22 @@ c_eps -> out.WorldPositionOffset
 - `schema_stale` → `ue_sync("schema")` (engine or plugin set changed). `.stub.nexus` files are read-only registry tags.
 
 ## 5. Reading state
+
+**Scene groups:** first pull uses `options.scene` with `map_path`, `name` and
+`actor_paths`. Files live at `Scenes/<map-relative>/<group>.scene.nexus`.
+Subsequent status/lint/pull/push accepts these files or directories. Mirrored
+asset dependencies run first; each scene has a separate transaction and recovery
+journal. Root actor transforms are world space; attached actors, components and
+instances use local space. Pull leaves UE metadata untouched. Ambiguous instance
+identity requires explicit `pull(force="ue")`; construction-script arrays are
+read-only. Loaded hidden levels are included; unloaded actors stay unavailable.
+Use the in-band scene guide for the complete format and boundaries.
+
+**Build and readiness:** capability `build` contains both DLL identities.
+Python 0.4.0 requires contract 2 before writes. Explicit material compilation
+reports shader readiness and a target RHI update fence; this is not whole-frame
+GPU completion. `diagnostics_get` reads loaded objects without compiling.
+Save callbacks enqueue exports; mirror transactions share a process/file lock.
 
 **Getting data out**: `ue_execute` reads default to a one-line summary. Use `ue_read(target=...)` (artifact token for the full body) or `ue_execute(..., response={"mode": "full"})`. `response` accepts only `mode` and `allow_heavy`; `response.format` is invalid — read shape goes into the operation payload (`format`) or `ue_read(format="detail")`. Modes: `silent | brief | ids_only | delta | summary | full | debug`.
 

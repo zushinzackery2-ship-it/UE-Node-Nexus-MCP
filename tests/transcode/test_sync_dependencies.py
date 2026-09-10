@@ -36,6 +36,33 @@ def test_dependency_cycle_is_reported_with_asset_paths():
     assert caught.value.code == "dependency_cycle"
 
 
+def test_material_subobject_connections_do_not_create_self_dependency():
+    document, _ = _document(
+        "/Game/MF_Wet",
+        '[graph]\nnode : Custom(Inputs=((InputName="A",Input=('
+        'Expression="/Script/Engine.MaterialExpressionFunctionInput'
+        "'/Game/MF_Wet.MF_Wet:MaterialExpressionFunctionInput_0'\"))))",
+        "MaterialFunction",
+    )
+    assert document_dependencies(document, "material_function") == set()
+    assert order_assets(dict((("/Game/MF_Wet.MF_Wet", ("material_function", document)),))) == ["/Game/MF_Wet.MF_Wet"]
+
+
+def test_external_subobject_retains_its_asset_dependency():
+    document, _ = _document("/Game/A", "[asset]\nReference=Object(/Game/B.B:SomeSubobject)")
+    assert document_dependencies(document, "asset") == set(("/Game/B.B",))
+
+
+def test_actual_recursive_material_function_still_fails():
+    document, _ = _document(
+        "/Game/MF_Wet",
+        "[graph]\ncall : MaterialFunctionCall(MaterialFunction=/Game/MF_Wet.MF_Wet)",
+        "MaterialFunction",
+    )
+    with pytest.raises(SyncError, match="cyclic asset dependencies"):
+        order_assets(dict((("/Game/MF_Wet.MF_Wet", ("material_function", document)),)))
+
+
 def test_push_plans_referenced_asset_before_blueprint(sync_workspace):
     ue, env, project = sync_workspace
     schema = project.parent / ".nexus/schema" / SCHEMA_KEY / "classes.component.json"

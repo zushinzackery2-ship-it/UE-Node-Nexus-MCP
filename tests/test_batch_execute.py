@@ -9,7 +9,7 @@ import pytest
 from ue_node_nexus_mcp import runtime
 from ue_node_nexus_mcp.tools_facade import ue_execute
 
-from conftest import RecordingBridge, SequencedBridge
+from tests.support.bridges import RecordingBridge, SequencedBridge
 
 
 def _batch(operations: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:

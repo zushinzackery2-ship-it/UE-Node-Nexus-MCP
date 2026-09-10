@@ -12,36 +12,41 @@ from .paths import object_path
 from .sync_project import SyncError
 from .values import is_balanced_group, unquote
 
-_REFERENCE = re.compile(r"(?:[\w./]+')?(/Game/[^\s\"'(),{}\[\]<>:=]+)(?::[^\s\"'(),{}\[\]<>]+)?'?")
+_REFERENCE = re.compile(r"(?:[\w./]+')?(/Game/[^\s\"'(),{}\[\]<>:=]+)(?::([^\s\"'(),{}\[\]<>]+))?'?")
 
 
-def _value_dependencies(value: str | None) -> set[str]:
+def _value_dependencies(value: str | None, owner: str) -> set[str]:
     if not value:
         return set()
     value = unquote(value.strip())
     match = _REFERENCE.fullmatch(value)
     if match:
-        return set((object_path(match.group(1)),))
+        asset = object_path(match.group(1))
+        # Serialized node connections reference subobjects owned by this asset.
+        if match.group(2) and asset == owner:
+            return set()
+        return set((asset,))
     if is_balanced_group(value):
-        return set().union(*(_value_dependencies(item) for _, item in parse_kv_list(value[1:-1])))
+        return set().union(*(_value_dependencies(item, owner) for _, item in parse_kv_list(value[1:-1])))
     for wrapper in ("Object", "Class", "SoftObject", "SoftClass"):
         if value.startswith(wrapper + "(") and value.endswith(")"):
-            return _value_dependencies(value[len(wrapper) + 1:-1])
+            return _value_dependencies(value[len(wrapper) + 1:-1], owner)
     return set()
 
 
 def document_dependencies(document: Document, kind: str) -> set[str]:
     """Inspect AST values, including UE import-text structs and object arrays."""
     dependencies: set[str] = set()
+    owner = object_path(document.header.asset)
     for section in document.sections:
         for prop in section.props():
-            dependencies.update(_value_dependencies(prop.value))
+            dependencies.update(_value_dependencies(prop.value, owner))
         for decl in section.decls():
             values = [decl.default, decl.type_name]
             values.extend(value for _, value in decl.args)
             values.extend(value for _, value in decl.props)
             for value in values:
-                dependencies.update(_value_dependencies(value))
+                dependencies.update(_value_dependencies(value, owner))
     return dependencies
 
 

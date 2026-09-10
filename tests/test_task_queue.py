@@ -10,7 +10,7 @@ import pytest
 from ue_node_nexus_mcp import task_queue
 from ue_node_nexus_mcp.tools_facade import ue_execute
 
-from conftest import RecordingBridge, RoutingBridge
+from tests.support.bridges import RecordingBridge, RoutingBridge
 
 
 @pytest.fixture(autouse=True)

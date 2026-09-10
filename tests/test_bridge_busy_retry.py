@@ -6,7 +6,7 @@ import pytest
 
 from ue_node_nexus_mcp import runtime
 
-from conftest import SequencedBridge
+from tests.support.bridges import SequencedBridge
 
 BUSY = {"ok": False, "error": {"code": "bridge_busy", "message": "another request is executing"}}
 DONE = {"ok": True, "data": {"applied": True}}

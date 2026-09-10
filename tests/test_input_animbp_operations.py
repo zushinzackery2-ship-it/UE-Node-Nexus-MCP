@@ -10,7 +10,7 @@ from ue_node_nexus_mcp import tools_blueprints, tools_project
 from ue_node_nexus_mcp.operation_registry import get_operation_spec
 from ue_node_nexus_mcp.tools_facade import ue_execute, ue_read
 
-from conftest import RecordingBridge
+from tests.support.bridges import RecordingBridge
 
 WRITE_OK = {"ok": True, "data": {"applied": False, "dry_run": True}, "diagnostics": [], "warnings": []}
 

@@ -1,0 +1,44 @@
+{
+  "operations": [
+    {
+      "name": "niagara_materials_set",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Assign Niagara renderer material."
+    },
+    {
+      "name": "niagara_compile",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Compile a Niagara system."
+    },
+    {
+      "name": "vfx_transcode_export",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Write full-fidelity raw exports of Niagara systems and emitters into the mirror."
+    },
+    {
+      "name": "vfx_transcode_apply",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Apply a text-mirror plan to one Niagara asset in one editor transaction, then compile, save and re-export it."
+    }
+  ]
+}

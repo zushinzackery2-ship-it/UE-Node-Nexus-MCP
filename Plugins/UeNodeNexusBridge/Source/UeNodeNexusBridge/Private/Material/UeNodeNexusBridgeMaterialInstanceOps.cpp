@@ -6,9 +6,13 @@
 #include "Engine/Texture.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeMaterialInstanceParamSet.h"
+#include "Instances/NexusMaterialInstanceParameters.h"
+#include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
+#include "ScopedTransaction.h"
 
 namespace UeNodeNexusBridge
 {
+using namespace MaterialInstances;
 static UMaterialInstanceConstant* LoadMaterialInstance(const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutResponse, const FString& Operation, const FString& RequestId)
 {
     FString AssetPath;
@@ -154,64 +158,9 @@ TSharedPtr<FJsonObject> HandleMaterialInstanceParamsGet(const FString& Operation
     return Response;
 }
 
-static bool ApplyScalar(UMaterialInstanceConstant* Instance, const TSharedPtr<FJsonObject>& Param)
-{
-    FString Name;
-    double Value = 0.0;
-    if (!Param->TryGetStringField(TEXT("name"), Name) || !Param->TryGetNumberField(TEXT("value"), Value))
-    {
-        return false;
-    }
-    FString Error;
-    return SetInstanceScalar(Instance, FName(*Name), static_cast<float>(Value), Error);
-}
 
-static bool ApplyVector(UMaterialInstanceConstant* Instance, const TSharedPtr<FJsonObject>& Param)
-{
-    FString Name;
-    const TSharedPtr<FJsonObject>* Value = nullptr;
-    if (!Param->TryGetStringField(TEXT("name"), Name) || !Param->TryGetObjectField(TEXT("value"), Value) || Value == nullptr)
-    {
-        return false;
-    }
 
-    double R = 0.0;
-    double G = 0.0;
-    double B = 0.0;
-    double A = 1.0;
-    (*Value)->TryGetNumberField(TEXT("r"), R);
-    (*Value)->TryGetNumberField(TEXT("g"), G);
-    (*Value)->TryGetNumberField(TEXT("b"), B);
-    (*Value)->TryGetNumberField(TEXT("a"), A);
-    FString Error;
-    return SetInstanceVector(Instance, FName(*Name), FLinearColor(R, G, B, A), Error);
-}
 
-static bool ApplyTexture(UMaterialInstanceConstant* Instance, const TSharedPtr<FJsonObject>& Param)
-{
-    FString Name;
-    FString Value;
-    if (!Param->TryGetStringField(TEXT("name"), Name) || !Param->TryGetStringField(TEXT("value"), Value))
-    {
-        return false;
-    }
-
-    UTexture* Texture = LoadObject<UTexture>(nullptr, *Value);
-    FString Error;
-    return Texture != nullptr && SetInstanceTexture(Instance, FName(*Name), Texture, Error);
-}
-
-static bool ApplyStaticSwitch(UMaterialInstanceConstant* Instance, const TSharedPtr<FJsonObject>& Param)
-{
-    FString Name;
-    bool bValue = false;
-    if (!Param->TryGetStringField(TEXT("name"), Name) || !Param->TryGetBoolField(TEXT("value"), bValue))
-    {
-        return false;
-    }
-    FString Error;
-    return SetInstanceStaticSwitch(Instance, FName(*Name), bValue, Error);
-}
 
 TSharedPtr<FJsonObject> HandleMaterialInstanceParamsSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
@@ -234,12 +183,26 @@ TSharedPtr<FJsonObject> HandleMaterialInstanceParamsSet(const FString& Operation
 
     int32 Changed = 0;
     int32 Planned = 0;
+    FString ParentError;
+    TArray<TSharedPtr<FJsonValue>> Diagnostics;
+    TUniquePtr<FScopedTransaction> Transaction;
+    if (!bDryRun)
+    {
+        if (!EnsureMaterialParentReady(Instance, TArray<TSharedPtr<FJsonValue>>(), true, ParentError))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("parent_material_not_ready"), ParentError);
+        }
+        Transaction = MakeUnique<FScopedTransaction>(FText::FromString(TEXT("Nexus instance parameters")));
+        Instance->Modify();
+    }
     for (const TSharedPtr<FJsonValue>& Value : *Params)
     {
         TSharedPtr<FJsonObject> Param = Value->AsObject();
         FString Type;
         if (!Param.IsValid() || !Param->TryGetStringField(TEXT("type"), Type))
         {
+            Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("invalid_parameter"),
+                TEXT("parameter object and type are required"), Instance->GetPathName(), TEXT("Nexus"))));
             continue;
         }
         ++Planned;
@@ -269,11 +232,17 @@ TSharedPtr<FJsonObject> HandleMaterialInstanceParamsSet(const FString& Operation
         {
             ++Changed;
         }
+        else if (!bDryRun)
+        {
+            Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("parameter_apply_failed"),
+                TEXT("parameter name, type or value could not be applied"), Instance->GetPathName(), TEXT("Nexus"))));
+        }
     }
 
-    if (!bDryRun)
+    Transaction.Reset();
+    TSharedPtr<FJsonObject> Compile = CompileAssetWrite(Instance, !bDryRun, !bDryRun && Changed > 0, Diagnostics);
+    if (!bDryRun && Changed > 0)
     {
-        UMaterialEditingLibrary::UpdateMaterialInstance(Instance);
         Instance->MarkPackageDirty();
     }
 
@@ -283,9 +252,11 @@ TSharedPtr<FJsonObject> HandleMaterialInstanceParamsSet(const FString& Operation
     Data->SetBoolField(TEXT("changed"), Changed > 0);
     Data->SetNumberField(TEXT("planned_count"), Planned);
     Data->SetNumberField(TEXT("changed_count"), Changed);
+    Data->SetObjectField(TEXT("compile"), Compile);
 
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Diagnostics.IsEmpty());
     Response->SetObjectField(TEXT("data"), Data);
+    Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
     return Response;
 }
 }

@@ -124,7 +124,7 @@ TArray<TSharedPtr<FJsonValue>> ExportEditableProps(UObject* Object, UObject* Def
     return Props;
 }
 
-bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Value, FString& OutError)
+bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Value, FString& OutError, bool bNotify)
 {
     if (Object == nullptr)
     {
@@ -175,7 +175,7 @@ bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Va
             OutError = FString::Printf(TEXT("%s: ImportText failed for %s"), *Name, *Value);
         }
     }
-    if (bOk)
+    if (bOk && bNotify)
     {
         FPropertyChangedEvent Event(Property);
         Object->PostEditChangeProperty(Event);

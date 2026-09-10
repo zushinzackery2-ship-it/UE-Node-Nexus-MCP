@@ -11,11 +11,11 @@ from .transcode.sync_project import SyncError
 
 SyncAction = Literal["init", "status", "pull", "lint", "push", "schema"]
 _OPTION_KEYS = {
-    "init": {"pull_all", "include_stubs", "auto_export", "refresh_schema"},
-    "status": {"discover", "include_stubs", "include_clean"},
-    "pull": {"discover", "include_stubs", "force"},
+    "init": {"pull_all", "include_stubs", "auto_export", "refresh_schema", "scene"},
+    "status": {"discover", "include_stubs", "include_clean", "scene"},
+    "pull": {"discover", "include_stubs", "force", "scene"},
     "lint": set(),
-    "push": {"dry_run", "compile", "save", "force", "allow_delete", "stop_on_error"},
+    "push": {"dry_run", "compile", "save", "force", "allow_delete", "stop_on_error", "scene"},
     "schema": set(),
 }
 _ROW_INLINE_LIMIT = 40
@@ -66,10 +66,13 @@ def _finish(report: dict[str, Any]) -> dict[str, Any]:
     if response_payload_bytes(result) <= LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         return result
     artifact = artifact_handle("ue_sync_report", result)
-    compact = {key: value for key, value in report.items() if key not in ("rows", "plans", "all_diagnostics", "diagnostics")}
+    compact = {key: value for key, value in report.items() if key not in ("rows", "scene_rows", "plans", "all_diagnostics", "diagnostics")}
     rows = report.get("rows") or []
     compact["rows"] = rows[:_ROW_INLINE_LIMIT]
     compact["rows_truncated"] = max(0, len(rows) - _ROW_INLINE_LIMIT)
+    if "scene_rows" in report:
+        compact["scene_rows"] = report["scene_rows"][:_ROW_INLINE_LIMIT]
+        compact["scene_rows_truncated"] = max(0, len(report["scene_rows"]) - _ROW_INLINE_LIMIT)
     compact["diagnostics"] = (report.get("diagnostics") or [])[:20]
     compact["artifact"] = artifact
     compact["next_read"] = {"tool": "ue_read", "args": {"target": "artifact", "query": {"artifact_id": artifact["id"]}}}

@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeOperations.h"
+#include "UeNodeNexusBridgeBuildInfo.h"
 
 #include "Algo/Sort.h"
 #include "Misc/App.h"
@@ -164,6 +165,8 @@ TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, co
     Data->SetBoolField(TEXT("contract_ok"), ExpectedOperations.IsEmpty() || (MissingExpectedOperations.IsEmpty() && UnexpectedExtraOperations.IsEmpty()));
     Data->SetObjectField(TEXT("counts"), Counts);
     Data->SetObjectField(TEXT("modules"), Modules);
+    Data->SetObjectField(TEXT("build"), BridgeBuildIdentities());
+    Data->SetNumberField(TEXT("contract_version"), NEXUS_CONTRACT_VERSION);
     Data->SetStringField(TEXT("schema_key"), Transcode::SchemaKey());
     Data->SetStringField(TEXT("engine_version"), Transcode::EngineVersionString());
     Data->SetStringField(TEXT("transcode_root"), Transcode::GetMirrorRoot());

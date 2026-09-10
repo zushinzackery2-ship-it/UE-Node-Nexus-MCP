@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ue-node-nexus-mcp"
-version = "0.3.1"
+version = "0.4.0"
 description = "Typed MCP server for safe Unreal Engine asset, graph, level, and Niagara editor operations."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,7 +23,7 @@ ue-node-nexus-mcp = "ue_node_nexus_mcp.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ue_node_nexus_mcp = ["operations.json", "guides/*.md"]
+ue_node_nexus_mcp = ["operations.json", "operations/*.json", "guides/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

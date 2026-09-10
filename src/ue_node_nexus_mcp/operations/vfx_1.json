@@ -1,0 +1,244 @@
+{
+  "operations": [
+    {
+      "name": "cascade_system_summary_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Cascade particle system emitters and modules."
+    },
+    {
+      "name": "niagara_system_summary_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara system readiness summary."
+    },
+    {
+      "name": "niagara_asset_lint",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara authoring risk diagnostics."
+    },
+    {
+      "name": "niagara_emitters_list",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List Niagara emitters."
+    },
+    {
+      "name": "niagara_system_properties_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara system properties."
+    },
+    {
+      "name": "niagara_emitter_properties_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara emitter properties."
+    },
+    {
+      "name": "niagara_modules_list",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List Niagara stack modules."
+    },
+    {
+      "name": "niagara_module_inputs_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara module inputs."
+    },
+    {
+      "name": "niagara_renderers_list",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List Niagara renderers."
+    },
+    {
+      "name": "niagara_renderer_properties_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara renderer properties."
+    },
+    {
+      "name": "niagara_user_params_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara user parameters."
+    },
+    {
+      "name": "niagara_materials_get",
+      "kind": "read",
+      "group": "vfx",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read Niagara renderer materials."
+    },
+    {
+      "name": "niagara_system_create",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create or copy a Niagara system."
+    },
+    {
+      "name": "niagara_system_duplicate",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Duplicate a Niagara system."
+    },
+    {
+      "name": "niagara_system_properties_set",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set Niagara system properties."
+    },
+    {
+      "name": "niagara_emitter_create",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create a Niagara emitter."
+    },
+    {
+      "name": "niagara_emitter_properties_set",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set Niagara emitter properties."
+    },
+    {
+      "name": "niagara_module_add",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Add a Niagara stack module."
+    },
+    {
+      "name": "niagara_module_remove",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Remove a Niagara stack module."
+    },
+    {
+      "name": "niagara_module_set_enabled",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Enable or disable a Niagara stack module."
+    },
+    {
+      "name": "niagara_module_inputs_set",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set Niagara module inputs."
+    },
+    {
+      "name": "niagara_renderer_create",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create a Niagara renderer."
+    },
+    {
+      "name": "niagara_renderer_properties_set",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set Niagara renderer properties."
+    },
+    {
+      "name": "niagara_user_params_set",
+      "kind": "write",
+      "group": "vfx",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set Niagara user parameters."
+    }
+  ]
+}

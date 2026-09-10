@@ -85,6 +85,11 @@ TArray<FString> GetCoreOperationNames()
         TEXT("transcode_apply"),
         TEXT("schema_export"),
         TEXT("transcode_watch_set"),
+        TEXT("scene_export"),
+        TEXT("scene_status"),
+        TEXT("scene_apply"),
+        TEXT("component_instances_get"),
+        TEXT("component_instances_patch"),
     };
 }
 }

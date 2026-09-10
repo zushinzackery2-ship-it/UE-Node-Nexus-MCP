@@ -33,13 +33,14 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 | 功能 | 内容 |
 |:-----|:-----|
 | **文本资产镜像** | Material、MaterialFunction、MaterialInstance、Blueprint、Niagara System 和属性型资产的导出、校验、差异计划与提交 |
+| **场景组镜像** | 当前世界已加载 Actor、蓝图 Actor、ISM/HISM 的稳定身份、文本编辑、批量实例操作、事务和外部包保存 |
 | **资产查询与管理** | 资产索引、元数据、依赖与引用关系，以及创建、复制、移动、重命名、删除和 redirector 修复 |
 | **图与蓝图** | 节点、引脚、连接、变量、组件、函数，以及动画蓝图与状态机摘要 |
 | **关卡操作** | Actor、变换、组件属性、材质槽、Landscape LayerInfo、关卡切换、视口相机与截图 |
 | **VFX** | Niagara 发射器、模块栈、渲染器和用户参数；Cascade 系统摘要 |
 | **诊断与批处理** | 编译诊断、MessageLog、日志尾、离线材质检查、批量执行和后台任务 |
 
-当前操作注册表包含 **132 个 operation**。其中 49 个兼容或底层操作从默认能力索引隐藏，仍可按名称查询与调用。完整清单由 [operations.json](src/ue_node_nexus_mcp/operations.json) 维护。
+当前操作注册表包含 **137 个 operation**，其中 52 个兼容或底层操作从默认能力索引隐藏。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
 
 ---
 
@@ -47,11 +48,11 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 
 ### 使用发行包
 
-[最新 Release](https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/releases/latest) 提供 UE 5.5 Windows x64 双插件 ZIP、Python Wheel 和 SHA256 校验文件。关闭编辑器，将 ZIP 中的 `Plugins/` 合并到工程根目录，再安装下载的 Wheel；配置 MCP 客户端时参照下方第 3 步。
+[最新 Release](https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/releases/latest) 提供 UE 5.5 Windows x64 双插件 ZIP、Python Wheel 和校验文件。使用同一版本的 ZIP 与 Wheel；本地构建也采用相同结构。关闭编辑器，将 `Plugins/` 合并到工程根目录后安装 Wheel。以下文件名以 0.4.0 构建为例：
 
 ```bat
 py -3 -m venv .venv
-.venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.3.1-py3-none-any.whl
+.venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.4.0-py3-none-any.whl
 ```
 
 源码安装与构建流程如下。
@@ -74,7 +75,7 @@ set "UE_NEXUS_ENGINE_DIR=D:\Unreal\UE_5.5"
 tests\compile_check\build_plugins.bat
 ```
 
-脚本使用 `vswhere` 查找 Visual Studio，在 `build/validation/` 内创建独立工程，并编译两个插件。输出位于 `build/validation/Plugins/`。
+脚本使用 `vswhere` 查找 Visual Studio，在 `build/validation/` 内准备精确源码副本，仅编译 Core、VFX 两个模块。DLL 与 `BuildIdentity.json` 位于 `build/validation/Plugins/`；身份文件记录版本、源码指纹、提交、脏状态和契约版本。
 
 关闭目标编辑器，将编译后的插件复制到 UE 工程的 `Plugins/` 目录：
 
@@ -201,6 +202,20 @@ ue_sync("status")
 
 默认 `stop_on_error=true`。设为 false 时独立资产可以继续，失败资产的依赖方保持阻断。dry-run 保持文本、同步基线和 state 不变，schema 与原始导出仍可写入暂存目录。
 
+### 场景与实例
+
+首次导入明确选择的场景组，之后通过 `Scenes/` 内的文件或目录执行相同的同步动作：
+
+```python
+ue_sync("pull", options=dict(scene=dict(
+    map_path="/Game/Maps/World", name="Block",
+    actor_paths=["/Game/Maps/World.World:PersistentLevel.Tiles"],
+)))
+ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"])
+```
+
+根 Actor 使用世界变换，挂接 Actor、组件和实例使用相对变换。实例 ID 随删除和重排保留；首次写入才绑定编辑器专用元数据。场景提交先处理镜像资产依赖，再应用场景事务，保存涉及的地图、子关卡和外部 Actor 包。完整语法、只读内容及失败恢复见 [场景镜像指南](src/ue_node_nexus_mcp/guides/scene_mirror.md)。分页及直接批量编辑使用 `component_instances_get/patch`。
+
 ---
 
 ## 配置与排障
@@ -209,6 +224,7 @@ ue_sync("status")
 |:-----|:-----|:-----|
 | **`UE_NEXUS_TRANSCODE_DIR`** | `<cwd>/Content_Transcoded` | 文本镜像根目录 |
 | **`UE_NEXUS_TIMEOUT_SECONDS`** | `30` | 桥接请求超时秒数 |
+| **`UE_NEXUS_LOG_DIR`** | `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Logs` | 按请求 ID 记录并轮转 Python 阶段日志 |
 | **`UE_NEXUS_RESPONSE_MODE`** | `minimal` | MCP facade 返回 `minimal` 或 `full` |
 | **`UE_NEXUS_FEATURES`** | 全部能力组 | 显式启用的组，逗号分隔 |
 | **`UE_NEXUS_ENABLE_FEATURES`** | 空 | 追加启用的组 |
@@ -223,9 +239,12 @@ ue_sync("status")
 | **`save_blocked_read_only`** | 先检出资产或恢复文件可写，再重试 |
 | **`dependency_not_selected`** | 将所引用的本地新资产加入同一批选择 |
 | **`dependency_cycle`** | 检查新资产之间的循环依赖 |
+| **`sync_busy`** | 同一镜像根目录已有事务，结束后重试 |
+| **`identity_conflict`** | 用 `pull(force="ue")` 明确采纳当前实例快照后再编辑 |
+| **`bridge_contract_mismatch`** | 根据 capability 的 `build` 信息核对同版本 Python、双插件和 BuildId |
 | **操作与 schema 对不上** | 同步更新 Python 服务与 UE 插件，重启编辑器并重连客户端 |
 
-桥接保存使用 `UPackage::SavePackage`，只读检查失败直接返回诊断；重入请求返回 `bridge_busy`。材质图写入前取消该材质的在途编译，批量修改结束后统一编译。
+编译入口共用编译服务，成功状态包含目标 shader 和 RHI 资源更新完成信息。诊断仅检查已加载对象；保存监听在事务结束后处理队列。镜像事务跨线程、跨进程互斥，场景回读用请求标识匹配提交。上述机制约束桥接生命周期；引擎断言和 GPU 驱动故障仍属于同进程故障边界，详见 [诊断指南](src/ue_node_nexus_mcp/guides/diagnostics_repair.md)。
 
 ---
 
@@ -238,12 +257,18 @@ UE-Node-Nexus-MCP/
     UeNodeNexusBridge/       核心编辑器插件
     UeNodeNexusVfxBridge/    VFX 插件
   src/ue_node_nexus_mcp/
-    operations.json        操作注册表
+    operations.json        操作定义索引
+    operations/            按能力组划分的操作定义
+    build_info/            双插件契约校验
+    diagnostics/           请求日志
     guides/                客户端可查询的工作流指南
     transcode/             文本解析、schema、diff 和同步
       push/                计划、提交、恢复和调用者刷新
+      scene/               场景编解码、预检、提交和恢复
+      transaction/         镜像事务所有权
   tests/
     transcode/             同步行为与故障恢复回归
+    scene/                 场景、身份、并发与原生回归源码
     compile_check/         编译桩与真实 UE 构建入口
     live/                  隔离编辑器集成验证
   skill/ue-node-nexus-mcp/  Agent skill
@@ -257,16 +282,22 @@ UE-Node-Nexus-MCP/
 .venv\Scripts\python.exe -m pytest -q
 set "UE_NEXUS_ENGINE_DIR=D:\Unreal\UE_5.5"
 tests\compile_check\build_plugins.bat
+tests\compile_check\compile_scene_tests.bat
+.venv\Scripts\python.exe -m tests.live.native_runner
 .venv\Scripts\python.exe tests\live\sync_smoke.py
 ```
 
-测试覆盖注册表契约、参数 schema、文本往返、依赖排序、失败保留、恢复重试和 300 行源码预算。clang 桩检查在缺少工具链时跳过；真实 UE 构建用于验证引擎 API 和链接。实机 runner 绑定自己启动的隔离编辑器，并在结束后关闭该测试进程。
+测试覆盖注册表契约、参数 schema、文本往返、依赖排序、失败保留、恢复重试和 300 行源码预算。clang 桩检查在缺少工具链时跳过；真实 UE 构建验证引擎 API 和链接，并生成与引擎 BuildId 匹配的模块清单。
+
+原生测试在 `build/scene-tests/` 内编译和运行实例身份及 Undo/Redo 回归；生产插件在 `build/validation/` 内构建。同步 smoke 使用 DX12 验证 shader/RHI 就绪、保存失败恢复与回读，runner 绑定自建编辑器并正常退出。场景与捕获批次的重放入口位于 `tests/live/`，每次运行记录构建身份、请求响应和验收结果。
 
 ## 支持边界
 
 | 项目 | 当前范围 |
 |:-----|:-----|
 | **引擎版本** | 已验证 UE 5.5；其他版本需重新构建和验证 API |
+| **场景范围** | 当前世界已加载对象，包括隐藏子关卡；Level Instance/Packed Level Actor、Foliage/PCG 和自动加载分区另需专用支持 |
+| **构造脚本** | 构造脚本生成的组件和实例数组按只读边界导出；先完成 Actor 构造，再应用可编辑组件覆盖 |
 | **Niagara** | emitter 资产、动态或链接输入、Event / Stage 栈按只读内容保留；模块重排序尚未实现 |
 | **Blueprint** | ParentClass 仅用于新建；继承组件属性、宏、委托与接口存在只读边界 |
 | **不透明节点** | `@opaque` 内容支持保留、移动、删除与连接，不能任意改写内部数据 |

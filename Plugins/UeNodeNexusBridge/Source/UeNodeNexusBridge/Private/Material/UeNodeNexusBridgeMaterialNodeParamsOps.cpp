@@ -2,6 +2,7 @@
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
+#include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "ScopedTransaction.h"
@@ -124,17 +125,10 @@ TSharedPtr<FJsonObject> HandleMaterialNodeParamsSet(const FString& Operation, co
 
     if (!bDryRun && bChanged)
     {
-        if (bCompileAfter)
-        {
-            UMaterialEditingLibrary::RecompileMaterial(Material);
-        }
-        else
-        {
-            Material->MarkPackageDirty();
-        }
+        Material->MarkPackageDirty();
     }
 
-    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, !bDryRun && bCompileAfter, true, 0, 0);
+    TSharedPtr<FJsonObject> Compile = CompileAssetWrite(Material, bCompileAfter, !bDryRun && bChanged && bCompileAfter, Diagnostics);
     TSharedPtr<FJsonObject> PinIntegrity = BuildMaterialPinIntegrity(Material);
     const bool bOk = Diagnostics.Num() == 0 && PinIntegrity->GetBoolField(TEXT("ok"));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, bOk);

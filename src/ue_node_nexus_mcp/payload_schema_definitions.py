@@ -15,6 +15,8 @@ WRAPPER_MODULES = (
     "tools_graphs",
     "tools_graph_writes",
     "tools_level_materials",
+    "tools_level_instances",
+    "tools_scene",
     "material_lint",
     "tools_materials",
     "tools_niagara",

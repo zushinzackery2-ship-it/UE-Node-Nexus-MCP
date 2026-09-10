@@ -1,0 +1,124 @@
+{
+  "operations": [
+    {
+      "name": "graph_snapshot_get",
+      "kind": "read",
+      "group": "graph",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read graph snapshot."
+    },
+    {
+      "name": "graph_node_search",
+      "kind": "read",
+      "group": "graph",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Search graph nodes by class, object name, or display name."
+    },
+    {
+      "name": "graph_node_info_get",
+      "kind": "read",
+      "group": "graph",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "full",
+      "summary": "Read whole graph node information."
+    },
+    {
+      "name": "node_info_get",
+      "kind": "read",
+      "group": "graph",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "full",
+      "summary": "Read one graph node edit view."
+    },
+    {
+      "name": "node_position_get",
+      "kind": "read",
+      "group": "graph",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read one graph node position."
+    },
+    {
+      "name": "node_class_params_get",
+      "kind": "read",
+      "group": "graph",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "full",
+      "summary": "Read editable node class parameter template."
+    },
+    {
+      "name": "node_params_get",
+      "kind": "read",
+      "group": "graph",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "full",
+      "summary": "Read editable parameters for one graph node."
+    },
+    {
+      "name": "graph_patch_apply",
+      "kind": "write",
+      "group": "graph",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Apply a declarative graph patch."
+    },
+    {
+      "name": "graph_build_apply",
+      "kind": "write",
+      "group": "graph",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Build a graph from compact specs."
+    },
+    {
+      "name": "node_create",
+      "kind": "write",
+      "group": "graph",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create one graph node."
+    },
+    {
+      "name": "node_position_set",
+      "kind": "write",
+      "group": "graph",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set one graph node position."
+    },
+    {
+      "name": "node_params_set",
+      "kind": "write",
+      "group": "graph",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set typed graph node parameters."
+    }
+  ]
+}

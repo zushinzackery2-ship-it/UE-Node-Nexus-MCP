@@ -2,6 +2,7 @@
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
+#include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
 #include "ScopedTransaction.h"
@@ -182,8 +183,8 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionNodeCreate(const FString& Operatio
             }
             Expression->PostEditChange();
         }
-        UMaterialEditingLibrary::UpdateMaterialFunction(Function, nullptr);
     }
+    TSharedPtr<FJsonObject> Compile = CompileAssetWrite(Function, !bDryRun, !bDryRun && Expression != nullptr, Diagnostics);
 
     TSharedPtr<FJsonObject> Data = !bDryRun && Expression != nullptr
         ? BuildMaterialFunctionNodeInterfaceData(Function, Expression, Payload, TEXT("created = true\n"))
@@ -193,6 +194,7 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionNodeCreate(const FString& Operatio
     Data->SetStringField(TEXT("graph_kind"), TEXT("material_function"));
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialFunctionGraph"));
     Data->SetBoolField(TEXT("created"), !bDryRun && Expression != nullptr);
+    Data->SetObjectField(TEXT("compile"), Compile);
     if (bDryRun)
     {
         SetTextPayload(Data, FString::Printf(TEXT("created = dry_run\nNode.Class = %s\nNode.Pos = %d,%d\n"), *ExpressionClass->GetName(), X, Y));

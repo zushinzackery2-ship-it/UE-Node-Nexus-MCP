@@ -5,6 +5,7 @@ from .facade_plan import ue_plan_validate
 from .runtime import consume_cli_arguments, mcp
 from .tools_facade import ue_diff_get, ue_execute, ue_read
 from .tools_sync import ue_sync
+from .diagnostics.logging import configure_logging
 
 __all__ = [
     "main",
@@ -19,6 +20,7 @@ __all__ = [
 
 
 def main() -> None:
+    configure_logging()
     consume_cli_arguments()
     mcp.run()
 

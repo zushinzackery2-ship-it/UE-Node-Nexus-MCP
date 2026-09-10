@@ -1,0 +1,44 @@
+{
+  "operations": [
+    {
+      "name": "material_expression_classes_list",
+      "kind": "read",
+      "group": "material",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List material expression classes."
+    },
+    {
+      "name": "material_lint",
+      "kind": "read",
+      "group": "material",
+      "risk": "low",
+      "hidden": true,
+      "local": true,
+      "default_response": "summary",
+      "summary": "Read Python-side material authoring diagnostics without compiling."
+    },
+    {
+      "name": "material_instance_params_get",
+      "kind": "read",
+      "group": "material",
+      "risk": "low",
+      "hidden": true,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read material instance parameters."
+    },
+    {
+      "name": "material_instance_params_set",
+      "kind": "write",
+      "group": "material",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Set material instance parameters."
+    }
+  ]
+}

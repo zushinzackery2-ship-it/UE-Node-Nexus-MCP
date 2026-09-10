@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeOperationRegistry.h"
 #include "UeNodeNexusBridgeOperations.h"
+#include "Level/Scene/NexusSceneOps.h"
 
 namespace UeNodeNexusBridge
 {
@@ -15,6 +16,11 @@ void RegisterCoreOp(const TCHAR* Operation, FBridgeOperationHandler Handler)
 
 void RegisterCoreOperations()
 {
+    RegisterCoreOp(TEXT("scene_export"), HandleSceneExport);
+    RegisterCoreOp(TEXT("scene_status"), HandleSceneStatus);
+    RegisterCoreOp(TEXT("scene_apply"), HandleSceneApply);
+    RegisterCoreOp(TEXT("component_instances_get"), HandleComponentInstancesGet);
+    RegisterCoreOp(TEXT("component_instances_patch"), HandleComponentInstancesPatch);
     RegisterCoreOp(TEXT("sound_cue_summary_get"), HandleSoundCueSummaryGet);
     RegisterCoreOp(TEXT("texture_summary_get"), HandleTextureSummaryGet);
     RegisterCoreOp(TEXT("asset_list"), HandleAssetList);

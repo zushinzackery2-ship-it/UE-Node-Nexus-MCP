@@ -1,0 +1,144 @@
+{
+  "operations": [
+    {
+      "name": "asset_list",
+      "kind": "read",
+      "group": "asset",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List Unreal assets through the UE bridge."
+    },
+    {
+      "name": "asset_get",
+      "kind": "read",
+      "group": "asset",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "Read metadata for one Unreal asset."
+    },
+    {
+      "name": "asset_create",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create a supported Unreal asset."
+    },
+    {
+      "name": "asset_delete",
+      "kind": "write",
+      "group": "asset",
+      "risk": "high",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Delete one Unreal asset."
+    },
+    {
+      "name": "asset_move",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Move one Unreal asset."
+    },
+    {
+      "name": "asset_rename",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Rename one Unreal asset."
+    },
+    {
+      "name": "asset_move_batch",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Move multiple Unreal assets."
+    },
+    {
+      "name": "asset_rename_batch",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Rename multiple Unreal assets."
+    },
+    {
+      "name": "asset_duplicate",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Duplicate one Unreal asset."
+    },
+    {
+      "name": "folder_create",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Create one Content Browser folder."
+    },
+    {
+      "name": "folder_delete",
+      "kind": "write",
+      "group": "asset",
+      "risk": "high",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Delete one Content Browser folder tree."
+    },
+    {
+      "name": "asset_redirectors_fixup",
+      "kind": "write",
+      "group": "asset",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Fix redirectors under a folder."
+    },
+    {
+      "name": "asset_dependencies_get",
+      "kind": "read",
+      "group": "asset",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List packages one asset depends on via the AssetRegistry."
+    },
+    {
+      "name": "asset_referencers_get",
+      "kind": "read",
+      "group": "asset",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "summary",
+      "summary": "List packages that reference one asset via the AssetRegistry."
+    }
+  ]
+}

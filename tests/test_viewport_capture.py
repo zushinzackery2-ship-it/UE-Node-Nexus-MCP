@@ -10,7 +10,7 @@ import pytest
 from ue_node_nexus_mcp.operation_registry import get_operation_spec
 from ue_node_nexus_mcp.tools_facade import ue_execute
 
-from conftest import RecordingBridge
+from tests.support.bridges import RecordingBridge
 
 
 def test_viewport_operations_carry_expected_metadata() -> None:

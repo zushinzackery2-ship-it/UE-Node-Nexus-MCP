@@ -10,7 +10,7 @@ import pytest
 from ue_node_nexus_mcp.operation_registry import get_operation_spec
 from ue_node_nexus_mcp.tools_facade import ue_execute, ue_read
 
-from conftest import RecordingBridge, RoutingBridge
+from tests.support.bridges import RecordingBridge, RoutingBridge
 
 
 def test_new_operations_carry_expected_metadata() -> None:
