@@ -17,8 +17,10 @@ from .sync_push import PushOptions, push_assets
 from .sync_status import compute_status, query_ue, resolve_selection
 from .scene.sync import SceneBatch
 from .transaction.lock import MirrorLock
+from .collaboration.report.options import ACTIONS as COLLABORATION_ACTIONS
 
-ACTIONS = ("init", "status", "pull", "lint", "push", "schema")
+LEGACY_ACTIONS = ("init", "status", "pull", "lint", "push", "schema")
+ACTIONS = tuple(dict.fromkeys((*LEGACY_ACTIONS, *COLLABORATION_ACTIONS)))
 MAX_INLINE_DIAGNOSTICS = 60
 
 
@@ -26,7 +28,22 @@ def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, op
     options = dict(options or {})
     if action not in ACTIONS:
         raise SyncError("invalid_action", f"unknown action {action!r}; expected one of {', '.join(ACTIONS)}")
-    context = resolve_context(bridge, env=env, cwd=cwd, require_bridge=action in ("init", "schema"))
+    context = resolve_context(bridge, env=env, cwd=cwd, require_bridge=action == "init", project_hint=options.get("project"))
+    if action == "schema":
+        from .schema.service import run
+        from .collaboration.report.options import validate
+
+        validate(action, options)
+        with MirrorLock(context.root, context.root / ".nexus" / "schema.lock"):
+            return dict(action=action, **run(bridge, context, options))
+    from .collaboration.store.migration import enabled
+
+    if enabled(context) or options.get("workspace_id") or action not in LEGACY_ACTIONS:
+        if action == "init":
+            raise SyncError("workspace_required", "collaboration is enabled; use checkout to create a workspace")
+        from .collaboration.service import run
+
+        return dict(context.info(), **run(bridge, context, action, paths, options))
     with MirrorLock(context.root):
         return _run_locked(bridge, context, action, paths, options)
 

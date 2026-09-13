@@ -41,6 +41,16 @@
       "summary": "Apply a text-mirror plan to one asset in one editor transaction, then compile, save and re-export it."
     },
     {
+      "name": "transcode_recover",
+      "kind": "write",
+      "group": "transcode",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Query a durable apply receipt or restore an interrupted execution checkpoint."
+    },
+    {
       "name": "schema_export",
       "kind": "read",
       "group": "transcode",

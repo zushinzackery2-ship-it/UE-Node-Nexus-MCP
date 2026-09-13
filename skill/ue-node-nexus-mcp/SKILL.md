@@ -24,9 +24,9 @@ Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; th
 | `ue_read(target, asset_path, format, query)` | Typed reads with artifact handles for big payloads | summary |
 | `ue_diff_get(since_token, cursor, limit)` | Changes since a diff token, cursor-paged | — |
 | `ue_plan_validate(operations)` | Validate a batch without touching UE | — |
-| `ue_sync(action, paths, options)` | Text mirror: `init` / `status` / `pull` / `lint` / `push` / `schema` | rows + counts |
+| `ue_sync(action, paths, options)` | Independent workspaces, local history, semantic merge, UE publication/recovery and schema | summary + artifacts |
 
-- 137 registry operations sit behind `ue_execute`; 52 are `hidden`, including internal scene transport. Hidden ops still run by name; list them with `include_hidden=true`.
+- 138 registry operations sit behind `ue_execute`, including internal scene transport and `transcode_recover`. Hidden ops still run by name; list them with `include_hidden=true`.
 - Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories (`getting_started`, `text_mirror`, `graph_editing`, `material_authoring`, `blueprint_authoring`, `niagara_authoring`, `diagnostics_repair`, `concurrency`); `{"category": ...}` returns one guide, `{"query": "connect pins"}` routes by keyword.
 - If an operation named here is missing from `ue_capability_get`, the MCP server process runs stale code: reinstall the Python package and restart the client. Plugin (editor) and server must both be current.
 
@@ -58,6 +58,27 @@ Run this before answering any "is the bridge working / what project is this" que
 | Look at something / second camera angle | `viewport_camera_get`, `viewport_camera_set` (`location` + `look_at` or `rotation`, `fov`) then `viewport_capture` |
 
 ## 4. Text mirror (`ue_sync`)
+
+**0.5.0 collaboration workflow**: load `workflow_guide_get(category="collaboration")`.
+Each agent creates its own checkout with `dry_run=False`, then edits the
+returned `files_root`/`file_paths`. Pass the returned `id` as `workspace_id`.
+Stage and commit locally; push merges committed HEAD with current UE memory.
+Keep later file edits local. Use `resolve`/`continue`/`abort` with returned
+merge IDs; inspect apply receipts with `recover` after interrupted publication.
+Use branch/tag, log/show/diff/blame, restore/revert, private reset/rebase/amend,
+cherry-pick, stash and reflog for version operations. Mutations default to
+preview; `proposal_id` binds the preview when provided.
+
+Schema is the parameter catalog: `schema(category=..., query=..., details=True)`
+through `options` reads classified JSON also used by lint. Function and target
+context queries supplement dynamic pins and inherited parameters. Read the
+returned `schema_path` index first; respect support flags and `context_required`.
+Offline/historical schema describes its bound version, and current publication
+still checks the editor environment.
+
+First checkout imports legacy baselines and preserves existing local text in
+the `imported` workspace. The following legacy loop applies before activation;
+after activation, use workspace IDs, local commits and conflict resolutions.
 
 Layout: `<UE_NEXUS_TRANSCODE_DIR or cwd/Content_Transcoded>/<Project>/<Path>/<Asset>.<kind>.nexus` with kinds `mat mf mi bp ns ne asset stub`; `.nexus/base/` is the merge base, `.nexus/schema/<key>/` the reflection lock.
 

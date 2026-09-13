@@ -1,8 +1,10 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Schema/NexusSchema.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Components/ActorComponent.h"
 #include "Engine/Blueprint.h"
+#include "GameFramework/Actor.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialExpressionFunctionInput.h"
@@ -68,7 +70,8 @@ static TSharedPtr<FJsonObject> MaterialExpressionClasses()
         }
         Record->SetArrayField(TEXT("inputs"), Inputs);
         Record->SetArrayField(TEXT("outputs"), Outputs);
-        Classes->SetObjectField(Class->GetName(), Record);
+        AddClassMetadata(Class, Record);
+        Classes->SetObjectField(Class->GetPathName(), Record);
     }
     return Classes;
 }
@@ -86,7 +89,8 @@ static TSharedPtr<FJsonObject> ClassFamily(TFunctionRef<bool(UClass*)> Filter)
         TSharedPtr<FJsonObject> Record = MakeShared<FJsonObject>();
         Record->SetStringField(TEXT("path"), Class->GetPathName());
         Record->SetObjectField(TEXT("props"), ClassPropsJson(Class));
-        Classes->SetObjectField(Class->GetName(), Record);
+        AddClassMetadata(Class, Record);
+        Classes->SetObjectField(Class->GetPathName(), Record);
     }
     return Classes;
 }
@@ -98,8 +102,14 @@ static TSharedPtr<FJsonObject> MaterialFunctionSignatures()
     FAssetRegistryModule::GetRegistry().GetAssetsByClass(UMaterialFunction::StaticClass()->GetClassPathName(), Assets, true);
     for (const FAssetData& AssetData : Assets)
     {
-        if (!AssetData.PackageName.ToString().StartsWith(TEXT("/Game/")) && !AssetData.IsAssetLoaded())
+        if (!AssetData.IsAssetLoaded())
         {
+            const auto Record = MakeShared<FJsonObject>();
+            Record->SetStringField(TEXT("path"), AssetData.GetObjectPathString());
+            Record->SetStringField(TEXT("coverage"), TEXT("context_required"));
+            Record->SetField(TEXT("inputs"), MakeShared<FJsonValueNull>());
+            Record->SetField(TEXT("outputs"), MakeShared<FJsonValueNull>());
+            Functions->SetObjectField(AssetData.GetObjectPathString(), Record);
             continue;
         }
         UMaterialFunction* Function = Cast<UMaterialFunction>(AssetData.GetAsset());
@@ -171,24 +181,43 @@ TSharedPtr<FJsonObject> HandleSchemaExport(const FString& Operation, const FStri
     {
         return MakeOperationError(Operation, RequestId, TEXT("invalid_root"), TEXT("out_dir must be inside the registered mirror root (call transcode_root_set first)"));
     }
+    const TArray<TSharedPtr<FJsonValue>>* Requests = nullptr;
+    if (Payload->TryGetArrayField(TEXT("functions"), Requests) && Requests->Num() > 128)
+    {
+        return MakeOperationError(Operation, RequestId, TEXT("query_too_large"), TEXT("at most 128 function signatures per query"));
+    }
+    bool bDetailsOnly = false;
+    Payload->TryGetBoolField(TEXT("details_only"), bDetailsOnly);
     const FString Key = SchemaKey();
     TArray<TPair<FString, TSharedPtr<FJsonObject>>> Files;
     TSharedPtr<FJsonObject> KeyJson = MakeShared<FJsonObject>();
     KeyJson->SetStringField(TEXT("key"), Key);
     KeyJson->SetStringField(TEXT("engine_version"), EngineVersionString());
     KeyJson->SetStringField(TEXT("generated_at"), FDateTime::UtcNow().ToIso8601());
+    KeyJson->SetObjectField(TEXT("environment"), SchemaEnvironment());
     Files.Emplace(TEXT("key.json"), KeyJson);
+    if (!bDetailsOnly)
+    {
     Files.Emplace(TEXT("classes.material_expression.json"), MaterialExpressionClasses());
     Files.Emplace(TEXT("classes.k2node.json"), BuildK2NodeSchema());
     Files.Emplace(TEXT("classes.asset.json"), ClassFamily([](UClass* Class)
     {
         const FString Name = Class->GetName();
         return Class == UMaterial::StaticClass() || Class == UMaterialFunction::StaticClass() || Class == UMaterialInstanceConstant::StaticClass()
-            || Class == UBlueprint::StaticClass() || IsGenericAssetClass(Class) || Name == TEXT("NiagaraSystem") || Name == TEXT("NiagaraEmitter");
+            || Class == UBlueprint::StaticClass() || IsGenericAssetClass(Class) || Class->IsChildOf(AActor::StaticClass()) || Name == TEXT("NiagaraSystem") || Name == TEXT("NiagaraEmitter");
     }));
-    Files.Emplace(TEXT("classes.component.json"), ClassFamily([](UClass* Class) { return Class->IsChildOf(UActorComponent::StaticClass()); }));
-    Files.Emplace(TEXT("classes.niagara_renderer.json"), ClassFamily([](UClass* Class) { return Class->GetName().StartsWith(TEXT("Niagara")) && Class->GetName().EndsWith(TEXT("RendererProperties")); }));
+    Files.Emplace(TEXT("classes.component.json"), ClassFamily([](UClass* Class)
+    {
+        return Class->IsChildOf(UActorComponent::StaticClass());
+    }));
+    Files.Emplace(TEXT("classes.niagara_renderer.json"), ClassFamily([](UClass* Class)
+    {
+        return Class->GetName().StartsWith(TEXT("Niagara")) && Class->GetName().EndsWith(TEXT("RendererProperties"));
+    }));
     Files.Emplace(TEXT("material_functions.json"), MaterialFunctionSignatures());
+    Files.Emplace(TEXT("functions.index.json"), CallableFunctionIndex());
+    Files.Emplace(TEXT("types.json"), CommonTypes());
+    }
     const TSharedPtr<FJsonObject> Functions = RequestedFunctionSignatures(Payload);
 
     int32 Written = 0;

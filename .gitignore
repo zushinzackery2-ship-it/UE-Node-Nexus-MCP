@@ -9,6 +9,7 @@
 /.codex/
 /.claude/
 /.cursor/
+/.workbuddy/
 /docs/
 /notes/
 /private/
@@ -56,8 +57,14 @@ Saved/
 Build/
 Content_Transcoded/
 .nexus/
+# Local collaboration history, schema catalogs, checkpoints and receipts live in .nexus/.
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
 *.uasset
 *.umap
+*.uexp
+*.ubulk
 *.sln
 *.opensdf
 *.sdf

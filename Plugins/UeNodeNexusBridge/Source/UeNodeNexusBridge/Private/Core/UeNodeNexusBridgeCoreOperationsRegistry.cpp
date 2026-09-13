@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeCoreOperationsRegistry.h"
+#include "UeNodeNexusCollaboration.h"
 
 #include "UeNodeNexusBridgeOperationRegistry.h"
 #include "UeNodeNexusBridgeOperations.h"
@@ -96,6 +97,7 @@ void RegisterCoreOperations()
     RegisterCoreOp(TEXT("transcode_status"), HandleTranscodeStatus);
     RegisterCoreOp(TEXT("transcode_export"), HandleTranscodeExport);
     RegisterCoreOp(TEXT("transcode_apply"), HandleTranscodeApply);
+    RegisterCoreOp(TEXT("transcode_recover"), Collaboration::Recover);
     RegisterCoreOp(TEXT("schema_export"), HandleSchemaExport);
     RegisterCoreOp(TEXT("transcode_watch_set"), HandleTranscodeWatchSet);
 

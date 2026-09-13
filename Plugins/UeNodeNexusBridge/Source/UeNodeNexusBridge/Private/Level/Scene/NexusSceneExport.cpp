@@ -11,6 +11,7 @@
 #include "Level/Instances/NexusInstanceEdit.h"
 #include "Level/Instances/NexusInstanceIdentity.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
+#include "UeNodeNexusCollaboration.h"
 
 namespace UeNodeNexusBridge::Scene
 {
@@ -174,6 +175,6 @@ FObject ExportScene(UWorld* World, const FObject& Selector, FString& Error)
     Json->SetArrayField(TEXT("missing"), Missing);
     Json->SetArrayField(TEXT("unavailable"), Unavailable);
     Json->SetBoolField(TEXT("dirty"), bDirty);
-    return Json;
+    return Collaboration::StampRaw(Json);
 }
 }

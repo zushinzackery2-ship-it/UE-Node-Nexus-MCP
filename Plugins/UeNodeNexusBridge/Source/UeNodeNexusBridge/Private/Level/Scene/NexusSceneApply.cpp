@@ -129,6 +129,15 @@ FObject ApplyScene(UWorld* World, const FObject& Plan, bool bDryRun, bool bSave,
     Data->SetNumberField(TEXT("applied"), Applied);
     Data->SetArrayField(TEXT("saved_packages"), Saved);
     Data->SetArrayField(TEXT("failed_packages"), Failed);
+    FRows Touched;
+    for (const auto& Pair : Context.Packages)
+    {
+        FObject Package = MakeShared<FJsonObject>();
+        Package->SetStringField(TEXT("package"), Pair.Key);
+        Package->SetBoolField(TEXT("deleted"), Pair.Value.bDeleted);
+        Touched.Add(MakeShared<FJsonValueObject>(Package));
+    }
+    Data->SetArrayField(TEXT("touched_packages"), Touched);
     Data->SetArrayField(TEXT("results"), Context.Results);
     Data->SetStringField(TEXT("error"), Context.Error);
     FString ExportError;
@@ -139,6 +148,11 @@ FObject ApplyScene(UWorld* World, const FObject& Plan, bool bDryRun, bool bSave,
         Data->SetObjectField(TEXT("snapshot"), After);
         Data->SetStringField(TEXT("revision"), String(After, TEXT("revision")));
         Data->SetStringField(TEXT("request_token"), String(Plan, TEXT("request_token")));
+        FObject ResultSelector = MakeShared<FJsonObject>();
+        ResultSelector->SetStringField(TEXT("map_path"), String(After, TEXT("map_path")));
+        ResultSelector->SetStringField(TEXT("name"), String(After, TEXT("name")));
+        ResultSelector->SetArrayField(TEXT("actors"), Rows(After, TEXT("actors")));
+        Data->SetObjectField(TEXT("result_selector"), ResultSelector);
     }
     else
     {

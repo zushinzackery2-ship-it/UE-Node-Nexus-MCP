@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "UeNodeNexusCollaboration.h"
 #include "Apply/UeNodeNexusBridgeTranscodeApplyResult.h"
 #include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
 
@@ -112,8 +113,13 @@ static void ApplyPlanForKind(UObject* Asset, const FString& Kind, const TArray<T
     }
 }
 
-TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
+    bool bDelete = false;
+    if (Payload->TryGetBoolField(TEXT("delete_asset"), bDelete) && bDelete)
+    {
+        return Collaboration::DeleteAsset(Operation, RequestId, Payload);
+    }
     FString AssetPath;
     FString Kind;
     const TArray<TSharedPtr<FJsonValue>>* Plan = nullptr;
@@ -272,5 +278,13 @@ TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FSt
     return MakeApplyResponse(
         Operation, RequestId, Data, Context, Compile, Plan->Num(),
         bSaveRequired, bSaved, SaveError, SaveCode);
+}
+
+TSharedPtr<FJsonObject> HandleTranscodeApply(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+{
+    return Collaboration::RunCommit(Operation, RequestId, Payload, [&](const Collaboration::FJson& Request)
+    {
+        return ApplyAsset(Operation, RequestId, Request);
+    });
 }
 }

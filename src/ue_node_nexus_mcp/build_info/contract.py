@@ -9,8 +9,8 @@ from typing import Any, Callable
 
 from ..contracts import OPERATION_FEATURES, WRITE_OPERATIONS
 
-VERSION = "0.4.0"
-CONTRACT_VERSION = 2
+VERSION = "0.5.0"
+CONTRACT_VERSION = 3
 CORE_MODULE = "UeNodeNexusBridge"
 VFX_MODULE = "UeNodeNexusVfxBridge"
 

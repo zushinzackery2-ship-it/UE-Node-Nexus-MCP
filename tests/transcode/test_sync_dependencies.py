@@ -65,11 +65,13 @@ def test_actual_recursive_material_function_still_fails():
 
 def test_push_plans_referenced_asset_before_blueprint(sync_workspace):
     ue, env, project = sync_workspace
-    schema = project.parent / ".nexus/schema" / SCHEMA_KEY / "classes.component.json"
-    schema.write_text(json.dumps(dict(StaticMeshComponent=dict(
+    from ue_node_nexus_mcp.transcode.schema.catalog import publish
+
+    schema = project.parent / ".nexus/schema" / SCHEMA_KEY
+    publish(schema, SCHEMA_KEY, dict(component=dict(StaticMeshComponent=dict(
         path="/Script/Engine.StaticMeshComponent",
         props=dict(OverlayMaterial=dict(type="object", kind="object", default="None")),
-    ))), encoding="utf-8")
+    ))), incremental=True)
     _, blueprint = _document(
         "/Game/A_Consumer",
         "[asset]\nParentClass=/Script/Engine.Actor\n\n[components]\n"

@@ -1,4 +1,5 @@
 #include "UeNodeNexusVfxTranscode.h"
+#include "UeNodeNexusCollaboration.h"
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -88,11 +89,11 @@ static TSharedPtr<FJsonObject> BuildRaw(UObject* Asset)
 {
     if (UNiagaraSystem* System = Cast<UNiagaraSystem>(Asset))
     {
-        return BuildNiagaraSystemRaw(System);
+        return Collaboration::StampRaw(BuildNiagaraSystemRaw(System));
     }
     if (UNiagaraEmitter* Emitter = Cast<UNiagaraEmitter>(Asset))
     {
-        return BuildNiagaraEmitterRaw(Emitter);
+        return Collaboration::StampRaw(BuildNiagaraEmitterRaw(Emitter));
     }
     return nullptr;
 }

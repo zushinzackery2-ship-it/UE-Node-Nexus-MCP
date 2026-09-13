@@ -24,6 +24,11 @@ def scene_status(map_path: str, name: str, actors: list[dict[str, Any]] | None =
 
 
 @hidden_tool()
-def scene_apply(plan_file: str, out_file: str, dry_run: bool = True, save: bool = True) -> dict[str, Any]:
+def scene_apply(plan_file: str, out_file: str, dry_run: bool = True, save: bool = True,
+                apply_id: str | None = None, repository: str = "", collaboration_version: int = 1,
+                expected_revision: str | None = None, read_set: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Preflight and apply one scene plan; JSON outputs use pending storage."""
-    return call_bridge("scene_apply", dict(plan_file=plan_file, out_file=out_file, dry_run=dry_run, save=save))
+    from .tools_transcode import _protocol
+
+    return call_bridge("scene_apply", dict(plan_file=plan_file, out_file=out_file, dry_run=dry_run, save=save,
+                      **_protocol(apply_id, repository, collaboration_version, expected_revision, False, read_set)))

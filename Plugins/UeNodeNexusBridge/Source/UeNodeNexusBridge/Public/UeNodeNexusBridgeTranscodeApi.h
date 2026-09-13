@@ -69,6 +69,7 @@ UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> PropertySchemaJson(FProperty* Prop
 // rejected as "save_blocked_asset_streaming_suspended"; callers retry later.
 UENODENEXUSBRIDGE_API bool SavePackageDirect(UObject* Asset, FString& OutError);
 UENODENEXUSBRIDGE_API bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FString* OutCode = nullptr);
+UENODENEXUSBRIDGE_API bool SavePackageTo(UPackage* Package, UObject* Base, const FString& Filename, bool bKeepDirty, FString& OutError);
 // True when the package's .uasset/.umap exists on disk and is read-only.
 UENODENEXUSBRIDGE_API bool IsPackageFileReadOnly(const UPackage* Package);
 // Error code for a failed SavePackageDirect ("save_blocked_read_only" |

@@ -101,4 +101,29 @@ bool SavePackageDirect(UObject* Asset, FString& OutError)
 {
     return SavePackageDirect(Asset ? Asset->GetOutermost() : nullptr, Asset, OutError);
 }
+
+bool SavePackageTo(UPackage* Package, UObject* Base, const FString& Filename, bool bKeepDirty, FString& OutError)
+{
+    if (!Package || IsPackageFileReadOnly(Package) || IsAssetStreamingSuspended())
+    {
+        OutError = !Package ? TEXT("asset has no package") : IsPackageFileReadOnly(Package)
+            ? FString(GReadOnlyPrefix) : FString(GStreamingSuspendedPrefix);
+        return false;
+    }
+    FSavePackageArgs Args;
+    Args.TopLevelFlags = RF_Public | RF_Standalone;
+    Args.SaveFlags = SAVE_NoError | (bKeepDirty ? SAVE_KeepDirty : 0);
+    Args.Error = GLog;
+    const bool bWasDirty = Package->IsDirty();
+    if (!UPackage::SavePackage(Package, Base, *Filename, Args))
+    {
+        OutError = TEXT("SavePackage failed for ") + Package->GetName();
+        return false;
+    }
+    if (bKeepDirty)
+    {
+        Package->SetDirtyFlag(bWasDirty);
+    }
+    return true;
+}
 }

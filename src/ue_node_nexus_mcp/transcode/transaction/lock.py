@@ -15,10 +15,11 @@ _LOCKS: WeakValueDictionary = WeakValueDictionary()
 
 
 class MirrorLock:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, lock_file: Path | None = None) -> None:
         self.root = root.resolve()
+        self.path = (lock_file or self.root / ".nexus" / "sync.lock").resolve()
         self._file: BinaryIO | None = None
-        key = os.path.normcase(str(self.root))
+        key = os.path.normcase(str(self.path))
         with _REGISTRY_LOCK:
             mutex = _LOCKS.get(key)
             if mutex is None:
@@ -30,9 +31,9 @@ class MirrorLock:
         if not self._mutex.acquire(blocking=False):
             raise SyncError("sync_busy", f"another mirror transaction owns {self.root}")
         try:
-            directory = self.root / ".nexus"
+            directory = self.path.parent
             directory.mkdir(parents=True, exist_ok=True)
-            self._file = (directory / "sync.lock").open("a+b")
+            self._file = self.path.open("a+b")
             if self._file.tell() == 0:
                 self._file.write(b"\0")
                 self._file.flush()

@@ -83,6 +83,7 @@ TArray<FString> GetCoreOperationNames()
         TEXT("transcode_status"),
         TEXT("transcode_export"),
         TEXT("transcode_apply"),
+        TEXT("transcode_recover"),
         TEXT("schema_export"),
         TEXT("transcode_watch_set"),
         TEXT("scene_export"),

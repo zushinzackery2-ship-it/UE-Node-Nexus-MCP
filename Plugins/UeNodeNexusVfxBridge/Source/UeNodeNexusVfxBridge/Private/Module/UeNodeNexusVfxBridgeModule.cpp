@@ -5,6 +5,9 @@
 #include "UeNodeNexusVfxTranscode.h"
 #include "BuildInfo/NexusVfxBuildInfo.h"
 #include "UeNodeNexusBridgeBuildInfo.h"
+#include "UeNodeNexusCollaboration.h"
+#include "NiagaraEmitter.h"
+#include "NiagaraSystem.h"
 
 IMPLEMENT_MODULE(FUeNodeNexusVfxBridgeModule, UeNodeNexusVfxBridge)
 
@@ -57,6 +60,27 @@ const TArray<FVfxOperation>& VfxOperations()
 void FUeNodeNexusVfxBridgeModule::StartupModule()
 {
     UeNodeNexusBridge::RegisterVfxBuildIdentity();
+    const auto Observer = [](const UeNodeNexusBridge::Collaboration::FJson& Request)
+    {
+        using namespace UeNodeNexusBridge;
+        FString Path;
+        Request->TryGetStringField(TEXT("asset_path"), Path);
+        UObject* Asset = LoadObject<UObject>(nullptr, *Path);
+        if (UNiagaraSystem* System = Cast<UNiagaraSystem>(Asset))
+        {
+            return VfxTranscode::BuildNiagaraSystemRaw(System);
+        }
+        if (UNiagaraEmitter* Emitter = Cast<UNiagaraEmitter>(Asset))
+        {
+            return VfxTranscode::BuildNiagaraEmitterRaw(Emitter);
+        }
+        auto Missing = MakeShared<FJsonObject>();
+        Missing->SetBoolField(TEXT("exists"), false);
+        Missing->SetStringField(TEXT("asset_path"), Path);
+        return TSharedPtr<FJsonObject>(Missing);
+    };
+    UeNodeNexusBridge::Collaboration::RegisterObserver(TEXT("niagara_system"), Observer);
+    UeNodeNexusBridge::Collaboration::RegisterObserver(TEXT("niagara_emitter"), Observer);
     for (const FVfxOperation& Operation : VfxOperations())
     {
         UeNodeNexusBridge::RegisterOperationHandler(FString(Operation.Name), Operation.Handler);
@@ -65,6 +89,8 @@ void FUeNodeNexusVfxBridgeModule::StartupModule()
 
 void FUeNodeNexusVfxBridgeModule::ShutdownModule()
 {
+    UeNodeNexusBridge::Collaboration::UnregisterObserver(TEXT("niagara_system"));
+    UeNodeNexusBridge::Collaboration::UnregisterObserver(TEXT("niagara_emitter"));
     UeNodeNexusBridge::UnregisterBuildIdentity(TEXT("UeNodeNexusVfxBridge"));
     for (const FVfxOperation& Operation : VfxOperations())
     {

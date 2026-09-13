@@ -3,6 +3,7 @@
 #include "NexusSceneApply.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
+#include "UeNodeNexusCollaboration.h"
 
 namespace UeNodeNexusBridge
 {
@@ -45,7 +46,7 @@ TSharedPtr<FJsonObject> HandleSceneStatus(const FString& Operation, const FStrin
     return Response;
 }
 
-TSharedPtr<FJsonObject> HandleSceneApply(const FString& Operation, const FString& RequestId, const FObject& Payload)
+static TSharedPtr<FJsonObject> ApplySceneRequest(const FString& Operation, const FString& RequestId, const FObject& Payload)
 {
     FObject Plan;
     FString Error;
@@ -88,5 +89,29 @@ TSharedPtr<FJsonObject> HandleSceneApply(const FString& Operation, const FString
             FString(TEXT("scene_incomplete")), String(Data, TEXT("error"), TEXT("scene write or save did not complete"))));
     }
     return Response;
+}
+
+TSharedPtr<FJsonObject> HandleSceneApply(const FString& Operation, const FString& RequestId, const FObject& Payload)
+{
+    FObject Request = MakeShared<FJsonObject>(*Payload);
+    if (Payload->HasField(TEXT("apply_id")))
+    {
+        FString Error;
+        FObject Plan;
+        if (!ReadFile(String(Payload, TEXT("plan_file")), Plan, Error))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("invalid_scene_plan"), Error);
+        }
+        Request->SetObjectField(TEXT("scene_plan"), Plan);
+        FObject Selector = MakeShared<FJsonObject>(*Object(Plan, TEXT("selector")));
+        Selector->SetStringField(TEXT("map_path"), String(Plan, TEXT("map_path")));
+        Request->SetObjectField(TEXT("selector"), Selector);
+        Request->SetStringField(TEXT("kind"), TEXT("scene"));
+        Request->SetStringField(TEXT("asset_path"), String(Plan, TEXT("map_path")));
+    }
+    return Collaboration::RunCommit(Operation, RequestId, Request, [&](const FObject& Commit)
+    {
+        return ApplySceneRequest(Operation, RequestId, Commit);
+    });
 }
 }

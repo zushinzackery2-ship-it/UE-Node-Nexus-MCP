@@ -1,4 +1,5 @@
 #include "UeNodeNexusVfxTranscode.h"
+#include "UeNodeNexusCollaboration.h"
 
 #include "NiagaraSystem.h"
 #include "ScopedTransaction.h"
@@ -13,8 +14,13 @@ namespace UeNodeNexusBridge
 using namespace Transcode;
 using namespace VfxTranscode;
 
-TSharedPtr<FJsonObject> HandleVfxTranscodeApply(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
+    bool bDelete = false;
+    if (Payload->TryGetBoolField(TEXT("delete_asset"), bDelete) && bDelete)
+    {
+        return Collaboration::DeleteAsset(Operation, RequestId, Payload);
+    }
     FString AssetPath;
     const TArray<TSharedPtr<FJsonValue>>* Plan = nullptr;
     if (!Payload->TryGetStringField(TEXT("asset_path"), AssetPath) || !Payload->TryGetArrayField(TEXT("plan"), Plan) || Plan == nullptr)
@@ -114,7 +120,7 @@ TSharedPtr<FJsonObject> HandleVfxTranscodeApply(const FString& Operation, const 
     Data->SetObjectField(TEXT("id_map"), IdMap);
     if (!bDryRun && !OutDir.IsEmpty())
     {
-        TSharedPtr<FJsonObject> Raw = BuildNiagaraSystemRaw(System);
+        TSharedPtr<FJsonObject> Raw = Collaboration::StampRaw(BuildNiagaraSystemRaw(System));
         FString File;
         FString Error;
         if (ResolveRawFile(OutDir, System->GetPathName(), File, Error) && WriteJsonFile(File, Raw, Error))
@@ -142,5 +148,13 @@ TSharedPtr<FJsonObject> HandleVfxTranscodeApply(const FString& Operation, const 
             FString(TEXT("compile_failed")), FString(TEXT("Niagara compile reported errors"))));
     }
     return Response;
+}
+
+TSharedPtr<FJsonObject> HandleVfxTranscodeApply(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
+{
+    return Collaboration::RunCommit(Operation, RequestId, Payload, [&](const Collaboration::FJson& Request)
+    {
+        return ApplySystem(Operation, RequestId, Request);
+    });
 }
 }

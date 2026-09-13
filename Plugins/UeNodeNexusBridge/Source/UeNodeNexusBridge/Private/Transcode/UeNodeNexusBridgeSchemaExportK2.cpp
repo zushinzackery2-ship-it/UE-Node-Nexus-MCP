@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Schema/NexusSchema.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraphNode_Comment.h"
@@ -48,7 +49,8 @@ TSharedPtr<FJsonObject> BuildK2NodeSchema()
         Record->SetObjectField(TEXT("props"), ClassProps(Class));
         Record->SetArrayField(TEXT("pins"), TArray<TSharedPtr<FJsonValue>>());
         Record->SetBoolField(TEXT("dynamic_pins"), true);
-        Classes->SetObjectField(Class->GetName(), Record);
+        AddClassMetadata(Class, Record);
+        Classes->SetObjectField(Class->GetPathName(), Record);
     }
     return Classes;
 }
@@ -74,12 +76,27 @@ TSharedPtr<FJsonObject> BuildFunctionSignatureRecord(UFunction* Function)
         Param->SetStringField(TEXT("dir"), bOut ? TEXT("out") : TEXT("in"));
         const FString DefaultKey = FString::Printf(TEXT("CPP_Default_%s"), *Property->GetName());
         Param->SetStringField(TEXT("default"), Function->HasMetaData(*DefaultKey) ? Function->GetMetaData(*DefaultKey) : FString());
+        Param->SetStringField(TEXT("default_source"), Function->HasMetaData(*DefaultKey) ? TEXT("CPP_Default_metadata") : TEXT("metadata_not_provided"));
+        Param->SetStringField(TEXT("tooltip"), Property->GetToolTipText().ToString());
         Params.Add(MakeShared<FJsonValueObject>(Param));
     }
     Record->SetArrayField(TEXT("params"), Params);
     Record->SetBoolField(TEXT("pure"), Function->HasAnyFunctionFlags(FUNC_BlueprintPure));
     Record->SetBoolField(TEXT("static"), Function->HasAnyFunctionFlags(FUNC_Static));
     Record->SetStringField(TEXT("owner"), Function->GetOwnerClass() ? Function->GetOwnerClass()->GetPathName() : FString());
+    Record->SetStringField(TEXT("path"), Function->GetOwnerClass()->GetPathName() + TEXT(".") + Function->GetName());
+    Record->SetStringField(TEXT("tooltip"), Function->GetToolTipText().ToString());
+    Record->SetStringField(TEXT("coverage"), TEXT("signature"));
+    Record->SetBoolField(TEXT("deprecated"), Function->HasMetaData(TEXT("DeprecatedFunction")));
+    const auto Conditions = MakeShared<FJsonObject>();
+    for (const TCHAR* Key : { TEXT("WorldContext"), TEXT("DeterminesOutputType"), TEXT("DynamicOutputParam"), TEXT("BlueprintInternalUseOnly"), TEXT("Latent"), TEXT("DeprecatedFunction") })
+    {
+        if (Function->HasMetaData(Key))
+        {
+            Conditions->SetStringField(Key, Function->GetMetaData(Key));
+        }
+    }
+    Record->SetObjectField(TEXT("conditions"), Conditions);
     return Record;
 }
 }

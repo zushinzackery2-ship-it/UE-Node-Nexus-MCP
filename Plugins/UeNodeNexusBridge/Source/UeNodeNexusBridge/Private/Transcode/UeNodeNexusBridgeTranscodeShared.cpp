@@ -200,19 +200,6 @@ FString EngineVersionString()
     return FEngineVersion::Current().ToString(EVersionComponent::Patch);
 }
 
-FString SchemaKey()
-{
-    TArray<FString> Names;
-    for (const TSharedRef<IPlugin>& Plugin : IPluginManager::Get().GetEnabledPlugins())
-    {
-        Names.Add(Plugin->GetName());
-    }
-    Names.Sort();
-    const FString Joined = FString::Join(Names, TEXT(","));
-    const FString Digest = FMD5::HashAnsiString(*Joined);
-    return FString::Printf(TEXT("%s-%s"), *EngineVersionString(), *Digest.Left(8));
-}
-
 FString PackageSavedHash(const FString& PackageName)
 {
     // The on-disk stamp updates the moment SavePackage returns; the AssetRegistry's

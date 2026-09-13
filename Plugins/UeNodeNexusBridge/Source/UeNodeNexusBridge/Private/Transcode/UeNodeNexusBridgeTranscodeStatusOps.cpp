@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "UeNodeNexusCollaboration.h"
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -37,6 +38,15 @@ TSharedPtr<FJsonObject> HandleTranscodeRootSet(const FString& Operation, const F
         return MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("root is required"));
     }
     FString Error;
+    FString Repository, ProjectId;
+    if (Payload->TryGetStringField(TEXT("collaboration_root"), Repository))
+    {
+        if (!Payload->TryGetStringField(TEXT("project_id"), ProjectId) || ProjectId.IsEmpty()
+            || !Collaboration::BindRepository(Repository, ProjectId, Error))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("repository_mismatch"), Error);
+        }
+    }
     if (!SetMirrorRoot(Root, Error))
     {
         return MakeOperationError(Operation, RequestId, TEXT("invalid_root"), Error);
@@ -44,6 +54,8 @@ TSharedPtr<FJsonObject> HandleTranscodeRootSet(const FString& Operation, const F
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("root"), GetMirrorRoot());
     Data->SetStringField(TEXT("schema_key"), SchemaKey());
+    Data->SetStringField(TEXT("editor_epoch"), Collaboration::EditorEpoch());
+    Data->SetNumberField(TEXT("collaboration_version"), 1);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
     return Response;

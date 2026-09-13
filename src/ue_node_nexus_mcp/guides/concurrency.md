@@ -1,5 +1,12 @@
 # Concurrency and batching
 
+For concurrent edits to the same asset, give each agent an independent
+`ue_sync("checkout")` workspace in the same project repository. Local commits
+retain their fork history; push merges them with current UE memory and returns
+persistent conflicts when necessary. Load `workflow_guide_get(category="collaboration")`
+for stage/commit, conflict resolution, history and recovery. The operation
+rules below apply to direct bridge calls.
+
 The bridge executes each request on the UE game thread, one at a time per
 editor instance. Parallel MCP calls do not run UE work in parallel — they
 queue. Plan accordingly.

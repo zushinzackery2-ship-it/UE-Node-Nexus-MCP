@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .paths import project_dir, project_info_path, resolve_root, schema_dir
-from .schema_lock import SchemaLock, find_any_schema_lock, load_schema_lock
+from .schema_lock import SchemaLock, load_schema_lock
 
 BridgeCall = Callable[[str, dict[str, Any]], dict[str, Any]]
 NIAGARA_KINDS = ("niagara_system", "niagara_emitter")
@@ -65,7 +65,7 @@ def _data(response: dict[str, Any]) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: Path | None = None, require_bridge: bool = False) -> ProjectContext:
+def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: Path | None = None, require_bridge: bool = False, project_hint: str | None = None) -> ProjectContext:
     """Bind the mirror root to the currently bound UE editor (or the last known project)."""
     root = resolve_root(env, cwd)
     project_name = ""
@@ -87,16 +87,18 @@ def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: 
         if require_bridge:
             raise
     if not project_name:
-        project_name = _last_project_name(root)
+        project_name = project_hint or _last_project_name(root)
         if not project_name:
             raise SyncError("no_project", "no UE editor is bound and no mirrored project exists yet; start the editor and run ue_sync init")
+    if project_hint and project_hint != project_name:
+        raise SyncError("project_mismatch", "the bound editor is for another project", dict(requested=project_hint, actual=project_name))
     project = project_dir(root, project_name)
     stored = _read_project_info(project)
     if not schema_key:
         schema_key = str(stored.get("schema_key", ""))
     if not engine_version:
         engine_version = str(stored.get("engine_version", ""))
-    schema = load_schema_lock(root, schema_key) if schema_key else find_any_schema_lock(root)
+    schema = load_schema_lock(root, schema_key) if schema_key else None
     if schema is not None and not schema.available and not schema_key:
         schema = None
     return ProjectContext(
@@ -144,8 +146,9 @@ def _last_project_name(root: Path) -> str:
     candidates = [path for path in root.iterdir() if path.is_dir() and project_info_path(path).is_file()]
     if not candidates:
         return ""
-    newest = max(candidates, key=lambda path: project_info_path(path).stat().st_mtime)
-    return str(_read_project_info(newest).get("project_name") or newest.name)
+    if len(candidates) != 1:
+        raise SyncError("project_required", "multiple mirrored projects exist; bind an editor to select its project")
+    return str(_read_project_info(candidates[0]).get("project_name") or candidates[0].name)
 
 
 def ensure_root_registered(bridge: BridgeCall, context: ProjectContext) -> dict[str, Any]:
@@ -162,22 +165,21 @@ def ensure_schema(bridge: BridgeCall, context: ProjectContext, force: bool = Fal
             return context.schema
         raise SyncError("bridge_unavailable", "schema lock is missing and no UE editor is bound to export it")
     if context.schema is not None and context.schema.available and not force and context.schema.key == context.schema_key:
+        from .schema.catalog import migrate
+
+        info = context.schema.info()
+        expected = info.get("environment", dict()).get("project_file")
+        if expected and context.project_file and Path(expected).resolve() != Path(context.project_file).resolve():
+            raise SyncError("schema_project_mismatch", "schema is bound to a different project")
+        if info.get("format") != 2:
+            migrate(context.schema.directory, context.schema.key, environment=dict(project_file=context.project_file))
         return context.schema
     ensure_root_registered(bridge, context)
     if not context.schema_key:
         raise SyncError("schema_key_unavailable", "the UE plugin did not report a schema key; rebuild/restart the UeNodeNexusBridge plugin")
-    target = schema_dir(context.root, context.schema_key)
-    data = _data(call_ok(bridge, "schema_export", {"out_dir": str(target)}))
-    key = str(data.get("schema_key") or context.schema_key)
-    try:
-        # Niagara module signatures come from the VFX plugin; absent when it is not loaded.
-        call_ok(bridge, "vfx_transcode_export", {"schema_out_dir": str(target), "asset_paths": []})
-    except SyncError as exc:
-        context.warnings.append(f"niagara schema skipped: {exc}")
-    context.schema_key = key
-    context.schema = load_schema_lock(context.root, key)
-    if not context.schema.available:
-        raise SyncError("schema_export_failed", f"schema_export did not produce key.json under {target}")
+    from .schema.service import refresh
+
+    refresh(bridge, context)
     write_project_info(context)
     return context.schema
 

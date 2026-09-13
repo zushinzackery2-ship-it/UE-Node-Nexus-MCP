@@ -8,8 +8,11 @@ from .facade_response import LARGE_RESPONSE_INLINE_BYTE_LIMIT, artifact_handle, 
 from .runtime import call_bridge, thin_tool
 from .transcode.sync import ACTIONS, run_sync
 from .transcode.sync_project import SyncError
+from .transcode.collaboration.report.options import COMMON, OPTIONS
 
-SyncAction = Literal["init", "status", "pull", "lint", "push", "schema"]
+SyncAction = Literal["init", "checkout", "workspaces", "status", "fetch", "pull", "lint", "push", "schema",
+                     "stage", "unstage", "commit", "amend", "merge", "resolve", "continue", "abort", "recover", "close",
+                     "branch", "switch", "tag", "log", "show", "diff", "blame", "reflog", "stash", "restore", "revert", "reset", "cherry-pick", "rebase"]
 _OPTION_KEYS = {
     "init": {"pull_all", "include_stubs", "auto_export", "refresh_schema", "scene"},
     "status": {"discover", "include_stubs", "include_clean", "scene"},
@@ -19,6 +22,8 @@ _OPTION_KEYS = {
     "schema": set(),
 }
 _ROW_INLINE_LIMIT = 40
+for _action, _keys in OPTIONS.items():
+    _OPTION_KEYS.setdefault(_action, set()).update(_keys | COMMON)
 
 
 @thin_tool()
@@ -27,16 +32,18 @@ def ue_sync(
     paths: list[str] | None = None,
     options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Sync the Content_Transcoded text mirror with the bound UE editor.
+    """Version and collaborate on UE assets through independent text workspaces.
 
-    ``status`` classifies assets (clean / local-modified / ue-modified /
-    both-modified / local-new / ue-new / ...), ``pull`` renders UE assets to
-    ``.nexus`` text, ``lint`` checks text offline against the schema lock,
-    ``push`` diffs text against the last synced base and applies the plan in
-    one editor transaction (``options.dry_run`` defaults to true), ``init``
-    binds the mirror root and pulls everything, ``schema`` refreshes the
-    reflection snapshot. ``paths`` accepts /Game asset paths, mirror files or
-    directories; empty means every mirrored asset.
+    checkout creates a workspace; its absolute files_root is this agent's editable
+    copy. Pass options.workspace_id to subsequent actions. stage/commit record
+    local history; push merges the committed HEAD with current UE memory and
+    publishes with revision checks and durable receipts. resolve/continue/abort
+    manage persistent conflicts. log/show/diff/blame, branch/tag, stash,
+    restore/revert/reset/cherry-pick/rebase/amend/reflog operate on local history.
+    Mutations default to dry_run=true; execute with dry_run=false and optionally
+    a proposal_id. schema(category/query/details/target/context) queries the
+    current classified parameter catalog, also used by lint and history.
+    Legacy init/pull/push remain available until checkout enables collaboration.
     """
     if action not in ACTIONS:
         return minimal_error("invalid_action", f"unknown action {action!r}", {"actions": list(ACTIONS)})
@@ -62,11 +69,16 @@ def _bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _finish(report: dict[str, Any]) -> dict[str, Any]:
-    result = {"ok": report.get("error_count", 0) == 0 and not report.get("stopped", False), "data": report}
+    result = {"ok": report.get("error_count", 0) == 0 and not report.get("stopped", False) and report.get("status") not in ("conflict", "stale", "recovery_required"), "data": report}
     if response_payload_bytes(result) <= LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         return result
     artifact = artifact_handle("ue_sync_report", result)
-    compact = {key: value for key, value in report.items() if key not in ("rows", "scene_rows", "plans", "all_diagnostics", "diagnostics")}
+    large = ("rows", "scene_rows", "plans", "all_diagnostics", "diagnostics", "conflicts", "changes", "workspaces", "commits", "entries", "revisions")
+    compact = {key: value for key, value in report.items() if key not in large}
+    for key in ("conflicts", "changes", "workspaces", "commits", "entries", "plans"):
+        if key in report:
+            compact[key] = report[key][:_ROW_INLINE_LIMIT]
+            compact[key + "_truncated"] = max(0, len(report[key]) - _ROW_INLINE_LIMIT)
     rows = report.get("rows") or []
     compact["rows"] = rows[:_ROW_INLINE_LIMIT]
     compact["rows_truncated"] = max(0, len(rows) - _ROW_INLINE_LIMIT)
@@ -76,4 +88,11 @@ def _finish(report: dict[str, Any]) -> dict[str, Any]:
     compact["diagnostics"] = (report.get("diagnostics") or [])[:20]
     compact["artifact"] = artifact
     compact["next_read"] = {"tool": "ue_read", "args": {"target": "artifact", "query": {"artifact_id": artifact["id"]}}}
+    if response_payload_bytes(dict(ok=result["ok"], data=compact)) > LARGE_RESPONSE_INLINE_BYTE_LIMIT:
+        keys = ("action", "status", "workspace_id", "merge_id", "apply_id", "proposal_id", "commit_id", "source_commit",
+                "published_commit", "candidate", "base", "ours", "theirs", "error_count", "conflict_count", "applied",
+                "source_integrated", "workspace_rebase_required", "dry_run", "schema_key")
+        summary = dict((key, compact[key]) for key in keys if key in compact)
+        summary.update(artifact=artifact, next_read=compact["next_read"], rows_count=len(rows), inline_truncated=True)
+        compact = summary
     return {"ok": result["ok"], "data": compact}

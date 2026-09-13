@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "UeNodeNexusCollaboration.h"
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -54,23 +55,23 @@ TSharedPtr<FJsonObject> BuildRawForAsset(UObject* Asset, const FString& Kind)
     }
     if (Kind == TEXT("material"))
     {
-        return BuildMaterialRaw(Cast<UMaterial>(Asset));
+        return Collaboration::StampRaw(BuildMaterialRaw(Cast<UMaterial>(Asset)));
     }
     if (Kind == TEXT("material_function"))
     {
-        return BuildMaterialFunctionRaw(Cast<UMaterialFunction>(Asset));
+        return Collaboration::StampRaw(BuildMaterialFunctionRaw(Cast<UMaterialFunction>(Asset)));
     }
     if (Kind == TEXT("material_instance"))
     {
-        return BuildMaterialInstanceRaw(Cast<UMaterialInstanceConstant>(Asset));
+        return Collaboration::StampRaw(BuildMaterialInstanceRaw(Cast<UMaterialInstanceConstant>(Asset)));
     }
     if (Kind == TEXT("blueprint"))
     {
-        return BuildBlueprintRaw(Cast<UBlueprint>(Asset));
+        return Collaboration::StampRaw(BuildBlueprintRaw(Cast<UBlueprint>(Asset)));
     }
     if (Kind == TEXT("asset"))
     {
-        return BuildGenericRaw(Asset);
+        return Collaboration::StampRaw(BuildGenericRaw(Asset));
     }
     return nullptr;
 }
@@ -131,7 +132,7 @@ TSharedPtr<FJsonObject> HandleTranscodeExport(const FString& Operation, const FS
             {
                 continue;
             }
-            Raw = BuildStubRaw(AssetData);
+            Raw = Collaboration::StampRaw(BuildStubRaw(AssetData));
         }
         else
         {

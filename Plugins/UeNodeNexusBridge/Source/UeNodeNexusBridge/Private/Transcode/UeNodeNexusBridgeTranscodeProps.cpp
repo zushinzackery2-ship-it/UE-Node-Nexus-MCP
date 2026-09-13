@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Schema/NexusSchema.h"
 
 #include "UObject/Class.h"
 #include "UObject/TextProperty.h"
@@ -221,6 +222,7 @@ TSharedPtr<FJsonObject> PropertySchemaJson(FProperty* Property, UObject* Cdo)
     {
         Json->SetStringField(TEXT("struct_type"), StructProperty->Struct ? StructProperty->Struct->GetPathName() : FString());
     }
+    AddPropertyMetadata(Property, Json);
     return Json;
 }
 }

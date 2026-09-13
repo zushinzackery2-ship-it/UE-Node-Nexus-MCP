@@ -1,5 +1,10 @@
 # Editing assets as text: the Content_Transcoded mirror
 
+For 0.5.0 collaboration, load `workflow_guide_get(category="collaboration")`.
+Use one checkout per agent, edit its returned `files_root`, then stage/commit
+and push with `workspace_id`. The loop below describes legacy mirrors before
+checkout activation. Format essentials apply to both workflows.
+
 UE stays the compiler; `.nexus` text files are the source. Edit them with the
 normal file tools, then let `ue_sync` push the diff into the editor in one
 transaction. Bulk data never enters the tool result: the UE plugin writes raw

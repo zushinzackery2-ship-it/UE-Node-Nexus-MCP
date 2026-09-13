@@ -46,14 +46,15 @@ def test_selected_locally_edited_caller_is_replanned_after_refresh(sync_workspac
     ))
     ue.assets[MAT]["saved_hash"] = "caller-added"
     run_sync(ue, "pull", [MAT], env=env)
-    schema = project.parent / ".nexus/schema" / SCHEMA_KEY / "classes.material_expression.json"
-    classes = json.loads(schema.read_text(encoding="utf-8"))
-    classes["MaterialExpressionMaterialFunctionCall"] = dict(
+    from ue_node_nexus_mcp.transcode.schema.catalog import publish
+
+    schema = project.parent / ".nexus/schema" / SCHEMA_KEY
+    record = dict(
         path="/Script/Engine.MaterialExpressionMaterialFunctionCall",
         props=dict(MaterialFunction=dict(type="object", kind="object", default="None")),
         inputs=["A", "B"], outputs=["Result"],
     )
-    schema.write_text(json.dumps(classes), encoding="utf-8")
+    publish(schema, SCHEMA_KEY, dict(material_expression=dict(MaterialExpressionMaterialFunctionCall=record)), incremental=True)
     ue.referencers[MF] = [MAT]
     _edit_interface(project)
     file = project / "Materials/M_Glass.mat.nexus"

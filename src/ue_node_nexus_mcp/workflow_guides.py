@@ -30,6 +30,10 @@ GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
         "Loaded Actor and ISM/HISM scene groups: identity, transactions and recovery",
         ("scene", "actor", "ism", "hism", "instances", "instancing", "scene group", "scene.nexus", "场景", "实例"),
     ),
+    "collaboration": (
+        "Independent workspaces, semantic merges, version history and recovery",
+        ("collaboration", "workspace", "checkout", "commit", "branch", "merge", "revert", "rebase", "stash", "history", "多agent", "协作", "历史", "回退"),
+    ),
     "graph_editing": (
         "Reading and patching Material/Blueprint graphs",
         ("graph", "node", "pin", "wire", "patch", "snapshot", "connect", "client_id", "build"),
