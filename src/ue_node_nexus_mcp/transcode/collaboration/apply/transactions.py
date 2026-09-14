@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from uuid import uuid4
 
+from ...paths import object_path
 from ...sync_project import SyncError, apply_operation
 from ..semantic.snapshot import from_raw
 from ..store.io import atomic_write, canonical, digest
@@ -53,22 +54,50 @@ def request(workspace, item: dict, source: str, candidate: str, target: str, obs
     return record
 
 
+def envelope(value) -> dict:
+    if not isinstance(value, dict):
+        return dict(ok=False, error=dict(code="protocol_mismatch", message="bridge returned a non-object response"))
+    return value
+
+
+def verify(workspace, record: dict, receipt) -> dict | None:
+    """A receipt counts only for the request, asset and schema it names."""
+    if not isinstance(receipt, dict):
+        return None
+    if receipt.get("apply_id") != record["id"]:
+        raise SyncError("receipt_invalid", "receipt belongs to another execution",
+                        dict(apply_id=record["id"], received=receipt.get("apply_id")))
+    if receipt.get("request_digest") not in (None, record["request_digest"]):
+        raise SyncError("receipt_invalid", "receipt answers a different request", dict(apply_id=record["id"]))
+    after = receipt.get("after")
+    if isinstance(after, dict):
+        reported = after.get("asset_path")
+        if reported and object_path(reported) != record["asset"]:
+            raise SyncError("receipt_invalid", "receipt reports another asset",
+                            dict(apply_id=record["id"], expected=record["asset"], received=reported))
+        key = after.get("schema_key")
+        if key and workspace.schema and key != workspace.schema.key:
+            raise SyncError("schema_stale", "result was produced under another schema environment",
+                            dict(apply_id=record["id"], expected=workspace.schema.key, received=key))
+    return receipt
+
+
 def execute(bridge, workspace, record: dict) -> dict:
     record["phase"] = "applying"
     save(workspace, record)
     try:
-        response = bridge(record["operation"], record["request"])
+        response = envelope(bridge(record["operation"], record["request"]))
     except (OSError, SyncError) as exc:
         response = dict(ok=False, error=dict(code="transport_lost", message=str(exc)))
     record["response"] = response
     receipt = (response.get("data") or dict()).get("receipt")
     if not receipt and (not response.get("ok") or not response.get("data")):
         try:
-            recovered = bridge("transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root)))
+            recovered = envelope(bridge("transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root))))
             receipt = (recovered.get("data") or dict()).get("receipt")
         except (OSError, SyncError):
             receipt = None
-    record["receipt"] = receipt
+    record["receipt"] = verify(workspace, record, receipt)
     if receipt and receipt.get("phase") == "ue_committed":
         record["phase"] = "ue_committed"
     elif receipt and receipt.get("phase") in ("rolled_back", "rejected"):

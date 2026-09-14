@@ -14,23 +14,40 @@ def blob(store, data: bytes | None) -> str | None:
     return store.objects.put("file", dict(base64=base64.b64encode(data).decode())) if data is not None else None
 
 
-def content(store, identifier: str | None) -> bytes | None:
-    return base64.b64decode(store.objects.data(identifier, "file")["base64"]) if identifier else None
+def content(store, reference) -> bytes | None:
+    """A journal entry names bytes it had to store, or a state that renders them."""
+    if not reference:
+        return None
+    if isinstance(reference, dict):
+        from ..semantic.snapshot import text_of
+
+        return text_of(store.objects.data(reference["snapshot"], "snapshot")).encode("utf-8")
+    return base64.b64decode(store.objects.data(reference, "file")["base64"])
 
 
-def prepare(workspace, after: dict, texts: dict[str, bytes | None], reason: str, identifier: str | None = None) -> dict:
+def prepare(workspace, after: dict, texts: dict[str, bytes | None], reason: str, identifier: str | None = None,
+            sources: dict[str, str] | None = None) -> dict:
     store, before = workspace.store, workspace.state
     journal = dict(id=identifier or uuid4().hex, workspace_id=before["id"], before=dict(before), after=after,
                    files=dict(), reason=reason, phase="prepared", completed=[])
     roots = [before["head"], before["index"], after["head"], after["index"]]
-    for relative, desired in texts.items():
-        path = confined(workspace.root, relative)
-        current = path.read_bytes() if path.is_file() else None
-        old, new = blob(store, current), blob(store, desired)
-        journal["files"][relative] = dict(before=old, after=new)
-        roots.extend(item for item in (old, new) if item)
-    journal["roots"] = roots
-    journal["generation"] = store.put_record("projection", journal["id"], journal, roots, expected=0)
+    # The journal is one durable decision, so its contents register together.
+    with store.db.connection(write=True):
+        for relative, desired in texts.items():
+            path = confined(workspace.root, relative)
+            current = path.read_bytes() if path.is_file() else None
+            # A file already holding the desired bytes has nothing to write and
+            # nothing to undo; journaling it would copy the untouched worktree.
+            if current == desired:
+                continue
+            # Text that a recorded snapshot renders needs no second copy; only
+            # local bytes, which exist nowhere else, are stored as blobs.
+            source = (sources or dict()).get(relative)
+            old, new = blob(store, current), dict(snapshot=source) if source else blob(store, desired)
+            journal["files"][relative] = dict(before=old, after=new)
+            roots.extend(item for item in (old, source) if item)
+        journal["roots"] = roots
+        journal["generation"] = store.put_record("projection", journal["id"], journal, roots, expected=0)
     return journal
 
 

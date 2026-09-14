@@ -92,6 +92,16 @@ complete; inspect `rows`, `errors` and the per-asset apply IDs. New file edits
 during publication return `workspace_rebase_required`; pull preserves and
 replays their layers.
 
+## Working at project scale
+
+Each observation records the memory revision it measured per asset. The next
+one re-exports only what the editor reports as dirty or newly saved, so
+publishing one edit in a ten-thousand asset project exports nothing and applies
+one asset. `status`, `stage` and `commit` re-encode only the files whose bytes
+changed, using `workspaces/<id>/captures.json`; that file is derived state and
+can be deleted at any time at the cost of one full re-read. Local commands take
+only their own workspace lock, so agents serialize on `push` alone.
+
 ## Schema and migration
 
 The model and lint share `Content_Transcoded/.nexus/schema/<schema_key>/`.

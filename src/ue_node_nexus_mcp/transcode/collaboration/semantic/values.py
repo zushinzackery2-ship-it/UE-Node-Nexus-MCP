@@ -6,7 +6,7 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from ...lexer import split_top_level
-from ...values import quote, unquote
+from ...values import unquote
 
 NUMERIC = re.compile(r"^(?:u?int(?:8|16|32|64)?|byte|float|double|real|F?FloatProperty|F?DoubleProperty)$", re.I)
 NUMBER = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[fF]?$")
@@ -24,7 +24,9 @@ def normalize(text: str, type_name: str) -> str:
         except InvalidOperation:
             return text
     if kind in ("string", "str", "name", "text"):
-        return quote(unquote(text))
+        # Content, not source form: the emitter decides quoting, so storing a
+        # quoted value here would escape it again on every round trip.
+        return unquote(text)
     if kind in STRUCTS and text.startswith("(") and text.endswith(")"):
         values = []
         for item in split_top_level(text[1:-1], ","):

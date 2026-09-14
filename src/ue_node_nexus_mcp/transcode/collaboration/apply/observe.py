@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from uuid import uuid4
 
 from ...paths import object_path
@@ -20,6 +19,37 @@ def bind(bridge, context, store) -> dict:
     if data.get("collaboration_version") != 1 or not data.get("editor_epoch"):
         raise SyncError("protocol_mismatch", "collaboration requires matching core and VFX plugins with protocol 1")
     return data
+
+
+def remembered(store, context, epoch: str) -> dict:
+    """Which snapshot each asset's memory revision was measured against.
+
+    An editor restart or a schema change invalidates every measurement at once;
+    anything finer is decided per asset against the snapshot it names.
+    """
+    record = store.record("memory", "observed")
+    if not record or record["editor_epoch"] != epoch or record["schema_key"] != context.schema_key:
+        return dict()
+    return record["entries"]
+
+
+def remember(store, context, commit: str, epoch: str, entries: dict, revisions: dict) -> None:
+    known = remembered(store, context, epoch)
+    memo = dict((asset, known[asset]) for asset in entries if asset in known and known[asset][0] == entries[asset])
+    memo.update((asset, [entries[asset], revisions[asset]]) for asset in revisions if asset in entries)
+    store.put_record("memory", "observed", dict(commit=commit, editor_epoch=epoch, schema_key=context.schema_key, entries=memo), [commit])
+
+
+def carried(known: list | None, snapshot: str, info) -> bool:
+    """A saved asset whose package hash never moved still holds observed memory.
+
+    The editor answers ``transcode_status`` for the whole project in one call,
+    while exporting is per asset; re-exporting thousands of untouched assets to
+    rediscover bytes the editor just reported as unchanged is the whole cost.
+    """
+    if not known or known[0] != snapshot or known[1]["dirty"] or info.dirty:
+        return False
+    return bool(info.saved_hash) and known[1]["saved_hash"] == info.saved_hash
 
 
 def scene_selector(asset: str, snapshot: dict | None, requested: dict | None = None) -> dict:
@@ -51,18 +81,23 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
         selected.update(infos)
     identifier = uuid4().hex
     directory = store.root / "observations" / identifier
-    groups, raw_by_asset = dict(), dict()
+    memory = remembered(store, context, binding["editor_epoch"])
+    groups, raw_by_asset, revisions = dict(), dict(), dict()
     for asset in sorted(selected):
-        prior = store.objects.data(identities[asset], "snapshot") if asset in identities else None
         if "#" in asset:
+            # Only a scene needs its previous state here; loading every other
+            # asset's snapshot to then not export it is the whole project.
+            prior = store.objects.data(identities[asset], "snapshot") if asset in identities else None
             file = directory / (digest(asset) + ".json")
             selector = scene_selector(asset, prior, (selectors or dict()).get(asset))
             call_ok(bridge, "scene_export", dict(selector, out_file=str(file)))
             raw_by_asset[asset] = read_json(file)
-        elif asset in infos:
-            groups.setdefault(export_operation(infos[asset].kind), []).append(asset)
-        else:
+        elif asset not in infos:
             entries.pop(asset, None)
+        elif asset in entries and carried(memory.get(asset), entries[asset], infos[asset]):
+            revisions[asset] = memory[asset][1]
+        else:
+            groups.setdefault(export_operation(infos[asset].kind), []).append(asset)
     for operation, paths in groups.items():
         out_dir = directory / operation
         data = call_ok(bridge, operation, dict(asset_paths=paths, out_dir=str(out_dir), include_stubs=True)).get("data") or dict()
@@ -73,19 +108,21 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
         missing = set(paths) - raw_by_asset.keys()
         if missing:
             raise SyncError("observation_failed", "one or more selected assets were not exported", dict(assets=sorted(missing), skipped=data.get("skipped")))
-    revisions = dict()
-    for asset, raw in raw_by_asset.items():
-        if not raw.get("live_revision") or raw.get("editor_epoch") != binding["editor_epoch"]:
-            raise SyncError("protocol_mismatch", "export is missing an authoritative memory revision", dict(asset=asset))
-        if raw.get("schema_key") != context.schema_key:
-            raise SyncError("schema_stale", "editor schema changed; refresh before recording an observation", dict(asset=asset))
-        if raw.get("unavailable"):
-            raise SyncError("scene_unavailable", "scene has unloaded members", dict(asset=asset))
-        prior = store.objects.data(identities[asset], "snapshot") if asset in identities else None
-        snapshot = from_raw(raw, prior, schema=context.schema)
-        entries[asset] = store.snapshot(snapshot, context.schema)
-        revisions[asset] = dict(revision=raw["live_revision"], editor_epoch=raw["editor_epoch"], dirty=raw.get("dirty", False),
-                                saved_hash=raw.get("saved_hash", ""), content_revision=raw.get("content_revision"))
+    # One transaction registers the whole export: a project-sized observation
+    # otherwise pays a separate durable commit for every asset it recorded.
+    with store.db.connection(write=True):
+        for asset, raw in raw_by_asset.items():
+            if not raw.get("live_revision") or raw.get("editor_epoch") != binding["editor_epoch"]:
+                raise SyncError("protocol_mismatch", "export is missing an authoritative memory revision", dict(asset=asset))
+            if raw.get("schema_key") != context.schema_key:
+                raise SyncError("schema_stale", "editor schema changed; refresh before recording an observation", dict(asset=asset))
+            if raw.get("unavailable"):
+                raise SyncError("scene_unavailable", "scene has unloaded members", dict(asset=asset))
+            prior = store.objects.data(identities[asset], "snapshot") if asset in identities else None
+            snapshot = from_raw(raw, prior, schema=context.schema)
+            entries[asset] = store.snapshot(snapshot, context.schema)
+            revisions[asset] = dict(revision=raw["live_revision"], editor_epoch=raw["editor_epoch"], dirty=raw.get("dirty", False),
+                                    saved_hash=raw.get("saved_hash", ""), content_revision=raw.get("content_revision"))
     tree = history.tree(entries)
     commit = previous
     if not previous or history.commit(previous)["tree"] != tree:
@@ -97,5 +134,6 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
         store.put_record("observation", identifier, record, [commit], expected=0)
         if previous != commit:
             store.move("refs/ue/observed", commit, previous, "UE", "fetch")
+        remember(store, context, commit, binding["editor_epoch"], entries, revisions)
     store.event("observation", observation_id=identifier, commit_id=commit, assets=len(selected), exports=len(raw_by_asset), persisted=persist)
     return dict(record, raw=raw_by_asset)

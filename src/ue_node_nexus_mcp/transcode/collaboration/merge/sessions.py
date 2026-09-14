@@ -27,7 +27,7 @@ class Sessions:
                        base=base, ours=metadata.get("ours", state["head"]), theirs=theirs, parents=parents, source_ref=source_ref,
                        original=state, original_files=self.history.tree(entries), original_hashes=hashes(workspace.root, files),
                        replay_layers=replay_layers, selected=selected, resolutions=dict(), metadata=metadata,
-                       schema_key=state.get("schema_key"), roles=dict(ours="workspace", theirs=operation), generation=0)
+                       schema_key=state.get("schema_key"), roles=metadata.get("roles") or dict(ours="workspace", theirs=operation), generation=0)
         return self.refresh(session)
 
     def save(self, session: dict) -> dict:
@@ -49,7 +49,7 @@ class Sessions:
             stages.extend([("index", session["ours"], "head", session["original"]["index"]),
                            ("files", session["original"]["index"], "index", session["original_files"])])
         for layer, base, ours, theirs in stages:
-            ours = candidates.get(ours, ours)
+            base, ours = candidates.get(base, base), candidates.get(ours, ours)
             tree, found = merge_trees(self.history, base, ours, theirs, self.workspace.schema, session["selected"], layer)
             for conflict in found:
                 conflict["file"] = str(self.workspace.root / session["original"]["files"].get(conflict["asset"], ""))

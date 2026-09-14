@@ -18,6 +18,9 @@ from .objects import Objects
 from .refs import get_ref, move_ref, reflog
 
 LOG = logging.getLogger("ue_nexus.collaboration")
+# Publication is the one serialized project-wide stage. A bounded wait lets two
+# agents overlap by seconds instead of failing; beyond it the holder is reported.
+PUBLICATION_WAIT_SECONDS = 30.0
 
 
 class Store:
@@ -35,10 +38,11 @@ class Store:
                 connection.execute("INSERT OR IGNORE INTO meta VALUES ('project_file', ?)", (canonical_project,))
             self.project_id = connection.execute("SELECT value FROM meta WHERE key='project_id'").fetchone()[0]
 
-    def lock(self, name: str) -> MirrorLock:
+    def lock(self, name: str, timeout: float = 0.0, **holder: Any) -> MirrorLock:
         if not name.replace("-", "").replace("_", "").isalnum():
             raise SyncError("invalid_lock", "invalid lock name")
-        return MirrorLock(self.root, lock_file=self.root / "locks" / f"{name}.lock")
+        return MirrorLock(self.root, lock_file=self.root / "locks" / f"{name}.lock", timeout=timeout,
+                          holder=dict(holder, action=name, project_id=self.project_id))
 
     def snapshot(self, snapshot: dict, schema=None) -> str:
         from ...schema.binding import bind

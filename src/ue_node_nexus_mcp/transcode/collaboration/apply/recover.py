@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ...sync_project import SyncError, call_ok
+from ..store.repository import PUBLICATION_WAIT_SECONDS
 from ..workspace.service import Workspace
 from . import transactions
 from .observe import capture
@@ -10,9 +11,9 @@ from .observe import capture
 
 def reconcile(bridge, context, workspace, record: dict, restore=False) -> dict:
     response = call_ok(bridge, "transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root), restore=restore))
-    receipt = (response.get("data") or dict()).get("receipt")
-    if not receipt or receipt.get("apply_id") != record["id"]:
-        raise SyncError("receipt_invalid", "recovery returned a receipt for another apply")
+    receipt = transactions.verify(workspace, record, (response.get("data") or dict()).get("receipt"))
+    if not receipt:
+        raise SyncError("receipt_invalid", "recovery did not return a receipt for this apply", dict(apply_id=record["id"]))
     record["receipt"] = receipt
     phase = receipt["phase"]
     if phase == "ue_committed":
@@ -72,5 +73,5 @@ def recover(bridge, context, workspace, options: dict) -> dict:
         raise SyncError("apply_not_found", str(identifier))
     if options.get("dry_run", True) or record["phase"] == "completed":
         return record
-    with workspace.store.lock("publication"):
+    with workspace.store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=workspace.state["id"]):
         return reconcile(bridge, context, workspace, record, options.get("restore", False))

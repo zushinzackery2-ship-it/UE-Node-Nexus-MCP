@@ -77,7 +77,9 @@ def run(workspace, action: str, paths, options: dict) -> dict:
             return stash.drop(workspace, required(options, "stash_id"))
         raise SyncError("invalid_option", "stash mode must be list, push, apply, pop or drop")
     if action == "log":
-        return query.log(history, revision(workspace, target), options.get("limit", 50), options.get("cursor"), paths[0] if paths else None, options.get("author"))
+        return query.log(history, revision(workspace, target), options.get("limit", 50), options.get("cursor"),
+                         paths[0] if paths else None, options.get("author"), options.get("entity"),
+                         options.get("since"), options.get("until"))
     if action == "reflog":
         return dict(entries=store.reflog(options.get("ref"), options.get("before"), options.get("limit", 50)))
     if action == "blame":
@@ -108,9 +110,20 @@ def required(options: dict, key: str):
     return options[key]
 
 
+def bounds(options: dict) -> tuple[int, int]:
+    return max(0, int(options.get("cursor") or 0)), max(1, min(1000, int(options.get("limit", 40))))
+
+
 def paged(rows: list, options: dict, **metadata) -> dict:
-    start, limit = max(0, int(options.get("cursor") or 0)), max(1, min(1000, int(options.get("limit", 40))))
+    start, limit = bounds(options)
     return dict(rows=rows[start:start + limit], total=len(rows), cursor=start + limit if start + limit < len(rows) else None, **metadata)
+
+
+def page(items: list, options: dict, render, **metadata) -> dict:
+    """Render only the requested page; whole-history text never materializes."""
+    start, limit = bounds(options)
+    return dict(rows=[render(item) for item in items[start:start + limit]], total=len(items),
+                cursor=start + limit if start + limit < len(items) else None, **metadata)
 
 
 def show(workspace, paths, options: dict) -> dict:
@@ -125,6 +138,7 @@ def show(workspace, paths, options: dict) -> dict:
         return record
     head = revision(workspace, options.get("revision", "HEAD"))
     commit = history.commit(head)
-    entries = history.entries(head)
-    rows = [dict(asset=asset, snapshot=identifier, text=text_of(store.objects.data(identifier, "snapshot"))) for asset, identifier in sorted(entries.items()) if paths is None or asset in paths]
-    return paged(rows, options, commit_id=head, commit=commit, published=bool(store.ref("refs/ue/published") and history.is_ancestor(head, store.ref("refs/ue/published"))))
+    items = [item for item in sorted(history.entries(head).items()) if paths is None or item[0] in paths]
+    render = lambda item: dict(asset=item[0], snapshot=item[1], text=text_of(store.objects.data(item[1], "snapshot")))
+    return page(items, options, render, commit_id=head, commit=commit,
+                published=bool(store.ref("refs/ue/published") and history.is_ancestor(head, store.ref("refs/ue/published"))))

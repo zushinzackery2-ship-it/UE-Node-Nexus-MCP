@@ -255,7 +255,9 @@ def find_any_schema_lock(root: Path) -> SchemaLock | None:
     base = root / ".nexus" / "schema"
     if not base.is_dir():
         return None
-    candidates = sorted((path for path in base.iterdir() if (path / "key.json").is_file()), key=lambda item: item.stat().st_mtime, reverse=True)
+    # Dot-prefixed directories are in-progress collections, never a usable catalog.
+    candidates = sorted((path for path in base.iterdir() if not path.name.startswith(".") and (path / "key.json").is_file()),
+                        key=lambda item: item.stat().st_mtime, reverse=True)
     if not candidates:
         return None
     return SchemaLock(candidates[0], candidates[0].name)

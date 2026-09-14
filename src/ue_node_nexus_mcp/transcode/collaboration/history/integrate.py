@@ -30,7 +30,7 @@ def integrate(workspace, operation: str, revision: str, mainline=None, paths=Non
     parents = [head]
     metadata = dict(message=message)
     if operation in ("merge", "pull"):
-        base, ancestors = common_base(history, head, source, workspace.schema)
+        base, ancestors = common_base(history, head, source, workspace.schema, workspace.store)
         metadata["ancestors"] = ancestors
         if history.is_ancestor(source, head) and operation == "merge":
             return dict(status="unchanged", commit_id=head)

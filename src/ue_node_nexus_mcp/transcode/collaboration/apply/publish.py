@@ -7,9 +7,10 @@ from ..history import History
 from ..merge.sessions import Sessions
 from ..report.proposals import create
 from ..store.refs import move_ref
+from ..store.repository import PUBLICATION_WAIT_SECONDS
 from ..workspace.files import discover, hashes
 from . import planning, transactions
-from .observe import capture
+from .observe import capture, remember
 
 
 def push(bridge, context, workspace, paths, options: dict, proposal=None) -> dict:
@@ -17,7 +18,7 @@ def push(bridge, context, workspace, paths, options: dict, proposal=None) -> dic
     workspace.schema = context.schema
     if not options.get("save", True):
         raise SyncError("save_required", "collaboration publication saves its committed result")
-    with workspace.store.lock("publication"):
+    with workspace.store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=workspace.state["id"]):
         from .recover import pending
 
         pending(bridge, context, workspace)
@@ -32,13 +33,23 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
     original_hashes = hashes(workspace.root, discover(workspace.root, original["files"]))
     original_dirty = workspace.status()["dirty"]
     assets = planning.selected_assets(workspace, source, paths)
-    dependencies = planning.references(workspace, source, assets)
+    dependencies = planning.references(workspace, source, assets, explicit=paths is not None)
     observation = capture(bridge, context, store, sorted(set(assets) | dependencies), reference=source, persist=not options.get("dry_run", True))
     if proposal:
         expected = proposal["preview"]
         if expected.get("source") != source or expected.get("target_tree") != observation["tree"] or expected.get("revisions") != observation["revisions"]:
             raise SyncError("stale_proposal", "source or observed UE inputs changed since preview")
+    if options.get("merge_id"):
+        prepared = Sessions(workspace).get(options["merge_id"])
+        if prepared["metadata"].get("base_pair"):
+            from ..merge.trees import adopt_base
+
+            adopt_base(workspace, prepared)
+            options = dict(options)
+            options.pop("merge_id")
     merged = planning.merge(workspace, source, observation["commit"], assets)
+    if merged.get("base_pair"):
+        return ancestors(workspace, merged, observation, source, paths, options, original)
     session = None
     if options.get("merge_id"):
         session = Sessions(workspace).get(options["merge_id"])
@@ -58,12 +69,13 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
                        push_candidate=merged["candidate"], base=merged["base"], conflict_count=len(merged["conflicts"]), conflicts=merged["conflicts"],
                        plans=[batch["units"][asset].get("summary", batch["units"][asset]) for asset in batch["order"] if asset in batch["units"]], errors=batch["errors"])
         return create(workspace, "push", paths, options, preview)
+    conflict_report = None
     if merged["conflicts"]:
-        report = Sessions(workspace).start("push", merged["base"], observation["commit"], [observation["commit"], source],
+        conflict_report = Sessions(workspace).start("push", merged["base"], observation["commit"], [observation["commit"], source],
             ours=merged["ours"], selected=assets, deferred=True, source=source, revisions=observation["revisions"],
             paths=paths, options=options, refs=dict(((original["branch"], original["head"]),)))
         if options.get("stop_on_error", True):
-            return report
+            return conflict_report
     if batch["errors"] and options.get("stop_on_error", True):
         return dict(action="push", status="blocked", errors=batch["errors"], error_count=len(batch["errors"]), applied=0)
     candidate = history.create(merged["candidate"], [observation["commit"], source], "Fixed submitted candidate", original["agent_id"], "candidate")
@@ -104,6 +116,10 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
             move_ref(connection, "refs/ue/published", final, store.ref("refs/ue/published"), original["id"], "complete integration")
             move_ref(connection, "refs/ue/observed", final, target, original["id"], "complete integration")
         target = final
+    if store.ref("refs/ue/observed") == target:
+        # Each receipt states the memory the editor now holds, so publication
+        # leaves the project fully measured instead of forcing a re-export.
+        remember(store, context, target, observation["editor_epoch"], history.entries(target), observation["revisions"])
     if session and not batch["errors"]:
         session.update(status="completed", result_commit=target)
         Sessions(workspace).save(session)
@@ -120,7 +136,26 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
             workspace_rebase = True
     return dict(action="push", source_commit=source, published_commit=target, status="partial" if batch["errors"] else "published",
                 error_count=len(batch["errors"]), errors=batch["errors"], rows=rows, applied=len([row for row in rows if row["action"] == "pushed"]),
-                source_integrated=complete, workspace_rebase_required=workspace_rebase, workspace_id=original["id"])
+                source_integrated=complete, workspace_rebase_required=workspace_rebase, workspace_id=original["id"],
+                merge_id=conflict_report["merge_id"] if conflict_report else None,
+                conflicts=conflict_report["conflicts"] if conflict_report else [])
+
+
+def ancestors(workspace, merged: dict, observation: dict, source: str, paths, options: dict, original: dict) -> dict:
+    """Independent ancestors disagree; resolve them once and reuse the result."""
+    if options.get("dry_run", True):
+        return dict(action="push", dry_run=True, status="base-conflict", base_ancestors=merged["ancestors"],
+                    conflict_count=len(merged["conflicts"]), conflicts=merged["conflicts"][:40])
+    open_session = next((item for item in workspace.store.records("session")
+                         if item["workspace_id"] == original["id"] and item["status"] not in ("completed", "aborted")
+                         and item["metadata"].get("base_pair") == merged["base_pair"]), None)
+    if open_session:
+        return Sessions(workspace).report(open_session)
+    previous, left, right = merged["base_inputs"]
+    return Sessions(workspace).start("push", previous, right, [left, right], ours=left, deferred=True,
+                                     source=source, revisions=observation["revisions"], base_pair=merged["base_pair"],
+                                     roles=dict(ours="ancestor", theirs="ancestor"), paths=paths, options=options,
+                                     refs=dict(((original["branch"], original["head"]),)))
 
 
 def adopt(observation: dict, record: dict, published: str, history: History) -> None:
@@ -152,6 +187,10 @@ def full_source(workspace, source: str, target: str) -> bool:
     before, after = history.entries(bases[0]), history.entries(source)
     required = set()
     for asset in before.keys() | after.keys():
+        # The same object is the same semantic state; only a differing pair is
+        # worth loading, which keeps this out of the per-asset cost of a push.
+        if before.get(asset) == after.get(asset):
+            continue
         left, right = planning.snapshot(workspace, before.get(asset)), planning.snapshot(workspace, after.get(asset))
         if (left or dict()).get("semantic_hash") != (right or dict()).get("semantic_hash"):
             required.add(asset)

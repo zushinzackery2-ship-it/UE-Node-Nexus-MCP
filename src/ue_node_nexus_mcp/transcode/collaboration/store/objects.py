@@ -28,14 +28,21 @@ class Objects:
         payload = canonical(dict(format=1, kind=kind, data=data, links=targets))
         object_id = byte_hash(payload)
         path = self.path(object_id)
-        if path.exists():
-            self.get(object_id, kind)
-        else:
-            atomic_write(path, payload)
+        # Materializing and registering inside one write transaction excludes the
+        # collector: an object can never be half-created while it is being swept.
         with self.database.connection(write=True) as connection:
+            if path.exists():
+                self.get(object_id, kind)
+            else:
+                atomic_write(path, payload)
             connection.execute("INSERT OR IGNORE INTO objects(id, kind, created) VALUES (?, ?, ?)", (object_id, kind, time.time()))
             connection.execute("UPDATE objects SET unreachable=NULL WHERE id=?", (object_id,))
+            connection.execute("DELETE FROM tombstones WHERE id=?", (object_id,))
         return object_id
+
+    def exists(self, object_id) -> bool:
+        """Whether a remembered identifier still names stored bytes."""
+        return isinstance(object_id, str) and bool(OBJECT_ID.fullmatch(object_id)) and self.path(object_id).is_file()
 
     def get(self, object_id: str, kind: str | None = None) -> dict:
         path = self.path(object_id)

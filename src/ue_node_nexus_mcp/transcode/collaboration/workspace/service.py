@@ -8,9 +8,10 @@ from ...sync_project import SyncError
 from ..history import History
 from ..semantic.snapshot import text_of
 from ..semantic.validation import validate
-from ..store.io import confined
+from ..store.io import byte_hash, confined
 from ..store.refs import move_ref
-from .files import capture_files, discover, filename, hashes, select
+from . import cache
+from .files import capture_files, discover, filename, select
 
 
 class Workspace:
@@ -43,13 +44,16 @@ class Workspace:
     def status(self) -> dict:
         state = self.state
         head, index = self.history.entries(state["head"]), self.history.entries(state["index"])
-        files = discover(self.root, state["files"])
-        deleted = [asset for asset, path in files.items() if not confined(self.root, path).is_file()]
         try:
-            working, _, _ = capture_files(self, delete=True)
+            # One worktree pass answers both questions; walking it twice was the
+            # single most expensive thing status did on a large project.
+            working, files, captured = capture_files(self, delete=True)
+            deleted = sorted(asset for asset, value in captured.items() if value is None)
             unstaged = [asset for asset in working.keys() | index.keys() if working.get(asset) != index.get(asset)]
             errors = []
         except (SyncError, UnicodeError) as exc:
+            files = discover(self.root, state["files"])
+            deleted = [asset for asset, path in files.items() if not confined(self.root, path).is_file()]
             unstaged, errors = sorted(files), [str(exc)]
         staged = [asset for asset in head.keys() | index.keys() if head.get(asset) != index.get(asset)]
         branch_head = self.store.ref(state["branch"])
@@ -71,13 +75,27 @@ class Workspace:
         if status["branch_moved"]:
             raise SyncError("branch_moved", "branch advanced in another workspace", status)
 
+    def introduced(self, entries: dict, selected=None) -> list[str]:
+        """States this workspace is recording that it has not accepted before.
+
+        Re-checking an entry the index already holds re-reads and re-lints the
+        whole project on every stage, and can only ever reach the same verdict
+        unless the schema itself moved.
+        """
+        indexed = self.history.entries(self.state["index"])
+        stale = bool(self.schema) and self.state.get("schema_key") != self.schema.key
+        wanted = entries.keys() if selected is None else entries.keys() & set(selected)
+        return sorted(asset for asset in wanted if stale or entries[asset] != indexed.get(asset))
+
+    def accept(self, entries: dict, selected=None, code="candidate_invalid") -> None:
+        for asset in self.introduced(entries, selected):
+            findings = validate(self.store.objects.data(entries[asset], "snapshot"), self.schema)
+            if findings:
+                raise SyncError(code, "recorded semantic state is invalid", dict(asset=asset, diagnostics=findings))
+
     def stage(self, paths=None, delete=False) -> dict:
         entries, files, _ = capture_files(self, paths, delete)
-        for asset in select(self.root, files, paths):
-            if asset in entries:
-                findings = validate(self.store.objects.data(entries[asset], "snapshot"), self.schema)
-                if findings:
-                    raise SyncError("candidate_invalid", "staged semantic state is invalid", dict(asset=asset, diagnostics=findings))
+        self.accept(entries, select(self.root, files, paths))
         self.persist(dict(self.state, index=self.history.tree(entries), files=files))
         self.store.event("stage", workspace_id=self.state["id"], index=self.state["index"])
         return self.status()
@@ -100,10 +118,7 @@ class Workspace:
         index, files = before["index"], before["files"]
         if all_files:
             entries, files, _ = capture_files(self, paths, delete)
-            for asset, identifier in entries.items():
-                findings = validate(self.store.objects.data(identifier, "snapshot"), self.schema)
-                if findings:
-                    raise SyncError("candidate_invalid", asset, dict(diagnostics=findings))
+            self.accept(entries)
             index = self.history.tree(entries)
         previous = self.history.commit(before["head"])
         if index == previous["tree"] and not amend:
@@ -121,8 +136,20 @@ class Workspace:
         self.store.event("commit", workspace_id=before["id"], commit_id=identifier)
         return dict(action="committed", commit_id=identifier, parents=parents, workspace_id=before["id"])
 
-    def install(self, head: str, index: str | None = None, files_tree: str | None = None,
-                reason="checkout", branch: str | None = None, base: str | None = None, projection_id: str | None = None) -> dict:
+    def projected(self, asset: str, identifier: str, relative: str, indexed: dict, memo: dict) -> bool:
+        """The worktree already holds this exact state, verified byte by byte.
+
+        Rendering every asset to decide that nothing moved is what made a pull
+        or a publication cost the whole project instead of the part that changed.
+        """
+        known = memo.get(asset)
+        if indexed.get(asset) != identifier or not known or known[2] != identifier:
+            return False
+        path = confined(self.root, relative)
+        return path.is_file() and byte_hash(path.read_bytes()) == known[0]
+
+    def install(self, head: str, index: str | None = None, files_tree: str | None = None, reason="checkout",
+                branch: str | None = None, base: str | None = None, projection_id: str | None = None, include=()) -> dict:
         from .projection import execute, prepare
 
         pending = self.store.record("projection", projection_id) if projection_id else None
@@ -131,21 +158,24 @@ class Workspace:
             return self.info()
         index = index or self.history.commit(head)["tree"]
         entries = self.history.entries(files_tree or index)
-        included = set(self.state["files"]) if self.state.get("sparse") else set(entries)
+        included = set(self.state["files"]) | set(include) if self.state.get("sparse") else set(entries)
         selected = dict((asset, identifier) for asset, identifier in entries.items() if asset in included)
-        files, texts = dict(), dict()
+        indexed, memo = self.history.entries(self.state["index"]), cache.load(self)
+        files, texts, taken, sources = dict(), dict(), dict(), dict()
         for asset, identifier in selected.items():
-            snapshot = self.store.objects.data(identifier, "snapshot")
-            relative = self.state["files"].get(asset, filename(asset, snapshot))
-            if relative in texts:
+            relative = self.state["files"].get(asset) or filename(asset, self.store.objects.data(identifier, "snapshot"))
+            if relative in taken:
                 raise SyncError("duplicate_asset", "two semantic assets map to the same workspace file", dict(file=relative))
-            files[asset] = relative
-            texts[relative] = text_of(snapshot).encode("utf-8")
-        for asset, relative in self.state["files"].items():
-            if relative not in texts:
+            files[asset], taken[relative] = relative, asset
+            if self.projected(asset, identifier, relative, indexed, memo):
+                continue
+            texts[relative] = text_of(self.store.objects.data(identifier, "snapshot")).encode("utf-8")
+            sources[relative] = identifier
+        for relative in self.state["files"].values():
+            if relative not in taken:
                 texts[relative] = None
         after = dict(self.state, head=head, index=index, files=files, base=base or self.state["base"], branch=branch or self.state["branch"])
-        execute(self, prepare(self, after, texts, reason, projection_id))
+        execute(self, prepare(self, after, texts, reason, projection_id, sources))
         return self.info()
 
 

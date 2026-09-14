@@ -37,15 +37,60 @@ def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None
     return history.tree(result), conflicts
 
 
-def common_base(history: History, ours: str, theirs: str, schema=None) -> tuple[str, list[str]]:
+def pair_key(left: str, right: str) -> str:
+    return digest(sorted([left, right]))
+
+
+def resolve_base(history: History, ours: str, theirs: str, schema=None, store=None) -> dict:
+    """The virtual ancestor, or the exact inputs whose merge would produce it.
+
+    Two independent ancestors that disagree cannot be collapsed by guessing. The
+    conflicting triple is returned so the caller can open a durable resolution
+    whose result is recorded and reused by every later attempt.
+    """
     bases = history.merge_bases(ours, theirs)
     if not bases:
         raise SyncError("unrelated_history", "versions have no recorded common ancestor")
     merged = bases[0]
     for next_base in bases[1:]:
-        previous, _ = common_base(history, merged, next_base, schema)
-        tree, conflicts = merge_trees(history, previous, merged, next_base, schema, layer="base")
+        key = pair_key(merged, next_base)
+        recorded = store.record("virtual_base", key) if store else None
+        if recorded:
+            merged = recorded["commit"]
+            continue
+        inner = resolve_base(history, merged, next_base, schema, store)
+        if inner["conflicts"]:
+            return dict(inner, bases=bases)
+        tree, conflicts = merge_trees(history, inner["base"], merged, next_base, schema, layer="base")
         if conflicts:
-            raise SyncError("base-conflict", "multiple common ancestors require resolution", dict(ancestors=bases, conflicts=conflicts))
+            return dict(base=inner["base"], bases=bases, conflicts=conflicts, pair=key,
+                        inputs=[inner["base"], merged, next_base])
         merged = history.create(tree, [merged, next_base], "virtual merge base", operation="virtual_base")
-    return merged, bases
+    return dict(base=merged, bases=bases, conflicts=[], pair="", inputs=[])
+
+
+def common_base(history: History, ours: str, theirs: str, schema=None, store=None) -> tuple[str, list[str]]:
+    resolved = resolve_base(history, ours, theirs, schema, store)
+    if resolved["conflicts"]:
+        raise SyncError("base-conflict", "multiple common ancestors require resolution",
+                        dict(ancestors=resolved["bases"], conflicts=resolved["conflicts"], inputs=resolved["inputs"]))
+    return resolved["base"], resolved["bases"]
+
+
+def adopt_base(workspace, session: dict) -> str:
+    """Record a resolved virtual ancestor so every later merge reuses it."""
+    from .sessions import Sessions
+
+    sessions = Sessions(workspace)
+    sessions.check(session)
+    if session["status"] != "ready":
+        raise SyncError("unresolved_conflicts", "resolve the ancestor conflicts before continuing", sessions.report(session))
+    commit = workspace.history.create(session["candidates"]["head"], [session["ours"], session["theirs"]],
+                                      "virtual merge base", session["original"]["agent_id"], "virtual_base")
+    key = session["metadata"]["base_pair"]
+    previous = workspace.store.record("virtual_base", key)
+    workspace.store.put_record("virtual_base", key, dict(commit=commit, inputs=[session["ours"], session["theirs"]]),
+                               [commit], previous["generation"] if previous else 0)
+    session.update(status="completed", result_commit=commit)
+    sessions.save(session)
+    return commit

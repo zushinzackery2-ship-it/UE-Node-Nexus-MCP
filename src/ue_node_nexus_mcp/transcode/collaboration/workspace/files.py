@@ -11,6 +11,7 @@ from ...scene.model import scene_name
 from ...sync_project import SyncError
 from ..semantic.snapshot import capture
 from ..store.io import byte_hash, confined
+from . import cache
 
 
 def filename(asset: str, snapshot: dict) -> str:
@@ -23,11 +24,16 @@ def filename(asset: str, snapshot: dict) -> str:
 
 
 def discover(root: Path, registered: dict[str, str]) -> dict[str, str]:
+    """Name the worktree's files; every reader and writer confines its own path.
+
+    Walking the tree yields paths that are inside it by construction, and each
+    consumer resolves what it is about to open. Resolving here as well doubled
+    the syscalls a project-sized listing pays for nothing.
+    """
     result = dict(registered)
     inverse = dict((relative, asset) for asset, relative in result.items())
     for path in sorted(root.rglob("*.nexus")):
         relative = path.relative_to(root).as_posix()
-        confined(root, relative)
         if relative in inverse:
             continue
         if path.name.endswith(".scene.nexus"):
@@ -75,6 +81,7 @@ def capture_files(workspace, paths: list[str] | None = None, delete: bool = Fals
     entries = history.entries(state["index"])
     registered = discover(workspace.root, state["files"])
     selected = select(workspace.root, registered, paths)
+    memo, fresh, changed = cache.load(workspace), dict(), False
     captured_hashes = dict()
     for asset in selected:
         path = confined(workspace.root, registered[asset])
@@ -86,10 +93,25 @@ def capture_files(workspace, paths: list[str] | None = None, delete: bool = Fals
             continue
         data = path.read_bytes()
         captured_hashes[asset] = byte_hash(data)
-        prior = store.objects.data(entries[asset], "snapshot") if asset in entries else None
+        previous_id = entries.get(asset)
+        # Encoding is a pure function of these bytes and that base snapshot, so a
+        # matching memo entry is the answer, not a guess about it.
+        known = memo.get(asset)
+        # An uncommitted result is reachable from nothing, so collection may have
+        # taken it; the memo then has to earn its answer again.
+        if known and known[:2] == [captured_hashes[asset], previous_id] and store.objects.exists(known[2]):
+            entries[asset] = known[2]
+            fresh[asset] = known
+            continue
+        prior = store.objects.data(previous_id, "snapshot") if previous_id else None
         kind = prior["semantic"]["kind"] if prior else ("scene" if path.name.endswith(".scene.nexus") else parse_text_path(workspace.root, path)[1])
         snapshot = capture(data.decode("utf-8-sig"), prior, f"{state['id']}:{state['head']}", kind, workspace.schema, str(path))
         if kind != "scene" and object_path(snapshot["semantic"]["header"]["asset"]) != asset:
             raise SyncError("asset_identity_changed", "asset header does not match its file path", dict(file=str(path)))
         entries[asset] = workspace.snapshot(snapshot)
+        fresh[asset], changed = [captured_hashes[asset], previous_id, entries[asset]], True
+    kept = dict((asset, value) for asset, value in memo.items() if asset in registered and asset not in fresh)
+    fresh = (kept | fresh) if paths is not None else fresh
+    if changed or len(fresh) != len(memo):
+        cache.save(workspace, fresh)
     return entries, registered, captured_hashes

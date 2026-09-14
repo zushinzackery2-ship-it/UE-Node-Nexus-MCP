@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .paths import project_dir, project_info_path, resolve_root, schema_dir
+from .paths import project_dir, project_info_path, resolve_root
 from .schema_lock import SchemaLock, load_schema_lock
 
 BridgeCall = Callable[[str, dict[str, Any]], dict[str, Any]]

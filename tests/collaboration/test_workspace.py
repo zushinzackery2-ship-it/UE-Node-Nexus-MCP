@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from ue_node_nexus_mcp.transcode.collaboration.history import History
-from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import from_raw, text_of
+from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import from_raw
 from ue_node_nexus_mcp.transcode.collaboration.store import Store
 from ue_node_nexus_mcp.transcode.collaboration.workspace import Workspace, checkout
 from ue_node_nexus_mcp.transcode.collaboration.workspace.projection import execute, prepare

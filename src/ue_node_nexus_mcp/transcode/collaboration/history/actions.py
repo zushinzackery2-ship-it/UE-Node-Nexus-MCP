@@ -76,7 +76,8 @@ def restore(workspace, revision: str, paths=None, destination="files", entity: s
     current = history.entries(workspace.state["index"]) if destination == "index" else working
     for asset, identifier in source.items():
         files.setdefault(asset, filename(asset, store.objects.data(identifier, "snapshot")))
-    for asset in select(workspace.root, files, paths):
+    selected = select(workspace.root, files, paths)
+    for asset in selected:
         if asset not in source:
             current.pop(asset, None)
             continue
@@ -107,7 +108,10 @@ def restore(workspace, revision: str, paths=None, destination="files", entity: s
     if destination == "index":
         workspace.persist(dict(workspace.state, index=tree, files=files))
     else:
-        workspace.install(workspace.state["head"], index=tree if destination == "both" else workspace.state["index"], files_tree=tree, reason="restore")
+        # An explicit path is a request for that asset, so a sparse worktree grows
+        # to hold what was restored instead of silently dropping it again.
+        workspace.install(workspace.state["head"], index=tree if destination == "both" else workspace.state["index"],
+                          files_tree=tree, reason="restore", include=selected)
     return workspace.status()
 
 

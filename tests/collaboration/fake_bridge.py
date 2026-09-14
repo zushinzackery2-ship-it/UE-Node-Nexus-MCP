@@ -27,9 +27,13 @@ class ProtocolUe(FakeUe):
         self.lose_response = False
         self.fail_save = False
 
+    def saving_fails(self, asset: str) -> bool:
+        """``True`` fails every save; a set fails only the assets it names."""
+        return self.fail_save is True or asset in (self.fail_save or ())
+
     def stamped(self, raw: dict) -> dict:
         value = deepcopy(raw)
-        value["schema_key"] = SCHEMA_KEY
+        value["schema_key"] = self.schema_key
         value["dirty"] = raw.get("asset_path") in self.dirty
         value["content_revision"] = digest(raw_evidence(value))
         value["live_revision"] = self.epoch + ":" + value["content_revision"]
@@ -74,15 +78,23 @@ class ProtocolUe(FakeUe):
             matching = raw is None if expected.get("expected_absent") else raw and self.stamped(raw)["live_revision"] == expected.get("expected_revision")
             if not matching:
                 return dict(ok=False, error=dict(code="stale_target", message="memory changed"), data=dict(applied=0))
-        before = deepcopy(self.assets)
+        before, before_dirty = deepcopy(self.assets), set(self.dirty)
+        # Saving the package is part of the apply: the memory checkpoint is gone
+        # once it succeeds, and comes back with the assets when it is rolled back.
+        self.dirty.discard(payload["asset_path"])
         response = super().call(operation, payload, **kwargs)
         failed = response.get("data", dict()).get("failed")
-        if failed or self.fail_save:
-            self.assets = before
+        if failed or self.saving_fails(payload["asset_path"]):
+            self.assets, self.dirty = before, before_dirty
             receipt = dict(apply_id=identifier, request_digest=request_digest, phase="rolled_back", response=response)
             self.receipts[identifier] = receipt
             return dict(ok=False, error=dict(code="apply_rolled_back", message="restored checkpoint"), data=dict(receipt=receipt))
-        after = self.stamped(self.assets[payload["asset_path"]])
+        if payload.get("delete_asset"):
+            self.assets.pop(payload["asset_path"], None)
+            after = dict(asset_path=payload["asset_path"], exists=False, editor_epoch=self.epoch,
+                         live_revision="", content_revision="", saved_hash="")
+        else:
+            after = self.stamped(self.assets[payload["asset_path"]])
         receipt = dict(apply_id=identifier, request_digest=request_digest, phase="ue_committed", after=after, response=deepcopy(response), response_data=deepcopy(response["data"]))
         self.receipts[identifier] = receipt
         if self.after_apply:

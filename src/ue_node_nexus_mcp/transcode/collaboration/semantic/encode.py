@@ -5,7 +5,7 @@ from __future__ import annotations
 from ...bp_types import type_text
 from ...model import Document, Section
 from ...sync_project import SyncError
-from .identity import Identities, plain
+from .identity import Identities
 from .values import field_values, value
 
 

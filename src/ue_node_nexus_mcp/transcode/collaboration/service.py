@@ -9,8 +9,8 @@ from .merge.sessions import Sessions
 from .report.options import mutates, validate
 from .report.proposals import check, create
 from .store.io import atomic_write, canonical
-from .store.migration import enabled, migrate
-from .store.repository import Store
+from .store.migration import enabled, migrate, survey
+from .store.repository import PUBLICATION_WAIT_SECONDS, Store
 from .workspace.commands import run as command
 from .workspace.service import Workspace, checkout
 
@@ -56,9 +56,20 @@ def ensure_idle(workspace, action: str) -> None:
     guarded = set(("stage", "unstage", "commit", "amend", "switch", "reset", "restore", "merge", "revert", "cherry-pick", "rebase", "stash", "pull"))
     if action not in guarded:
         return
-    active = [item for item in workspace.store.records("session") if item["workspace_id"] == workspace.state["id"] and item["status"] not in ("completed", "aborted", "stale")]
+    identifier = workspace.state["id"]
+    owned = lambda category: [item for item in workspace.store.records(category) if item["workspace_id"] == identifier]
+    active = [item for item in owned("session") if item["status"] not in ("completed", "aborted", "stale")]
     if active:
         raise SyncError("unmerged_workspace", "resolve/continue or abort the current operation", dict(merge_ids=[item["id"] for item in active]))
+    running = [item for item in owned("rebase") if item["status"] not in ("completed", "aborted")]
+    if running:
+        raise SyncError("unmerged_workspace", "continue or abort the running rebase", dict(rebase_ids=[item["id"] for item in running]))
+    # A half-applied projection left the worktree between two versions; capturing
+    # those bytes as an edit would record a state neither side ever authored.
+    stuck = [item for item in owned("projection") if item["phase"] not in ("completed", "aborted")]
+    if stuck:
+        raise SyncError("projection_pending", "recover the interrupted file update first",
+                        dict(projection_ids=[item["id"] for item in stuck], recover=dict(action="recover", options=dict(projection_id=stuck[0]["id"], dry_run=False))))
 
 
 def create_workspace(bridge, context, store, paths, options: dict) -> dict:
@@ -66,20 +77,22 @@ def create_workspace(bridge, context, store, paths, options: dict) -> dict:
     if context.bridge_available:
         ensure_schema(bridge, context)
     if dry_run and not enabled(context):
-        return dict(action="checkout", dry_run=True, migration="recorded bases and original local bytes", repository=str(store.root), revision=options.get("revision", "UE"), paths=paths)
+        return dict(action="checkout", dry_run=True, repository=str(store.root), revision=options.get("revision", "UE"),
+                    paths=paths, migration=survey(context))
     with store.lock("initialize"):
         if not enabled(context):
             migrate(store, context)
         revision = options.get("revision")
         if not revision or revision == "UE":
-            with store.lock("publication"):
+            with store.lock("publication", PUBLICATION_WAIT_SECONDS):
                 selectors = dict()
                 scene = options.get("scene")
                 if scene:
                     key = scene["map_path"] + "#" + scene["name"]
                     selectors[key] = scene
                 selected = list(selectors) if selectors else checkout_paths(bridge, context, paths)
-                observed = capture(bridge, context, store, selected, discover=paths is None and not selectors, selectors=selectors)
+                observed = capture(bridge, context, store, selected, discover=paths is None and not selectors,
+                                   selectors=selectors, persist=not dry_run)
             revision = observed["commit"]
         if dry_run:
             head = History(store).resolve(revision)
@@ -113,7 +126,7 @@ def fetch(bridge, context, workspace, action: str, paths, options: dict, proposa
     from .workspace.files import select
 
     assets = select(workspace.root, workspace.state["files"], paths) if paths else None
-    with workspace.store.lock("publication"):
+    with workspace.store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=workspace.state["id"]):
         observation = capture(bridge, context, workspace.store, assets, reference=workspace.state["head"],
                               discover=options.get("discover", False), persist=not options.get("dry_run", True))
         if proposal and proposal["preview"].get("target_tree") != observation["tree"]:

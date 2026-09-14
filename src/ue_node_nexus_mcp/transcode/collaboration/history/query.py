@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from .graph import History
 
 
@@ -10,21 +12,42 @@ def walk(history: History, head: str) -> list[str]:
     return sorted(identifiers, key=lambda item: (history.commit(item)["generation"], history.commit(item)["time"], item), reverse=True)
 
 
-def log(history: History, head: str, limit: int = 50, cursor: str | None = None,
-        asset: str | None = None, author: str | None = None) -> dict:
+def moment(value) -> str:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return datetime.fromtimestamp(float(value), timezone.utc).isoformat()
+    return str(value)
+
+
+def touched(history: History, asset: str) -> set[str]:
+    """Commits whose first-parent delta includes the asset, from the index."""
+    with history.store.db.connection() as connection:
+        return set(row[0] for row in connection.execute("SELECT commit_id FROM changes WHERE asset=?", (asset,)))
+
+
+def log(history: History, head: str, limit: int = 50, cursor: str | None = None, asset: str | None = None,
+        author: str | None = None, entity: str | None = None, since=None, until=None) -> dict:
     entries = walk(history, head)
     if cursor in entries:
         entries = entries[entries.index(cursor) + 1:]
+    indexed = touched(history, asset) if asset else None
     matches = []
     for identifier in entries:
+        if indexed is not None and identifier not in indexed:
+            continue
         commit = history.commit(identifier)
         if author and author not in commit["author"]:
             continue
+        if since and commit["time"] < moment(since):
+            continue
+        if until and commit["time"] > moment(until):
+            continue
         if asset:
             current = history.entries(identifier).get(asset)
-            previous = commit["parents"] or [None]
-            if all(history.entries(parent).get(asset) == current for parent in previous):
+            if all(history.entries(parent).get(asset) == current for parent in commit["parents"] or [None]):
                 continue
+        if entity and not diff(history, commit["parents"][0] if commit["parents"] else None, identifier,
+                               [asset] if asset else None, entity):
+            continue
         matches.append(dict(commit, commit_id=identifier))
         if len(matches) >= max(1, min(limit, 1000)):
             break
@@ -49,8 +72,10 @@ def diff(history: History, left: str, right: str, assets: list[str] | None = Non
     for asset in sorted(set(assets) if assets is not None else before.keys() | after.keys()):
         if before.get(asset) == after.get(asset):
             continue
-        old = history.store.objects.data(before[asset], "snapshot")["semantic"] if asset in before else None
-        new = history.store.objects.data(after[asset], "snapshot")["semantic"] if asset in after else None
+        # An added or removed asset descends into an empty state so every field
+        # keeps a real path; entity and field filters then apply to it as well.
+        old = history.store.objects.data(before[asset], "snapshot")["semantic"] if asset in before else dict()
+        new = history.store.objects.data(after[asset], "snapshot")["semantic"] if asset in after else dict()
         fields = changed_fields(old, new)
         fields = [item for item in fields if (not entity or entity in item["path"]) and (not field or field in item["path"])]
         if fields:

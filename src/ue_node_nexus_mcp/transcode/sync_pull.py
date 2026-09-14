@@ -8,7 +8,7 @@ from typing import Any
 from .paths import base_path, pending_dir
 from .state import AssetState, SyncState, sha256_text
 from .sync_files import backup_text, load_base, materialize, read_json, read_text, remove_stale_text, render_snapshot, write_text_atomic
-from .sync_project import BridgeCall, ProjectContext, SyncError, call_ok, ensure_root_registered, export_operation, now_iso
+from .sync_project import BridgeCall, ProjectContext, call_ok, ensure_root_registered, export_operation, now_iso
 from .sync_status import AssetStatus
 
 CONFLICT_SUFFIX = ".ue.nexus"

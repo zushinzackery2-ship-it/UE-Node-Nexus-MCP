@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from shutil import rmtree
 from uuid import uuid4
 
 from ..collaboration.store.io import atomic_write, canonical, digest, read_json
@@ -13,9 +14,7 @@ from .lock import SchemaLock
 from .records import FAMILIES
 
 
-def refresh(bridge, context) -> SchemaLock:
-    ensure_root_registered(bridge, context)
-    staging = context.root / ".nexus" / "schema" / (".collect-" + uuid4().hex)
+def collect(bridge, context, staging: Path) -> SchemaLock:
     data = call_ok(bridge, "schema_export", dict(out_dir=str(staging))).get("data") or dict()
     key = str(data.get("schema_key") or context.schema_key)
     if not key or not (staging / "key.json").is_file():
@@ -37,6 +36,17 @@ def refresh(bridge, context) -> SchemaLock:
     context.schema_key = key
     context.schema = SchemaLock(target, key)
     return context.schema
+
+
+def refresh(bridge, context) -> SchemaLock:
+    ensure_root_registered(bridge, context)
+    staging = context.root / ".nexus" / "schema" / (".collect-" + uuid4().hex)
+    try:
+        return collect(bridge, context, staging)
+    finally:
+        # Half-written collections are never a catalog: the published directory is
+        # the only readable one, and an interrupted attempt leaves nothing behind.
+        rmtree(staging, ignore_errors=True)
 
 
 def query(lock: SchemaLock, category=None, text=None, limit=40, cursor=0, details=False) -> dict:
@@ -68,7 +78,10 @@ def query(lock: SchemaLock, category=None, text=None, limit=40, cursor=0, detail
 def details(bridge, context, reference: str) -> None:
     ensure_root_registered(bridge, context)
     staging = context.root / ".nexus" / "schema" / (".details-" + uuid4().hex)
-    data = call_ok(bridge, "schema_export", dict(out_dir=str(staging), functions=[reference], details_only=True)).get("data") or dict()
+    try:
+        data = call_ok(bridge, "schema_export", dict(out_dir=str(staging), functions=[reference], details_only=True)).get("data") or dict()
+    finally:
+        rmtree(staging, ignore_errors=True)
     records = data.get("functions", dict())
     if not records:
         raise SyncError("schema_unknown", "function was not resolved in the current project", dict(query=reference))

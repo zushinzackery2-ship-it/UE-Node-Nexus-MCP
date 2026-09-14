@@ -10,6 +10,14 @@ from typing import Any
 from ue_node_nexus_mcp.transcode.paths import asset_relative, object_path
 
 SCHEMA_KEY = "5.5.4-abcd1234"
+FUNCTIONS = {
+    "KismetSystemLibrary.PrintString": {
+        "path": "/Script/Engine.KismetSystemLibrary.PrintString",
+        "params": [{"name": "InString", "type": "string", "dir": "in", "default": "Hello"},
+                   {"name": "Duration", "type": "float", "dir": "in", "default": "2.0"}],
+        "pure": False,
+    },
+}
 
 
 def _prop_schema(kind: str, default: str, **extra: Any) -> dict[str, Any]:
@@ -22,6 +30,8 @@ class FakeUe:
     def __init__(self, assets: dict[str, dict[str, Any]], project_name: str = "Shadetest") -> None:
         self.assets = {object_path(raw["asset_path"]): copy.deepcopy(raw) for raw in assets.values()}
         self.project_name = project_name
+        # Engine version plus plugin hash: a rebuild or Live Coding reload moves it.
+        self.schema_key = SCHEMA_KEY
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.root: str | None = None
         self.applied: list[dict[str, Any]] = []
@@ -47,16 +57,19 @@ class FakeUe:
         return {"project_name": self.project_name, "project_file_path": f"D:/UE/{self.project_name}/{self.project_name}.uproject"}
 
     def op_bridge_capabilities_get(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return {"schema_key": SCHEMA_KEY, "engine_version": "5.5.4", "modules": {"vfx_available": True}}
+        return {"schema_key": self.schema_key, "engine_version": "5.5.4", "modules": {"vfx_available": True}}
 
     def op_transcode_root_set(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.root = payload["root"]
         return {"root": self.root}
 
     def op_schema_export(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("details_only"):
+            wanted = [str(item) for item in payload.get("functions") or []]
+            return {"schema_key": self.schema_key, "functions": {name: FUNCTIONS[name] for name in wanted if name in FUNCTIONS}}
         out = Path(payload["out_dir"])
         out.mkdir(parents=True, exist_ok=True)
-        (out / "key.json").write_text(json.dumps({"key": SCHEMA_KEY, "engine_version": "5.5.4", "plugins_hash": "abcd1234"}), encoding="utf-8")
+        (out / "key.json").write_text(json.dumps({"key": self.schema_key, "engine_version": "5.5.4", "plugins_hash": self.schema_key.rsplit("-", 1)[-1]}), encoding="utf-8")
         classes = {
             "MaterialExpressionAdd": {"path": "/Script/Engine.MaterialExpressionAdd", "props": {"Desc": _prop_schema("string", ""), "ConstA": _prop_schema("number", "0.0"), "ConstB": _prop_schema("number", "1.0")}, "inputs": ["A", "B"], "outputs": [""]},
             "MaterialExpressionSubtract": {"path": "/Script/Engine.MaterialExpressionSubtract", "props": {"Desc": _prop_schema("string", ""), "ConstA": _prop_schema("number", "0.0"), "ConstB": _prop_schema("number", "1.0")}, "inputs": ["A", "B"], "outputs": [""]},
@@ -76,7 +89,7 @@ class FakeUe:
         (out / "classes.niagara_renderer.json").write_text("{}", encoding="utf-8")
         (out / "material_functions.json").write_text("{}", encoding="utf-8")
         (out / "niagara_modules.json").write_text("{}", encoding="utf-8")
-        return {"schema_key": SCHEMA_KEY, "files": 8}
+        return {"schema_key": self.schema_key, "files": 8}
 
     # -- status / export --------------------------------------------------
     def op_transcode_status(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -96,7 +109,7 @@ class FakeUe:
         target = Path(out_dir).joinpath(*relative.parts[:-1]) / f"{relative.name}.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         stored = copy.deepcopy(raw)
-        stored["schema_key"] = SCHEMA_KEY
+        stored["schema_key"] = self.schema_key
         target.write_text(json.dumps(stored), encoding="utf-8")
         return str(target)
 

@@ -9,7 +9,7 @@ from ...scene.diff import build_plan as scene_plan
 from ...scene.model import from_document as scene_model
 from ...sync_deps import document_dependencies, order_assets
 from ...sync_project import SyncError
-from ..merge.trees import common_base, merge_trees
+from ..merge.trees import merge_trees, resolve_base
 from ..semantic.decode import physical_ids, to_document
 from ..semantic.validation import validate
 from .observe import scene_selector
@@ -24,24 +24,43 @@ def selected_assets(workspace, source: str, paths) -> list[str]:
 
     entries = workspace.history.entries(source)
     entries.update(workspace.history.entries(workspace.state["base"]))
-    files = dict((asset, filename(asset, snapshot(workspace, value))) for asset, value in entries.items())
-    files.update(workspace.state["files"])
-    return select(workspace.root, files, paths) if paths else sorted(entries)
+    if not paths:
+        return sorted(entries)
+    # Only an asset with no projected file needs its name derived from state.
+    files = dict(workspace.state["files"])
+    for asset, value in entries.items():
+        if asset not in files:
+            files[asset] = filename(asset, snapshot(workspace, value))
+    return select(workspace.root, files, paths)
 
 
-def references(workspace, source: str, assets: list[str]) -> set[str]:
-    entries = workspace.history.entries(source)
+def references(workspace, source: str, assets: list[str], explicit: bool) -> set[str]:
+    """Assets the observation must cover beyond the ones being published.
+
+    A narrowed selection has to be closed over its dependencies, because even an
+    untouched member is published when the editor holds it dirty. A full
+    workspace already observed every asset the project had, so there only an
+    edited one can point somewhere new and the rest need no decoding.
+    """
+    entries, base = workspace.history.entries(source), workspace.history.entries(workspace.state["base"])
+    partial = explicit or bool(workspace.state.get("sparse"))
     result = set()
     for asset in assets:
-        value = snapshot(workspace, entries.get(asset))
-        if value:
-            result.update(document_dependencies(to_document(value), value["semantic"]["kind"]))
+        identifier = entries.get(asset)
+        if not identifier or (not partial and identifier == base.get(asset)):
+            continue
+        value = snapshot(workspace, identifier)
+        result.update(document_dependencies(to_document(value), value["semantic"]["kind"]))
     return result - set(assets)
 
 
 def merge(workspace, source: str, target: str, assets: list[str]) -> dict:
     history, store = workspace.history, workspace.store
-    base, ancestors = common_base(history, source, target, workspace.schema)
+    resolved = resolve_base(history, source, target, workspace.schema, store)
+    if resolved["conflicts"]:
+        return dict(base=resolved["base"], ancestors=resolved["bases"], ours=None, theirs=target, candidate=None,
+                    conflicts=resolved["conflicts"], base_pair=resolved["pair"], base_inputs=resolved["inputs"])
+    base, ancestors = resolved["base"], resolved["bases"]
     baselines = history.entries(base)
     source_entries, target_entries = history.entries(source), history.entries(target)
     # A partial publication consumes only the submitted state of each asset.
@@ -119,17 +138,38 @@ def unit(workspace, asset: str, candidate: dict | None, current: dict | None, ra
                 dependencies=dependencies, interface_changed=plan.interface_changed, summary=plan.summary(), risky=bool(plan.risky()))
 
 
+def settled(asset: str, raw: dict | None, candidate: dict, current: dict, ours: dict) -> dict | None:
+    """Nothing to apply here: identical merged and observed states, saved memory.
+
+    Snapshots are content addressed, so agreement is one comparison. Publishing
+    a whole project must not pay to decode every asset that no one touched.
+    """
+    if candidate.get(asset) != current.get(asset) or (raw or dict()).get("dirty"):
+        return None
+    if ours.get(asset) == current.get(asset):
+        return dict(skip=True)
+    # The workspace still submitted this state; the integration record is what
+    # lets a later push know its source was published in full.
+    return dict(asset=asset, kind="", empty=True, payload=dict(), dependencies=[])
+
+
 def preflight(workspace, merged: dict, observation: dict, assets: list[str], options: dict) -> dict:
     candidate, current = workspace.history.entries(merged["candidate"]), workspace.history.entries(observation["commit"])
+    ours = workspace.history.entries(merged["ours"]) if merged.get("ours") else dict()
     units, errors, documents = dict(), dict(), dict()
     conflicted = set(item["asset"] for item in merged["conflicts"])
     for asset in assets:
         if asset in conflicted:
             errors[asset] = dict(code="conflict", message="resolve the semantic conflicts")
             continue
-        desired, before = snapshot(workspace, candidate.get(asset)), snapshot(workspace, current.get(asset))
-        if not desired and not before:
+        if asset not in candidate and asset not in current:
             continue
+        unchanged = settled(asset, observation["raw"].get(asset), candidate, current, ours)
+        if unchanged is not None:
+            if not unchanged.get("skip"):
+                units[asset] = unchanged
+            continue
+        desired, before = snapshot(workspace, candidate.get(asset)), snapshot(workspace, current.get(asset))
         try:
             units[asset] = unit(workspace, asset, desired, before, observation["raw"].get(asset), options)
             if desired:
