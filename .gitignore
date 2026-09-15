@@ -113,6 +113,7 @@ Desktop.ini
 /Laffey.ico
 /_ws_*.json
 Plugins/**/Resources/*.ico
+Plugins/**/BuildIdentity.json
 
 # Logs, captures and temporary files
 logs/
