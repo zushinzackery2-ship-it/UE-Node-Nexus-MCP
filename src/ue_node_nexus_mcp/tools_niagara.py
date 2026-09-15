@@ -105,26 +105,6 @@ def niagara_emitters_list(asset_path: str, format: Literal["compact", "full", "i
 
 
 @default_tool("vfx")
-def niagara_user_params_get(asset_path: str, format: Literal["compact", "full", "indexed", "tiny"] = "indexed") -> dict[str, Any]:
-    """List exposed Niagara User parameters; indexed/tiny omit values to keep default responses compact."""
-    require_non_empty_string(asset_path, "asset_path")
-    return _call_niagara("niagara_user_params_get", {"asset_path": asset_path, "format": format})
-
-
-@default_tool("vfx")
-def niagara_user_params_set(
-    asset_path: str,
-    params: list[dict[str, Any]],
-    dry_run: bool = True,
-    save: bool = False,
-) -> dict[str, Any]:
-    """Set existing or addable simple Niagara User parameters with typed validation."""
-    require_non_empty_string(asset_path, "asset_path")
-    require_list(params, "params")
-    return _call_niagara("niagara_user_params_set", {"asset_path": asset_path, "params": params, "dry_run": dry_run, "save": save})
-
-
-@default_tool("vfx")
 def niagara_materials_get(asset_path: str, format: Literal["compact", "full", "indexed", "tiny"] = "indexed") -> dict[str, Any]:
     """List materials on existing sprite/ribbon/mesh renderers; this tool cannot create renderers."""
     require_non_empty_string(asset_path, "asset_path")

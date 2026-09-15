@@ -6,46 +6,12 @@
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
 #include "ScopedTransaction.h"
-#include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 
 namespace UeNodeNexusBridge
 {
-static bool ReadFunctionPositionPair(const TSharedPtr<FJsonObject>& Payload, int32& OutX, int32& OutY)
-{
-    double X = 0.0;
-    double Y = 0.0;
-    if (!Payload->TryGetNumberField(TEXT("x"), X) || !Payload->TryGetNumberField(TEXT("y"), Y))
-    {
-        return ReadMaterialPosition(Payload, OutX, OutY);
-    }
-    OutX = static_cast<int32>(X);
-    OutY = static_cast<int32>(Y);
-    return true;
-}
-
-static TSharedPtr<FJsonObject> MakeFunctionPositionData(UMaterialFunction* Function, UMaterialExpression* Expression, const FString& Prefix)
-{
-    const FString Alias = MaterialNodeAlias(Function, Expression);
-    FString Text = Prefix;
-    Text += FString::Printf(TEXT("Node.Name = %s\n"), *Alias);
-    Text += FString::Printf(TEXT("Node.Id = %s\n"), *Alias);
-    Text += FString::Printf(TEXT("Node.RealId = %s\n"), *MaterialExpressionNodeId(Expression));
-    Text += FString::Printf(TEXT("Node.Pos = %d,%d\n"), Expression->MaterialExpressionEditorX, Expression->MaterialExpressionEditorY);
-
-    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
-    Data->SetStringField(TEXT("format"), TEXT("node_position_text"));
-    Data->SetStringField(TEXT("asset_path"), Function->GetPathName());
-    Data->SetStringField(TEXT("graph_kind"), TEXT("material_function"));
-    Data->SetStringField(TEXT("graph_name"), TEXT("MaterialFunctionGraph"));
-    Data->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
-    Data->SetStringField(TEXT("node_alias"), Alias);
-    SetTextPayload(Data, Text);
-    return Data;
-}
-
 static UMaterialExpression* ReadFunctionNodeOrError(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FJsonObject>& OutResponse)
 {
     FString NodeId;
@@ -77,62 +43,6 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionNodeInfoGet(const FString& Operati
     TSharedPtr<FJsonObject> Data = BuildMaterialFunctionNodeInterfaceData(Function, Expression, Payload, FString());
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Data->GetBoolField(TEXT("selection_ok")));
     Response->SetObjectField(TEXT("data"), Data);
-    return Response;
-}
-
-TSharedPtr<FJsonObject> HandleMaterialFunctionNodePositionGet(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload)
-{
-    TSharedPtr<FJsonObject> Error;
-    UMaterialExpression* Expression = ReadFunctionNodeOrError(Operation, RequestId, Function, Payload, Error);
-    if (Expression == nullptr)
-    {
-        return Error;
-    }
-
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), MakeFunctionPositionData(Function, Expression, FString()));
-    return Response;
-}
-
-TSharedPtr<FJsonObject> HandleMaterialFunctionNodePositionSet(const FString& Operation, const FString& RequestId, UMaterialFunction* Function, const TSharedPtr<FJsonObject>& Payload)
-{
-    TSharedPtr<FJsonObject> Error;
-    UMaterialExpression* Expression = ReadFunctionNodeOrError(Operation, RequestId, Function, Payload, Error);
-    if (Expression == nullptr)
-    {
-        return Error;
-    }
-
-    int32 X = 0;
-    int32 Y = 0;
-    if (!ReadFunctionPositionPair(Payload, X, Y))
-    {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("x and y are required")));
-        return Response;
-    }
-
-    const int32 BeforeX = Expression->MaterialExpressionEditorX;
-    const int32 BeforeY = Expression->MaterialExpressionEditorY;
-    const int32 AfterX = X;
-    const int32 AfterY = Y;
-    bool bDryRun = true;
-    Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
-
-    TUniquePtr<FScopedTransaction> Transaction;
-    if (!bDryRun)
-    {
-        Transaction = MakeUnique<FScopedTransaction>(FText::FromString(TEXT("UE Node Nexus Material Function Node Position")));
-        Function->Modify();
-        Expression->Modify();
-        Expression->MaterialExpressionEditorX = AfterX;
-        Expression->MaterialExpressionEditorY = AfterY;
-        Function->MarkPackageDirty();
-    }
-
-    const FString Prefix = FString::Printf(TEXT("moved = %s\nNode.Pos.Before = %d,%d\nNode.Pos.After = %d,%d\n"), bDryRun ? TEXT("dry_run") : TEXT("true"), BeforeX, BeforeY, AfterX, AfterY);
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), MakeFunctionPositionData(Function, Expression, Prefix));
     return Response;
 }
 

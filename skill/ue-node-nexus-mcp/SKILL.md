@@ -13,6 +13,7 @@ Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; th
 2. Never guess a payload. `ue_capability_get(operation, detail="schema")` first, `detail="examples"` for a valid body.
 3. Author assets through the text mirror (`ue_sync`); use graph ops only for what the mirror marks `@opaque`, for levels, and for asset management.
 4. Writes default to `dry_run=true`. Read the plan, then apply.
+5. Mirror text is edited with your own file tools (Read / grep / StrReplace) and validated with `ue_sync("lint")`. Do not generate or patch `.nexus` files with a script, do not parse them with the project's Python modules, and never write conflict markers into them — a `.nexus` suffix inside the mirror root is treated as a live mirror file.
 
 ## 1. Public surface
 
@@ -26,8 +27,8 @@ Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; th
 | `ue_plan_validate(operations)` | Validate a batch without touching UE | — |
 | `ue_sync(action, paths, options)` | Independent workspaces, local history, semantic merge, UE publication/recovery and schema | summary + artifacts |
 
-- 138 registry operations sit behind `ue_execute`, including internal scene transport and `transcode_recover`. Hidden ops still run by name; list them with `include_hidden=true`.
-- Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories (`getting_started`, `text_mirror`, `graph_editing`, `material_authoring`, `blueprint_authoring`, `niagara_authoring`, `diagnostics_repair`, `concurrency`); `{"category": ...}` returns one guide, `{"query": "connect pins"}` routes by keyword.
+- 134 registry operations sit behind `ue_execute`. 48 are `hidden` (omitted from the default index, still callable by name; list them with `include_hidden=true`). Hidden means one of: superseded by the text mirror (graph and material graph ops, asset-shaped Niagara ops), a deliberate narrow extension for what the mirror excludes (`graph_patch_apply` for `@opaque` nodes, `blueprint_components_patch`, the Niagara/UObject reflected-property ops), internal transport driven by `ue_sync` (`scene_export` / `scene_status` / `scene_apply`), editor lifecycle (`editor_save_all`, `editor_request_exit`), or index maintenance (`auto_index_disable` / `auto_index_flush` / `auto_index_clear` / `auto_index_diff_registry`).
+- Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories (`getting_started`, `text_mirror`, `scene_mirror`, `collaboration`, `graph_editing`, `material_authoring`, `blueprint_authoring`, `niagara_authoring`, `diagnostics_repair`, `concurrency`); `{"category": ...}` returns one guide, `{"query": "connect pins"}` routes by keyword. `ue_context_get` returns the same category list, so you never need to guess a name.
 - If an operation named here is missing from `ue_capability_get`, the MCP server process runs stale code: reinstall the Python package and restart the client. Plugin (editor) and server must both be current.
 
 ## 2. First probe
@@ -48,8 +49,12 @@ Run this before answering any "is the bridge working / what project is this" que
 | Create one of those from scratch | Write the `.nexus` file, `ue_sync("push")` — the asset is created |
 | Node the mirror shows as `@opaque` | `graph_patch_apply` on that node only |
 | Inspect a graph, instance parameters, an asset's metadata | `ue_read` (section 5) |
-| Create / delete / move / duplicate assets, fix redirectors | `asset_*` ops |
+| Create / delete / move / rename / duplicate assets, folders, fix redirectors | `asset_create`, `asset_delete`, `asset_move`, `asset_rename`, `asset_move_batch`, `asset_rename_batch`, `asset_duplicate`, `folder_create`, `folder_delete`, `asset_redirectors_fixup` |
+| Asset dependencies / referencers, find who uses a material | `asset_dependencies_get`, `asset_referencers_get`, `material_usage_find` |
 | Level actors, components, material slots, landscape layer info | `level_*`, `component_*`, `landscape_layer_info_set` |
+| Read or set a level actor, its transform, component materials, or its instances without a scene group | `level_actor_get`, `level_actor_transform_get`, `level_mesh_instances_list`, `material_usage_find`, `component_materials_get`, `component_materials_set`, `component_material_instance_params_get/set` |
+| AnimBlueprint state machines, montages, blend spaces | `anim_blueprint_summary_get`, `anim_state_machine_summary_get`, `anim_montage_summary_get`, `blend_space_summary_get`; add states and transitions with `anim_state_machine_state_add`, `anim_state_machine_transition_add` (neither the mirror nor the graph snapshot descends into state machines) |
+| Persistent asset index | `auto_index_enable` (setup), `auto_index_status`, `auto_index_overview`, `auto_index_rebuild`, `auto_index_query`, `auto_index_resolve_path`, `auto_index_get`, `auto_index_tree_get` |
 | Loaded Actor/Blueprint/ISM/HISM scene groups | `ue_sync` with `.scene.nexus`; load `workflow_guide_get(category="scene_mirror")` |
 | Paged instance reads and batch edits | `component_instances_get/patch`; use the read revision and persistent IDs |
 | Compile, validate, save one asset | `asset_compile`, `asset_validate`, `asset_save` |
@@ -128,8 +133,7 @@ identity requires explicit `pull(force="ue")`; construction-script arrays are
 read-only. Loaded hidden levels are included; unloaded actors stay unavailable.
 Use the in-band scene guide for the complete format and boundaries.
 
-**Build and readiness:** capability `build` contains both DLL identities.
-Python 0.4.0 requires contract 2 before writes. Explicit material compilation
+**Build and readiness:** capability `build` contains both DLL identities. The Python package and the plugin check the same contract version before any write, and a mismatch is reported as `bridge_contract_mismatch` rather than attempted. Explicit material compilation
 reports shader readiness and a target RHI update fence; this is not whole-frame
 GPU completion. `diagnostics_get` reads loaded objects without compiling.
 Save callbacks enqueue exports; mirror transactions share a process/file lock.
@@ -167,6 +171,8 @@ Sequence: `ue_capability_get(op, detail="schema")` → minimal payload → `ue_p
 {"op": "connect_pins", "from_node_id": "<GUID>", "from_pin": "Then", "to_node_id": "branch", "to_pin": "execute"}
 {"op": "set_node_param", "node_id": "<GUID>", "name": "PinName", "value": "string_or_number"}
 ```
+
+Wiring order that survives review: connect exec pins before data pins, read the exact pin names with `node_params_get` / `graph_node_info_get` before any `connect_pins` (dynamic nodes and overloads do not have stable names), set defaults only where no data source exists, and compile after each logical chunk rather than after a whole batch of edits.
 
 Blueprint `create_node.client_id` works in dry run; for Material / MaterialFunction the Python layer expands same-batch `client_id` links only when `dry_run=false`.
 
@@ -239,10 +245,16 @@ Transport is one Windows named pipe per editor: `\\.\pipe\UeNodeNexusBridge.<pid
 | `invalid_request` | required field missing, or a read op called with no target | read the schema |
 | `target_conflict` | more than one target given (e.g. `material_interface_resolve`) | pass exactly one |
 | `invalid_response_field` | `response.format` or another unknown response key | use `response.mode` |
+| `workspace_required` | collaboration is enabled and the action came without `options.workspace_id`; `init` always returns it once collaboration is on | run `checkout` (the error lists existing workspaces), then pass the returned `id` as `workspace_id` |
+| `both-modified` (status) | text and editor both changed | pull first, or push with `force="local"` |
+| `sync_busy` | another transaction owns the mirror root | wait for it to finish and retry |
+| `dependency_not_selected` | a newly referenced asset is not in the same selection | include it and push again |
+| `dependency_cycle` | new assets reference each other in a cycle | break the cycle before pushing |
+| `recovery_required` | an interrupted apply left a durable receipt | `ue_sync("recover")` with the `apply_id` and read the evidence |
+| `stale_proposal` / `stale_session` / `stale_target` | the input changed since the preview or session was produced | keep your edits, re-observe, then merge and preview again |
 | `bridge_busy` | request arrived while another one was executing | retried automatically; if it persists, wait |
 | `save_blocked_read_only` | file checked in / read-only | check out in the editor, retry |
 | `schema_stale` | mirror text written against an older schema key | `ue_sync("schema")` |
-| `both-modified` (status) | text and editor both changed | pull first, or push with `force="local"` |
 | `mcp_bridge_error` | pipe / transport failure | editor gone or plugin unloaded; re-probe |
 
 ## 11. Evidence order

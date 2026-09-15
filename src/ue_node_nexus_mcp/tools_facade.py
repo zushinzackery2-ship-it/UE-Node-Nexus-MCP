@@ -36,7 +36,13 @@ def ue_execute(
     payload: dict[str, Any],
     response: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Execute one internal operation through the thin facade and return summary/delta by default."""
+    """Execute one internal operation through the thin facade and return summary/delta by default.
+
+    Asset content is not edited through this entry point: the ``.nexus`` text files
+    under the mirror root are the edit surface, and ``ue_sync`` owns that loop. Use
+    this for the typed operations the text mirror does not cover - asset management,
+    levels and components, Enhanced Input, diagnostics, compile/save.
+    """
     if not isinstance(operation, str) or not operation.strip():
         return minimal_error("invalid_request", "operation must be a non-empty string", {"operation": operation})
     if not isinstance(payload, dict):
@@ -73,7 +79,13 @@ def ue_read(
     query: dict[str, Any] | None = None,
     format: Literal["summary", "index", "detail", "debug"] = "summary",
 ) -> dict[str, Any]:
-    """Read common UE state through one thin facade entrypoint."""
+    """Read common UE state through one thin facade entrypoint.
+
+    Targets read live UE objects (assets, graphs, material instances, levels,
+    Niagara, diagnostics). There is no target for mirror text: ``.nexus`` files are
+    ordinary files on disk, so read them with your own file tools and validate an
+    edit with ``ue_sync("lint")``.
+    """
     if not isinstance(target, str) or not target.strip():
         return minimal_error("invalid_request", "target must be a non-empty string", {"target": target})
     if query is not None and not isinstance(query, dict):

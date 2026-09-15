@@ -10,7 +10,12 @@
   count) so you can target the right graph.
 - AnimBlueprints have dedicated compact reads: `anim_blueprint_summary_get`
   for AnimGraph nodes, `anim_state_machine_summary_get` for state machines
-  (the generic snapshot does not descend into state-machine sub-graphs).
+  (the generic snapshot does not descend into state-machine sub-graphs), and
+  `anim_montage_summary_get` / `blend_space_summary_get` for their assets.
+- State machines are the one AnimBlueprint surface with no text-mirror form:
+  add states with `anim_state_machine_state_add` and wire them with
+  `anim_state_machine_transition_add`. Everything else in an AnimBlueprint
+  follows the mirror and generic graph rules.
 
 ## Component tree (SCS) writes
 

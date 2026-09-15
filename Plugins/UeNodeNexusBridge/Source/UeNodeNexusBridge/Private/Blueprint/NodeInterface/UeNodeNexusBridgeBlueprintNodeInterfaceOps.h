@@ -11,8 +11,6 @@ class UEdGraphPin;
 namespace UeNodeNexusBridge
 {
 TSharedPtr<FJsonObject> HandleBlueprintNodeInfoGet(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> HandleBlueprintNodePositionGet(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload);
-TSharedPtr<FJsonObject> HandleBlueprintNodePositionSet(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload);
 TSharedPtr<FJsonObject> HandleBlueprintNodeCreate(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload);
 UEdGraph* ResolveBlueprintNodeInterfaceGraph(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload);
 UEdGraphNode* ResolveBlueprintNodeInterfaceNode(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Payload);

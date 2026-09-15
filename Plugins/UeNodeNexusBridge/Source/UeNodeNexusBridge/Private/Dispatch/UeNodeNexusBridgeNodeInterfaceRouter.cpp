@@ -30,6 +30,15 @@ static UObject* LoadGraphAssetOrError(const FString& Operation, const FString& R
 
 static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
+    const bool bInfo = Operation == TEXT("node_info_get");
+    const bool bCreate = Operation == TEXT("node_create");
+    if (!bInfo && !bCreate)
+    {
+        TSharedPtr<FJsonObject> Unsupported = MakeEnvelope(Operation, RequestId, false);
+        Unsupported->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_request"), FString::Printf(TEXT("node interface does not handle %s"), *Operation)));
+        return Unsupported;
+    }
+
     TSharedPtr<FJsonObject> Error;
     UObject* Asset = LoadGraphAssetOrError(Operation, RequestId, Payload, Error);
     if (Asset == nullptr)
@@ -39,53 +48,29 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
 
     if (UMaterial* Material = Cast<UMaterial>(Asset))
     {
-        if (Operation == TEXT("node_info_get"))
+        if (bInfo)
         {
             return HandleMaterialNodeInfoGet(Operation, RequestId, Material, Payload);
         }
-        if (Operation == TEXT("node_position_get"))
-        {
-            return HandleMaterialNodePositionGet(Operation, RequestId, Material, Payload);
-        }
-        if (Operation == TEXT("node_create"))
-        {
-            return HandleMaterialNodeCreate(Operation, RequestId, Material, Payload);
-        }
-        return HandleMaterialNodePositionSet(Operation, RequestId, Material, Payload);
+        return HandleMaterialNodeCreate(Operation, RequestId, Material, Payload);
     }
 
     if (UMaterialFunction* Function = Cast<UMaterialFunction>(Asset))
     {
-        if (Operation == TEXT("node_info_get"))
+        if (bInfo)
         {
             return HandleMaterialFunctionNodeInfoGet(Operation, RequestId, Function, Payload);
         }
-        if (Operation == TEXT("node_position_get"))
-        {
-            return HandleMaterialFunctionNodePositionGet(Operation, RequestId, Function, Payload);
-        }
-        if (Operation == TEXT("node_create"))
-        {
-            return HandleMaterialFunctionNodeCreate(Operation, RequestId, Function, Payload);
-        }
-        return HandleMaterialFunctionNodePositionSet(Operation, RequestId, Function, Payload);
+        return HandleMaterialFunctionNodeCreate(Operation, RequestId, Function, Payload);
     }
 
     if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
     {
-        if (Operation == TEXT("node_info_get"))
+        if (bInfo)
         {
             return HandleBlueprintNodeInfoGet(Operation, RequestId, Blueprint, Payload);
         }
-        if (Operation == TEXT("node_position_get"))
-        {
-            return HandleBlueprintNodePositionGet(Operation, RequestId, Blueprint, Payload);
-        }
-        if (Operation == TEXT("node_create"))
-        {
-            return HandleBlueprintNodeCreate(Operation, RequestId, Blueprint, Payload);
-        }
-        return HandleBlueprintNodePositionSet(Operation, RequestId, Blueprint, Payload);
+        return HandleBlueprintNodeCreate(Operation, RequestId, Blueprint, Payload);
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
@@ -94,16 +79,6 @@ static TSharedPtr<FJsonObject> DispatchNodeAsset(const FString& Operation, const
 }
 
 TSharedPtr<FJsonObject> HandleNodeInfoGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
-{
-    return DispatchNodeAsset(Operation, RequestId, Payload);
-}
-
-TSharedPtr<FJsonObject> HandleNodePositionGet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
-{
-    return DispatchNodeAsset(Operation, RequestId, Payload);
-}
-
-TSharedPtr<FJsonObject> HandleNodePositionSet(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     return DispatchNodeAsset(Operation, RequestId, Payload);
 }

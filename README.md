@@ -45,7 +45,7 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 | **VFX** | Niagara 发射器、模块栈、渲染器和用户参数；Cascade 系统摘要 |
 | **诊断与批处理** | 编译诊断、MessageLog、日志尾、离线材质检查、批量执行和后台任务 |
 
-当前操作注册表包含 **138 个 operation**。七个 MCP 门面保持不变，协作通过 `ue_sync` 扩展动作提供；内部增加 `transcode_recover`。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
+当前操作注册表包含 **134 个 operation**，其中 48 个为内部操作（默认索引不列出，仍可按名调用）。七个 MCP 门面保持不变，协作通过 `ue_sync` 扩展动作提供；内部增加 `transcode_recover`。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
 
 ---
 

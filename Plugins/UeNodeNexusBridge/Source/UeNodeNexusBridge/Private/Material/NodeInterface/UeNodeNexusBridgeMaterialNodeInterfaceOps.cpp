@@ -173,36 +173,4 @@ TSharedPtr<FJsonObject> HandleMaterialNodeInfoGet(const FString& Operation, cons
     Response->SetObjectField(TEXT("data"), Data);
     return Response;
 }
-
-TSharedPtr<FJsonObject> HandleMaterialNodePositionGet(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
-{
-    FString NodeId;
-    if (!Payload->TryGetStringField(TEXT("node_id"), NodeId))
-    {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_request"), TEXT("node_id is required")));
-        return Response;
-    }
-    UMaterialExpression* Expression = ResolveMaterialInterfaceNode(Material, NodeId);
-    if (Expression == nullptr)
-    {
-        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("node_not_found"), TEXT("Material node was not found")));
-        return Response;
-    }
-
-    const FString Alias = MaterialNodeAlias(Material, Expression);
-    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
-    Data->SetStringField(TEXT("format"), TEXT("node_position_text"));
-    Data->SetStringField(TEXT("asset_path"), Material->GetPathName());
-    Data->SetStringField(TEXT("graph_kind"), TEXT("material"));
-    Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
-    Data->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(Expression));
-    Data->SetStringField(TEXT("node_alias"), Alias);
-    SetTextPayload(Data, FString::Printf(TEXT("Node.Name = %s\nNode.Id = %s\nNode.RealId = %s\nNode.Pos = %d,%d\n"), *Alias, *Alias, *MaterialExpressionNodeId(Expression), Expression->MaterialExpressionEditorX, Expression->MaterialExpressionEditorY));
-
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), Data);
-    return Response;
-}
 }

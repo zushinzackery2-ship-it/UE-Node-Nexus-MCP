@@ -101,16 +101,6 @@
       "summary": "Read Niagara renderer properties."
     },
     {
-      "name": "niagara_user_params_get",
-      "kind": "read",
-      "group": "vfx",
-      "risk": "low",
-      "hidden": true,
-      "local": false,
-      "default_response": "summary",
-      "summary": "Read Niagara user parameters."
-    },
-    {
       "name": "niagara_materials_get",
       "kind": "read",
       "group": "vfx",
@@ -229,16 +219,6 @@
       "local": false,
       "default_response": "delta",
       "summary": "Set Niagara renderer properties."
-    },
-    {
-      "name": "niagara_user_params_set",
-      "kind": "write",
-      "group": "vfx",
-      "risk": "medium",
-      "hidden": true,
-      "local": false,
-      "default_response": "delta",
-      "summary": "Set Niagara user parameters."
     }
   ]
 }

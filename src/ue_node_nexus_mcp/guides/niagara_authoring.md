@@ -25,8 +25,39 @@ the result is not cached — reconnect and retry.
    Component/Decal/Volume), `niagara_renderers_list`,
    `niagara_renderer_properties_get/set`; materials through
    `niagara_materials_get/set`.
-5. **User parameters**: `niagara_user_params_get/set`
-   (float/int/bool/vector/color/material).
+5. **User parameters**: edit the mirror's `[user]` section
+   (`Speed : float = 3`); the push verbs are `ns_user_param_add`,
+   `ns_user_param_set` and `ns_user_param_remove`. Types are
+   `float int bool Vector2 Vector Vector4 Color Position Quat`, or a class name.
+
+## What the text mirror covers, and the reflected-property escape hatch
+
+The mirror exports Niagara by reflection, so it is the primary surface:
+
+- `[asset]` - editable UObject properties of the system (`set_asset_prop`).
+- `[emitter Name]` - editable `FVersionedNiagaraEmitterData` properties
+  (`ns_emitter_prop_set`), plus `Parent`/`enabled`.
+- `[renderers Name]` - editable renderer properties with attribute bindings
+  removed (`ns_renderer_add/remove/set_prop`).
+- `[user]` - the exposed parameter store (`ns_user_param_*`).
+- `[stack Name/Group]` - module stack lines and their rapid-iteration inputs.
+
+Four hidden operations remain deliberately available outside the mirror, because
+their property predicate is wider than the mirror's `IsEditableProperty`
+(`CPF_Edit && !EditConst && !Deprecated`). They also accept BlueprintVisible-only
+and Edit+EditConst properties, and `allow_non_editable=true` widens that further:
+
+- `niagara_system_properties_get/set`
+- `niagara_emitter_properties_get/set`
+- `niagara_renderer_properties_get/set`
+
+Reach for them only when the mirror's editable filter excludes the property you
+need; the default mirror path stays the reviewable one. `niagara_materials_get/set`
+also stays: it resolves the material slot per renderer type (mesh renderers use a
+nested array), which has no first-class text form.
+
+User parameters are not in that category. They are parameter-store entries with a
+first-class `[user]` form, so no separate operation exists.
 
 ## Validation
 

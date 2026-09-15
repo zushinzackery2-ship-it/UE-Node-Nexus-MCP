@@ -41,16 +41,6 @@
       "summary": "Read one graph node edit view."
     },
     {
-      "name": "node_position_get",
-      "kind": "read",
-      "group": "graph",
-      "risk": "low",
-      "hidden": true,
-      "local": false,
-      "default_response": "summary",
-      "summary": "Read one graph node position."
-    },
-    {
       "name": "node_class_params_get",
       "kind": "read",
       "group": "graph",
@@ -99,16 +89,6 @@
       "local": false,
       "default_response": "delta",
       "summary": "Create one graph node."
-    },
-    {
-      "name": "node_position_set",
-      "kind": "write",
-      "group": "graph",
-      "risk": "medium",
-      "hidden": true,
-      "local": false,
-      "default_response": "delta",
-      "summary": "Set one graph node position."
     },
     {
       "name": "node_params_set",

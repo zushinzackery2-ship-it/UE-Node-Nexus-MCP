@@ -29,8 +29,6 @@ const TArray<FVfxOperation>& VfxOperations()
         { TEXT("niagara_system_duplicate"), UeNodeNexusBridge::HandleNiagaraSystemDuplicate },
         { TEXT("niagara_system_summary_get"), UeNodeNexusBridge::HandleNiagaraSystemSummaryGet },
         { TEXT("niagara_emitters_list"), UeNodeNexusBridge::HandleNiagaraEmittersList },
-        { TEXT("niagara_user_params_get"), UeNodeNexusBridge::HandleNiagaraUserParamsGet },
-        { TEXT("niagara_user_params_set"), UeNodeNexusBridge::HandleNiagaraUserParamsSet },
         { TEXT("niagara_materials_get"), UeNodeNexusBridge::HandleNiagaraMaterialsGet },
         { TEXT("niagara_materials_set"), UeNodeNexusBridge::HandleNiagaraMaterialsSet },
         { TEXT("niagara_system_properties_get"), UeNodeNexusBridge::HandleNiagaraSystemPropertiesGet },

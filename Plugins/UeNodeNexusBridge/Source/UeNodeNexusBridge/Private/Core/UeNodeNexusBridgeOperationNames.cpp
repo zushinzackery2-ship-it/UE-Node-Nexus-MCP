@@ -62,8 +62,6 @@ TArray<FString> GetCoreOperationNames()
         TEXT("graph_build_apply"),
         TEXT("node_info_get"),
         TEXT("node_create"),
-        TEXT("node_position_get"),
-        TEXT("node_position_set"),
         TEXT("node_params_get"),
         TEXT("node_params_set"),
         TEXT("material_instance_params_get"),

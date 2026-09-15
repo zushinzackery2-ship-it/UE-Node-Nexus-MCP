@@ -170,54 +170,6 @@ def node_info_get(
 
 
 @default_tool()
-def node_position_get(
-    asset_path: str,
-    node_id: str,
-    graph_name: str | None = None,
-    graph_kind: Literal["material", "material_function", "blueprint", "auto"] = "auto",
-) -> dict[str, Any]:
-    """Return one graph node position without compiling or modifying the asset."""
-    require_non_empty_string(asset_path, "asset_path")
-    require_non_empty_string(node_id, "node_id")
-    return _call(
-        "node_position_get",
-        {
-            "asset_path": asset_path,
-            "node_id": node_id,
-            "graph_name": graph_name,
-            "graph_kind": graph_kind,
-        },
-    )
-
-
-@default_tool()
-def node_position_set(
-    asset_path: str,
-    node_id: str,
-    x: int,
-    y: int,
-    graph_name: str | None = None,
-    graph_kind: Literal["material", "material_function", "blueprint", "auto"] = "auto",
-    dry_run: bool = True,
-) -> dict[str, Any]:
-    """Set one graph node position without triggering compile."""
-    require_non_empty_string(asset_path, "asset_path")
-    require_non_empty_string(node_id, "node_id")
-    return _call(
-        "node_position_set",
-        {
-            "asset_path": asset_path,
-            "node_id": node_id,
-            "x": x,
-            "y": y,
-            "graph_name": graph_name,
-            "graph_kind": graph_kind,
-            "dry_run": dry_run,
-        },
-    )
-
-
-@default_tool()
 def node_create(
     asset_path: str,
     node_class: str,

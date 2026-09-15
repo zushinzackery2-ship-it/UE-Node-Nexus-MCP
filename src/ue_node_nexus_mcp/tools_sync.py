@@ -34,6 +34,12 @@ def ue_sync(
 ) -> dict[str, Any]:
     """Version and collaborate on UE assets through independent text workspaces.
 
+    The editable surface is text: ``.nexus`` files under the mirror root
+    (``UE_NEXUS_TRANSCODE_DIR`` or ``cwd/Content_Transcoded``) mirror Material,
+    MaterialFunction, MaterialInstance, Blueprint, Niagara and property-bag assets.
+    Edit those files with your own file tools; never generate or patch them with a
+    script, and never write conflict markers into them.
+
     checkout creates a workspace; its absolute files_root is this agent's editable
     copy. Pass options.workspace_id to subsequent actions. stage/commit record
     local history; push merges the committed HEAD with current UE memory and
@@ -43,7 +49,9 @@ def ue_sync(
     Mutations default to dry_run=true; execute with dry_run=false and optionally
     a proposal_id. schema(category/query/details/target/context) queries the
     current classified parameter catalog, also used by lint and history.
-    Legacy init/pull/push remain available until checkout enables collaboration.
+    Legacy init/pull/push remain available until checkout enables collaboration;
+    once it is enabled those actions require options.workspace_id, and init is
+    refused with workspace_required - create a checkout and retry.
     """
     if action not in ACTIONS:
         return minimal_error("invalid_action", f"unknown action {action!r}", {"actions": list(ACTIONS)})

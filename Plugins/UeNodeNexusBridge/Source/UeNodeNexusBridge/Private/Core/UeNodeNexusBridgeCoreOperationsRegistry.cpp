@@ -77,8 +77,6 @@ void RegisterCoreOperations()
     RegisterCoreOp(TEXT("graph_build_apply"), HandleGraphBuildApply);
     RegisterCoreOp(TEXT("node_info_get"), HandleNodeInfoGet);
     RegisterCoreOp(TEXT("node_create"), HandleNodeCreate);
-    RegisterCoreOp(TEXT("node_position_get"), HandleNodePositionGet);
-    RegisterCoreOp(TEXT("node_position_set"), HandleNodePositionSet);
     RegisterCoreOp(TEXT("node_params_get"), HandleNodeParamsGet);
     RegisterCoreOp(TEXT("node_params_set"), HandleNodeParamsSet);
     RegisterCoreOp(TEXT("material_instance_params_get"), HandleMaterialInstanceParamsGet);

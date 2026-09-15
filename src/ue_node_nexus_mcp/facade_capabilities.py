@@ -15,6 +15,7 @@ from .operation_registry import (
 )
 from .payload_schema import example_payload_for
 from .runtime import enabled_features, thin_tool
+from .workflow_guides import guide_categories
 
 
 @thin_tool()
@@ -48,12 +49,18 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
         "recommended_next": "ue_sync",
         "text_mirror": {
             "tool": "ue_sync",
-            "flow": ["status", "edit .nexus files", "lint", "push (dry_run)", "push dry_run=false"],
-            "guide": {"operation": "workflow_guide_get", "payload": {"category": "text_mirror"}},
+            "edit_surface": "the .nexus text files under the mirror root are the only asset edit surface; change them with your own file tools, never with a script",
+            "flow": ["checkout", "edit the returned files_root .nexus files", "stage", "commit", "push (dry_run)", "push dry_run=false"],
+            "legacy_flow": ["status", "edit .nexus files", "lint", "push (dry_run)", "push dry_run=false"],
+            "legacy_note": "checkout enables collaboration; init/status/lint/push then require options.workspace_id, and init is refused",
+            "guides": [
+                {"operation": "workflow_guide_get", "payload": {"category": "collaboration"}},
+                {"operation": "workflow_guide_get", "payload": {"category": "text_mirror"}},
+            ],
         },
         "workflow_guides": {
             "operation": "workflow_guide_get",
-            "list_categories": {},
+            "categories": [row["category"] for row in guide_categories()],
             "example": {"category": "getting_started"},
         },
         "background_tasks": {

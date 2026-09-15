@@ -68,7 +68,7 @@
       "hidden": true,
       "local": false,
       "default_response": "summary",
-      "summary": "Compare Auto-Index with live AssetRegistry."
+      "summary": "Diagnostic only: compare Auto-Index with the live AssetRegistry to find drift."
     },
     {
       "name": "auto_index_enable",
@@ -98,7 +98,7 @@
       "hidden": true,
       "local": false,
       "default_response": "delta",
-      "summary": "Disable Auto-Index listeners."
+      "summary": "Maintenance: stop Auto-Index listeners; use auto_index_enable to resume."
     },
     {
       "name": "auto_index_flush",
@@ -108,7 +108,7 @@
       "hidden": true,
       "local": false,
       "default_response": "delta",
-      "summary": "Flush Auto-Index state to disk."
+      "summary": "Maintenance: force Auto-Index state to disk; automatic flush already runs on save."
     },
     {
       "name": "auto_index_clear",
@@ -118,7 +118,7 @@
       "hidden": true,
       "local": false,
       "default_response": "delta",
-      "summary": "Clear Auto-Index state."
+      "summary": "Maintenance reset: wipe Auto-Index state; follow with auto_index_rebuild when the index is needed again."
     }
   ]
 }

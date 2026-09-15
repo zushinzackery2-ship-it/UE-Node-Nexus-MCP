@@ -1,6 +1,6 @@
 # Getting started with the thin facade
 
-The MCP surface is exactly six tools. Everything else is an internal operation
+The MCP surface is exactly seven tools. Everything else is an internal operation
 you discover, inspect, and run through them.
 
 ## The core loop
