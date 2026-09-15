@@ -129,7 +129,7 @@ def unit(workspace, asset: str, candidate: dict | None, current: dict | None, ra
                     payload=dict(kind=kind), dependencies=dependencies, risky=any(row["op"].startswith(("remove_", "delete_")) for row in plan["ops"]))
     aligned = align_aliases(current, candidate) if current else None
     ids = dict((alias, guid) for guid, alias in physical_ids(aligned).items()) if aligned else dict()
-    plan = build_plan(document, to_document(aligned) if aligned else None, kind, ids)
+    plan = build_plan(document, to_document(aligned) if aligned else None, kind, ids, workspace.schema)
     if plan.has_errors:
         raise SyncError("plan_invalid", "candidate cannot be expressed by this bridge", dict(asset=asset, diagnostics=[item.format() for item in plan.diagnostics]))
     if plan.risky() and not options.get("allow_delete"):

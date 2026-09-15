@@ -40,7 +40,7 @@ def refresh_callers(bridge: BridgeCall, context: ProjectContext, state: SyncStat
         response = bridge("transcode_apply", payload)
         document, _ = parse(existing or "")
         status = AssetStatus(caller, kind, "local-modified" if protected else "clean", file, None, record, None)
-        item = Prepared(status, document, build_plan(document, document, kind), file, existing or "", load_base(context.project, caller))
+        item = Prepared(status, document, build_plan(document, document, kind, schema=context.schema), file, existing or "", load_base(context.project, caller))
         errors = apply_diagnostics(response, item, display_path(context.project, file), result)
         data = response.get("data") if isinstance(response, dict) else None
         data = data if isinstance(data, dict) else dict()

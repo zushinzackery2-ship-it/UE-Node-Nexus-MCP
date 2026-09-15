@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from .diff_common import decl_params, diff_brace_props, diff_prop_section
+from .diff_common import decl_params, diff_brace_props, diff_prop_section, same_class
 from .model import Decl, Document, Section
 from .plan import AssetPlan
+from .schema_lock import SchemaLock
 from .values import is_marker, values_equal
 
 ASSIGNMENT_MODULE = "SetVariables"
 
 
-def diff_niagara(local: Document, base: Document | None, plan: AssetPlan, kind: str) -> None:
+def diff_niagara(local: Document, base: Document | None, plan: AssetPlan, kind: str,
+                 schema: SchemaLock | None = None) -> None:
     diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
     _diff_user_params(local.section("user"), base.section("user") if base else None, plan)
     if kind == "niagara_system":
@@ -25,7 +27,7 @@ def diff_niagara(local: Document, base: Document | None, plan: AssetPlan, kind: 
                 plan.add("ns_module_remove", emitter=emitter, group=group, id=decl.id)
     for section in local.find_sections("renderers"):
         before = base.section("renderers", section.args) if base else None
-        _diff_renderers(section, before, plan)
+        _diff_renderers(section, before, plan, schema)
     for section in base.find_sections("renderers") if base else []:
         if local.section("renderers", section.args) is None:
             for decl in section.decls():
@@ -143,7 +145,7 @@ def _add_input(plan: AssetPlan, decl: Decl, identifier: str, key: str, value: st
     plan.add("ns_module_input_set", line=decl.line, id=identifier, input=key, value=value, **common)
 
 
-def _diff_renderers(local: Section, base: Section | None, plan: AssetPlan) -> None:
+def _diff_renderers(local: Section, base: Section | None, plan: AssetPlan, schema: SchemaLock | None = None) -> None:
     emitter = local.args.strip()
     local_decls = local.decl_map()
     base_decls = base.decl_map() if base else {}
@@ -152,7 +154,7 @@ def _diff_renderers(local: Section, base: Section | None, plan: AssetPlan) -> No
             plan.add("ns_renderer_remove", emitter=emitter, id=identifier)
     for identifier, decl in local_decls.items():
         before = base_decls.get(identifier)
-        if before is not None and before.type_name != decl.type_name:
+        if before is not None and not same_class(schema, "niagara_renderer", decl.type_name, before.type_name):
             plan.add("ns_renderer_remove", emitter=emitter, id=identifier)
             before = None
         if before is None:

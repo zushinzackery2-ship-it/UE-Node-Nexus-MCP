@@ -4,15 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from .diff_common import decl_params, diff_params
+from .diff_common import decl_params, diff_params, same_class
 from .model import Decl, Link, Section
 from .plan import AssetPlan
+from .schema_lock import SchemaLock
 
 TEXTURE_ALIAS_INDEX = {"rgb": "0", "rgba": "0", "r": "1", "g": "2", "b": "3", "a": "4"}
 MATERIAL_OUT = "out"
 
 
-def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, kind: str, graph: str | None = None) -> None:
+def node_class_family(kind: str) -> str:
+    """Schema family that holds this graph kind's node classes."""
+    return "k2node" if kind == "blueprint" else "material_expression"
+
+
+def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, kind: str, graph: str | None = None,
+                       schema: SchemaLock | None = None) -> None:
     extra: dict[str, Any] = {"graph": graph} if graph else {}
     local_decls = {decl.id: decl for decl in local.decls() if decl.modifier is None}
     base_decls = {decl.id: decl for decl in base.decls() if decl.modifier is None} if base else {}
@@ -27,7 +34,7 @@ def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, ki
             plan.add("delete_node", id=identifier, **extra)
     for identifier, decl in local_decls.items():
         before = base_decls.get(identifier)
-        if before is not None and before.type_name != decl.type_name and not (before.opaque and decl.opaque):
+        if before is not None and not (before.opaque and decl.opaque) and not same_class(schema, node_class_family(kind), decl.type_name, before.type_name):
             plan.warn("node_class_changed", f"{identifier}: class changed {before.type_name} -> {decl.type_name}; node is recreated (GUID changes)", decl.line)
             plan.add("delete_node", line=decl.line, id=identifier, **extra)
             before = None

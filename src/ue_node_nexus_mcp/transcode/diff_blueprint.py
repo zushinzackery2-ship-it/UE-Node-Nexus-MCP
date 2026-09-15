@@ -4,25 +4,26 @@ from __future__ import annotations
 
 from .bp_signature import FunctionSignature, parse_signature
 from .bp_types import join_type_text, parse_type_text
-from .diff_common import diff_brace_props, diff_prop_section, match_renamed
+from .diff_common import diff_brace_props, diff_prop_section, match_renamed, same_class
 from .diff_graph import diff_graph_section
 from .lexer import LexError
 from .model import Decl, Document, Section
 from .plan import AssetPlan
+from .schema_lock import SchemaLock
 from .values import values_equal
 
 
-def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan) -> None:
+def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, schema: SchemaLock | None = None) -> None:
     diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
     _diff_variables(local.section("variables"), base.section("variables") if base else None, plan)
-    _diff_components(local.section("components"), base.section("components") if base else None, plan)
+    _diff_components(local.section("components"), base.section("components") if base else None, plan, schema)
     diff_prop_section(local.section("defaults"), base.section("defaults") if base else None, plan, "bp_default_set")
     for name in ("dispatchers", "interfaces"):
         local_lines = [bare.text for bare in (local.section(name).bares() if local.section(name) else [])]
         base_lines = [bare.text for bare in (base.section(name).bares() if base and base.section(name) else [])]
         if local_lines != base_lines:
             plan.error("unsupported_edit", f"[{name}] is read-only in this version; revert the change", line=local.section(name).line if local.section(name) else None)
-    _diff_graphs(local, base, plan)
+    _diff_graphs(local, base, plan, schema)
 
 
 def _variable_payload(decl: Decl) -> dict[str, object]:
@@ -76,7 +77,7 @@ def _same(left: object, right: object) -> bool:
     return left == right
 
 
-def _diff_components(local: Section | None, base: Section | None, plan: AssetPlan) -> None:
+def _diff_components(local: Section | None, base: Section | None, plan: AssetPlan, schema: SchemaLock | None = None) -> None:
     local_decls = local.decl_map() if local else {}
     base_decls = base.decl_map() if base else {}
     renames = match_renamed(local_decls, base_decls)
@@ -99,7 +100,7 @@ def _diff_components(local: Section | None, base: Section | None, plan: AssetPla
             for key, value in decl.prop_values().items():
                 plan.add("bp_component_set_prop", line=decl.line, name=name, prop=key, value=value)
             continue
-        if not decl.inherited and decl.type_name != before.type_name:
+        if not decl.inherited and not same_class(schema, "component", decl.type_name, before.type_name):
             plan.error("unsupported_edit", f"{name}: component class change ({before.type_name} -> {decl.type_name}) needs remove + add under a new name", decl.line)
             continue
         before_keyed = before.keyed()
@@ -116,14 +117,14 @@ def _signature_of(section: Section, plan: AssetPlan) -> FunctionSignature | None
         return None
 
 
-def _diff_graphs(local: Document, base: Document | None, plan: AssetPlan) -> None:
+def _diff_graphs(local: Document, base: Document | None, plan: AssetPlan, schema: SchemaLock | None = None) -> None:
     base_graphs = {section.args.strip(): section for section in (base.find_sections("graph") if base else [])}
     for section in local.find_sections("graph"):
         name = section.args.strip()
         before = base_graphs.get(name)
         if before is None and name != "EventGraph":
             plan.add("bp_graph_add", line=section.line, name=name)
-        diff_graph_section(section, before, plan, "blueprint", graph=name)
+        diff_graph_section(section, before, plan, "blueprint", graph=name, schema=schema)
     for name in base_graphs:
         if local.section("graph", name) is None:
             plan.error("unsupported_edit", f"graph {name!r} was removed; deleting ubergraph pages is not supported from text", None)
@@ -143,13 +144,13 @@ def _diff_graphs(local: Document, base: Document | None, plan: AssetPlan) -> Non
         if before is None:
             plan.add("bp_function_add", line=section.line, name=signature.name, signature=signature.to_raw())
             _diff_locals(section, None, signature.name, plan)
-            diff_graph_section(section, None, plan, "blueprint", graph=signature.name)
+            diff_graph_section(section, None, plan, "blueprint", graph=signature.name, schema=schema)
             continue
         before_section, before_signature = before
         if signature.text() != before_signature.text():
             plan.add("bp_function_signature_set", line=section.line, name=signature.name, signature=signature.to_raw())
         _diff_locals(section, before_section, signature.name, plan)
-        diff_graph_section(section, before_section, plan, "blueprint", graph=signature.name)
+        diff_graph_section(section, before_section, plan, "blueprint", graph=signature.name, schema=schema)
     for name in base_functions:
         if name not in local_names:
             plan.add("bp_function_remove", name=name)

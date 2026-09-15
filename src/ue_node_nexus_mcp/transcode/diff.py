@@ -10,13 +10,19 @@ from .model import Document, Section
 from .paths import object_path
 from .plan import AssetPlan
 from .raw_simple import INSTANCE_SECTIONS
+from .schema_lock import SchemaLock
 from .values import values_equal
 
 FUNCTION_INTERFACE_CLASSES = {"FunctionInput", "FunctionOutput"}
 
 
-def build_plan(local: Document, base: Document | None, kind: str, ids: dict[str, str] | None = None) -> AssetPlan:
-    """Diff ``local`` (text) against ``base`` (last synced raw); ``base`` None means create."""
+def build_plan(local: Document, base: Document | None, kind: str, ids: dict[str, str] | None = None,
+               schema: SchemaLock | None = None) -> AssetPlan:
+    """Diff ``local`` (text) against ``base`` (last synced raw); ``base`` None means create.
+
+    ``schema`` resolves class spellings, so a class written as its short name in one
+    document and as its full path in the other is not read as a class change.
+    """
     plan = AssetPlan(asset_path=object_path(local.header.asset), kind=kind, ids=dict(ids or {}), asset_class=local.header.cls)
     plan.creates_asset = base is None
     if kind == "stub":
@@ -27,7 +33,7 @@ def build_plan(local: Document, base: Document | None, kind: str, ids: dict[str,
         diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
         local_graph = local.section("graph") or Section(name="graph")
         base_graph = base.section("graph") if base else None
-        diff_graph_section(local_graph, base_graph, plan, kind)
+        diff_graph_section(local_graph, base_graph, plan, kind, schema=schema)
         if kind == "material_function":
             plan.interface_changed = _function_interface_changed(local_graph, base_graph)
     elif kind == "material_instance":
@@ -37,9 +43,9 @@ def build_plan(local: Document, base: Document | None, kind: str, ids: dict[str,
     elif kind == "asset":
         diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
     elif kind == "blueprint":
-        diff_blueprint(local, base, plan)
+        diff_blueprint(local, base, plan, schema)
     elif kind in ("niagara_system", "niagara_emitter"):
-        diff_niagara(local, base, plan, kind)
+        diff_niagara(local, base, plan, kind, schema)
     else:
         plan.error("unsupported_kind", f"cannot push kind {kind!r}")
     return plan

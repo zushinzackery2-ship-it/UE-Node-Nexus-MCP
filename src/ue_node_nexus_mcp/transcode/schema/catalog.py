@@ -89,13 +89,27 @@ def read_entry(lock, family: str, name: str, entry: dict) -> dict:
     return record
 
 
+def _entry_names(entry: dict) -> set[str]:
+    """Names an index entry answers to, derived from the entry alone.
+
+    Catalog entries carry ``path``, so the real class name is available even when
+    a catalog published before ``records.class_aliases`` widened ``aliases``.
+    """
+    names = set(entry.get("aliases") or ())
+    path = str(entry.get("path") or "")
+    simple = path.rsplit(".", 1)[-1].rsplit("/", 1)[-1] if path else ""
+    if simple:
+        names.add(simple)
+    return names
+
+
 def lookup_record(lock, family: str, name: str) -> dict | None:
     entries = lock.info().get("tables", dict()).get(family, dict())
     candidates = [name, name + "." + name.rsplit("/", 1)[-1]]
     for key in candidates:
         if key in entries:
             return read_entry(lock, family, key, entries[key])
-    matches = [(key, entry) for key, entry in entries.items() if name in entry["aliases"] or key.endswith("." + name)]
+    matches = [(key, entry) for key, entry in entries.items() if name in _entry_names(entry) or key.endswith("." + name)]
     if len(matches) > 1:
         raise SyncError("schema_ambiguous", "use the full UE path", dict(candidates=[key for key, _ in matches]))
     return read_entry(lock, family, *matches[0]) if matches else None
@@ -110,7 +124,7 @@ def lookup_class(lock, family: str, name: str, manifest: dict) -> dict | None:
         if key in entries:
             return read_entry(lock, family, key, entries[key])
     names = set(candidates)
-    matches = [(key, entry) for key, entry in entries.items() if names.intersection(entry["aliases"])]
+    matches = [(key, entry) for key, entry in entries.items() if names.intersection(_entry_names(entry))]
     if len(matches) == 1:
         return read_entry(lock, family, *matches[0])
     if len(matches) > 1:

@@ -63,7 +63,7 @@ def prepare_item(bridge: BridgeCall, context: ProjectContext, status: AssetStatu
     elif base is None:
         raise SyncError("base_missing", f"{status.asset_path} needs a live base; pull first or push with force=local")
     ids = dict((identifier, guid) for guid, identifier in (base or dict()).get("ids", dict()).items())
-    plan = build_plan(document, base_document(base) if base is not None else None, status.kind, ids)
+    plan = build_plan(document, base_document(base) if base is not None else None, status.kind, ids, context.schema)
     diagnostics = [Diagnostic(entry.severity, entry.code, entry.message, label, entry.line) for entry in plan.diagnostics]
     result.diagnostics.extend(diagnostics)
     if plan.has_errors:
@@ -92,7 +92,7 @@ def live_base(bridge: BridgeCall, context: ProjectContext, status: AssetStatus, 
 def replan_refreshed(bridge: BridgeCall, context: ProjectContext, item: Prepared) -> None:
     item.base = live_base(bridge, context, item.status, item.base)
     ids = dict((identifier, guid) for guid, identifier in item.base.get("ids", dict()).items())
-    item.plan = build_plan(item.document, base_document(item.base), item.status.kind, ids)
+    item.plan = build_plan(item.document, base_document(item.base), item.status.kind, ids, context.schema)
     if item.plan.has_errors:
         raise SyncError("replan_failed", "; ".join(entry.format() for entry in item.plan.diagnostics))
     item.reconcile = True

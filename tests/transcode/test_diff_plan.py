@@ -163,3 +163,109 @@ def test_niagara_edits() -> None:
 def test_niagara_linked_input_cannot_be_created_from_text() -> None:
     plan = _plan_for(niagara_raw, lambda text: text.replace("InitializeParticle(Lifetime=2)", "InitializeParticle(Lifetime=@link(User.Life))"))
     assert any(item.code == "unsupported_edit" for item in plan.diagnostics)
+
+
+BLUEPRINT_HEADER = "nexus: 1\nasset: /Game/Blueprints/BP_Notation\nclass: Blueprint\nschema: key\n\n"
+
+
+def _schema_lock(tmp_path, family: str, paths: list[str]):
+    from ue_node_nexus_mcp.transcode.schema.catalog import publish
+    from ue_node_nexus_mcp.transcode.schema.lock import SchemaLock
+
+    directory = tmp_path / ".nexus" / "schema" / "key"
+    publish(directory, "key", {family: {path: dict(path=path, props=dict()) for path in paths}})
+    return SchemaLock(directory, "key")
+
+
+def _blueprint_plan(tmp_path, base_body: str, local_body: str, paths: list[str]):
+    schema = _schema_lock(tmp_path, "component", paths)
+    base, sink = parse(BLUEPRINT_HEADER + base_body)
+    assert sink.items == []
+    local, sink = parse(BLUEPRINT_HEADER + local_body)
+    assert sink.items == []
+    return build_plan(local, base, "blueprint", None, schema), local, schema
+
+
+def test_component_real_name_resolves_when_a_prefix_is_stripped(tmp_path) -> None:
+    """The reported case: the bridge pulls ``NiagaraComponent`` and its own output failed lint."""
+    from ue_node_nexus_mcp.transcode.lint import lint_document
+
+    plan, local, schema = _blueprint_plan(
+        tmp_path,
+        "[components]\nRoot : SceneComponent\nEffects : NiagaraComponent(parent=Root)\n",
+        "[components]\nRoot : SceneComponent\nEffects : /Script/Niagara.NiagaraComponent(parent=Root)\n",
+        ["/Script/Engine.SceneComponent", "/Script/Niagara.NiagaraComponent"],
+    )
+    assert lint_document(local, "blueprint", schema, "BP_Notation.bp.nexus", "key").items == []
+    assert not plan.has_errors, [item.format() for item in plan.diagnostics]
+    assert [verb.op for verb in plan.verbs] == []
+
+
+def test_component_class_notation_switch_is_not_a_class_change(tmp_path) -> None:
+    plan, _, _ = _blueprint_plan(
+        tmp_path,
+        "[components]\nMesh : StaticMeshComponent(parent=Root)\n",
+        "[components]\nMesh : /Script/Engine.StaticMeshComponent(parent=Root)\n",
+        ["/Script/Engine.StaticMeshComponent"],
+    )
+    assert not plan.has_errors, [item.format() for item in plan.diagnostics]
+    assert [verb.op for verb in plan.verbs] == []
+
+
+def test_component_class_replacement_is_still_rejected(tmp_path) -> None:
+    plan, _, _ = _blueprint_plan(
+        tmp_path,
+        "[components]\nMesh : StaticMeshComponent(parent=Root)\n",
+        "[components]\nMesh : SkeletalMeshComponent(parent=Root)\n",
+        ["/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent"],
+    )
+    assert any(item.code == "unsupported_edit" for item in plan.diagnostics)
+
+
+def test_renderer_class_notation_switch_is_not_a_recreate(tmp_path) -> None:
+    schema = _schema_lock(tmp_path, "niagara_renderer", ["/Script/Niagara.NiagaraSpriteRendererProperties"])
+    header = "nexus: 1\nasset: /Game/VFX/NS_Notation\nclass: NiagaraSystem\nschema: key\n\n"
+    base, sink = parse(header + "[renderers Sparks]\nsprite : Sprite { Alignment=VelocityAligned }\n")
+    assert sink.items == []
+    local, sink = parse(header + "[renderers Sparks]\nsprite : /Script/Niagara.NiagaraSpriteRendererProperties { Alignment=VelocityAligned }\n")
+    assert sink.items == []
+    plan = build_plan(local, base, "niagara_system", None, schema)
+    assert [verb.op for verb in plan.verbs] == []
+
+
+def test_node_prefixed_short_name_is_not_a_class_change(tmp_path) -> None:
+    schema = _schema_lock(tmp_path, "material_expression", ["/Script/Engine.MaterialExpressionConstant"])
+    header = "nexus: 1\nasset: /Game/Materials/M_Notation\nclass: Material\nschema: key\n\n"
+    base, sink = parse(header + "[graph]\nc : Constant(R=1) @ 0,0\n\nc -> out.BaseColor\n")
+    assert sink.items == []
+    local, sink = parse(header + "[graph]\nc : MaterialExpressionConstant(R=1) @ 0,0\n\nc -> out.BaseColor\n")
+    assert sink.items == []
+    plan = build_plan(local, base, "material", None, schema)
+    assert [item.format() for item in plan.diagnostics if item.code == "node_class_changed"] == []
+    assert [verb.op for verb in plan.verbs] == []
+
+
+def test_shared_short_name_resolves_through_the_spelled_out_side(tmp_path) -> None:
+    """`CallFunction` names both K2Node_CallFunction and AnimGraphNode_CallFunction.
+
+    The stripped name is ambiguous, so the resolved side has to decide identity;
+    otherwise a full path in the text recreates every node that uses it.
+    """
+    schema = _schema_lock(tmp_path, "k2node", [
+        "/Script/BlueprintGraph.K2Node_CallFunction",
+        "/Script/AnimGraph.AnimGraphNode_CallFunction",
+        "/Script/BlueprintGraph.K2Node_IfThenElse",
+    ])
+    header = "nexus: 1\nasset: /Game/Blueprints/BP_Notation\nclass: Blueprint\nschema: key\n\n"
+    base, sink = parse(header + "[graph EventGraph]\ncall : CallFunction(KismetSystemLibrary.PrintString) @ 0,0\n")
+    assert sink.items == []
+    same, sink = parse(header + "[graph EventGraph]\ncall : /Script/BlueprintGraph.K2Node_CallFunction(KismetSystemLibrary.PrintString) @ 0,0\n")
+    assert sink.items == []
+    plan = build_plan(same, base, "blueprint", None, schema)
+    assert [item.format() for item in plan.diagnostics if item.code == "node_class_changed"] == []
+    assert [verb.op for verb in plan.verbs] == []
+
+    other, sink = parse(header + "[graph EventGraph]\ncall : /Script/BlueprintGraph.K2Node_IfThenElse @ 0,0\n")
+    assert sink.items == []
+    changed = build_plan(other, base, "blueprint", None, schema)
+    assert [item.code for item in changed.diagnostics if item.code == "node_class_changed"] == ["node_class_changed"]

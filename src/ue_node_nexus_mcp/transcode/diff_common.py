@@ -1,4 +1,4 @@
-"""Shared diff helpers: property sections and typed declarations."""
+"""Shared diff helpers: property sections, typed declarations and class identity."""
 
 from __future__ import annotations
 
@@ -6,7 +6,53 @@ from typing import Any
 
 from .model import Decl, Section
 from .plan import AssetPlan
+from .schema.records import class_aliases
+from .schema_lock import SchemaLock
+from .sync_project import SyncError
 from .values import values_equal
+
+
+def class_path(schema: SchemaLock | None, family: str, text: str) -> str | None:
+    """Record path for one class spelling, or None when it cannot be resolved.
+
+    An ambiguous name (several records share the alias, such as ``CallFunction`` for
+    both ``K2Node_CallFunction`` and ``AnimGraphNode_CallFunction``) resolves to None:
+    the spelling alone does not identify a class.
+    """
+    if schema is None or not text:
+        return None
+    try:
+        info = schema.resolve_class(family, text)
+    except SyncError:
+        return None
+    return info.path if info is not None else None
+
+
+def answers_to(path: str, text: str) -> bool:
+    """True when ``text`` is one of the names the class at ``path`` answers to."""
+    return bool(path) and bool(text) and text in class_aliases(path, path)
+
+
+def same_class(schema: SchemaLock | None, family: str, left: str, right: str) -> bool:
+    """True when two class spellings denote the same reflected class.
+
+    Text accepts the full UE path, the real class name and the prefix-stripped form
+    the mirror writes for nodes, so comparing the spellings literally reads a
+    notation switch as a class change and rejects text the schema itself resolved.
+    When only one side resolves, that record decides identity, which covers shortcut
+    names several records share.
+    """
+    if left == right:
+        return True
+    left_path = class_path(schema, family, left)
+    right_path = class_path(schema, family, right)
+    if left_path is not None and right_path is not None:
+        return left_path == right_path
+    if left_path is not None:
+        return answers_to(left_path, right)
+    if right_path is not None:
+        return answers_to(right_path, left)
+    return False
 
 
 def prop_default(base_section: Section | None, base_decl_meta: dict[str, Any] | None, key: str) -> str | None:

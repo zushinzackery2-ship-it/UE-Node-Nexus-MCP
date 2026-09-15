@@ -9,11 +9,28 @@ FAMILIES = dict(material_expression="material", material_functions="material", k
                 niagara_renderer="niagara", niagara_modules="niagara", types="common")
 
 
+def class_aliases(name: str, path: str) -> list[str]:
+    """Every name one class record answers to.
+
+    Class tables are keyed by full UE path, so ``name`` alone does not carry the
+    class name. ``short_class_name`` strips engine-family prefixes for the node
+    ids the mirror writes (``Constant``, ``Sprite``), which eats the real name of
+    classes that start with one of those tokens (``NiagaraComponent``). The real
+    class name is therefore added explicitly.
+    """
+    aliases = {name, path}
+    simple = path.rsplit(".", 1)[-1].rsplit("/", 1)[-1] if path else ""
+    if simple:
+        aliases.add(simple)
+        aliases.add(short_class_name(simple))
+    return sorted(alias for alias in aliases if alias)
+
+
 def normalize(family: str, name: str, raw: dict, schema_key: str) -> dict:
     path = raw.get("path") or (name if name.startswith("/") else f"/Unknown/{name}")
     record = dict(raw)
     record.update(name=name, path=path, category=FAMILIES[family], family=family, schema_key=schema_key,
-                  aliases=sorted(set([name, short_class_name(name), path])),
+                  aliases=class_aliases(name, path),
                   module=raw.get("module") or (path.removeprefix("/Script/").split(".", 1)[0] if path.startswith("/Script/") else "project"),
                   plugin=raw.get("plugin", "metadata_not_provided"), inheritance=raw.get("inheritance", "metadata_not_provided"),
                   engine_available=raw.get("engine_available", True),
