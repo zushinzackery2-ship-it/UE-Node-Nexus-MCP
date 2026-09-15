@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">UE Node Nexus MCP symbol</title>
+  <desc id="desc">Cut node ring symbol on a transparent background, for light surfaces.</desc>
+  <defs>
+    <path id="ring" d="M36 128A92 92 0 1 0 220 128A92 92 0 1 0 36 128ZM66 128A62 62 0 1 1 190 128A62 62 0 1 1 66 128Z"/>
+    <path id="node" d="M128 102L154 128L128 154L102 128Z"/>
+    <clipPath id="cutLower"><polygon points="0,256 256,256 256,0"/></clipPath>
+    <clipPath id="cutUpper"><polygon points="0,0 256,0 0,256"/></clipPath>
+  </defs>
+  <g clip-path="url(#cutLower)">
+    <use href="#ring" fill="#192226"/>
+    <use href="#node" fill="#148577"/>
+  </g>
+  <g clip-path="url(#cutUpper)">
+    <g transform="translate(-7,-7)">
+      <use href="#ring" fill="#192226"/>
+      <use href="#node" fill="#148577"/>
+    </g>
+  </g>
+</svg>
