@@ -64,7 +64,8 @@ class ProtocolUe(FakeUe):
         if operation not in ("transcode_apply", "vfx_transcode_apply") or not payload.get("apply_id"):
             return super().call(operation, payload, **kwargs)
         identifier = payload["apply_id"]
-        request_digest = digest(payload)
+        request = dict(deepcopy(payload), operation=operation)
+        request_digest = digest(request)
         previous = self.receipts.get(identifier)
         if previous:
             if previous["request_digest"] != request_digest:
@@ -86,7 +87,7 @@ class ProtocolUe(FakeUe):
         failed = response.get("data", dict()).get("failed")
         if failed or self.saving_fails(payload["asset_path"]):
             self.assets, self.dirty = before, before_dirty
-            receipt = dict(apply_id=identifier, request_digest=request_digest, phase="rolled_back", response=response)
+            receipt = dict(apply_id=identifier, request=request, request_digest=request_digest, phase="rolled_back", response=response)
             self.receipts[identifier] = receipt
             return dict(ok=False, error=dict(code="apply_rolled_back", message="restored checkpoint"), data=dict(receipt=receipt))
         if payload.get("delete_asset"):
@@ -95,7 +96,8 @@ class ProtocolUe(FakeUe):
                          live_revision="", content_revision="", saved_hash="")
         else:
             after = self.stamped(self.assets[payload["asset_path"]])
-        receipt = dict(apply_id=identifier, request_digest=request_digest, phase="ue_committed", after=after, response=deepcopy(response), response_data=deepcopy(response["data"]))
+        receipt = dict(apply_id=identifier, request=request, request_digest=request_digest, phase="ue_committed", after=after,
+                       response=deepcopy(response), response_data=deepcopy(response["data"]))
         self.receipts[identifier] = receipt
         if self.after_apply:
             callback, self.after_apply = self.after_apply, None

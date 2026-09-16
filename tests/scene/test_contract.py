@@ -1,13 +1,13 @@
 from copy import deepcopy
 
-from ue_node_nexus_mcp.build_info.contract import CONTRACT_VERSION, CORE_MODULE, VERSION, VFX_MODULE, compatibility
+from ue_node_nexus_mcp.build_info.contract import CONTRACT_VERSION, CORE_MODULE, GUARD_MODULE, VERSION, VFX_MODULE, compatibility
 from ue_node_nexus_mcp.payload_schema import payload_schema_for
 
 
 def build_info():
     module = dict(version=VERSION, contract_version=CONTRACT_VERSION, loaded=True,
                   source_fingerprint="a" * 64, module_path="D:/Plugins/Bridge.dll", build_id="engine-build")
-    return dict(build=dict(((CORE_MODULE, module), (VFX_MODULE, deepcopy(module)))))
+    return dict(build=dict(((CORE_MODULE, module), (GUARD_MODULE, deepcopy(module)), (VFX_MODULE, deepcopy(module)))))
 
 
 def test_write_contract_requires_matching_loaded_binary():

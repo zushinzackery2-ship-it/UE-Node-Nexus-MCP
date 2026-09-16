@@ -9,6 +9,7 @@ import pytest
 from ue_node_nexus_mcp.transcode.collaboration.apply import transactions
 from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import text_of
 from ue_node_nexus_mcp.transcode.collaboration.store import Store
+from ue_node_nexus_mcp.transcode.collaboration.store.io import digest
 from ue_node_nexus_mcp.transcode.collaboration.workspace import Workspace
 from ue_node_nexus_mcp.transcode.collaboration.workspace.projection import prepare
 from ue_node_nexus_mcp.transcode.sync import run_sync
@@ -251,7 +252,8 @@ def test_a_malformed_transport_reply_rejects_the_execution(project):
 def record_for(store, workspace_id):
     handle = Workspace(store, workspace_id)
     handle.schema = None
-    return handle, dict(id="apply-1", asset=MATERIAL, request_digest="digest-1")
+    request = dict(asset_path=MATERIAL, apply_id="apply-1")
+    return handle, dict(id="apply-1", asset=MATERIAL, request=request, operation="transcode_apply", request_digest=digest(request))
 
 
 @pytest.mark.parametrize("receipt,code", [
@@ -274,10 +276,11 @@ def test_a_receipt_from_another_schema_environment_is_stale(project):
     from ue_node_nexus_mcp.transcode.schema.lock import SchemaLock
 
     handle.schema = SchemaLock(store.root, SCHEMA_KEY)
-    matching = dict(apply_id="apply-1", after=dict(asset_path=MATERIAL, schema_key=SCHEMA_KEY))
+    matching = dict(apply_id="apply-1", request=dict(record["request"], operation=record["operation"]),
+                    after=dict(asset_path=MATERIAL, schema_key=SCHEMA_KEY))
     assert transactions.verify(handle, record, matching) is matching
     with pytest.raises(SyncError) as failure:
-        transactions.verify(handle, record, dict(apply_id="apply-1", after=dict(asset_path=MATERIAL, schema_key="5.6.0-other")))
+        transactions.verify(handle, record, dict(matching, after=dict(asset_path=MATERIAL, schema_key="5.6.0-other")))
     assert failure.value.code == "schema_stale"
     assert failure.value.details["received"] == "5.6.0-other"
     assert transactions.verify(handle, record, "not a receipt") is None

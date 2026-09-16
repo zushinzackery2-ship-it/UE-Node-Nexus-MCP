@@ -4,23 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
-import subprocess
 import time
 
 from ue_node_nexus_mcp import runtime
-from ue_node_nexus_mcp.bridge import BridgeConfig, BridgeError, UeBridgeClient
-from ue_node_nexus_mcp.instance import instance_manager
-
-
-def environment(project: Path) -> dict[str, str]:
-    result = os.environ.copy()
-    temporary = project.parent / "Temp"
-    temporary.mkdir(parents=True, exist_ok=True)
-    result.update(TEMP=str(temporary), TMP=str(temporary))
-    result["UE-LocalDataCachePath"] = str(project.parent / "DerivedDataCache")
-    return result
+from ue_node_nexus_mcp.bridge import BridgeConfig, UeBridgeClient
+from ue_node_nexus_mcp.instances.broker.client import BrokerClient
+from ue_node_nexus_mcp.instances.session.binding import EditorSession as ManagedSession
 
 
 class EditorSession:
@@ -28,31 +18,24 @@ class EditorSession:
         if rhi not in ("d3d12", "nullrhi"):
             raise ValueError("validation RHI must be d3d12 or nullrhi")
         self.project = project.resolve()
+        self.project.relative_to((Path(__file__).resolve().parents[3] / "build").resolve())
         self.engine = engine.resolve()
         self.name = name
         self.rhi = rhi
         self.logs = self.project.parent / "Logs"
         self.logs.mkdir(parents=True, exist_ok=True)
-        self.process = None
-        self.output = None
+        self.session = ManagedSession(BrokerClient(self.project.parent / "Runtime", str(self.project.parent)), str(self.project))
         self.previous_bridge = None
         self.requests = self.logs / f"{name}-requests.jsonl"
 
     def __enter__(self):
-        command = [
-            str(self.engine / "Engine/Binaries/Win64/UnrealEditor-Cmd.exe"), str(self.project),
-            "-" + self.rhi, "-unattended", "-nosplash", "-nosound", "-NoSourceControl", "-nop4",
-            "-stdout", "-FullStdOutLogOutput", "-RenderOffscreen", "-NoVSync",
-            "-abslog=" + str(self.logs / f"{self.name}-editor.log"),
-        ]
-        self.output = (self.logs / f"{self.name}-console.log").open("w", encoding="utf-8")
-        self.process = subprocess.Popen(command, env=environment(self.project), stdout=self.output,
-                                        stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
         self.previous_bridge = runtime.bridge
-        runtime.bridge = UeBridgeClient(BridgeConfig(timeout_seconds=180))
-        self.report("launch", dict(command=command, pid=self.process.pid))
-        print(json.dumps(dict(phase="editor_start", pid=self.process.pid, project=str(self.project), rhi=self.rhi)), flush=True)
+        runtime.bridge = UeBridgeClient(BridgeConfig(timeout_seconds=180), instances=self.session)
         try:
+            result = self.session.ensure(dict(mode="reuse_or_start", engine_path=str(self.engine),
+                                              launch_profile="offscreen", rhi=self.rhi, dry_run=False))
+            self.report("launch", result)
+            print(json.dumps(dict(phase="editor_start", instance_id=result["instance"]["instance_id"], project=str(self.project))), flush=True)
             self._ready()
         except BaseException:
             self.__exit__(True, None, None)
@@ -62,11 +45,10 @@ class EditorSession:
     def _ready(self) -> None:
         deadline = time.monotonic() + 240
         while time.monotonic() < deadline:
-            if self.process.poll() is not None:
-                raise RuntimeError(f"editor exited with {self.process.returncode}; see {self.logs}")
-            try:
-                instance_manager.select(pid=self.process.pid)
-            except BridgeError:
+            status = self.session.status()
+            if status["state"] in ("EXITED", "UNRESPONSIVE"):
+                raise RuntimeError(f"validation editor unavailable: {status}")
+            if status["state"] != "READY":
                 time.sleep(0.5)
                 continue
             response = self.call("project_context_get", dict())
@@ -96,8 +78,8 @@ class EditorSession:
 
     def verify_builds(self) -> dict:
         capabilities = self.require("bridge_capabilities_get")
-        for name in ("UeNodeNexusBridge", "UeNodeNexusVfxBridge"):
-            plugin = self.project.parent / "Plugins" / name
+        for name in ("UeNodeNexusBridge", "UeNodeNexusGuard", "UeNodeNexusVfxBridge"):
+            plugin = self.project.parent / "Plugins" / ("UeNodeNexusBridge" if name == "UeNodeNexusGuard" else name)
             expected = json.loads((plugin / "BuildIdentity.json").read_text(encoding="utf-8"))
             live = capabilities["build"][name]
             for field in ("version", "source_commit", "source_dirty", "source_fingerprint", "contract_version"):
@@ -112,22 +94,25 @@ class EditorSession:
     def __exit__(self, exc_type, _exception, _traceback):
         failure = None
         try:
-            if self.process is not None and self.process.poll() is None:
-                self.call("editor_request_exit", dict(save_before_exit=False, force=False))
-                try:
-                    self.process.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    self.process.terminate()
-                    self.process.wait(timeout=30)
-                    failure = TimeoutError(f"validation editor did not exit normally: {self.name}")
-                if self.process.returncode != 0:
-                    failure = RuntimeError(f"validation editor exited with {self.process.returncode}: {self.name}")
-                self.report("exit", dict(returncode=self.process.returncode, normal=failure is None))
+            identifier = self.session.current().get("instance_id")
+            if identifier:
+                self.session.release()
+                state = self.session.status()
+                if state["state"] in ("READY", "IDLE", "BLOCKED"):
+                    self.session.call("close", dict(instance_id=identifier, dry_run=False))
+                    state = self.session.status()
+                deadline = time.monotonic() + 75
+                while state["state"] not in ("EXITED", "BLOCKED", "UNRESPONSIVE") and time.monotonic() < deadline:
+                    time.sleep(0.5)
+                    state = self.session.status()
+                normal = state["state"] == "EXITED" and state.get("exit_code") == 0
+                self.report("exit", dict(normal=normal, instance=state))
+                if not normal:
+                    failure = RuntimeError(f"validation editor did not exit normally: {state}")
         finally:
             if self.previous_bridge is not None:
                 runtime.bridge = self.previous_bridge
-            if self.output is not None:
-                self.output.close()
+            self.session.close()
         if failure is not None and not exc_type:
             raise failure
         return False

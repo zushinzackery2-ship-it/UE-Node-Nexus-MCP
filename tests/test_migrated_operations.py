@@ -10,7 +10,7 @@ import pytest
 from ue_node_nexus_mcp.operation_registry import get_operation_spec
 from ue_node_nexus_mcp.tools_facade import ue_execute, ue_read
 
-from tests.support.bridges import RecordingBridge, RoutingBridge
+from tests.support.bridges import RecordingBridge
 
 
 def test_new_operations_carry_expected_metadata() -> None:
@@ -58,22 +58,25 @@ def test_asset_dependencies_reads_through_ue_read(all_features: None, use_bridge
     assert bridge.calls[1][0] == "asset_referencers_get"
 
 
-def _project_context_route(tmp_path: Path) -> dict:
-    return {
-        "ok": True,
-        "data": {"project_saved_dir": str(tmp_path)},
-        "diagnostics": [],
-        "warnings": [],
-    }
+def _project_logs(tmp_path: Path, monkeypatch) -> Path:
+    from ue_node_nexus_mcp import tools_system
+    from ue_node_nexus_mcp.instances.broker.client import BrokerClient
+    from ue_node_nexus_mcp.instances.session.binding import EditorSession
+
+    project = tmp_path / "Demo.uproject"
+    project.touch()
+    session = EditorSession(BrokerClient(tmp_path / "Runtime", str(tmp_path)), str(project))
+    monkeypatch.setattr(tools_system, "instance_manager", session)
+    return tmp_path / "Saved/Logs"
 
 
-def test_log_tail_reads_newest_project_log(all_features: None, use_bridge: Callable, tmp_path: Path) -> None:
-    logs_dir = tmp_path / "Logs"
-    logs_dir.mkdir()
+def test_log_tail_reads_newest_project_log(all_features: None, use_bridge: Callable, tmp_path: Path, monkeypatch) -> None:
+    logs_dir = _project_logs(tmp_path, monkeypatch)
+    logs_dir.mkdir(parents=True)
     (logs_dir / "Demo.log").write_text(
         "LogInit: startup\nLogTemp: Warning: sampler mismatch\nLogTemp: done\n", encoding="utf-8"
     )
-    use_bridge(RoutingBridge({"project_context_get": _project_context_route(tmp_path)}))
+    bridge = use_bridge(RecordingBridge())
 
     result = ue_execute("log_tail_get", {})
     assert result["ok"] is True
@@ -84,19 +87,21 @@ def test_log_tail_reads_newest_project_log(all_features: None, use_bridge: Calla
     filtered = ue_execute("log_tail_get", {"match": "warning"})
     assert filtered["data"]["matched_lines"] == 1
     assert "sampler mismatch" in filtered["data"]["text"]
+    assert not bridge.calls
 
 
-def test_log_tail_via_ue_read_and_missing_log(all_features: None, use_bridge: Callable, tmp_path: Path) -> None:
-    use_bridge(RoutingBridge({"project_context_get": _project_context_route(tmp_path)}))
+def test_log_tail_via_ue_read_and_missing_log(all_features: None, use_bridge: Callable, tmp_path: Path, monkeypatch) -> None:
+    logs_dir = _project_logs(tmp_path, monkeypatch)
+    bridge = use_bridge(RecordingBridge())
     result = ue_read(target="log")
     assert result["ok"] is False  # no Logs dir yet -> log_not_found flows through ue_read
 
-    logs_dir = tmp_path / "Logs"
-    logs_dir.mkdir()
+    logs_dir.mkdir(parents=True)
     (logs_dir / "Demo.log").write_text("only line\n", encoding="utf-8")
     ok_result = ue_read(target="log")
     assert ok_result["ok"] is True
     assert ok_result["data"]["operation"] == "log_tail_get"
+    assert not bridge.calls
 
 
 @pytest.mark.parametrize(

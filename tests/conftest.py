@@ -19,7 +19,10 @@ def all_features(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def use_bridge(monkeypatch: pytest.MonkeyPatch) -> Callable[[Any], Any]:
     def _install(bridge: Any) -> Any:
+        from ue_node_nexus_mcp.instances.session import instance_manager
+        from tests.support.scopes import Scope
         monkeypatch.setattr(runtime, "bridge", bridge)
+        monkeypatch.setattr(instance_manager, "reserve", Scope)
         return bridge
 
     return _install

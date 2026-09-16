@@ -71,6 +71,9 @@ def refresh_plugins(build: Path, host: Path) -> None:
         for filename in (f"{name}.uplugin", "BuildIdentity.json", "Binaries/Win64/UnrealEditor.modules",
                          f"Binaries/Win64/UnrealEditor-{name}.dll"):
             shutil.copy2(source / filename, target / filename)
+        if name == "UeNodeNexusBridge":
+            filename = "Binaries/Win64/UnrealEditor-UeNodeNexusGuard.dll"
+            shutil.copy2(source / filename, target / filename)
         assert fingerprint(target) == identity["source_fingerprint"], name
     print(f"Refreshed verified plugin copies: {host}")
 

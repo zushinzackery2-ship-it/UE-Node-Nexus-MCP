@@ -135,7 +135,7 @@ def test_historical_schema_answers_from_the_recorded_snapshots(project):
 def test_dynamic_pin_classes_are_marked_as_needing_a_target_context(project):
     ue, env, workspace, store, root = project
     catalog = run_sync(ue, "schema", options=dict(category="blueprint", query="CallFunction", details=True), env=env)
-    assert catalog["freshness"] == "cached"
+    assert catalog["freshness"] == "unknown"
     row = next(item for item in catalog["rows"] if item["name"] == "K2Node_CallFunction")
     assert row["coverage"] == "context_required"
     assert row["definition"]["dynamic_pins"] is True

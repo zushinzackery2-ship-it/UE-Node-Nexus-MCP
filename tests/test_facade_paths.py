@@ -16,7 +16,7 @@ from tests.support.bridges import RecordingBridge, RoutingBridge
 
 from ue_node_nexus_mcp import runtime
 from ue_node_nexus_mcp.errors import BridgeError
-from ue_node_nexus_mcp.instance import InstanceManager
+from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from ue_node_nexus_mcp.server import (
     ue_capability_get,
     ue_diff_get,
@@ -208,50 +208,41 @@ class _UnreachableBridge:
         raise BridgeError("no UE editor instance found")
 
 
-class _VfxBridge:
-    def __init__(self, available: bool) -> None:
-        self._available = available
-
-    def call(self, *_args, **_kwargs):
-        return {"ok": True, "data": {"modules": {"vfx_available": self._available}}}
-
-
 def test_inconclusive_vfx_probe_is_not_cached(clean_feature_state, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runtime, "bridge", _UnreachableBridge())
+    monkeypatch.setattr(runtime.instance_manager, "binding", dict())
     assert "vfx" not in runtime.enabled_features()
     assert runtime._enabled_features is None  # probe failure must not stick
 
-    monkeypatch.setattr(runtime, "bridge", _VfxBridge(available=True))
+    runtime.instance_manager.binding["vfx_available"] = True
     assert "vfx" in runtime.enabled_features()
     assert runtime._enabled_features is not None
 
 
 def test_editor_without_vfx_module_is_cached(clean_feature_state, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(runtime, "bridge", _VfxBridge(available=False))
+    monkeypatch.setattr(runtime, "bridge", _UnreachableBridge())
+    monkeypatch.setattr(runtime.instance_manager, "binding", dict(vfx_available=False))
     assert "vfx" not in runtime.enabled_features()
     assert runtime._enabled_features is not None  # definitive editor answer sticks
 
 
 # --- instance bind callback -----------------------------------------------------
 
-class _IdentifyTransport:
-    def send(self, _pipe_name, _envelope, _timeout):
-        return {"data": {"project_name": "Demo", "project_file_path": "C:/Demo/Demo.uproject"}}
-
-
-def test_instance_bind_fires_feature_reset_callback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_instance_bind_fires_feature_reset_callback(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     pipe_name = "\\\\.\\pipe\\UeNodeNexusBridge.123"
-    monkeypatch.setattr("ue_node_nexus_mcp.instance.enumerate_pipe_names", lambda: [(123, pipe_name)])
     events: list[str] = []
-
-    manager = InstanceManager(transport=_IdentifyTransport())
+    project = tmp_path / "Demo.uproject"
+    project.write_text("{}")
+    manager = EditorSession(project=str(project))
+    item = dict(instance_id="first", pid=123, state="READY", project_path=str(project), project_name="Demo")
+    monkeypatch.setattr(manager, "call", lambda *_args: dict(instance=dict(item), lease=dict(lease_id="lease")))
     manager.set_on_bind_changed(lambda: events.append("bind"))
-
-    assert manager.resolve_target() == pipe_name
+    manager.ensure(dict(dry_run=False))
+    assert manager.current()["target"] == pipe_name
     assert events == ["bind"]
-    assert manager.resolve_target() == pipe_name  # already bound: no re-notify
+    manager.ensure(dict(dry_run=False))
     assert events == ["bind"]
-
-    manager.select(pid=123)
+    item["instance_id"] = "replacement"
+    manager.ensure(dict(dry_run=False, instance_id="replacement"))
     assert events == ["bind", "bind"]
     assert manager.current()["mode"] == "explicit"

@@ -28,6 +28,13 @@ def finalize(host: Path, engine: Path) -> None:
         if identity["source_fingerprint"] != expected or expected.encode("utf-16le") not in binary:
             raise RuntimeError(f"rebuild required before finalizing module metadata: {name}")
         data = dict(BuildId=build_id, Modules=dict(((name, binary_name),)))
+        if name == "UeNodeNexusBridge":
+            guard = "UnrealEditor-UeNodeNexusGuard.dll"
+            if not (directory / guard).is_file():
+                raise RuntimeError("lifecycle guard was not built")
+            if expected.encode("utf-16le") not in (directory / guard).read_bytes():
+                raise RuntimeError("lifecycle guard fingerprint differs from the main bridge")
+            data["Modules"]["UeNodeNexusGuard"] = guard
         (directory / "UnrealEditor.modules").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     (host / "Content").mkdir(exist_ok=True)
     print(f"Verified module manifests: {host}, BuildId={build_id}")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import nullcontext
 
 import pytest
 
@@ -9,6 +10,8 @@ from ue_node_nexus_mcp.contracts import DEFAULT_HIDDEN_OPERATIONS, THIN_MCP_OPER
 from ue_node_nexus_mcp.operation_registry import get_operation_spec
 from ue_node_nexus_mcp.tools_sync import ue_sync
 from ue_node_nexus_mcp.workflow_guides import load_guide, search_guides
+from ue_node_nexus_mcp.transcode.lifecycle import instance_manager
+from ue_node_nexus_mcp.instances.errors import InstanceError
 
 from .fake_ue import FakeUe
 from .fixtures import material_function_raw
@@ -34,6 +37,8 @@ def test_ue_sync_validates_arguments(all_features) -> None:
 def test_ue_sync_runs_against_fake_bridge(all_features, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     ue = FakeUe({"mf": material_function_raw()})
     monkeypatch.setattr(runtime, "bridge", ue)
+    monkeypatch.setattr(instance_manager, "repository", lambda: dict(mirror_root=str(tmp_path / "mirror"), mirror_project_name="Shadetest"))
+    monkeypatch.setattr(instance_manager, "work_scope", lambda *args, **kwargs: nullcontext())
     monkeypatch.setenv("UE_NEXUS_TRANSCODE_DIR", str(tmp_path / "mirror"))
     result = ue_sync("init")
     assert result["ok"] is True, result
@@ -50,10 +55,13 @@ def test_ue_sync_reports_sync_errors_as_minimal_errors(all_features, monkeypatch
         return {"ok": False, "operation": operation, "error": {"code": "mcp_bridge_error", "message": "no pipe"}, "diagnostics": [], "warnings": []}
 
     monkeypatch.setattr(tools_sync, "_bridge", offline)
+    def missing_project():
+        raise InstanceError("project_required", "select an exact project before resolving its repository")
+    monkeypatch.setattr(instance_manager, "repository", missing_project)
     monkeypatch.setenv("UE_NEXUS_TRANSCODE_DIR", str(tmp_path / "empty"))
     result = ue_sync("status")
     assert result["ok"] is False
-    assert result["error"]["code"] == "no_project"
+    assert result["error"]["code"] == "project_required"
 
 
 def test_text_mirror_guide_is_served() -> None:
