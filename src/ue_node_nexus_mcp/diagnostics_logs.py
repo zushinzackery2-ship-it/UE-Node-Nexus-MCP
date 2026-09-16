@@ -64,12 +64,13 @@ def enrich_with_material_log_diagnostics(
 
 
 def read_latest_project_log(project_context: dict[str, Any] | None, tail_bytes: int = _DEFAULT_TAIL_BYTES) -> tuple[str, Path | None]:
-    log_dir = _project_log_dir(project_context)
-    if log_dir is None or not log_dir.exists():
+    saved_dir = _project_saved_dir(project_context)
+    if saved_dir is None:
         return "", None
 
     candidates = sorted(
-        (path for path in log_dir.glob("*.log") if path.is_file()),
+        (path for log_dir in (saved_dir / "Logs", saved_dir / "Nexus/Logs")
+         for path in log_dir.glob("*.log") if path.is_file()),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
@@ -81,7 +82,7 @@ def read_latest_project_log(project_context: dict[str, Any] | None, tail_bytes: 
     with path.open("rb") as handle:
         if size > tail_bytes:
             handle.seek(size - tail_bytes)
-        text = handle.read().decode("utf-8", errors="replace")
+        text = handle.read(tail_bytes).decode("utf-8", errors="replace")
     return text, path
 
 
@@ -169,18 +170,18 @@ def parse_material_log_diagnostics(
     return items[-limit:]
 
 
-def _project_log_dir(project_context: dict[str, Any] | None) -> Path | None:
+def _project_saved_dir(project_context: dict[str, Any] | None) -> Path | None:
     data = project_context.get("data") if isinstance(project_context, dict) else None
     if not isinstance(data, dict):
         return None
 
     saved_dir = data.get("project_saved_dir")
     if isinstance(saved_dir, str) and saved_dir:
-        return Path(saved_dir) / "Logs"
+        return Path(saved_dir)
 
     project_file = data.get("project_file_path")
     if isinstance(project_file, str) and project_file:
-        return Path(project_file).parent / "Saved" / "Logs"
+        return Path(project_file).parent / "Saved"
     return None
 
 

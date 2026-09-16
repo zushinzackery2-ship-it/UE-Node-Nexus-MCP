@@ -10,6 +10,7 @@ from ...sync_project import SyncError, apply_operation
 from ..semantic.snapshot import from_raw
 from ..store.io import atomic_write, canonical, digest
 from ..store.refs import move_ref
+from .receipt import verify_request
 
 
 def save(workspace, record: dict) -> None:
@@ -67,8 +68,7 @@ def verify(workspace, record: dict, receipt) -> dict | None:
     if receipt.get("apply_id") != record["id"]:
         raise SyncError("receipt_invalid", "receipt belongs to another execution",
                         dict(apply_id=record["id"], received=receipt.get("apply_id")))
-    if receipt.get("request_digest") not in (None, record["request_digest"]):
-        raise SyncError("receipt_invalid", "receipt answers a different request", dict(apply_id=record["id"]))
+    verify_request(record, receipt)
     after = receipt.get("after")
     if isinstance(after, dict):
         reported = after.get("asset_path")

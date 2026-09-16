@@ -11,13 +11,15 @@ from .parser import parse
 from .paths import display_path, parse_text_path
 from .state import SyncState
 from .sync_files import mirrored_assets, read_text
-from .sync_project import BridgeCall, ProjectContext, SyncError, ensure_schema, resolve_context, write_project_info
+from .sync_project import BridgeCall, ProjectContext, SyncError, ensure_schema, resolve_context, stored_project_name, write_project_info
 from .sync_pull import pull_assets
 from .sync_push import PushOptions, push_assets
 from .sync_status import compute_status, query_ue, resolve_selection
 from .scene.sync import SceneBatch
 from .transaction.lock import MirrorLock
 from .collaboration.report.options import ACTIONS as COLLABORATION_ACTIONS
+from .lifecycle import requires_editor
+from .paths import resolve_root, project_dir
 
 LEGACY_ACTIONS = ("init", "status", "pull", "lint", "push", "schema")
 ACTIONS = tuple(dict.fromkeys((*LEGACY_ACTIONS, *COLLABORATION_ACTIONS)))
@@ -28,7 +30,14 @@ def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, op
     options = dict(options or {})
     if action not in ACTIONS:
         raise SyncError("invalid_action", f"unknown action {action!r}; expected one of {', '.join(ACTIONS)}")
-    context = resolve_context(bridge, env=env, cwd=cwd, require_bridge=action == "init", project_hint=options.get("project"))
+    root = resolve_root(env, cwd)
+    project_name = options.get("project")
+    if action == "continue" and not project_name:
+        project_name = stored_project_name(root)
+    hinted = project_dir(root, project_name) if project_name else None
+    offline = not requires_editor(action, options, hinted)
+    context = resolve_context(bridge, env=env, cwd=cwd, require_bridge=action == "init",
+                              project_hint=options.get("project"), offline=offline)
     if action == "schema":
         from .schema.service import run
         from .collaboration.report.options import validate

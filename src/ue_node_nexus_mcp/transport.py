@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import json
 import struct
-import sys
+import time
 from typing import Any
 
 from .errors import BridgeError
+from .coordination.win32_pipe import _Win32, _win
 
 PIPE_PREFIX = "UeNodeNexusBridge."
 PIPE_ROOT = "\\\\.\\pipe\\"
@@ -58,115 +59,6 @@ def parse_pid_from_pipe_name(name: str) -> int | None:
     return int(suffix) if suffix.isdigit() else None
 
 
-# --- Win32 bindings (lazy) -------------------------------------------------
-
-_WIN: _Win32 | None = None
-
-
-class _Win32:
-    """Lazily-bound kernel32 entry points used by the pipe client/enumerator."""
-
-    GENERIC_READ = 0x80000000
-    GENERIC_WRITE = 0x40000000
-    OPEN_EXISTING = 3
-    FILE_FLAG_OVERLAPPED = 0x40000000
-    INVALID_HANDLE_VALUE = -1
-    ERROR_FILE_NOT_FOUND = 2
-    ERROR_PIPE_BUSY = 231
-    ERROR_IO_PENDING = 997
-    ERROR_NO_MORE_FILES = 18
-    WAIT_OBJECT_0 = 0
-
-    def __init__(self) -> None:
-        import ctypes
-        from ctypes import wintypes
-
-        self.ctypes = ctypes
-        self.wintypes = wintypes
-        k = ctypes.WinDLL("kernel32", use_last_error=True)
-
-        class OVERLAPPED(ctypes.Structure):
-            _fields_ = [
-                ("Internal", ctypes.c_void_p),
-                ("InternalHigh", ctypes.c_void_p),
-                ("Offset", wintypes.DWORD),
-                ("OffsetHigh", wintypes.DWORD),
-                ("hEvent", wintypes.HANDLE),
-            ]
-
-        class WIN32_FIND_DATAW(ctypes.Structure):
-            _fields_ = [
-                ("dwFileAttributes", wintypes.DWORD),
-                ("ftCreationTime", wintypes.FILETIME),
-                ("ftLastAccessTime", wintypes.FILETIME),
-                ("ftLastWriteTime", wintypes.FILETIME),
-                ("nFileSizeHigh", wintypes.DWORD),
-                ("nFileSizeLow", wintypes.DWORD),
-                ("dwReserved0", wintypes.DWORD),
-                ("dwReserved1", wintypes.DWORD),
-                ("cFileName", wintypes.WCHAR * 260),
-                ("cAlternateFileName", wintypes.WCHAR * 14),
-            ]
-
-        self.OVERLAPPED = OVERLAPPED
-        self.WIN32_FIND_DATAW = WIN32_FIND_DATAW
-
-        self.CreateFileW = k.CreateFileW
-        self.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
-        self.CreateFileW.restype = wintypes.HANDLE
-
-        self.WaitNamedPipeW = k.WaitNamedPipeW
-        self.WaitNamedPipeW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
-        self.WaitNamedPipeW.restype = wintypes.BOOL
-
-        self.CreateEventW = k.CreateEventW
-        self.CreateEventW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR]
-        self.CreateEventW.restype = wintypes.HANDLE
-
-        self.ReadFile = k.ReadFile
-        self.ReadFile.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
-        self.ReadFile.restype = wintypes.BOOL
-
-        self.WriteFile = k.WriteFile
-        self.WriteFile.argtypes = [wintypes.HANDLE, wintypes.LPCVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
-        self.WriteFile.restype = wintypes.BOOL
-
-        self.WaitForSingleObject = k.WaitForSingleObject
-        self.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-        self.WaitForSingleObject.restype = wintypes.DWORD
-
-        self.GetOverlappedResult = k.GetOverlappedResult
-        self.GetOverlappedResult.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD), wintypes.BOOL]
-        self.GetOverlappedResult.restype = wintypes.BOOL
-
-        self.CancelIoEx = k.CancelIoEx
-        self.CancelIoEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
-        self.CancelIoEx.restype = wintypes.BOOL
-
-        self.CloseHandle = k.CloseHandle
-        self.CloseHandle.argtypes = [wintypes.HANDLE]
-        self.CloseHandle.restype = wintypes.BOOL
-
-        self.FindFirstFileW = k.FindFirstFileW
-        self.FindFirstFileW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(WIN32_FIND_DATAW)]
-        self.FindFirstFileW.restype = wintypes.HANDLE
-
-        self.FindNextFileW = k.FindNextFileW
-        self.FindNextFileW.argtypes = [wintypes.HANDLE, ctypes.POINTER(WIN32_FIND_DATAW)]
-        self.FindNextFileW.restype = wintypes.BOOL
-
-        self.FindClose = k.FindClose
-        self.FindClose.argtypes = [wintypes.HANDLE]
-        self.FindClose.restype = wintypes.BOOL
-
-
-def _win() -> _Win32:
-    global _WIN
-    if sys.platform != "win32":
-        raise BridgeError("named pipe transport requires Windows")
-    if _WIN is None:
-        _WIN = _Win32()
-    return _WIN
 
 
 # --- Enumeration -----------------------------------------------------------
@@ -199,28 +91,37 @@ def enumerate_pipe_names() -> list[tuple[int, str]]:
 
 # --- Client ----------------------------------------------------------------
 
+def _remaining(deadline: float) -> int:
+    seconds = deadline - time.monotonic()
+    if seconds <= 0:
+        raise BridgeError("bridge I/O timed out")
+    return max(1, int(seconds * 1000))
+
+
 class NamedPipeTransport:
     """Stateless request/response over a named pipe (one connect per call)."""
 
     def send(self, pipe_name: str, envelope: dict[str, Any], timeout_seconds: float) -> dict[str, Any]:
         win = _win()
-        timeout_ms = max(1, int(timeout_seconds * 1000))
+        deadline = time.monotonic() + max(0.001, timeout_seconds)
 
-        handle = self._connect(win, pipe_name, timeout_ms)
+        handle = self._connect(win, pipe_name, _remaining(deadline))
         try:
-            self._write_all(win, handle, encode_frame(envelope), timeout_ms)
-            length_bytes = self._read_exact(win, handle, 4, timeout_ms)
+            self._write_all(win, handle, encode_frame(envelope), _remaining(deadline))
+            length_bytes = self._read_exact(win, handle, 4, _remaining(deadline))
             (length,) = struct.unpack("<I", length_bytes)
             if length == 0 or length > MAX_FRAME_BYTES:
                 raise BridgeError(f"bridge returned invalid frame length {length}")
-            body = self._read_exact(win, handle, length, timeout_ms)
+            body = self._read_exact(win, handle, length, _remaining(deadline))
         finally:
             win.CloseHandle(handle)
         return decode_body(body)
 
     def _connect(self, win: _Win32, pipe_name: str, timeout_ms: int):
         ctypes = win.ctypes
+        deadline = time.monotonic() + timeout_ms / 1000
         while True:
+            remaining = _remaining(deadline)
             handle = win.CreateFileW(
                 pipe_name,
                 win.GENERIC_READ | win.GENERIC_WRITE,
@@ -236,7 +137,7 @@ class NamedPipeTransport:
             if err == win.ERROR_FILE_NOT_FOUND:
                 raise BridgeError(f"UE instance pipe not found (instance gone?): {pipe_name}")
             if err == win.ERROR_PIPE_BUSY:
-                if not win.WaitNamedPipeW(pipe_name, timeout_ms):
+                if not win.WaitNamedPipeW(pipe_name, remaining):
                     raise BridgeError(f"UE instance busy, all pipe slots in use: {pipe_name}")
                 continue
             raise BridgeError(f"failed to open pipe {pipe_name}: win32 error {err}")
@@ -258,6 +159,7 @@ class NamedPipeTransport:
                     raise BridgeError(f"bridge pipe I/O failed: win32 error {err}")
                 if win.WaitForSingleObject(event, timeout_ms) != win.WAIT_OBJECT_0:
                     win.CancelIoEx(handle, ctypes.byref(ov))
+                    win.GetOverlappedResult(handle, ctypes.byref(ov), ctypes.byref(transferred), True)
                     raise BridgeError("bridge I/O timed out")
                 if not win.GetOverlappedResult(handle, ctypes.byref(ov), ctypes.byref(transferred), False):
                     raise BridgeError(f"bridge pipe I/O failed: win32 error {ctypes.get_last_error()}")
@@ -269,8 +171,9 @@ class NamedPipeTransport:
         ctypes = win.ctypes
         buffer = (ctypes.c_char * num_bytes)()
         total = 0
+        deadline = time.monotonic() + timeout_ms / 1000
         while total < num_bytes:
-            got = self._overlapped_io(win, handle, win.ReadFile, ctypes.byref(buffer, total), num_bytes - total, timeout_ms)
+            got = self._overlapped_io(win, handle, win.ReadFile, ctypes.byref(buffer, total), num_bytes - total, _remaining(deadline))
             if got == 0:
                 raise BridgeError("bridge closed the connection")
             total += got
@@ -281,8 +184,9 @@ class NamedPipeTransport:
         buffer = (ctypes.c_char * len(data)).from_buffer_copy(data)
         total = 0
         size = len(data)
+        deadline = time.monotonic() + timeout_ms / 1000
         while total < size:
-            put = self._overlapped_io(win, handle, win.WriteFile, ctypes.byref(buffer, total), size - total, timeout_ms)
+            put = self._overlapped_io(win, handle, win.WriteFile, ctypes.byref(buffer, total), size - total, _remaining(deadline))
             if put == 0:
                 raise BridgeError("bridge closed the connection")
             total += put

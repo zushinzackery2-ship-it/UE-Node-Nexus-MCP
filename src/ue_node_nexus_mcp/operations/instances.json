@@ -1,0 +1,94 @@
+{
+  "operations": [
+    {
+      "name": "bridge_instance_list",
+      "kind": "read",
+      "group": "core",
+      "risk": "low",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "List project identities, ownership, users, startup and shutdown states from the shared manager."
+    },
+    {
+      "name": "bridge_instance_status",
+      "kind": "read",
+      "group": "core",
+      "risk": "low",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Inspect instance state, use leases, work, dirty packages, recovery and close blockers without refreshing usage."
+    },
+    {
+      "name": "bridge_instance_ensure",
+      "kind": "write",
+      "group": "core",
+      "risk": "medium",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Acquire a shared editor for an exact .uproject; reuse_only and dry_run=true by default."
+    },
+    {
+      "name": "bridge_instance_select",
+      "kind": "write",
+      "group": "core",
+      "risk": "medium",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Acquire an existing instance by exact identity or an unambiguous legacy PID/project selector."
+    },
+    {
+      "name": "bridge_instance_release",
+      "kind": "write",
+      "group": "core",
+      "risk": "low",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Release this MCP session's use leases; pending work retains its scope until completion."
+    },
+    {
+      "name": "bridge_instance_close",
+      "kind": "write",
+      "group": "core",
+      "risk": "high",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Preview or request guarded normal exit; other users, dirty packages and in-flight work block close."
+    },
+    {
+      "name": "bridge_instance_reap",
+      "kind": "write",
+      "group": "core",
+      "risk": "medium",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Preview or reclaim eligible managed editors; external and protected editors remain owned by their users."
+    },
+    {
+      "name": "bridge_instance_adopt",
+      "kind": "write",
+      "group": "core",
+      "risk": "high",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Explicitly adopt an external editor after verifying project, instance and process creation identity."
+    },
+    {
+      "name": "bridge_instance_pin",
+      "kind": "write",
+      "group": "core",
+      "risk": "medium",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Keep a managed editor for a stated reason and a finite duration, at most 3600 seconds."
+    }
+  ]
+}

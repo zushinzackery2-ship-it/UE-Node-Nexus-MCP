@@ -9,6 +9,7 @@ from uuid import uuid4
 from ..collaboration.store.io import atomic_write, canonical, digest, read_json
 from ..paths import object_path, schema_dir
 from ..sync_project import SyncError, call_ok, ensure_root_registered
+from ..lifecycle import schema_refresh_requested
 from .catalog import migrate, publish, read_entry
 from .lock import SchemaLock
 from .records import FAMILIES
@@ -124,7 +125,7 @@ def target_context(bridge, context, target: str, conditions: dict | None = None)
 def run(bridge, context, options: dict) -> dict:
     if options.get("revision"):
         return historical(context, options)
-    refresh_requested = options.get("refresh", not bool(options))
+    refresh_requested = schema_refresh_requested(options)
     if refresh_requested:
         if not context.bridge_available:
             raise SyncError("bridge_unavailable", "refresh requires the bound editor")

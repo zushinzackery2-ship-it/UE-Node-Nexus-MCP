@@ -18,6 +18,10 @@ _GUIDES_DIR = Path(__file__).with_name("guides")
 # category -> (title, keywords). Keywords drive query matching; keep them
 # lowercase. The markdown file name is "<category>.md".
 GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
+    "instances": (
+        "Shared editor instances: acquire, reuse, release and guarded shutdown",
+        ("instance", "editor", "uproject", "ensure", "release", "broker", "lifecycle", "memory", "实例", "回收", "启动"),
+    ),
     "getting_started": (
         "Thin facade basics: discover, execute, verify",
         ("facade", "schema", "response mode", "artifact", "dry run", "start", "workflow", "discover"),

@@ -111,26 +111,6 @@
       "summary": "Compare local contract with loaded bridge modules."
     },
     {
-      "name": "bridge_instance_list",
-      "kind": "read",
-      "group": "core",
-      "risk": "low",
-      "hidden": false,
-      "local": true,
-      "default_response": "summary",
-      "summary": "List live UE editor instances on named pipes."
-    },
-    {
-      "name": "bridge_instance_select",
-      "kind": "write",
-      "group": "core",
-      "risk": "medium",
-      "hidden": false,
-      "local": true,
-      "default_response": "delta",
-      "summary": "Bind this session to one UE editor instance."
-    },
-    {
       "name": "project_context_get",
       "kind": "read",
       "group": "core",

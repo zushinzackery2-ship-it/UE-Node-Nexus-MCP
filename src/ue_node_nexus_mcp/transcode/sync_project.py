@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,33 +66,36 @@ def _data(response: dict[str, Any]) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: Path | None = None, require_bridge: bool = False, project_hint: str | None = None) -> ProjectContext:
+def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: Path | None = None, require_bridge: bool = False,
+                    project_hint: str | None = None, offline: bool = False) -> ProjectContext:
     """Bind the mirror root to the currently bound UE editor (or the last known project)."""
     root = resolve_root(env, cwd)
     project_name = ""
     schema_key = ""
     engine_version = ""
     project_file = ""
-    bridge_available = True
+    bridge_available = not offline
     warnings: list[str] = []
-    try:
-        context = _data(call_ok(bridge, "project_context_get", {}))
-        project_name = str(context.get("project_name", ""))
-        project_file = str(context.get("project_file_path", ""))
-        capabilities = _data(call_ok(bridge, "bridge_capabilities_get", {}))
-        schema_key = str(capabilities.get("schema_key", ""))
-        engine_version = str(capabilities.get("engine_version", ""))
-    except SyncError as exc:
-        bridge_available = False
-        warnings.append(f"UE bridge unavailable: {exc}")
-        if require_bridge:
-            raise
+    if not offline:
+        try:
+            context = _data(call_ok(bridge, "project_context_get", {}))
+            project_name = str(context.get("project_name", ""))
+            project_file = str(context.get("project_file_path", ""))
+            capabilities = _data(call_ok(bridge, "bridge_capabilities_get", {}))
+            schema_key = str(capabilities.get("schema_key", ""))
+            engine_version = str(capabilities.get("engine_version", ""))
+        except SyncError as exc:
+            bridge_available = False
+            warnings.append(f"UE bridge unavailable: {exc}")
+            if require_bridge:
+                raise
     if not project_name:
-        project_name = project_hint or _last_project_name(root)
+        project_name = project_hint or stored_project_name(root)
         if not project_name:
             raise SyncError("no_project", "no UE editor is bound and no mirrored project exists yet; start the editor and run ue_sync init")
-    if project_hint and project_hint != project_name:
+    if project_hint and os.path.normcase(project_hint) != os.path.normcase(project_name):
         raise SyncError("project_mismatch", "the bound editor is for another project", dict(requested=project_hint, actual=project_name))
+    project_name = project_hint or project_name
     project = project_dir(root, project_name)
     stored = _read_project_info(project)
     if not schema_key:
@@ -140,7 +144,7 @@ def _read_project_info(project: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _last_project_name(root: Path) -> str:
+def stored_project_name(root: Path) -> str:
     if not root.is_dir():
         return ""
     candidates = [path for path in root.iterdir() if path.is_dir() and project_info_path(path).is_file()]

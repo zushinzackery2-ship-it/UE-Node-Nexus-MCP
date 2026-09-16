@@ -16,10 +16,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from .errors import BridgeError
 from .facade_response import compact_data_summary
 from .operation_validation import validate_operation_call
 from .runtime import default_tool
+from .instances.session.work import reserve
+from .instances.errors import InstanceError
+from .tasks.runner import ensure_worker as _ensure_worker
+from .contracts import ALL_OPERATIONS
 
 MAX_ACTIVE_TASKS = 20
 MAX_FINISHED_TASKS = 50
@@ -32,6 +35,8 @@ _FORBIDDEN_IN_TASK = {
     name: "nested_task"
     for name in ("task_submit", "task_status", "task_result", "task_cancel")
 }
+_FORBIDDEN_IN_TASK.update((name, "lifecycle_task_forbidden") for name in ALL_OPERATIONS
+                          if name.startswith("bridge_instance_") or name == "editor_request_exit")
 
 
 @dataclass
@@ -46,6 +51,7 @@ class _TaskRecord:
     result: dict[str, Any] | None = None
     error: dict[str, Any] | None = None
     done: threading.Event = field(default_factory=threading.Event)
+    work_scope: Any = None
 
 
 _lock = threading.Lock()
@@ -53,6 +59,7 @@ _tasks: dict[str, _TaskRecord] = {}
 _queue: queue.Queue[str] = queue.Queue()
 _worker: threading.Thread | None = None
 _next_task_number = 1
+_closing = False
 
 
 def _envelope(operation: str, ok: bool, data: dict[str, Any], error: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -66,50 +73,6 @@ def _envelope(operation: str, ok: bool, data: dict[str, Any], error: dict[str, A
 
 def _task_error(operation: str, code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return _envelope(operation, False, {}, {"code": code, "message": message, "details": details or {}})
-
-
-def _run_one(record: _TaskRecord) -> None:
-    from .facade_execute import execute_operation
-
-    try:
-        response = execute_operation(record.operation, record.payload)
-    except (BridgeError, ValueError) as exc:
-        code = "bridge_error" if isinstance(exc, BridgeError) else "invalid_operation"
-        with _lock:
-            record.status = "failed"
-            record.error = {"code": code, "message": str(exc)}
-        return
-    with _lock:
-        record.result = response
-        if response.get("ok") is True:
-            record.status = "succeeded"
-        else:
-            record.status = "failed"
-            error = response.get("error")
-            record.error = error if isinstance(error, dict) else {"code": "operation_failed", "message": "operation failed"}
-
-
-def _worker_loop() -> None:
-    while True:
-        task_id = _queue.get()
-        with _lock:
-            record = _tasks.get(task_id)
-            if record is None or record.status != "queued":
-                continue
-            record.status = "running"
-            record.started_at = time.time()
-        _run_one(record)
-        with _lock:
-            record.finished_at = time.time()
-        record.done.set()
-        _prune_finished()
-
-
-def _ensure_worker() -> None:
-    global _worker
-    if _worker is None or not _worker.is_alive():
-        _worker = threading.Thread(target=_worker_loop, name="ue-nexus-task-worker", daemon=True)
-        _worker.start()
 
 
 def _prune_finished() -> None:
@@ -144,9 +107,16 @@ def task_submit(operation: str, payload: dict[str, Any] | None = None) -> dict[s
     error = validate_operation_call(operation, call_payload, _FORBIDDEN_IN_TASK)
     if error is not None:
         return _task_error("task_submit", error["code"], error["message"])
+    if operation == "batch_execute":
+        from .batch_execute import _validate_items
+        errors = _validate_items(call_payload.get("operations", []))
+        if errors:
+            return _task_error("task_submit", "invalid_batch", "batch contains invalid operations", dict(errors=errors))
 
     with _lock:
-        active = sum(1 for record in _tasks.values() if record.status in ("queued", "running"))
+        if _closing:
+            return _task_error("task_submit", "session_closed", "the MCP task queue is closing")
+        active = sum(1 for record in _tasks.values() if record.status in ("reserving", "queued", "running"))
         if active >= MAX_ACTIVE_TASKS:
             return _task_error(
                 "task_submit",
@@ -156,11 +126,29 @@ def task_submit(operation: str, payload: dict[str, Any] | None = None) -> dict[s
         global _next_task_number
         task_id = f"task-{_next_task_number}"
         _next_task_number += 1
-        record = _TaskRecord(task_id=task_id, operation=operation, payload=call_payload, submitted_at=time.time())
+        record = _TaskRecord(task_id=task_id, operation=operation, payload=call_payload, status="reserving", submitted_at=time.time())
         _tasks[task_id] = record
-        queued_before = sum(1 for other in _tasks.values() if other.status == "queued") - 1
+        queued_before = sum(1 for other in _tasks.values() if other.status == "queued")
 
-    _queue.put(task_id)
+    try:
+        scope = reserve(operation, call_payload)
+    except Exception as exc:
+        with _lock:
+            _tasks.pop(task_id, None)
+        if isinstance(exc, InstanceError):
+            return _task_error("task_submit", exc.code, str(exc), exc.details)
+        raise
+    with _lock:
+        record.work_scope = scope
+        cancelled = _closing or record.status == "cancelled"
+        if not cancelled:
+            record.status = "queued"
+            _queue.put(task_id)
+    if cancelled:
+        if scope:
+            scope.release()
+        return _envelope("task_submit", True, dict(task_id=task_id, operation=operation, status="cancelled"))
+
     _ensure_worker()
     return _envelope(
         "task_submit",
@@ -211,7 +199,7 @@ def task_cancel(task_id: str) -> dict[str, Any]:
         record = _tasks.get(task_id)
         if record is None:
             return _task_error("task_cancel", "task_not_found", f"unknown task id: {task_id}")
-        if record.status != "queued":
+        if record.status not in ("reserving", "queued"):
             return _task_error(
                 "task_cancel",
                 "task_not_cancellable",
@@ -221,6 +209,8 @@ def task_cancel(task_id: str) -> dict[str, Any]:
         record.status = "cancelled"
         record.finished_at = time.time()
     record.done.set()
+    if record.work_scope:
+        record.work_scope.release()
     return _envelope("task_cancel", True, {"task_id": task_id, "status": "cancelled"})
 
 
@@ -236,4 +226,18 @@ def wait_for_task(task_id: str, timeout_seconds: float) -> bool:
 def reset_for_tests() -> None:
     """Forget all task records. Stale queued ids are skipped by the worker."""
     with _lock:
+        global _closing
+        _closing = False
         _tasks.clear()
+
+
+def shutdown() -> None:
+    with _lock:
+        global _closing
+        _closing = True
+        queued = [item.task_id for item in _tasks.values() if item.status in ("reserving", "queued")]
+    for identifier in queued:
+        task_cancel(identifier)
+    if _worker and _worker.is_alive():
+        _queue.put(None)
+        _worker.join(timeout=5)

@@ -111,20 +111,10 @@ def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str
         if not isinstance(mode, str):
             raise ValueError("mode must be a string")
         return bridge_contract_check(mode=mode)  # type: ignore[arg-type]
-    if operation == "bridge_instance_list":
-        from .tools_system import bridge_instance_list
+    if operation.startswith("bridge_instance_"):
+        from .instances.tools.dispatch import execute
 
-        return bridge_instance_list()
-    if operation == "bridge_instance_select":
-        from .tools_system import bridge_instance_select
-
-        pid = payload.get("pid")
-        project = payload.get("project")
-        if pid is not None and not isinstance(pid, int):
-            raise ValueError("pid must be an integer")
-        if project is not None and not isinstance(project, str):
-            raise ValueError("project must be a string")
-        return bridge_instance_select(pid=pid, project=project)
+        return execute(operation, payload)
     if operation == "material_lint":
         from .material_lint import material_lint
 

@@ -8,6 +8,7 @@
     "operations/blueprint.json",
     "operations/core.json",
     "operations/graph.json",
+    "operations/instances.json",
     "operations/level.json",
     "operations/material.json",
     "operations/project_input.json",

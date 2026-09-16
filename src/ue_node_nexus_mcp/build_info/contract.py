@@ -8,16 +8,12 @@ import time
 from typing import Any, Callable
 
 from ..contracts import OPERATION_FEATURES, WRITE_OPERATIONS
-
-VERSION = "0.5.0"
-CONTRACT_VERSION = 3
-CORE_MODULE = "UeNodeNexusBridge"
-VFX_MODULE = "UeNodeNexusVfxBridge"
+from .requirements import VERSION, CONTRACT_VERSION, CORE_MODULE, GUARD_MODULE, VFX_MODULE
 
 
 def compatibility(data: dict[str, Any], operation: str) -> dict[str, Any] | None:
     modules = data.get("build")
-    required = [CORE_MODULE, VFX_MODULE] if OPERATION_FEATURES.get(operation) == "vfx" else [CORE_MODULE]
+    required = [CORE_MODULE, GUARD_MODULE, VFX_MODULE] if OPERATION_FEATURES.get(operation) == "vfx" else [CORE_MODULE, GUARD_MODULE]
     if not isinstance(modules, dict):
         return dict(code="bridge_build_identity_missing", message="The loaded plugin does not expose build identity; install the matching plugins and restart the editor.")
     for name in required:
@@ -28,8 +24,10 @@ def compatibility(data: dict[str, Any], operation: str) -> dict[str, Any] | None
         if not valid:
             return dict(code="bridge_contract_mismatch", message=f"Python {VERSION} requires {name} {VERSION} with contract {CONTRACT_VERSION}.",
                         details=dict(module=name, expected_version=VERSION, expected_contract=CONTRACT_VERSION, loaded=module))
-    if len(required) == 2 and modules[CORE_MODULE]["build_id"] != modules[VFX_MODULE]["build_id"]:
-        return dict(code="bridge_build_id_mismatch", message="Core and VFX module manifests have different engine BuildIds.")
+    if len(set(modules[name]["build_id"] for name in required)) != 1:
+        return dict(code="bridge_build_id_mismatch", message="Required module manifests have different engine BuildIds.")
+    if modules[CORE_MODULE]["source_fingerprint"] != modules[GUARD_MODULE]["source_fingerprint"]:
+        return dict(code="bridge_contract_mismatch", message="Guard and bridge were built from different plugin sources.")
     return None
 
 

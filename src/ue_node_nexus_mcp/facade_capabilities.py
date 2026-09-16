@@ -6,7 +6,8 @@ from typing import Any, Literal
 
 from .errors import BridgeError
 from .facade_response import minimal_error
-from .instance import instance_manager
+from .instances.session import instance_manager
+from .instances.errors import InstanceError
 from .operation_registry import (
     capability_index,
     enabled_operation_specs,
@@ -21,6 +22,12 @@ from .workflow_guides import guide_categories
 @thin_tool()
 def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
     """Return thin facade status, enabled groups, and the recommended first capability query."""
+    manager_error = None
+    try:
+        available_instances = instance_manager.list_instances()
+    except InstanceError as exc:
+        available_instances = []
+        manager_error = exc.envelope()["error"]
     features = enabled_features()
     specs = enabled_operation_specs(features)
     groups: dict[str, int] = {}
@@ -28,10 +35,6 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
         if spec.hidden:
             continue
         groups[spec.group] = groups.get(spec.group, 0) + 1
-    try:
-        available_instances = instance_manager.list_instances()
-    except BridgeError:
-        available_instances = []
     data: dict[str, Any] = {
         "bridge": "named_pipe",
         "active_instance": instance_manager.current(),
@@ -69,7 +72,21 @@ def ue_context_get(include_counts: bool = True) -> dict[str, Any]:
             "poll_with": ["task_status", "task_result"],
         },
     }
-    return {"ok": True, "data": data}
+    active = data["active_instance"]
+    state = active.get("state")
+    if not active.get("instance_id") or state == "EXITED":
+        data["recommended_next"] = "ue_execute"
+        data["recommended_call"] = dict(operation="bridge_instance_ensure", payload=dict(mode="reuse_only", dry_run=True))
+    elif state in ("STARTING", "DRAINING", "STOPPING", "UNRESPONSIVE"):
+        data["recommended_next"] = "ue_execute"
+        data["recommended_call"] = dict(operation="bridge_instance_status", payload=dict(instance_id=active["instance_id"]))
+    elif active.get("recovery_pending"):
+        data["recommended_call"] = dict(tool="ue_sync", action="recover")
+    data["instance_lifecycle"] = dict(release="bridge_instance_release", inspect="bridge_instance_status",
+                                       policy="reuse shared project editor; release use leases when work is finished")
+    if manager_error:
+        return dict(ok=False, error=manager_error, data=data)
+    return dict(ok=True, data=data)
 
 
 @thin_tool()

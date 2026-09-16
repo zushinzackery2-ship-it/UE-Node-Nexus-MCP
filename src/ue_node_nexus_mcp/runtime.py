@@ -14,7 +14,9 @@ from .bridge import BridgeError, UeBridgeClient
 from .contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
 from .diagnostic_counting import coerce_error_count, count_diagnostic_errors
 from .features import consume_feature_args, read_feature_env, resolve_enabled_features
-from .instance import instance_manager
+from .instances.session import instance_manager
+from .instances.errors import InstanceError
+from .instances.session.lifespan import lifespan, configure as configure_session
 from .profiles import (
     DEFAULT_RESPONSE_MODE,
     consume_profile_args,
@@ -22,13 +24,12 @@ from .profiles import (
 )
 from .response_normalization import normalize_bridge_response
 
-mcp = FastMCP("UE Node Nexus MCP")
+mcp = FastMCP("UE Node Nexus MCP", lifespan=lifespan)
 bridge = UeBridgeClient()
 _enabled_features = None
 _response_mode = None
 _profile_args_consumed = False
 _cli_feature_args: tuple[set[str] | None, set[str], set[str], bool | None] | None = None
-_CAPABILITY_PROBE_TIMEOUT_SECONDS = 1.0
 
 
 def _bridge_vfx_available() -> bool | None:
@@ -38,22 +39,7 @@ def _bridge_vfx_available() -> bool | None:
     was inconclusive (no editor reachable yet); inconclusive results must not
     be cached so a later-started editor can still enable the vfx group.
     """
-    try:
-        response = bridge.call(
-            "bridge_capabilities_get",
-            {},
-            timeout_seconds=_CAPABILITY_PROBE_TIMEOUT_SECONDS,
-        )
-    except (BridgeError, OSError, TimeoutError, ValueError):
-        return None
-
-    data = response.get("data")
-    if not isinstance(data, dict):
-        return False
-    modules = data.get("modules")
-    if not isinstance(modules, dict):
-        return False
-    return modules.get("vfx_available") is True
+    return instance_manager.current().get("vfx_available")
 
 
 def consume_cli_arguments() -> None:
@@ -64,6 +50,7 @@ def consume_cli_arguments() -> None:
     feature/profile access.
     """
     global _cli_feature_args
+    configure_session()
     _ensure_profile_args_consumed()
     if _cli_feature_args is None:
         arg_features, arg_enable, arg_disable, arg_vfx, remaining = consume_feature_args(sys.argv)
@@ -263,6 +250,8 @@ def call_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
             response = bridge.call(operation, payload)
         return _with_remaining_errors(operation, payload, normalize_bridge_response(response))
     except (BridgeError, ValueError) as exc:
+        if isinstance(exc, InstanceError):
+            return _with_remaining_errors(operation, payload, dict(exc.envelope(), operation=operation, diagnostics=[], warnings=[]))
         return _with_remaining_errors(operation, payload, {
             "ok": False,
             "operation": operation,
@@ -277,5 +266,5 @@ def call_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # Feature gating is per-editor; recompute it whenever the session (re)binds to
-# an instance. Injected as a callback so instance.py never imports runtime.
+# an instance. The session SDK remains independent of runtime.
 instance_manager.set_on_bind_changed(reset_feature_cache)

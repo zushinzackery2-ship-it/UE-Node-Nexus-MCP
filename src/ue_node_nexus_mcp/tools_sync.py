@@ -9,6 +9,8 @@ from .runtime import call_bridge, thin_tool
 from .transcode.sync import ACTIONS, run_sync
 from .transcode.sync_project import SyncError
 from .transcode.collaboration.report.options import COMMON, OPTIONS
+from .transcode.lifecycle import run_managed_sync
+from .instances.errors import InstanceError
 
 SyncAction = Literal["init", "checkout", "workspaces", "status", "fetch", "pull", "lint", "push", "schema",
                      "stage", "unstage", "commit", "amend", "merge", "resolve", "continue", "abort", "recover", "close",
@@ -34,8 +36,8 @@ def ue_sync(
 ) -> dict[str, Any]:
     """Version and collaborate on UE assets through independent text workspaces.
 
-    The editable surface is text: ``.nexus`` files under the mirror root
-    (``UE_NEXUS_TRANSCODE_DIR`` or ``cwd/Content_Transcoded``) mirror Material,
+    The editable surface is text: ``.nexus`` files under the shared project root
+    returned by ``bridge_instance_ensure`` mirror Material,
     MaterialFunction, MaterialInstance, Blueprint, Niagara and property-bag assets.
     Edit those files with your own file tools; never generate or patch them with a
     script, and never write conflict markers into them.
@@ -66,8 +68,8 @@ def ue_sync(
     if force not in (None, "local", "ue"):
         return minimal_error("invalid_option", "force must be \"local\" or \"ue\"", {"action": action})
     try:
-        report = run_sync(_bridge, action, paths, options)
-    except SyncError as exc:
+        report = run_managed_sync(_bridge, action, paths, options, run_sync)
+    except (SyncError, InstanceError) as exc:
         return minimal_error(exc.code, str(exc), exc.details)
     return _finish(report)
 

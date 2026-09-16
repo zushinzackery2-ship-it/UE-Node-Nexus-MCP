@@ -7,10 +7,11 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from .contracts import BRIDGE_OPERATIONS
+from .contracts import BRIDGE_OPERATIONS, WRITE_OPERATIONS
 from .build_info.contract import ContractCache
 from .errors import BridgeError
-from .instance import instance_manager
+from .instances.session import instance_manager
+from .instances.errors import InstanceError
 from .transport import named_pipe_transport
 
 # Re-exported so existing callers keep importing it from this module.
@@ -49,21 +50,36 @@ class UeBridgeClient:
         if operation not in BRIDGE_OPERATIONS:
             raise ValueError(f"Unsupported operation: {operation}")
 
+        if operation == "editor_request_exit":
+            from .instances.tools.dispatch import legacy_exit
+            return legacy_exit(payload, self._instances)
+        with self._instances.work_scope(operation, exclusive=operation in ("level_open", "editor_save_all")) as scope:
+            return self._call_scoped(scope, operation, payload, timeout_seconds)
+
+    def _call_scoped(self, scope, operation: str, payload: dict, timeout_seconds: float | None) -> dict:
         request_id = str(uuid.uuid4())
-        envelope = {
-            "operation": operation,
-            "request_id": request_id,
-            "payload": payload,
-        }
+        envelope = dict(operation=operation, request_id=request_id, payload=payload, lifecycle=scope.metadata())
         timeout = self._config.timeout_seconds if timeout_seconds is None else timeout_seconds
-        target = self._instances.resolve_target()
-        error = self._contracts.check(target, operation, payload, lambda: self._send(
-            target, dict(operation="bridge_capabilities_get", request_id=str(uuid.uuid4()), payload=dict()), timeout))
+        target = scope.target
+        try:
+            error = self._contracts.check(scope.cache_key, operation, payload, lambda: self._send(
+                target, dict(operation="bridge_capabilities_get", request_id=str(uuid.uuid4()), payload=dict(), lifecycle=scope.metadata()), timeout))
+        except (BridgeError, OSError) as exc:
+            self._contracts.invalidate(scope.cache_key)
+            raise InstanceError("instance_unresponsive", "contract probe failed before the operation was sent",
+                                dict(instance_id=scope.instance["instance_id"], operation=operation, submitted=False)) from exc
         if error:
             return dict(ok=False, operation=operation, request_id=request_id, error=error, diagnostics=[], warnings=[])
-        response = self._send(target, envelope, timeout)
+        try:
+            response = self._send(target, envelope, timeout)
+        except (BridgeError, OSError) as exc:
+            self._contracts.invalidate(scope.cache_key)
+            code = "operation_outcome_unknown" if operation in WRITE_OPERATIONS else "instance_unresponsive"
+            raise InstanceError(code, "response interrupted; inspect instance status and recovery receipts before retrying",
+                                dict(request_id=request_id, instance_id=scope.instance["instance_id"], operation=operation)) from exc
+        scope.observe(response)
         if operation == "bridge_capabilities_get":
-            self._contracts.observe(target, response)
+            self._contracts.observe(scope.cache_key, response)
 
         response.setdefault("operation", operation)
         response.setdefault("request_id", request_id)
@@ -77,7 +93,6 @@ class UeBridgeClient:
         try:
             response = self._transport.send(target, envelope, timeout)
         except (BridgeError, OSError):
-            self._contracts.invalidate(target)
             LOGGER.exception("request=%s phase=transport_failed", envelope["request_id"])
             raise
 

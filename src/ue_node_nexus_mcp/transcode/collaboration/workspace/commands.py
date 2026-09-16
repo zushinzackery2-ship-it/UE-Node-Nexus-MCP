@@ -5,7 +5,6 @@ from __future__ import annotations
 from ...sync_project import SyncError
 from ..history import actions, integrate, query, rebase
 from ..merge.sessions import Sessions
-from ..semantic.decode import to_document
 from ..semantic.snapshot import text_of
 from . import stash
 from .files import capture_files, select
@@ -96,11 +95,8 @@ def run(workspace, action: str, paths, options: dict) -> dict:
         rows = query.diff(history, left, right, paths, options.get("entity"), options.get("field"))
         return paged(rows, options, left=left, right=right)
     if action == "lint":
-        from ...lint import lint_document
-
-        entries, _, _ = capture_files(workspace, paths)
-        diagnostics = [item.format() for asset, snapshot in entries.items() for item in lint_document(to_document(store.objects.data(snapshot, "snapshot")), store.objects.data(snapshot, "snapshot")["semantic"]["kind"], workspace.schema)]
-        return dict(diagnostics=diagnostics, error_count=sum(": error " in item for item in diagnostics))
+        from .lint import lint
+        return lint(workspace, paths)
     raise SyncError("invalid_action", action)
 
 

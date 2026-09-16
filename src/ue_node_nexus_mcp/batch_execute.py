@@ -11,16 +11,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from .contracts import require_list
+from .contracts import ALL_OPERATIONS, require_list
 from .errors import BridgeError
 from .facade_response import asset_path_from_payload, compact_data_summary, diagnostic_counts
 from .operation_validation import validate_operation_call
 from .runtime import default_tool
+from .instances.session.work import operation_scope
 
 MAX_BATCH_OPERATIONS = 20
 
 # A batch may not contain itself; task_submit is allowed (it returns instantly).
 _FORBIDDEN_IN_BATCH = {"batch_execute": "nested_batch"}
+_FORBIDDEN_IN_BATCH.update((name, "lifecycle_batch_forbidden") for name in ALL_OPERATIONS
+                           if name.startswith("bridge_instance_") or name == "editor_request_exit")
 
 
 def _validate_items(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -62,6 +65,11 @@ def batch_execute(operations: list[dict[str, Any]], continue_on_error: bool = Fa
             },
         )
 
+    with operation_scope("batch_execute", dict(operations=operations)):
+        return _run_batch(operations, continue_on_error)
+
+
+def _run_batch(operations: list[dict], continue_on_error: bool) -> dict:
     from .facade_execute import execute_operation
 
     items: list[dict[str, Any]] = []

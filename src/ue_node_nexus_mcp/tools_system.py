@@ -10,7 +10,9 @@ from .contracts import (
 )
 from .diagnostics_logs import enrich_with_material_log_diagnostics, read_latest_project_log
 from .errors import BridgeError
-from .instance import instance_manager
+from .instances.errors import InstanceError
+from .instances.session import instance_manager
+from .instances.tools.operations import bridge_instance_list, bridge_instance_select
 from .runtime import call_bridge as _call
 from .runtime import default_tool, enabled_features, hidden_tool
 
@@ -35,9 +37,10 @@ def log_tail_get(
     if match is not None and (not isinstance(match, str) or not match.strip()):
         raise ValueError("match must be a non-empty string")
 
-    project_context = _call("project_context_get", {})
-    if project_context.get("ok") is not True:
-        return project_context
+    try:
+        project_context = dict(data=dict(project_file_path=instance_manager.project()["project_path"]))
+    except InstanceError as exc:
+        return dict(exc.envelope(), operation="log_tail_get", diagnostics=[], warnings=[])
     log_text, log_path = read_latest_project_log(project_context, tail_bytes=tail_kb * 1024)
     if log_path is None:
         return {
@@ -105,41 +108,6 @@ def bridge_contract_check(
             "allowed_extra_operations": sorted(allowed_extra_operations),
             "mode": mode,
         },
-    )
-
-
-def _local_instance_response(operation: str, produce: Any) -> dict[str, Any]:
-    """Run a session-local instance op and shape it like a bridge response so the
-    thin facade's summarizer handles it uniformly. These ops never touch a UE
-    instance's data plane — they manage which instance the session targets."""
-    try:
-        data = produce()
-    except BridgeError as exc:
-        return {
-            "ok": False,
-            "operation": operation,
-            "error": {"code": "instance_error", "message": str(exc), "details": {}},
-            "diagnostics": [],
-            "warnings": [],
-        }
-    return {"ok": True, "operation": operation, "data": data, "diagnostics": [], "warnings": []}
-
-
-@default_tool()
-def bridge_instance_list() -> dict[str, Any]:
-    """List live UE editor instances discoverable on named pipes (pid, project, active flag)."""
-    return _local_instance_response(
-        "bridge_instance_list",
-        lambda: {"instances": instance_manager.list_instances(), "active": instance_manager.current()},
-    )
-
-
-@default_tool()
-def bridge_instance_select(pid: int | None = None, project: str | None = None) -> dict[str, Any]:
-    """Bind this MCP session to one UE editor instance by pid or project-name substring."""
-    return _local_instance_response(
-        "bridge_instance_select",
-        lambda: {"selected": instance_manager.select(pid=pid, project=project), "active": instance_manager.current()},
     )
 
 
@@ -219,8 +187,11 @@ def editor_save_all(
 
 @hidden_tool()
 def editor_request_exit(
-    save_before_exit: bool = True,
+    save_before_exit: bool = False,
     force: bool = False,
+    dry_run: bool = True,
+    save_packages: list[str] | None = None,
+    proposal_id: str | None = None,
 ) -> dict[str, Any]:
     """Request a normal Unreal Editor exit, optionally saving dirty packages first."""
     return _call(
@@ -228,6 +199,9 @@ def editor_request_exit(
         {
             "save_before_exit": save_before_exit,
             "force": force,
+            "dry_run": dry_run,
+            "save_packages": save_packages or [],
+            "proposal_id": proposal_id,
         },
     )
 
