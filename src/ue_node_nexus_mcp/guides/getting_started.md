@@ -5,6 +5,12 @@ you discover, inspect, and run through them.
 
 ## The core loop
 
+Configure `--project` or `UE_NEXUS_PROJECT_PATH` with the exact `.uproject`.
+Use `bridge_instance_ensure` to reuse it (`reuse_only` by default); explicitly
+choose `mode="reuse_or_start"` and `dry_run=False` when startup is intended.
+Poll `bridge_instance_status` for a STARTING instance. Read the `instances`
+workflow guide for ownership, cleanup, shared repositories and migration.
+
 1. `ue_context_get()` — enabled groups, bound editor instance, facade tools.
 2. `ue_capability_get(group="graph", detail="index")` — list operations in a group.
 3. `ue_capability_get(operation="node_params_set", detail="schema")` — exact payload schema. Never guess parameters from an operation name.
@@ -12,6 +18,8 @@ you discover, inspect, and run through them.
 5. `ue_diff_get(since_token="diff_...")` — verify what changed.
 
 `detail="examples"` returns a complete example payload for any operation.
+Finish editor work with `bridge_instance_release`. Idle heartbeats and status
+queries do not keep an unused editor alive.
 
 ## Reads return summaries by default
 

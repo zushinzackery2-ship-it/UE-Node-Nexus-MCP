@@ -26,14 +26,15 @@ an MCP-local read of the newest project log file.
 ## Connection and contract triage
 
 1. `ue_context_get()` — is an instance bound? Which groups are enabled?
-2. `ue_execute("bridge_instance_list", {})` — which editors are live? Bind with
-   `bridge_instance_select` when more than one.
+2. `ue_execute("bridge_instance_list", {})` — inspect ownership, users and state.
+   Use `bridge_instance_ensure` with the exact `.uproject`; STARTING, busy and
+   unresponsive processes keep their identity. See the `instances` guide.
 3. `ue_execute("bridge_contract_check", {})` — Python contract vs. operations
    actually loaded in the UE bridge; catches a stale plugin or server build.
 4. `ue_execute("project_context_get", {}, response={"mode":"full"})` — project
    path, content dir, `/Game` mount.
 
-`bridge_capabilities_get` includes `build` entries for Core and VFX: embedded
+`bridge_capabilities_get` includes `build` entries for Guard, Core and VFX: embedded
 version, source fingerprint, commit/dirty state, protocol version, loaded module
 path and engine BuildId. Python checks the loaded contract before writes.
 `bridge_contract_mismatch` or `bridge_build_identity_missing` requires matching

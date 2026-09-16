@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ue-node-nexus-mcp"
-version = "0.5.0"
+version = "0.6.0"
 description = "Typed MCP server for safe Unreal Engine asset, graph, level, and Niagara editor operations."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,6 +18,7 @@ Issues = "https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/issues"
 
 [project.scripts]
 ue-node-nexus-mcp = "ue_node_nexus_mcp.server:main"
+ue-node-nexus-manager = "ue_node_nexus_mcp.instances.broker.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

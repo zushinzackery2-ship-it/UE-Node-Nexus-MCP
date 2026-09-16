@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import subprocess
 
-CONTRACT_VERSION = 3
+CONTRACT_VERSION = 4
 
 
 def source_files(plugin: Path) -> list[Path]:

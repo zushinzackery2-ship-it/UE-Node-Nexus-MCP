@@ -5,7 +5,7 @@ description: Operate the UE Node Nexus MCP bridge to inspect and edit a running 
 
 # UE Node Nexus MCP
 
-Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; this skill tells you which door to use and what the bridge guarantees.
+Seven MCP tools share a project editor across agent workspaces. The editor stays the compiler; the user-level manager owns startup, usage and guarded cleanup.
 
 **Ground rules**
 
@@ -27,13 +27,15 @@ Seven MCP tools in front of one Unreal Editor. The editor stays the compiler; th
 | `ue_plan_validate(operations)` | Validate a batch without touching UE | — |
 | `ue_sync(action, paths, options)` | Independent workspaces, local history, semantic merge, UE publication/recovery and schema | summary + artifacts |
 
-- 134 registry operations sit behind `ue_execute`. 48 are `hidden` (omitted from the default index, still callable by name; list them with `include_hidden=true`). Hidden means one of: superseded by the text mirror (graph and material graph ops, asset-shaped Niagara ops), a deliberate narrow extension for what the mirror excludes (`graph_patch_apply` for `@opaque` nodes, `blueprint_components_patch`, the Niagara/UObject reflected-property ops), internal transport driven by `ue_sync` (`scene_export` / `scene_status` / `scene_apply`), editor lifecycle (`editor_save_all`, `editor_request_exit`), or index maintenance (`auto_index_disable` / `auto_index_flush` / `auto_index_clear` / `auto_index_diff_registry`).
-- Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories (`getting_started`, `text_mirror`, `scene_mirror`, `collaboration`, `graph_editing`, `material_authoring`, `blueprint_authoring`, `niagara_authoring`, `diagnostics_repair`, `concurrency`); `{"category": ...}` returns one guide, `{"query": "connect pins"}` routes by keyword. `ue_context_get` returns the same category list, so you never need to guess a name.
+- The operation registry sits behind `ue_execute`. Hidden operations remain callable by name; discover them with `include_hidden=true`. These include mirror transport, narrow graph extensions, index maintenance and legacy editor operations.
+- Task recipes are served in-band: `ue_execute("workflow_guide_get", {})` lists categories, including `instances`, `getting_started`, `text_mirror`, `scene_mirror`, `collaboration` and authoring/diagnostic guides. `{"category": ...}` returns one guide; `{"query": "connect pins"}` routes by keyword. `ue_context_get` returns the same category list.
 - If an operation named here is missing from `ue_capability_get`, the MCP server process runs stale code: reinstall the Python package and restart the client. Plugin (editor) and server must both be current.
 
 ## 2. First probe
 
 Run this before answering any "is the bridge working / what project is this" question:
+
+Configure an exact `.uproject`, then follow section 9 to ensure/reuse it. Querying context alone never starts UE. Poll a STARTING instance before making data calls.
 
 1. `ue_context_get(include_counts=true)` — bound instance, enabled groups.
 2. `ue_execute("project_context_get", {}, response={"mode": "full"})` — `.uproject`, content dir, `/Game` mount.
@@ -64,7 +66,7 @@ Run this before answering any "is the bridge working / what project is this" que
 
 ## 4. Text mirror (`ue_sync`)
 
-**0.5.0 collaboration workflow**: load `workflow_guide_get(category="collaboration")`.
+**Collaboration workflow**: load `workflow_guide_get(category="collaboration")`.
 Each agent creates its own checkout with `dry_run=False`, then edits the
 returned `files_root`/`file_paths`. Pass the returned `id` as `workspace_id`.
 Stage and commit locally; push merges committed HEAD with current UE memory.
@@ -85,7 +87,7 @@ First checkout imports legacy baselines and preserves existing local text in
 the `imported` workspace. The following legacy loop applies before activation;
 after activation, use workspace IDs, local commits and conflict resolutions.
 
-Layout: `<UE_NEXUS_TRANSCODE_DIR or cwd/Content_Transcoded>/<Project>/<Path>/<Asset>.<kind>.nexus` with kinds `mat mf mi bp ns ne asset stub`; `.nexus/base/` is the merge base, `.nexus/schema/<key>/` the reflection lock.
+Layout: `<shared mirror_root returned by ensure>/<Project>/<Path>/<Asset>.<kind>.nexus` with kinds `mat mf mi bp ns ne asset stub`; `.nexus/base/` is the merge base, `.nexus/schema/<key>/` the reflection lock. Existing UE repository bindings take precedence; new projects default to `<Project>/Saved/Nexus/Content_Transcoded`.
 
 **Loop**
 
@@ -133,7 +135,7 @@ identity requires explicit `pull(force="ue")`; construction-script arrays are
 read-only. Loaded hidden levels are included; unloaded actors stay unavailable.
 Use the in-band scene guide for the complete format and boundaries.
 
-**Build and readiness:** capability `build` contains both DLL identities. The Python package and the plugin check the same contract version before any write, and a mismatch is reported as `bridge_contract_mismatch` rather than attempted. Explicit material compilation
+**Build and readiness:** capability `build` contains Guard, Core and optional VFX identities. Version 0.6.0 requires contract 4 and matching engine BuildIds; Guard and Core also share a source fingerprint. Python validates the loaded contract before writes. Explicit material compilation
 reports shader readiness and a target RHI update fence; this is not whole-frame
 GPU completion. `diagnostics_get` reads loaded objects without compiling.
 Save callbacks enqueue exports; mirror transactions share a process/file lock.
@@ -209,7 +211,7 @@ What the bridge guarantees, so you do not need sleeps or manual-save workarounds
 - Material output pins include `WorldPositionOffset`, `ClearCoat`, `ClearCoatRoughness`, `SurfaceThickness`, `FrontMaterial`.
 - The editor refuses to nest a request inside a running one (`bridge_busy`); the server retries for about two seconds before surfacing it.
 - Bridge readback is editor memory, not disk. `ue_sync("status")` compares against the saved file (`ue-modified`, dirty flag) when on-disk state matters.
-- Only touched packages are saved; the bridge never runs SaveAll.
+- Publication saves only touched packages. `editor_save_all` is an explicit exclusive operation; automatic cleanup never saves or discards edits.
 
 ## 8. Concurrency and batching
 
@@ -223,16 +225,24 @@ Every request runs on the UE game thread, one at a time per editor; parallel MCP
 
 - `batch_execute` runs up to 20 ordered operations in one call: validated as a whole first, stops at the first failure unless `continue_on_error=true`, not a transaction. Prefer one `graph_patch_apply` or one `ue_sync push` when it covers the edit.
 - `task_submit` queues a long call on one background worker and returns `task_id`; poll `task_status`, fetch `task_result`, `task_cancel` while queued. Task ids die with the server; `task_*` cannot nest.
+- A task reserves its project and instance at submission; later selection cannot redirect it. Whole batches and push/recover retain scopes. Lifecycle operations cannot be batched or queued.
 - Long compiles: raise `UE_NEXUS_TIMEOUT_SECONDS` rather than splitting the work.
 
 ## 9. Editor instances
 
-Transport is one Windows named pipe per editor: `\\.\pipe\UeNodeNexusBridge.<pid>`.
+Load `workflow_guide_get(category="instances")` for schemas, state transitions, policy and upgrades.
 
-- One editor live → bound automatically.
-- Several → calls fail until `ue_execute("bridge_instance_list", {})` then `ue_execute("bridge_instance_select", {"pid": ...})` or `{"project": "<substring>"}` (both MCP-local).
-- `ue_context_get` shows `active_instance` and `available_instances`. An auto-bound session survives an editor restart; an explicit selection that exits errors until re-selected.
-- "no UE editor instance found" → editor closed or plugin not loaded; `bridge_capabilities_get` says whether the VFX module is present.
+- Set `--project` / `UE_NEXUS_PROJECT_PATH`, or pass exact `project_path` to `bridge_instance_ensure`. cwd only supplies candidates; ambiguity needs an exact target.
+- Ensure defaults to `mode="reuse_only"`, `dry_run=true`. Preview and apply with `dry_run=false`; choose `reuse_or_start` when starting the project is authorized. Set `engine_path` when EngineAssociation is unresolved.
+- STARTING callers join one launch. Poll `bridge_instance_status`; do not open another editor to address startup, busy, unresponsive or repository errors.
+- End work with `bridge_instance_release`. Heartbeats and context/status polling do not renew usage. Defaults: idle lease 300 s, exit grace 120 s, max two managed editors and one startup.
+- Existing compatible editors remain `external`. Automatic cleanup applies to clean, unused managed editors; interactive editors are protected. Other users, work, dirty packages, PIE, compilation/saving and recovery block close.
+- All workspaces use ensure's shared repository; each gets its own checkout. Conflicting `mirror_root` returns `repository_mismatch`; preserve the existing history. Offline lint/stage/commit keep working after UE exits.
+- Use list/status/reap to inspect users, scopes, resource samples and blockers. Explicit close uses a preview and named `save_packages`; `EXITED` and its exit code confirm the actual outcome.
+- `adopt` transfers ownership only with exact project/instance/process creation identity and a reason. It is protected by default. `pin` requires a reason and a finite duration up to 3600 s.
+- Explicit instance selection stays stale after that process exits. Authorized project-level `reuse_or_start` can restore the same project; accepted tasks retain their original instance.
+- A possibly executed write with `operation_outcome_unknown` is not replayed. Query state or use the recorded apply ID for publication recovery. A `manager_response_unknown` ensure can be inspected/retried with the same idempotency key.
+- Install matching Wheel/Core/Guard before enabling managed startup. Legacy `editor_request_exit` uses the same ownership/usage checks; its old force/blanket save modes are rejected.
 
 ## 10. Diagnosis playbooks
 

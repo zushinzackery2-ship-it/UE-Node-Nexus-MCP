@@ -1,6 +1,6 @@
 # Editing assets as text: the Content_Transcoded mirror
 
-For 0.5.0 collaboration, load `workflow_guide_get(category="collaboration")`.
+For collaboration, load `workflow_guide_get(category="collaboration")`.
 Use one checkout per agent, edit its returned `files_root`, then stage/commit
 and push with `workspace_id`. The loop below describes legacy mirrors before
 checkout activation. Format essentials apply to both workflows.
@@ -13,7 +13,7 @@ exports straight into the mirror directory.
 ## Layout
 
 ```
-<root>/                          UE_NEXUS_TRANSCODE_DIR or <cwd>/Content_Transcoded
+<root>/                          shared mirror_root returned by bridge_instance_ensure
   .nexus/schema/<key>/           schema lock (classes, props, defaults, enums, MF signatures)
   <Project>/A/B/M_X.mat.nexus    material        .mf = function   .mi = instance
   <Project>/A/B/BP_X.bp.nexus    blueprint       .ns/.ne = Niagara system/emitter

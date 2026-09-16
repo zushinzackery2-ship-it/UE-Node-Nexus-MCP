@@ -10,6 +10,9 @@ rules below apply to direct bridge calls.
 The bridge executes each request on the UE game thread, one at a time per
 editor instance. Parallel MCP calls do not run UE work in parallel — they
 queue. Plan accordingly.
+All MCP workspaces for the same physical `.uproject` acquire the same editor
+through `bridge_instance_ensure`. Independent checkouts need no extra editor.
+Load the `instances` guide for lifecycle operations and ownership.
 
 ## Operation classes
 
@@ -70,5 +73,11 @@ a heavy `graph_build_apply`, a whole `batch_execute`), submit it instead:
   while a task is still queued.
 - A task may wrap `batch_execute`, but `task_*` operations cannot wrap each
   other. Task state is in-memory: ids do not survive a server restart.
+- Submission reserves the exact project and instance before queueing. A later
+  selection change cannot redirect an accepted task. Batch and publication
+  scopes cover the whole operation; release stays pending until work finishes.
+- Lifecycle operations cannot be submitted or batched. `level_open` and
+  `editor_save_all` require exclusive admission; stale context epochs require
+  a fresh `project_context_get` before reusing scene references.
 - The wrapped call still honors `UE_NEXUS_TIMEOUT_SECONDS`; raise it for big
   compiles — the queue does not remove the per-call timeout.

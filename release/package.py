@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from configparser import ConfigParser
 from email.parser import BytesParser
 import hashlib
 import json
@@ -17,7 +18,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from release.identity import fingerprint
+from release.identity import CONTRACT_VERSION, fingerprint
 
 PLUGINS = ("UeNodeNexusBridge", "UeNodeNexusVfxBridge")
 
@@ -50,8 +51,8 @@ def plugin_files(build: Path, plugin: str, version: str, build_id: str, local_bu
         raise RuntimeError(f"rebuild required: descriptor changed for {plugin}")
     modules_file = built / "Binaries/Win64/UnrealEditor.modules"
     modules = read_json(modules_file)
-    binary_name = f"UnrealEditor-{plugin}.dll"
-    if modules.get("BuildId") != build_id or modules.get("Modules", dict()).get(plugin) != binary_name:
+    expected_modules = dict((item["Name"], f"UnrealEditor-{item['Name']}.dll") for item in descriptor["Modules"])
+    if modules.get("BuildId") != build_id or modules.get("Modules") != expected_modules:
         raise RuntimeError(f"incompatible module manifest: {plugin}")
     files = dict()
     tracked = git("ls-files", "-z", "--", prefix).split("\0")
@@ -67,21 +68,20 @@ def plugin_files(build: Path, plugin: str, version: str, build_id: str, local_bu
         if not compiled_source.is_file() or sha256(local) != sha256(compiled_source):
             raise RuntimeError(f"rebuild required: {relative}")
         files[relative] = local
-    binary = built / "Binaries/Win64" / binary_name
-    with binary.open("rb") as stream:
-        if stream.read(2) != b"MZ":
-            raise RuntimeError(f"invalid Windows DLL: {binary}")
     identity_file = built / "BuildIdentity.json"
     identity = read_json(identity_file)
     source_hash = fingerprint(source)
     if identity.get("source_fingerprint") != source_hash or fingerprint(built) != source_hash:
         raise RuntimeError(f"source fingerprint differs from build: {plugin}")
-    if source_hash.encode("utf-16le") not in binary.read_bytes():
-        raise RuntimeError(f"DLL does not embed the current source fingerprint: {plugin}")
-    if identity.get("version") != version or identity.get("contract_version") != 2:
+    for module, binary_name in expected_modules.items():
+        binary = built / "Binaries/Win64" / binary_name
+        content = binary.read_bytes()
+        if content[:2] != b"MZ" or source_hash.encode("utf-16le") not in content:
+            raise RuntimeError(f"DLL does not embed the current source fingerprint: {module}")
+        files[f"{prefix}/Binaries/Win64/{binary_name}"] = binary
+    if identity.get("version") != version or identity.get("contract_version") != CONTRACT_VERSION:
         raise RuntimeError(f"build identity contract mismatch: {plugin}")
     files[f"{prefix}/BuildIdentity.json"] = identity_file
-    files[f"{prefix}/Binaries/Win64/{binary_name}"] = binary
     files[f"{prefix}/Binaries/Win64/UnrealEditor.modules"] = modules_file
     icon = files[f"{prefix}/Resources/Icon128.png"]
     if sha256(icon) != sha256(ROOT / "assets/branding/nexus-128.png"):
@@ -95,6 +95,15 @@ def verify_wheel(wheel: Path, version: str) -> None:
         if metadata["Version"] != version:
             raise RuntimeError("wheel version mismatch")
         members = set(archive.namelist())
+        entries = ConfigParser()
+        entries.read_string(archive.read(f"ue_node_nexus_mcp-{version}.dist-info/entry_points.txt").decode("utf-8"))
+        expected_entries = dict((("ue-node-nexus-mcp", "ue_node_nexus_mcp.server:main"),
+                                 ("ue-node-nexus-manager", "ue_node_nexus_mcp.instances.broker.main:main")))
+        if dict(entries["console_scripts"]) != expected_entries:
+            raise RuntimeError("wheel is missing the fixed manager or MCP entry point")
+        operations = json.loads(archive.read("ue_node_nexus_mcp/operations.json"))
+        if "operations/instances.json" not in operations["files"]:
+            raise RuntimeError("wheel does not publish lifecycle operations")
         for module in ("prepare", "apply", "commit", "diagnostics", "recovery", "refresh"):
             if f"ue_node_nexus_mcp/transcode/push/{module}.py" not in members:
                 raise RuntimeError(f"wheel missing sync module: {module}")
@@ -130,6 +139,7 @@ def package(build: Path, wheel_dir: Path, engine: Path, output: Path, local_buil
     files["LICENSE"] = ROOT / "LICENSE"
     files["INSTALL.md"] = ROOT / "release/INSTALL.md"
     files["SCENES.md"] = ROOT / "src/ue_node_nexus_mcp/guides/scene_mirror.md"
+    files["INSTANCES.md"] = ROOT / "src/ue_node_nexus_mcp/guides/instances.md"
     forbidden = (".pdb", ".lib", ".exp", ".obj", ".log", ".tmp", ".uasset", ".umap")
     for name in files:
         parts = Path(name).parts
@@ -148,7 +158,7 @@ def package(build: Path, wheel_dir: Path, engine: Path, output: Path, local_buil
     manifest = output / "release-manifest.json"
     write_json(manifest, dict(
         version=version, tag=None if local_build else f"v{version}-ue5.5", commit=git("rev-parse", "HEAD"),
-        source_dirty=dirty, mode="local-build" if local_build else "release", contract_version=2,
+        source_dirty=dirty, mode="local-build" if local_build else "release", contract_version=CONTRACT_VERSION,
         builds=dict((plugin, read_json(build / "Plugins" / plugin / "BuildIdentity.json")) for plugin in PLUGINS),
         engine=engine_version, module_build_id=build_id,
         files=dict((name, dict(size=path.stat().st_size, sha256=sha256(path))) for name, path in sorted(files.items())),

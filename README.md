@@ -25,6 +25,8 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 
 **0.5.0** 在解码层上加入本地协作版本库：每个 agent 使用独立工作区，暂存和提交自己的修改；发布时依据共同祖先合并当前 UE 内存状态，返回可持久保存的逐字段冲突。历史、分支、标签和回退通过同一个 `ue_sync` 入口使用。当前 UE、插件和项目的参数目录统一落入 schema，模型与校验器读取相同 JSON。
 
+**0.6.0 / 契约 4** 增加用户级实例管理：不同工作区操作同一物理 `.uproject` 时复用编辑器，统一启动仲裁、使用租约、闲置回收和退出检查。早期 Guard 阻止普通编辑器重复启动；用户已有编辑器保留其所有权。
+
 > [!NOTE]
 > **运行环境**
 >
@@ -37,6 +39,7 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 | **文本资产镜像** | Material、MaterialFunction、MaterialInstance、Blueprint、Niagara System 和属性型资产的导出、校验、差异计划与提交 |
 | **场景组镜像** | 当前世界已加载 Actor、蓝图 Actor、ISM/HISM 的稳定身份、文本编辑、批量实例操作、事务和外部包保存 |
 | **多 agent 协作** | 独立工作区、HEAD/index/files、三方语义合并、持久冲突会话、带 revision 条件的 UE 发布 |
+| **共享编辑器生命周期** | 同项目复用、启动防重、跨会话租约、自动闲置回收、脏包与任务退出保护、资源和日志限额 |
 | **本地版本历史** | commit、log/show/diff/blame、branch/tag、restore/revert/reset、stash、cherry-pick/rebase/amend 和 reflog |
 | **统一参数目录** | 按蓝图、材质、Niagara、场景、资产及通用类型分类的 schema JSON、Markdown 索引、定向函数与上下文查询 |
 | **资产查询与管理** | 资产索引、元数据、依赖与引用关系，以及创建、复制、移动、重命名、删除和 redirector 修复 |
@@ -45,7 +48,7 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 | **VFX** | Niagara 发射器、模块栈、渲染器和用户参数；Cascade 系统摘要 |
 | **诊断与批处理** | 编译诊断、MessageLog、日志尾、离线材质检查、批量执行和后台任务 |
 
-当前操作注册表包含 **134 个 operation**，其中 48 个为内部操作（默认索引不列出，仍可按名调用）。七个 MCP 门面保持不变，协作通过 `ue_sync` 扩展动作提供；内部增加 `transcode_recover`。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
+七个 MCP 门面保持不变。实例管理通过 `ue_execute` 的 `bridge_instance_*` 操作提供，协作通过 `ue_sync` 扩展动作提供。内部操作默认索引不列出，仍可按名查询 schema 和调用。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
 
 ---
 
@@ -53,11 +56,11 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 
 ### 使用发行包
 
-[最新 Release](https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/releases/latest) 提供已发布版本的 UE 5.5 Windows x64 双插件 ZIP、Python Wheel 和校验文件。使用同一版本的 ZIP 与 Wheel；本地构建也采用相同结构。关闭编辑器，将 `Plugins/` 合并到工程根目录后安装 Wheel。以下文件名以 0.4.0 已发布构建为例；本分支 0.5.0 / 契约 3 的协作能力使用下面的源码构建流程：
+[Release 页面](https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/releases) 提供已发布制品；当前工作树版本为 0.6.0。使用同一次构建的 UE 5.5 Windows x64 插件 ZIP、Python Wheel 和校验文件。目标编辑器完成保存并退出后，安装插件与 Wheel。实例管理要求 Bridge 插件内同时包含 Core 和 Guard DLL；VFX 插件按需要启用：
 
 ```bat
 py -3 -m venv .venv
-.venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.4.0-py3-none-any.whl
+.venv\Scripts\python.exe -m pip install ue_node_nexus_mcp-0.6.0-py3-none-any.whl
 ```
 
 源码安装与构建流程如下。
@@ -80,7 +83,7 @@ set "UE_NEXUS_ENGINE_DIR=D:\Unreal\UE_5.5"
 tests\compile_check\build_plugins.bat
 ```
 
-脚本使用 `vswhere` 查找 Visual Studio，在 `build/validation/` 内准备精确源码副本，仅编译 Core、VFX 两个模块。DLL 与 `BuildIdentity.json` 位于 `build/validation/Plugins/`；身份文件记录版本、源码指纹、提交、脏状态和契约版本。
+脚本使用 `vswhere` 查找 Visual Studio，在 `build/validation/` 内准备精确源码副本，编译 Guard、Core、VFX 三个模块。DLL 与 `BuildIdentity.json` 位于 `build/validation/Plugins/`；身份文件记录版本、源码指纹、提交、脏状态和契约版本。
 
 关闭目标编辑器，将编译后的插件复制到 UE 工程的 `Plugins/` 目录：
 
@@ -96,7 +99,7 @@ robocopy "build\validation\Plugins\UeNodeNexusVfxBridge" "%UE_PROJECT_DIR%\Plugi
 
 ### 3. 配置 MCP 客户端
 
-将下面路径替换为实际仓库与镜像目录，加入客户端的 MCP 配置：
+将下面路径替换为实际安装目录和 `.uproject`，加入客户端的 MCP 配置。多个工作区配置同一项目即可共享编辑器：
 
 ```json
 {
@@ -105,17 +108,17 @@ robocopy "build\validation\Plugins\UeNodeNexusVfxBridge" "%UE_PROJECT_DIR%\Plugi
     "ue-node-nexus":
     {
       "command": "D:/Tools/UE-Node-Nexus-MCP/.venv/Scripts/ue-node-nexus-mcp.exe",
-      "args": ["--response-mode", "minimal"],
+      "args": ["--response-mode", "minimal", "--project", "D:/UEProjects/MyProject/MyProject.uproject"],
       "env":
       {
-        "UE_NEXUS_TRANSCODE_DIR": "D:/UEProjects/AssetMirror"
+        "UE_NEXUS_TIMEOUT_SECONDS": "30"
       }
     }
   }
 }
 ```
 
-启动加载了桥接插件的 UE 工程，再重连 MCP 客户端。可将 [随附 Agent skill](skill/ue-node-nexus-mcp/SKILL.md) 安装到客户端的技能目录，提供操作发现和文本镜像工作流。
+重连 MCP 客户端后，使用 `bridge_instance_ensure` 接入已有编辑器；明确传 `mode="reuse_or_start"` 才允许启动缺失项目。可将 [随附 Agent skill](skill/ue-node-nexus-mcp/SKILL.md) 安装到客户端的技能目录。现存旧版编辑器保持受保护状态，完成工作后再升级重启。
 
 ---
 
@@ -135,12 +138,14 @@ robocopy "build\validation\Plugins\UeNodeNexusVfxBridge" "%UE_PROJECT_DIR%\Plugi
 
 ```text
 ue_context_get(include_counts=true)
+ue_execute("bridge_instance_ensure", {"mode": "reuse_or_start", "dry_run": false})
+ue_execute("bridge_instance_status", {})
 ue_execute("project_context_get", {}, response={"mode": "full"})
 ue_execute("bridge_contract_check", {})
 ue_capability_get(operation="level_actors_list", detail="schema")
 ```
 
-多个编辑器同时运行时，调用 `bridge_instance_list` 查看实例，再通过 `bridge_instance_select` 的 `pid` 或 `project` 参数明确绑定。
+`STARTING` 时查询同一实例状态，READY 后执行工作；结束时调用 `bridge_instance_release`。默认使用租约在 300 秒无实际工作后失效，最后一次释放后有 120 秒宽限；心跳和状态查询不会延长使用期限。其他会话、任务、未保存包和恢复事务会阻止退出。完整操作、所有权、共享仓库和升级方法见 [实例管理指南](src/ue_node_nexus_mcp/guides/instances.md)。
 
 `ue_read(target="graph")` 读取材质图，`target="material_instance"` 读取实例参数，`target="auto"` 解析未知资产类型。操作的 `format` 控制数据形状，`response.mode` 控制响应详细程度。
 
@@ -148,7 +153,7 @@ ue_capability_get(operation="level_actors_list", detail="schema")
 
 ## 文本工作区与协作
 
-同一工程的 agent 共用镜像根与版本库，每个任务分别 `checkout`。工具返回该工作区的 `id`、`files_root` 和 `file_paths`；编辑时以这些路径为准。
+同一工程的 agent 使用 ensure 返回的共享镜像根与版本库，每个任务分别 `checkout`。已有 UE 仓库绑定优先；新项目默认根为 `<Project>/Saved/Nexus/Content_Transcoded`。工具返回该工作区的 `id`、`files_root` 和 `file_paths`；编辑时以这些路径为准。回收编辑器后，工作区和历史继续支持离线 lint/stage/commit。
 
 ```
 Content_Transcoded/
@@ -261,7 +266,9 @@ ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"], options=dict(work
 
 | 环境变量 | 默认值 | 用途 |
 |:-----|:-----|:-----|
-| **`UE_NEXUS_TRANSCODE_DIR`** | `<cwd>/Content_Transcoded` | 文本镜像根目录 |
+| **`UE_NEXUS_PROJECT_PATH`** | 无 | 精确项目；也可用 `--project` |
+| **`UE_NEXUS_TRANSCODE_DIR`** | 已有绑定或 `<Project>/Saved/Nexus/Content_Transcoded` | 首次选择共享镜像根，冲突时返回现有位置 |
+| **`UE_NEXUS_RUNTIME_DIR`** | `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Runtime` | 用户级管理状态；普通工作区共用默认值 |
 | **`UE_NEXUS_TIMEOUT_SECONDS`** | `30` | 桥接请求超时秒数 |
 | **`UE_NEXUS_LOG_DIR`** | `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Logs` | 按请求 ID 记录并轮转 Python 阶段日志 |
 | **`UE_NEXUS_RESPONSE_MODE`** | `minimal` | MCP facade 返回 `minimal` 或 `full` |
@@ -283,7 +290,10 @@ ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"], options=dict(work
 | **`stale_proposal / stale_session / stale_target`** | 输入发生变化，保留原稿并重新观察、合并与预览 |
 | **`identity_conflict`** | 查看相关实体与持久身份，解决会话中的身份冲突后再继续 |
 | **`recovery_required`** | 按 apply_id 调用 recover 查看证据与可执行恢复动作 |
-| **`bridge_contract_mismatch`** | 根据 capability 的 `build` 信息核对同版本 Python、双插件和 BuildId |
+| **`bridge_contract_mismatch`** | 根据 capability 的 `build` 核对同版本 Python、Guard/Core/VFX 和 BuildId |
+| **`instance_starting / instance_unresponsive`** | 查询既有实例状态和日志，保留同一项目绑定 |
+| **`capacity_exceeded`** | 查看受管实例占用、可用内存及回收状态 |
+| **`repository_mismatch`** | 接入返回的共享仓库，保留已有历史 |
 | **操作与 schema 对不上** | 同步更新 Python 服务与 UE 插件，重启编辑器并重连客户端 |
 
 编译入口共用编译服务，成功状态包含目标 shader 和 RHI 资源更新完成信息。诊断仅检查已加载对象；保存监听在事务结束后处理队列。镜像事务跨线程、跨进程互斥，场景回读用请求标识匹配提交。上述机制约束桥接生命周期；引擎断言和 GPU 驱动故障仍属于同进程故障边界，详见 [诊断指南](src/ue_node_nexus_mcp/guides/diagnostics_repair.md)。
@@ -296,13 +306,15 @@ ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"], options=dict(work
 UE-Node-Nexus-MCP/
   assets/branding/         项目标识、透明标记和单色 SVG
   Plugins/
-    UeNodeNexusBridge/       核心编辑器插件
+    UeNodeNexusBridge/       Guard 早期门禁及核心编辑器插件
     UeNodeNexusVfxBridge/    VFX 插件
   src/ue_node_nexus_mcp/
     operations.json        操作定义索引
     operations/            按能力组划分的操作定义
-    build_info/            双插件契约校验
-    diagnostics/           请求日志
+    build_info/            三模块构建身份与契约校验
+    coordination/          通用 OS 锁与控制管道
+    instances/             身份、Broker、租约、作用域、回收与仓库绑定
+    diagnostics/           独立会话日志和总量保留策略
     guides/                客户端可查询的工作流指南
     transcode/             文本解析、schema、diff 和同步
       collaboration/       store、history、workspace、semantic、merge、apply、report
@@ -311,6 +323,7 @@ UE-Node-Nexus-MCP/
       scene/               场景编解码、预检、提交和恢复
       transaction/         镜像事务所有权
   tests/
+    instances/             单元、跨进程竞争、故障与真实 UE 长测
     collaboration/         版本库、工作区、历史、合并与发布回归
     transcode/             同步行为与故障恢复回归
     scene/                 场景、身份、并发与原生回归源码

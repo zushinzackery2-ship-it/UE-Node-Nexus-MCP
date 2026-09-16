@@ -1,9 +1,13 @@
 # Local collaboration and version history
 
-Version 0.5.0 / bridge contract 3 adds a local repository behind `ue_sync`.
+Version 0.6.0 / bridge contract 4 shares the editor and repository across MCPs.
 Use one mirror root per UE project and one workspace per agent. Each workspace
 has an independent HEAD, index and files directory. The editor serializes final
 publication; independent local edits and commits stay isolated.
+Call `bridge_instance_ensure` for the exact project and use its returned
+`mirror_root`. Existing UE bindings are preserved; a conflicting explicit root
+returns `repository_mismatch`. Release the editor after work; files and history
+remain available for offline lint/stage/commit. See the `instances` guide.
 
 ## Start and publish
 
