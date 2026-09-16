@@ -51,6 +51,7 @@ bool ReadNamedPipeExact(
             if (WaitForMultipleObjects(2, WaitHandles, false, INFINITE) != WAIT_OBJECT_0)
             {
                 CancelIoEx(Pipe, &Overlapped);
+                GetOverlappedResult(Pipe, &Overlapped, &Read, true);
                 return false;
             }
             if (!GetOverlappedResult(Pipe, &Overlapped, &Read, false))
@@ -109,6 +110,7 @@ bool WriteNamedPipeAll(
             if (WaitForMultipleObjects(2, WaitHandles, false, INFINITE) != WAIT_OBJECT_0)
             {
                 CancelIoEx(Pipe, &Overlapped);
+                GetOverlappedResult(Pipe, &Overlapped, &Written, true);
                 return false;
             }
             if (!GetOverlappedResult(Pipe, &Overlapped, &Written, false))
@@ -126,16 +128,31 @@ bool WriteNamedPipeAll(
 
 bool DispatchNamedPipeRequest(
     const FString& Body,
+    void* PipeHandle,
     FThreadSafeBool& Stopping,
     FString& OutResponse)
 {
+    TSharedPtr<FJsonObject> Request;
+    uint32 Peer = 0;
+#if PLATFORM_WINDOWS
+    ULONG NativePeer = 0;
+    if (!GetNamedPipeClientProcessId(PipeHandle, &NativePeer))
+    {
+        return false;
+    }
+    Peer = NativePeer;
+#endif
+    if (!PrepareBridgeRequest(Body, Request, OutResponse, Peer))
+    {
+        return true;
+    }
     TSharedRef<TPromise<FString>, ESPMode::ThreadSafe> Promise =
         MakeShared<TPromise<FString>, ESPMode::ThreadSafe>();
     TFuture<FString> Future = Promise->GetFuture();
 
-    AsyncTask(ENamedThreads::GameThread, [Body, Promise]()
+    AsyncTask(ENamedThreads::GameThread, [Request, Promise]()
     {
-        Promise->SetValue(DispatchBodyToResponseString(Body));
+        Promise->SetValue(DispatchParsedRequest(Request));
     });
 
     // Stay responsive to ShutdownModule on the game thread instead of waiting

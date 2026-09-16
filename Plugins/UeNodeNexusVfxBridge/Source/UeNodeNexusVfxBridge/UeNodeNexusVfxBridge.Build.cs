@@ -101,7 +101,7 @@ public class UeNodeNexusVfxBridge : ModuleRules
         PrivateDefinitions.Add("NEXUS_SOURCE_FINGERPRINT=\"" + Fingerprint + "\"");
         PrivateDefinitions.Add("NEXUS_SOURCE_DIRTY=" + (Dirty ? "1" : "0"));
         PrivateDefinitions.Add("NEXUS_IDENTITY_RECORDED=" + (Recorded ? "1" : "0"));
-        PrivateDefinitions.Add("NEXUS_CONTRACT_VERSION=3");
+        PrivateDefinitions.Add("NEXUS_CONTRACT_VERSION=4");
     }
 
 }

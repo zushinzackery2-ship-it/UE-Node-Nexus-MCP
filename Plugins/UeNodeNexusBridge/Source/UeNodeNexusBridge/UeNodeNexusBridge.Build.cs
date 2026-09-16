@@ -6,7 +6,7 @@ public class UeNodeNexusBridge : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         IWYUSupport = IWYUSupport.Full;
-        ConfigureBuildIdentity();
+        ConfigureBuildIdentity(this);
 
         PrivateIncludePaths.AddRange(new string[]
         {
@@ -57,13 +57,14 @@ public class UeNodeNexusBridge : ModuleRules
             "Projects",
             "RenderCore",
             "RHI",
-            "UnrealEd"
+            "UnrealEd",
+            "UeNodeNexusGuard"
         });
     }
 
-    private void ConfigureBuildIdentity()
+    public static void ConfigureBuildIdentity(ModuleRules Rules)
     {
-        string Root = System.IO.Path.GetFullPath(System.IO.Path.Combine(ModuleDirectory, "..", ".."));
+        string Root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Rules.ModuleDirectory, "..", ".."));
         string Descriptor = System.IO.Path.Combine(Root, System.IO.Path.GetFileName(Root) + ".uplugin");
         var Files = new System.Collections.Generic.List<string>();
         Files.Add(Descriptor);
@@ -81,7 +82,7 @@ public class UeNodeNexusBridge : ModuleRules
         Files.Sort((Left, Right) => System.StringComparer.Ordinal.Compare(
             System.IO.Path.GetRelativePath(Root, Left).Replace('\\', '/'),
             System.IO.Path.GetRelativePath(Root, Right).Replace('\\', '/')));
-        ExternalDependencies.AddRange(Files);
+        Rules.ExternalDependencies.AddRange(Files);
         string Fingerprint;
         using (var Hash = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256))
         {
@@ -107,7 +108,7 @@ public class UeNodeNexusBridge : ModuleRules
         string Metadata = System.IO.Path.Combine(Root, "BuildIdentity.json");
         if (System.IO.File.Exists(Metadata))
         {
-            ExternalDependencies.Add(Metadata);
+            Rules.ExternalDependencies.Add(Metadata);
             var Data = EpicGames.Core.JsonObject.Parse(System.IO.File.ReadAllText(Metadata));
             Commit = Data.GetStringField("source_commit");
             Recorded = Data.GetStringField("source_fingerprint") == Fingerprint;
@@ -117,12 +118,12 @@ public class UeNodeNexusBridge : ModuleRules
         {
             throw new BuildException("Invalid source commit in build identity");
         }
-        PrivateDefinitions.Add("NEXUS_BUILD_VERSION=\"" + Version + "\"");
-        PrivateDefinitions.Add("NEXUS_SOURCE_COMMIT=\"" + Commit + "\"");
-        PrivateDefinitions.Add("NEXUS_SOURCE_FINGERPRINT=\"" + Fingerprint + "\"");
-        PrivateDefinitions.Add("NEXUS_SOURCE_DIRTY=" + (Dirty ? "1" : "0"));
-        PrivateDefinitions.Add("NEXUS_IDENTITY_RECORDED=" + (Recorded ? "1" : "0"));
-        PrivateDefinitions.Add("NEXUS_CONTRACT_VERSION=3");
+        Rules.PrivateDefinitions.Add("NEXUS_BUILD_VERSION=\"" + Version + "\"");
+        Rules.PrivateDefinitions.Add("NEXUS_SOURCE_COMMIT=\"" + Commit + "\"");
+        Rules.PrivateDefinitions.Add("NEXUS_SOURCE_FINGERPRINT=\"" + Fingerprint + "\"");
+        Rules.PrivateDefinitions.Add("NEXUS_SOURCE_DIRTY=" + (Dirty ? "1" : "0"));
+        Rules.PrivateDefinitions.Add("NEXUS_IDENTITY_RECORDED=" + (Recorded ? "1" : "0"));
+        Rules.PrivateDefinitions.Add("NEXUS_CONTRACT_VERSION=4");
     }
 
 }

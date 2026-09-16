@@ -7,6 +7,7 @@
 #include "Level/Instances/NexusInstanceIdentity.h"
 #include "Core/BuildInfo/NexusCoreBuildInfo.h"
 #include "UeNodeNexusBridgeBuildInfo.h"
+#include "Lifecycle/EditorLifecycle.h"
 
 IMPLEMENT_MODULE(FUeNodeNexusBridgeModule, UeNodeNexusBridge)
 
@@ -19,10 +20,12 @@ void FUeNodeNexusBridgeModule::StartupModule()
     UeNodeNexusBridge::RegisterAutoIndexOperations();
     BridgeServer = MakeUnique<FUeNodeNexusBridgeNamedPipeServer>();
     BridgeServer->Start();
+    UeNodeNexusBridge::Lifecycle::Start();
 }
 
 void FUeNodeNexusBridgeModule::ShutdownModule()
 {
+    UeNodeNexusBridge::Lifecycle::Stop();
     UeNodeNexusBridge::ShutdownTranscodeWatch();
     UeNodeNexusBridge::Instances::ShutdownIdentity();
     if (BridgeServer.IsValid())

@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeBuildInfo.h"
+#include "NexusLifecycle.h"
 
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -40,6 +41,7 @@ static FString ModuleBuildId(const FString& ModuleFile)
 TSharedPtr<FJsonObject> BridgeBuildIdentities()
 {
     TSharedPtr<FJsonObject> Modules = MakeShared<FJsonObject>();
+    Modules->SetObjectField(TEXT("UeNodeNexusGuard"), NexusLifecycle::BuildIdentity());
     TArray<FName> Names;
     GIdentities.GetKeys(Names);
     Names.Sort(FNameLexicalLess());

@@ -196,7 +196,7 @@ bool FUeNodeNexusBridgeNamedPipeServer::FWorker::ServeConnection(HANDLE Pipe, HA
     const FString Body = UeNodeNexusBridge::BodyToString(BodyBytes);
 
     FString ResponseString;
-    if (!UeNodeNexusBridge::DispatchNamedPipeRequest(Body, bStopping, ResponseString))
+    if (!UeNodeNexusBridge::DispatchNamedPipeRequest(Body, Pipe, bStopping, ResponseString))
     {
         return false;   // stopping mid-flight
     }

@@ -21,6 +21,7 @@ bool WriteNamedPipeAll(
     uint32 NumBytes);
 bool DispatchNamedPipeRequest(
     const FString& Body,
+    void* PipeHandle,
     FThreadSafeBool& Stopping,
     FString& OutResponse);
 }

@@ -148,36 +148,9 @@ TSharedPtr<FJsonObject> HandleEditorSaveAll(const FString& Operation, const FStr
 
 TSharedPtr<FJsonObject> HandleEditorRequestExit(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
-    const bool bSaveBeforeExit = ReadEditorBoolField(Payload, TEXT("save_before_exit"), true);
-    const bool bForce = ReadEditorBoolField(Payload, TEXT("force"), false);
-    TSharedPtr<FJsonObject> SaveData = MakeShared<FJsonObject>();
-    bool bCanExit = true;
-    if (bSaveBeforeExit)
-    {
-        TSharedPtr<FJsonObject> SaveResponse = HandleEditorSaveAll(TEXT("editor_save_all"), RequestId, Payload);
-        bCanExit = SaveResponse->GetBoolField(TEXT("ok"));
-        const TSharedPtr<FJsonObject>* Data = nullptr;
-        if (SaveResponse->TryGetObjectField(TEXT("data"), Data) && Data != nullptr)
-        {
-            SaveData = *Data;
-        }
-    }
-
-    TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
-    Data->SetBoolField(TEXT("save_before_exit"), bSaveBeforeExit);
-    Data->SetBoolField(TEXT("force"), bForce);
-    Data->SetBoolField(TEXT("exit_requested"), bCanExit || bForce);
-    Data->SetObjectField(TEXT("save"), SaveData);
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, bCanExit || bForce);
-    Response->SetObjectField(TEXT("data"), Data);
-    if (bCanExit || bForce)
-    {
-        FGenericPlatformMisc::RequestExit(bForce);
-    }
-    else
-    {
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("exit_blocked_by_unsaved_packages"), TEXT("Dirty packages remained after save attempt")));
-    }
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+    Response->SetObjectField(TEXT("error"), MakeError(TEXT("guarded_exit_required"),
+        TEXT("Use bridge_instance_close through the Broker; preview the instance and explicit save_packages first")));
     return Response;
 }
 }
