@@ -39,11 +39,15 @@ _PREFIXES = {
     "niagara_renderer": ("Niagara",),
 }
 _SUFFIXES = {"niagara_renderer": ("RendererProperties",)}
+# ``CallFunction`` names both ``K2Node_CallFunction`` and ``AnimGraphNode_CallFunction``
+# once the engine prefixes are stripped, so the plain spelling is pinned to the Blueprint
+# node; AnimGraph nodes keep their own ``AnimGraphNode_CallFunction`` spelling.
 K2_ALIASES = {
     "Branch": "K2Node_IfThenElse",
     "Sequence": "K2Node_ExecutionSequence",
     "Comment": "EdGraphNode_Comment",
     "Reroute": "K2Node_Knot",
+    "CallFunction": "K2Node_CallFunction",
 }
 
 
