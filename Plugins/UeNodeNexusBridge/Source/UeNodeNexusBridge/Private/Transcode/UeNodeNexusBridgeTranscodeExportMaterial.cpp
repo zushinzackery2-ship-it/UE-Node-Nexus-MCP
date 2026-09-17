@@ -11,15 +11,10 @@
 
 namespace UeNodeNexusBridge::Transcode
 {
-static FString ExpressionGuid(UMaterialExpression* Expression)
-{
-    return Expression ? Expression->GetMaterialExpressionId().ToString(EGuidFormats::DigitsWithHyphens) : FString();
-}
-
-static TSharedPtr<FJsonObject> ExpressionNodeJson(UMaterialExpression* Expression)
+static TSharedPtr<FJsonObject> ExpressionNodeJson(UMaterialExpression* Expression, TConstArrayView<TObjectPtr<UMaterialExpression>> Expressions)
 {
     TSharedPtr<FJsonObject> Node = MakeShared<FJsonObject>();
-    Node->SetStringField(TEXT("guid"), ExpressionGuid(Expression));
+    Node->SetStringField(TEXT("guid"), MaterialExpressionKey(Expression, Expressions));
     Node->SetStringField(TEXT("class"), Expression->GetClass()->GetPathName());
     FString Short = Expression->GetClass()->GetName();
     Short.RemoveFromStart(TEXT("MaterialExpression"));
@@ -62,7 +57,7 @@ static TSharedPtr<FJsonObject> ExpressionNodeJson(UMaterialExpression* Expressio
     return Node;
 }
 
-static void AppendExpressionLinks(UMaterialExpression* Expression, TArray<TSharedPtr<FJsonValue>>& Links)
+static void AppendExpressionLinks(UMaterialExpression* Expression, TConstArrayView<TObjectPtr<UMaterialExpression>> Expressions, TArray<TSharedPtr<FJsonValue>>& Links)
 {
     for (FExpressionInputIterator It{ Expression }; It; ++It)
     {
@@ -72,9 +67,9 @@ static void AppendExpressionLinks(UMaterialExpression* Expression, TArray<TShare
             continue;
         }
         TSharedPtr<FJsonObject> Link = MakeShared<FJsonObject>();
-        Link->SetStringField(TEXT("from"), ExpressionGuid(Input->Expression));
+        Link->SetStringField(TEXT("from"), MaterialExpressionKey(Input->Expression, Expressions));
         Link->SetNumberField(TEXT("from_out"), Input->OutputIndex);
-        Link->SetStringField(TEXT("to"), ExpressionGuid(Expression));
+        Link->SetStringField(TEXT("to"), MaterialExpressionKey(Expression, Expressions));
         Link->SetNumberField(TEXT("to_in"), It.Index);
         Links.Add(MakeShared<FJsonValueObject>(Link));
     }
@@ -88,8 +83,8 @@ static TSharedPtr<FJsonObject> GraphJson(TConstArrayView<TObjectPtr<UMaterialExp
     {
         if (UMaterialExpression* Expression = ExpressionPtr.Get())
         {
-            Nodes.Add(MakeShared<FJsonValueObject>(ExpressionNodeJson(Expression)));
-            AppendExpressionLinks(Expression, Links);
+            Nodes.Add(MakeShared<FJsonValueObject>(ExpressionNodeJson(Expression, Expressions)));
+            AppendExpressionLinks(Expression, Expressions, Links);
         }
     }
     TArray<TSharedPtr<FJsonValue>> Outputs;
@@ -103,7 +98,7 @@ static TSharedPtr<FJsonObject> GraphJson(TConstArrayView<TObjectPtr<UMaterialExp
                 continue;
             }
             TSharedPtr<FJsonObject> Output = MakeShared<FJsonObject>();
-            Output->SetStringField(TEXT("from"), ExpressionGuid(Input->Expression));
+            Output->SetStringField(TEXT("from"), MaterialExpressionKey(Input->Expression, Expressions));
             Output->SetNumberField(TEXT("from_out"), Input->OutputIndex);
             Output->SetStringField(TEXT("property"), MaterialOutputPropertyName(Property));
             Outputs.Add(MakeShared<FJsonValueObject>(Output));

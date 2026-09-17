@@ -11,11 +11,13 @@ Raw ``graph`` shape::
 
 from __future__ import annotations
 
+import collections
 from typing import Any
 
 from .ids import material_node_candidate
 from .model import Decl, Document, Link, Section
 from .raw_common import (
+    RawError,
     allocator_for,
     base_order,
     header_from_raw,
@@ -58,6 +60,19 @@ def input_pin_name(node: dict[str, Any], index: int) -> str | None:
     return str(index)
 
 
+def require_unique_keys(nodes: list[dict[str, Any]]) -> None:
+    """Refuse a graph whose nodes share one identity.
+
+    A repeated key silently merges two expressions and rewires their links, so the
+    export must name every node once (the UE side records the GUID, disambiguated by
+    the object name when legacy editor data repeats it).
+    """
+    counts = collections.Counter(str(node.get("guid", "")) for node in nodes)
+    repeated = sorted(key for key, count in counts.items() if count > 1)
+    if repeated:
+        raise RawError(f"the export repeats node identities ({', '.join(repeated[:3])}); re-pull this asset with the current bridge")
+
+
 def node_decl(identifier: str, node: dict[str, Any]) -> Decl:
     params = non_default_params(node.get("props"))
     position = (int(node.get("x", 0)), int(node.get("y", 0)))
@@ -88,6 +103,7 @@ def material_document(
     allocator = allocator_for(raw, previous_ids)
     if kind == "material":
         allocator.reserve(MATERIAL_OUTPUT_ID)
+    require_unique_keys(nodes)
 
     ids: dict[str, str] = {}
     for node in nodes:

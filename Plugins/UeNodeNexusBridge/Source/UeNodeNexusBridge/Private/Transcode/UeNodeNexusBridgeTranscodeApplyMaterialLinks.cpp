@@ -30,9 +30,10 @@ UMaterialExpression* ResolveMaterialNode(UObject* Owner, const FApplyContext& Co
     {
         return nullptr;
     }
-    for (const TObjectPtr<UMaterialExpression>& Expression : OwnerExpressions(Owner))
+    const TConstArrayView<TObjectPtr<UMaterialExpression>> Expressions = OwnerExpressions(Owner);
+    for (const TObjectPtr<UMaterialExpression>& Expression : Expressions)
     {
-        if (Expression && Expression->GetMaterialExpressionId().ToString(EGuidFormats::DigitsWithHyphens).Equals(*Guid, ESearchCase::IgnoreCase))
+        if (Expression && MaterialExpressionKey(Expression.Get(), Expressions).Equals(*Guid, ESearchCase::IgnoreCase))
         {
             return Expression.Get();
         }

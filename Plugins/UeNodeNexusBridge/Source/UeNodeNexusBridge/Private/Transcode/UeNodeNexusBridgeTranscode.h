@@ -8,6 +8,7 @@
 
 class UBlueprint;
 class UMaterial;
+class UMaterialExpression;
 class UMaterialFunction;
 class UMaterialInstanceConstant;
 struct FAssetData;
@@ -25,6 +26,11 @@ TSharedPtr<FJsonObject> BuildGenericRaw(UObject* Asset);
 TSharedPtr<FJsonObject> BuildStubRaw(const FAssetData& AssetData);
 // Dispatch by kind; nullptr when the asset kind is not exportable here.
 TSharedPtr<FJsonObject> BuildRawForAsset(UObject* Asset, const FString& Kind);
+
+// --- material node identity ------------------------------------------------
+// One node key for both the mirror and the plan: the expression GUID, disambiguated
+// by the object name when legacy editor data repeats a GUID across several nodes.
+FString MaterialExpressionKey(UMaterialExpression* Expression, TConstArrayView<TObjectPtr<UMaterialExpression>> Expressions);
 
 // --- plan appliers ---------------------------------------------------------
 void ApplyMaterialPlan(UObject* Owner, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context);

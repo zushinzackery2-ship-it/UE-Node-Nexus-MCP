@@ -118,9 +118,9 @@ bool ApplyCreate(UObject* Owner, const TSharedPtr<FJsonObject>& Op, int32 Index,
         }
     }
     FinishExpressionEdit(Expression);
-    const FString Guid = Expression->GetMaterialExpressionId().ToString(EGuidFormats::DigitsWithHyphens);
-    Context.Ids.Add(Id, Guid);
-    Context.Created.Add(Id, Guid);
+    const FString Key = MaterialExpressionKey(Expression, OwnerExpressions(Owner));
+    Context.Ids.Add(Id, Key);
+    Context.Created.Add(Id, Key);
     Context.bChanged = true;
     return true;
 }
