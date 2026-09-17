@@ -27,7 +27,7 @@ def from_raw(raw: dict, previous: dict | None = None, namespace: str = "ue", sch
         scene_metadata(document, aliases)
     else:
         previous_ids = physical_ids(previous) if previous else raw.get("ids")
-        document, _, _ = document_from_raw(raw, previous_ids=previous_ids)
+        document, _, _ = document_from_raw(raw, previous_ids=previous_ids, schema=schema)
     semantic, bindings, _ = encode(document, kind, previous, namespace, schema)
     return dict(semantic=semantic, semantic_hash=digest(semantic), bindings=bindings,
                 raw=raw_evidence(raw), schema_key=raw.get("schema_key", ""), codec_version=1)

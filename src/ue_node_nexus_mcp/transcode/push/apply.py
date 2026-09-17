@@ -32,7 +32,7 @@ def commit_snapshot(context: ProjectContext, state: SyncState, item: Prepared, r
     extra_ids = dict((str(guid), str(identifier)) for identifier, guid in (data.get("id_map") or dict()).items())
     snapshot = render_snapshot(
         context.project, raw, item.base,
-        order_override=local_order_from_document(item.document), extra_ids=extra_ids,
+        order_override=local_order_from_document(item.document), extra_ids=extra_ids, schema=context.schema,
     )
     text, file = snapshot.text, snapshot.text_file
     normalized = text != item.text

@@ -93,11 +93,11 @@ def _finish_pull(context: ProjectContext, state: SyncState, status: AssetStatus,
         return _row(status.asset_path, status.kind, status.state, "failed", errors=[f"raw export unreadable: {raw_file}"])
     previous = load_base(context.project, status.asset_path)
     if conflict:
-        snapshot = render_snapshot(context.project, raw, previous)
+        snapshot = render_snapshot(context.project, raw, previous, schema=context.schema)
         conflict_file = snapshot.text_file.with_name(snapshot.text_file.name.replace(".nexus", CONFLICT_SUFFIX))
         write_text_atomic(conflict_file, snapshot.text)
         return _row(status.asset_path, status.kind, status.state, "conflict", warnings=[f"UE version written to {conflict_file.name}; resolve then delete it"])
-    _, text, text_file, _ = materialize(context.project, raw, previous)
+    _, text, text_file, _ = materialize(context.project, raw, previous, schema=context.schema)
     if raw_file.resolve() != base_path(context.project, status.asset_path).resolve():
         raw_file.unlink(missing_ok=True)
     kind = str(raw.get("kind", ""))

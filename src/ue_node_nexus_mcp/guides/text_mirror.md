@@ -74,6 +74,11 @@ tex.R -> out.Roughness         # materials: implicit `out` node = material outpu
   panel shows (rapid-iteration values); `[renderers Name]` `sprite : Sprite { SubImageSize=(X=2,Y=2) }`
   (attribute bindings are not in text), `[user]` `"Spawn Rate" : float = 100` with types
   `float int bool Vector2 Vector Vector4 Color Position Quat` or a class name.
+  A module reference is the script short name while exactly one script answers to it;
+  engine content that ships a superseded variant under the same name (`InitializeParticle`
+  also exists as `/Niagara/Modules/Spawn/Initialization/V2/InitializeParticle`) makes the
+  mirror write the full script path, and a hand-written short name for such a script is
+  rejected with its candidates instead of picking one.
   `@link(...)` / `@dynamic` inputs are read-only; `SetVariables(...)` modules can be edited
   but not created from text.
 

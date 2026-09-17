@@ -77,9 +77,9 @@ def load_base(project: Path, asset_path: str) -> dict[str, Any] | None:
     return read_json(base_path(project, asset_path))
 
 
-def base_document(base: dict[str, Any]) -> Document:
+def base_document(base: dict[str, Any], schema=None) -> Document:
     ids, order = bookkeeping_from_base(base)
-    document, _, _ = document_from_raw(base, ids, order)
+    document, _, _ = document_from_raw(base, ids, order, schema)
     return document
 
 
@@ -92,14 +92,14 @@ class MirrorSnapshot:
     stored: dict[str, Any]
 
 
-def render_snapshot(project: Path, raw: dict[str, Any], previous: dict[str, Any] | None, order_override: dict[str, list[str]] | None = None, extra_ids: dict[str, str] | None = None) -> MirrorSnapshot:
+def render_snapshot(project: Path, raw: dict[str, Any], previous: dict[str, Any] | None, order_override: dict[str, list[str]] | None = None, extra_ids: dict[str, str] | None = None, schema=None) -> MirrorSnapshot:
     """Render text and bookkeeping without changing the accepted mirror."""
     ids, order = bookkeeping_from_base(previous)
     if extra_ids:
         ids = {**(ids or {}), **extra_ids}
     if order_override:
         order = {**(order or {}), **order_override}
-    document, new_ids, new_order = document_from_raw(raw, ids, order)
+    document, new_ids, new_order = document_from_raw(raw, ids, order, schema)
     text = emit(document)
     kind = str(raw.get("kind", ""))
     asset_path = str(raw.get("asset_path", ""))
@@ -110,9 +110,9 @@ def render_snapshot(project: Path, raw: dict[str, Any], previous: dict[str, Any]
     return MirrorSnapshot(document, text, text_file, base_file, stored)
 
 
-def materialize(project: Path, raw: dict[str, Any], previous: dict[str, Any] | None, order_override: dict[str, list[str]] | None = None, extra_ids: dict[str, str] | None = None) -> tuple[Document, str, Path, Path]:
+def materialize(project: Path, raw: dict[str, Any], previous: dict[str, Any] | None, order_override: dict[str, list[str]] | None = None, extra_ids: dict[str, str] | None = None, schema=None) -> tuple[Document, str, Path, Path]:
     """raw -> (document, text, text_path, base_path); writes base with bookkeeping."""
-    snapshot = render_snapshot(project, raw, previous, order_override, extra_ids)
+    snapshot = render_snapshot(project, raw, previous, order_override, extra_ids, schema)
     write_json(snapshot.base_file, snapshot.stored)
     return snapshot.document, snapshot.text, snapshot.text_file, snapshot.base_file
 

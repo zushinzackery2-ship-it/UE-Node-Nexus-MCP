@@ -38,6 +38,7 @@ class Identities:
         self.old_bindings = self.previous.get("bindings", dict())
         self.by_alias = dict()
         self.by_physical = dict()
+        self.by_owner = dict()
         self.section_aliases = dict()
         for key, section in self.sections.items():
             self.section_aliases[section_name(Section(section["name"], section["args"]))] = key
@@ -46,6 +47,9 @@ class Identities:
         for identifier, binding in self.old_bindings.items():
             if binding.get("physical"):
                 self.by_physical[binding["physical"]] = identifier
+                owner = binding.get("meta", dict()).get("owner")
+                if owner:
+                    self.by_owner[(owner, binding["physical"])] = identifier
 
     def scope(self, section: Section) -> str:
         name = section_name(section)
@@ -53,12 +57,19 @@ class Identities:
 
     def entity(self, scope: str, decl: Decl) -> tuple[str, dict]:
         physical = str(decl.meta.get("physical") or decl.meta.get("guid") or "")
+        owner = str(decl.meta.get("owner") or "")
         alias_match = self.by_alias.get((scope, decl.id))
         if physical and self.old_bindings.get(alias_match, dict()).get("physical") not in (None, "", physical):
             alias_match = None
-        identifier = decl.meta.get("semantic_id") or self.by_physical.get(physical) or alias_match
+        known = self.by_owner.get((owner, physical)) if physical and owner else self.by_physical.get(physical)
+        identifier = decl.meta.get("semantic_id") or known or alias_match
         if identifier is None:
-            source = "physical:" + physical if physical else f"new:{self.namespace}:{scope}:{decl.id}"
+            # A renderer id is an object name that repeats across emitters, so the owning
+            # emitter is part of the identity: two emitters never share one entity.
+            if physical and owner:
+                source = f"physical:{owner}/{physical}"
+            else:
+                source = "physical:" + physical if physical else f"new:{self.namespace}:{scope}:{decl.id}"
             identifier = stable_id(self.asset + ":" + source)
         if identifier in self.bindings:
             raise SyncError("ambiguous_identity", f"duplicate entity identity {decl.id}")

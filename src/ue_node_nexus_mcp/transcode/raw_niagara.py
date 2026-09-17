@@ -34,20 +34,22 @@ def input_value_text(item: dict[str, Any]) -> str:
     return str(item.get("value", ""))
 
 
-def module_decl(identifier: str, module: dict[str, Any]) -> Decl:
+def module_decl(identifier: str, module: dict[str, Any], schema=None) -> Decl:
     args: list[tuple[str | None, str]] = []
     inputs = list(module.get("inputs") or [])
     for item in inputs:
         if not item.get("has_override"):
             continue
         args.append((str(item.get("name", "")), input_value_text(item)))
+    script = str(module.get("script", ""))
+    short = str(module.get("script_short") or niagara_module_candidate(script))
     decl = Decl(
         id=identifier,
-        type_name=str(module.get("script_short") or niagara_module_candidate(str(module.get("script", "")))),
+        type_name=module_reference(schema, script, short),
         args=args,
         meta={
             "guid": str(module.get("guid", "")),
-            "script": str(module.get("script", "")),
+            "script": script,
             "inputs": inputs,
             "input_types": {str(item.get("name", "")): str(item.get("type", "")) for item in inputs},
             "input_defaults": {str(item.get("name", "")): str(item.get("default", "")) for item in inputs},
@@ -58,12 +60,21 @@ def module_decl(identifier: str, module: dict[str, Any]) -> Decl:
     return decl
 
 
+def module_reference(schema, script: str, short: str) -> str:
+    """Write the short name only while it still means exactly this script."""
+    if schema is None or not script:
+        return short
+    from .schema.catalog import module_reference as resolve
+
+    return resolve(schema, script, short)
+
+
 def renderer_type_name(renderer: dict[str, Any]) -> str:
     """``/Script/Niagara.NiagaraSpriteRendererProperties`` -> ``Sprite``."""
     return short_class_name(str(renderer.get("class") or renderer.get("class_short") or ""))
 
 
-def renderer_decl(identifier: str, renderer: dict[str, Any]) -> Decl:
+def renderer_decl(identifier: str, renderer: dict[str, Any], owner: str = "") -> Decl:
     props = [(key, value) for key, value in non_default_params(renderer.get("props"))]
     return Decl(
         id=identifier,
@@ -71,6 +82,9 @@ def renderer_decl(identifier: str, renderer: dict[str, Any]) -> Decl:
         props=props,
         meta={
             "guid": str(renderer.get("guid", "")),
+            # Renderer ids are object names, unique per emitter only; semantic identity
+            # scopes them by the owning emitter so multi-emitter systems stay distinct.
+            "owner": owner,
             "class": str(renderer.get("class", "")),
             "prop_types": prop_types(renderer.get("props")),
             "prop_defaults": prop_defaults(renderer.get("props")),
@@ -88,10 +102,11 @@ def _section_guids(emitter: dict[str, Any]) -> list[list[str]]:
     return sections
 
 
-def _emitter_sections(emitter: dict[str, Any], prefix: str, claimed: dict[str, str], used: set[str]) -> tuple[list[Section], dict[str, str], dict[str, list[str]]]:
+def _emitter_sections(emitter: dict[str, Any], prefix: str, claimed: dict[str, str], used: set[str], schema=None) -> tuple[list[Section], dict[str, str], dict[str, list[str]]]:
     sections: list[Section] = []
     ids: dict[str, str] = {}
     order: dict[str, list[str]] = {}
+    owner = str(emitter.get("guid", ""))
     for stack in emitter.get("stacks") or []:
         group = str(stack.get("group", ""))
         modules = list(stack.get("modules") or [])
@@ -104,7 +119,7 @@ def _emitter_sections(emitter: dict[str, Any], prefix: str, claimed: dict[str, s
             guid = str(module.get("guid", ""))
             identifier = allocator.allocate(guid, niagara_module_candidate(str(module.get("script", ""))), "module")
             module_ids.append(identifier)
-            section.entries.append(module_decl(identifier, module))
+            section.entries.append(module_decl(identifier, module, schema))
         ids.update(allocator.by_guid)
         used.update(allocator.by_guid.values())
         order[key] = module_ids
@@ -121,7 +136,7 @@ def _emitter_sections(emitter: dict[str, Any], prefix: str, claimed: dict[str, s
         section = Section(name="renderers", args=prefix)
         for renderer in renderers:
             identifier = allocator.allocate(str(renderer.get("guid", "")), renderer_type_name(renderer), "renderer")
-            section.entries.append(renderer_decl(identifier, renderer))
+            section.entries.append(renderer_decl(identifier, renderer, owner))
         ids.update(allocator.by_guid)
         used.update(allocator.by_guid.values())
         sections.append(section)
@@ -132,6 +147,7 @@ def niagara_document(
     raw: dict[str, Any],
     previous_ids: dict[str, str] | None = None,
     previous_order: dict[str, list[str]] | None = None,
+    schema=None,
 ) -> tuple[Document, dict[str, str], dict[str, list[str]]]:
     kind = require_kind(raw, "niagara_system", "niagara_emitter")
     niagara = raw.get("niagara") or {}
@@ -162,7 +178,7 @@ def niagara_document(
             document.sections.append(section)
         else:
             document.sections[0].entries.extend(props_section(emitter.get("props")).entries)
-        sections, emitter_ids, emitter_order = _emitter_sections(emitter, prefix, claimed, used)
+        sections, emitter_ids, emitter_order = _emitter_sections(emitter, prefix, claimed, used, schema)
         ids.update(emitter_ids)
         order.update(emitter_order)
         document.sections.extend(sections)

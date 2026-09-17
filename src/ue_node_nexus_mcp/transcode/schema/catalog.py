@@ -47,7 +47,8 @@ def _publish(directory, key, tables, environment, coverage, incremental) -> dict
             if not (directory / path).is_file():
                 atomic_write(directory / path, canonical(record))
             entries[name] = dict(file=path, hash=record_hash, path=record["path"], aliases=record["aliases"],
-                                 category=record["category"], coverage=record["coverage"], bridge=record["bridge"])
+                                 category=record["category"], coverage=record["coverage"], bridge=record["bridge"],
+                                 deprecated=bool(record.get("deprecated")))
         index[family] = entries
     manifest = dict(format=2, key=key, environment=environment or old.get("environment", dict()),
                     generation=old.get("generation", 0) + 1, tables=index,
@@ -103,6 +104,21 @@ def _entry_names(entry: dict) -> set[str]:
     return names
 
 
+def _entry_path(entry: dict, key: str) -> str:
+    return str(entry.get("path") or key)
+
+
+def _current_only(matches: list[tuple[str, dict]]) -> list[tuple[str, dict]]:
+    """Keep the matches that are not superseded engine content.
+
+    Engine libraries ship a deprecated script (``V2``/``V3`` folder) beside the
+    current one under the same short name; only an unambiguous current record may
+    answer to that spelling.
+    """
+    current = [item for item in matches if not item[1].get("deprecated")]
+    return current if len(current) == 1 else matches
+
+
 def lookup_record(lock, family: str, name: str) -> dict | None:
     entries = lock.info().get("tables", dict()).get(family, dict())
     candidates = [name, name + "." + name.rsplit("/", 1)[-1]]
@@ -111,8 +127,28 @@ def lookup_record(lock, family: str, name: str) -> dict | None:
             return read_entry(lock, family, key, entries[key])
     matches = [(key, entry) for key, entry in entries.items() if name in _entry_names(entry) or key.endswith("." + name)]
     if len(matches) > 1:
-        raise SyncError("schema_ambiguous", "use the full UE path", dict(candidates=[key for key, _ in matches]))
+        matches = _current_only(matches)
+    if len(matches) > 1:
+        raise SyncError("schema_ambiguous", "use the full UE path", dict(candidates=[_entry_path(entry, key) for key, entry in matches]))
     return read_entry(lock, family, *matches[0]) if matches else None
+
+
+def module_reference(lock, path: str, short: str) -> str:
+    """Shortest module reference that resolves back to ``path`` in this catalog.
+
+    Engine libraries ship a superseded module script beside the current one, so a
+    short name that several records answer to must stay out of the mirror: the same
+    spelling would mean one script to the validator and another to the editor.
+    """
+    entries = lock.info().get("tables", dict()).get("niagara_modules", dict())
+    if not path or not short or not entries:
+        return short or path
+    matches = [(key, entry) for key, entry in entries.items() if short in _entry_names(entry) or key.endswith("." + short)]
+    if len(matches) > 1:
+        matches = _current_only(matches)
+    if len(matches) == 1 and _entry_path(matches[0][1], matches[0][0]) == path:
+        return short
+    return path
 
 
 def lookup_class(lock, family: str, name: str, manifest: dict) -> dict | None:

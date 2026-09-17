@@ -6,6 +6,7 @@ from .diff_common import decl_params, diff_brace_props, diff_prop_section, same_
 from .model import Decl, Document, Section
 from .plan import AssetPlan
 from .schema_lock import SchemaLock
+from .sync_project import SyncError
 from .values import is_marker, values_equal
 
 ASSIGNMENT_MODULE = "SetVariables"
@@ -19,7 +20,7 @@ def diff_niagara(local: Document, base: Document | None, plan: AssetPlan, kind: 
         _diff_emitters(local, base, plan)
     for section in local.find_sections("stack"):
         before = base.section("stack", section.args) if base else None
-        _diff_stack(section, before, plan, kind)
+        _diff_stack(section, before, plan, kind, schema)
     for section in base.find_sections("stack") if base else []:
         if local.section("stack", section.args) is None and section.decls() and not section.decls()[0].opaque:
             emitter, group = _split(section.args, kind)
@@ -92,7 +93,23 @@ def _diff_emitters(local: Document, base: Document | None, plan: AssetPlan) -> N
                     plan.add("ns_emitter_prop_set", emitter=name, name=key, value=default)
 
 
-def _diff_stack(local: Section, base: Section | None, plan: AssetPlan, kind: str) -> None:
+def _module_script(decl: Decl, schema: SchemaLock | None) -> str | None:
+    """Exact script path for a module the text adds; None when the name is ambiguous."""
+    recorded = str(decl.meta.get("script") or "")
+    if recorded:
+        return recorded
+    if schema is None or decl.type_name == ASSIGNMENT_MODULE:
+        return decl.type_name
+    try:
+        path, _, _ = schema.niagara_module(decl.type_name)
+    except SyncError as exc:
+        if exc.code == "schema_ambiguous":
+            return None
+        raise
+    return path or decl.type_name
+
+
+def _diff_stack(local: Section, base: Section | None, plan: AssetPlan, kind: str, schema: SchemaLock | None = None) -> None:
     emitter, group = _split(local.args, kind)
     if group.startswith("Event:") or group.startswith("Stage:"):
         return
@@ -113,7 +130,11 @@ def _diff_stack(local: Section, base: Section | None, plan: AssetPlan, kind: str
             if decl.type_name == ASSIGNMENT_MODULE:
                 plan.error("unsupported_edit", f"{identifier}: Set Variables modules cannot be created from text; add it in the editor, then pull", decl.line)
                 continue
-            plan.add("ns_module_add", line=decl.line, id=identifier, script=decl.meta.get("script") or decl.type_name, index=index, **common)
+            script = _module_script(decl, schema)
+            if script is None:
+                plan.error("ambiguous_module", f"{identifier}: module {decl.type_name!r} matches several scripts; write the full path", decl.line)
+                continue
+            plan.add("ns_module_add", line=decl.line, id=identifier, script=script, index=index, **common)
             for key, value in decl_params(decl).items():
                 _add_input(plan, decl, identifier, key, value, None, common)
             if "disabled" in decl.flags:

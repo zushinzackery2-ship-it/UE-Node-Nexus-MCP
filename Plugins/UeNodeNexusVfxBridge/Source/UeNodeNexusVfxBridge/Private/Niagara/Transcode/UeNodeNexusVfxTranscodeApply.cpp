@@ -67,20 +67,17 @@ int32 ModuleIndex(UNiagaraNodeOutput* Output, const FString& Guid)
     return INDEX_NONE;
 }
 
-FString ResolveScriptPath(const FString& Text)
+TArray<FString> ModuleScriptMatches(const FString& Text)
 {
-    if (Text.StartsWith(TEXT("/")))
-    {
-        return Text;
-    }
+    TArray<FString> Matches;
     for (TObjectIterator<UNiagaraScript> It; It; ++It)
     {
         if (It->Usage == ENiagaraScriptUsage::Module && It->GetName().Equals(Text, ESearchCase::IgnoreCase))
         {
-            return It->GetPathName();
+            Matches.Add(It->GetPathName());
         }
     }
-    return FString();
+    return Matches;
 }
 
 // Re-enter an existing Niagara handler with a synthesized payload; failures become plan failures.
@@ -211,8 +208,23 @@ void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJs
     const FString Id = Str(Op, TEXT("id"));
     if (Verb == TEXT("ns_module_add"))
     {
-        const FString Script = ResolveScriptPath(Str(Op, TEXT("script")));
-        if (Script.IsEmpty()) { Context.Fail(Index, TEXT("unknown_module"), FString::Printf(TEXT("module script not found: %s"), *Str(Op, TEXT("script")))); return; }
+        // A short name that several engine scripts answer to must not be guessed: the
+        // caller spells the full path, or the plan fails with the candidates.
+        const FString Requested = Str(Op, TEXT("script"));
+        FString Script = Requested;
+        if (!Requested.StartsWith(TEXT("/")))
+        {
+            const TArray<FString> Matches = ModuleScriptMatches(Requested);
+            if (Matches.Num() != 1)
+            {
+                const FString Message = Matches.Num() > 1
+                    ? FString::Printf(TEXT("module name %s matches %d scripts: %s"), *Requested, Matches.Num(), *FString::Join(Matches, TEXT(", ")))
+                    : FString::Printf(TEXT("module script not found: %s"), *Requested);
+                Context.Fail(Index, Matches.Num() > 1 ? TEXT("ambiguous_module") : TEXT("unknown_module"), Message);
+                return;
+            }
+            Script = Matches[0];
+        }
         Payload->SetStringField(TEXT("module_script_path"), Script);
         int32 Target = INDEX_NONE;
         Op->TryGetNumberField(TEXT("index"), Target);

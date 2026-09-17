@@ -73,7 +73,12 @@ def _lint_module(decl: Decl, schema: SchemaLock | None, sink: DiagnosticSink) ->
     if schema is None or decl.type_name == "SetVariables":
         # Set Variables modules own a per-node generated script; their inputs are the assigned variables
         return
-    path, record, ambiguous = schema.niagara_module(decl.type_name)
+    # A pull records the exact script of every module it exported, so a declaration that
+    # only writes the short name still resolves to the script the editor actually holds.
+    declared = str(decl.meta.get("script") or "")
+    path, record, ambiguous = schema.niagara_module(declared) if declared else (None, None, [])
+    if record is None:
+        path, record, ambiguous = schema.niagara_module(decl.type_name)
     if record is None:
         if ambiguous:
             sink.error("ambiguous_module", f"module {decl.type_name!r} matches several scripts; use the full path: {', '.join(ambiguous[:5])}", line=decl.line)

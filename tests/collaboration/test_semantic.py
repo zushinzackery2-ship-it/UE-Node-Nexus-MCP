@@ -93,3 +93,36 @@ def test_new_physical_guid_does_not_reuse_deleted_entity_identity():
     changed = from_raw(raw, base)
     before = set(base["bindings"])
     assert set(changed["bindings"]) - before
+
+
+def second_emitter(emitter, name: str, guid: str, suffix: str):
+    """Another emitter whose renderer keeps the per-emitter object name it shares."""
+    clone = deepcopy(emitter)
+    clone["name"] = name
+    clone["guid"] = guid
+    for stack in clone.get("stacks") or []:
+        for module in stack.get("modules") or []:
+            module["guid"] = str(module.get("guid", "")) + suffix
+    return clone
+
+
+def renderer_bindings(snapshot) -> dict[str, dict]:
+    return dict((identifier, binding) for identifier, binding in snapshot["bindings"].items() if str(binding.get("scope", "")).startswith("renderers:"))
+
+
+def test_renderer_identity_is_scoped_to_its_emitter():
+    """A renderer id is an object name, so two emitters would otherwise share one entity."""
+    raw = niagara_raw()
+    emitter = raw["niagara"]["emitters"][0]
+    raw["niagara"]["emitters"].append(second_emitter(emitter, "Sparks2", "E-2", "-B"))
+
+    base = from_raw(raw)
+    sprites = renderer_bindings(base)
+    assert len(sprites) == 2
+    assert len({binding["physical"] for binding in sprites.values()}) == 1
+    assert len({binding["meta"]["owner"] for binding in sprites.values()}) == 2
+    assert len(set(sprites)) == 2
+
+    again = from_raw(raw, base)
+    assert set(again["bindings"]) == set(base["bindings"])
+    assert set(renderer_bindings(again)) == set(sprites)

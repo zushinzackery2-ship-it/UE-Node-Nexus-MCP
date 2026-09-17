@@ -22,9 +22,35 @@ using namespace VfxTranscode;
 
 namespace VfxTranscode
 {
+static bool ScriptDeprecated(UNiagaraScript* Script)
+{
+#if WITH_EDITORONLY_DATA
+    const FVersionedNiagaraScriptData* Data = Script ? Script->GetLatestScriptData() : nullptr;
+    return Data != nullptr && Data->bDeprecated;
+#else
+    return false;
+#endif
+}
+
+static FString ScriptRecommendation(UNiagaraScript* Script)
+{
+#if WITH_EDITORONLY_DATA
+    const FVersionedNiagaraScriptData* Data = Script ? Script->GetLatestScriptData() : nullptr;
+    return Data != nullptr && Data->DeprecationRecommendation != nullptr ? Data->DeprecationRecommendation->GetPathName() : FString();
+#else
+    return FString();
+#endif
+}
+
 TSharedPtr<FJsonObject> BuildModuleSignatures()
 {
     TSharedPtr<FJsonObject> Modules = MakeShared<FJsonObject>();
+    TMap<FString, TArray<FString>> PathsByShort;
+    const auto AddRecord = [&Modules, &PathsByShort](const FString& Path, const TSharedPtr<FJsonObject>& Record)
+    {
+        Modules->SetObjectField(Path, Record);
+        PathsByShort.FindOrAdd(Record->GetStringField(TEXT("short"))).Add(Path);
+    };
     for (TObjectIterator<UNiagaraScript> It; It; ++It)
     {
         UNiagaraScript* Script = *It;
@@ -56,7 +82,8 @@ TSharedPtr<FJsonObject> BuildModuleSignatures()
         TSharedPtr<FJsonObject> Record = MakeShared<FJsonObject>();
         Record->SetStringField(TEXT("short"), Script->GetName());
         Record->SetArrayField(TEXT("inputs"), Inputs);
-        Modules->SetObjectField(Script->GetPathName(), Record);
+        Record->SetBoolField(TEXT("deprecated"), ScriptDeprecated(Script));
+        AddRecord(Script->GetPathName(), Record);
     }
     // Unloaded module scripts are indexed by name only (inputs unknown) so lint can resolve
     // them without loading the whole module library.
@@ -79,7 +106,27 @@ TSharedPtr<FJsonObject> BuildModuleSignatures()
         TSharedPtr<FJsonObject> Record = MakeShared<FJsonObject>();
         Record->SetStringField(TEXT("short"), Asset.AssetName.ToString());
         Record->SetField(TEXT("inputs"), MakeShared<FJsonValueNull>());
-        Modules->SetObjectField(Path, Record);
+        AddRecord(Path, Record);
+    }
+    // A short name that several scripts answer to must be resolved by the engine's own
+    // verdict, so exactly those scripts are loaded to read their deprecation state.
+    for (const TPair<FString, TArray<FString>>& Pair : PathsByShort)
+    {
+        if (Pair.Value.Num() < 2)
+        {
+            continue;
+        }
+        for (const FString& Path : Pair.Value)
+        {
+            UNiagaraScript* Script = LoadObject<UNiagaraScript>(nullptr, *Path);
+            const TSharedPtr<FJsonObject>* Record = nullptr;
+            if (Script == nullptr || !Modules->TryGetObjectField(Path, Record) || Record == nullptr)
+            {
+                continue;
+            }
+            (*Record)->SetBoolField(TEXT("deprecated"), ScriptDeprecated(Script));
+            (*Record)->SetStringField(TEXT("recommendation"), ScriptRecommendation(Script));
+        }
     }
     return Modules;
 }
