@@ -6,7 +6,7 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from ...lexer import split_top_level
-from ...values import unquote
+from ...values import normalize_display, unquote
 
 NUMERIC = re.compile(r"^(?:u?int(?:8|16|32|64)?|byte|float|double|real|F?FloatProperty|F?DoubleProperty)$", re.I)
 NUMBER = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[fF]?$")
@@ -14,6 +14,10 @@ STRUCTS = set(("vector", "vector2d", "vector4", "rotator", "quat", "transform", 
 
 
 def normalize(text: str, type_name: str) -> str:
+    # Numbers reach the semantic state in the same form the mirror text shows them, so a
+    # captured snapshot and the files rendered from it agree whatever the value's type is;
+    # unknown struct types (BasePropertyOverrides, platform data) otherwise drifted.
+    text = normalize_display(str(text))
     kind = type_name.removeprefix("F").lower()
     if kind in ("bool", "boolean", "boolproperty") and text.lower() in ("true", "false", "1", "0"):
         return "true" if text.lower() in ("true", "1") else "false"

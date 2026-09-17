@@ -75,6 +75,22 @@ def test_a_superseded_script_is_written_in_full_while_the_current_one_stays_shor
     assert module_diagnostics(current, lock) == []
 
 
+def test_linting_text_with_an_ambiguous_short_name_reports_it_per_line(tmp_path):
+    """The ambiguity is a diagnostic on that line, so one module cannot fail the whole asset."""
+    lock = module_catalog(tmp_path)
+    text = emit(document_from_raw(niagara_raw(), schema=lock)[0])
+    for path in (CURRENT, SUPERSEDED):
+        text = text.replace(path, "InitializeParticle")
+    document, sink = parse(text)
+    assert sink.items == []
+
+    diagnostics = lint_document(document, "niagara_system", lock, "NS_Rain.ns.nexus").items
+
+    reported = [item for item in diagnostics if item.code == "ambiguous_module"]
+    assert len(reported) == 1
+    assert "InitializeParticle.InitializeParticle" in reported[0].message
+
+
 def test_adding_an_ambiguous_module_needs_the_full_path(tmp_path):
     lock = module_catalog(tmp_path)
     text = emit(document_from_raw(niagara_raw(), schema=lock)[0])

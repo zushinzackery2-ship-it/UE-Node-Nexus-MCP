@@ -51,7 +51,17 @@ def pending(bridge, context, workspace) -> None:
             record["reason"] = "interrupted before submitting to UE"
             transactions.save(owner, record)
             continue
-        result = reconcile(bridge, context, owner, record)
+        try:
+            result = reconcile(bridge, context, owner, record)
+        except SyncError as exc:
+            if exc.code != "apply_not_found":
+                raise
+            record["phase"] = "rejected"
+            record["receipt"] = None
+            record["reason"] = "durable receipt is missing; transaction cannot be resumed"
+            record["recovery_error"] = str(exc)
+            transactions.save(owner, record)
+            continue
         if result["phase"] != "completed":
             raise SyncError("recovery_required", "finish the pending execution before publishing", dict(apply_id=result["id"], phase=result["phase"]))
 

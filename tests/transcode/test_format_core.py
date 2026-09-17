@@ -1,10 +1,27 @@
 from __future__ import annotations
 
-from ue_node_nexus_mcp.transcode.emitter import emit
+from ue_node_nexus_mcp.transcode.emitter import emit, emit_entry
 from ue_node_nexus_mcp.transcode.lexer import parse_kv_list, split_top_level
 from ue_node_nexus_mcp.transcode.model import Decl, Link, Prop
 from ue_node_nexus_mcp.transcode.parser import parse
 from ue_node_nexus_mcp.transcode.values import format_value, normalize_value, parse_value, values_equal
+
+
+def test_control_bytes_survive_one_line():
+    """A value may carry binary payload (AssetRegistry tags); the line must stay one line.
+
+    ``str.splitlines`` breaks on ``\\x0b``/``\\x0c`` and ``str.strip`` trims the edge bytes,
+    so quoting has to escape every control character instead of writing it verbatim.
+    """
+    payload = "\x04\x01A\x0b\x0c\x1f\\\"01\x7f"
+    text = emit_entry(Prop(key="FiBData", value=payload))
+    assert "\n" not in text and text.splitlines() == [text]
+    assert parse_value(text.split(" = ", 1)[1]) == payload
+
+    document, sink = parse(f"nexus: 1\nasset: /Game/A.A\nclass: DataAsset\nschema: k\n\n[tags]\n{text}\n")
+    assert sink.items == []
+    assert document.section("tags").props()[0].value == payload
+    assert emit(document).splitlines()[6] == text
 
 SAMPLE = """nexus: 1
 asset: /Game/WaterStains/Functions/MF_WS_S

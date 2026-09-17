@@ -7,6 +7,7 @@ from .lint_material import check_value
 from .model import Decl, Document, Section
 from .raw_niagara import STACK_GROUPS
 from .schema_lock import SchemaLock
+from .sync_project import SyncError
 from .values import is_marker
 
 
@@ -76,9 +77,15 @@ def _lint_module(decl: Decl, schema: SchemaLock | None, sink: DiagnosticSink) ->
     # A pull records the exact script of every module it exported, so a declaration that
     # only writes the short name still resolves to the script the editor actually holds.
     declared = str(decl.meta.get("script") or "")
-    path, record, ambiguous = schema.niagara_module(declared) if declared else (None, None, [])
-    if record is None:
-        path, record, ambiguous = schema.niagara_module(decl.type_name)
+    try:
+        path, record, ambiguous = schema.niagara_module(declared) if declared else (None, None, [])
+        if record is None:
+            path, record, ambiguous = schema.niagara_module(decl.type_name)
+    except SyncError as exc:
+        if exc.code != "schema_ambiguous":
+            raise
+        path, record = None, None
+        ambiguous = [str(item) for item in (exc.details.get("candidates") or [])]
     if record is None:
         if ambiguous:
             sink.error("ambiguous_module", f"module {decl.type_name!r} matches several scripts; use the full path: {', '.join(ambiguous[:5])}", line=decl.line)

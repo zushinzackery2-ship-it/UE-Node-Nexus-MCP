@@ -7,8 +7,9 @@ import pytest
 from ue_node_nexus_mcp.transcode.collaboration.merge.engine import merge_snapshots
 from ue_node_nexus_mcp.transcode.collaboration.merge.order import merge_order
 from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import capture, from_raw, text_of
-from ue_node_nexus_mcp.transcode.collaboration.semantic.values import value
-from tests.transcode.fixtures import blueprint_raw, material_function_raw, material_instance_raw, material_raw, niagara_raw
+from ue_node_nexus_mcp.transcode.collaboration.semantic.values import normalize, value
+from ue_node_nexus_mcp.transcode.values import normalize_value
+from tests.transcode.fixtures import blueprint_raw, material_function_raw, material_instance_raw, material_raw, niagara_raw, prop
 
 
 @pytest.mark.parametrize("factory", [material_raw, material_function_raw, material_instance_raw, blueprint_raw, niagara_raw])
@@ -108,6 +109,24 @@ def second_emitter(emitter, name: str, guid: str, suffix: str):
 
 def renderer_bindings(snapshot) -> dict[str, dict]:
     return dict((identifier, binding) for identifier, binding in snapshot["bindings"].items() if str(binding.get("scope", "")).startswith("renderers:"))
+
+
+def test_a_custom_struct_value_survives_the_text_round_trip():
+    """An unknown struct type must reach the semantic state in the mirror's own number form.
+
+    A capture keeps the value it read from the editor; the file projection renders the
+    semantic state, so a type the semantic layer did not recognize left the workspace
+    looking locally modified the moment it was created.
+    """
+    struct = "(ShadingModel=MSM_DefaultLit,DisplacementScaling=(Magnitude=4.000000,Center=0.500000))"
+    assert normalize(struct, "BasePropertyOverrides") == normalize_value(struct)
+    assert normalize(struct, "BasePropertyOverrides") == "(ShadingModel=MSM_DefaultLit,DisplacementScaling=(Magnitude=4,Center=0.5))"
+    assert normalize(normalize(struct, "BasePropertyOverrides"), "BasePropertyOverrides") == normalize(struct, "BasePropertyOverrides")
+
+    raw = material_raw()
+    raw["props"].append(prop("BasePropertyOverrides", "FBasePropertyOverrides", struct, "(ShadingModel=MSM_DefaultLit)"))
+    base = from_raw(raw)
+    assert capture(text_of(base), base, "workspace-A", base["semantic"]["kind"])["semantic"] == base["semantic"]
 
 
 def test_renderer_identity_is_scoped_to_its_emitter():

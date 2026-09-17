@@ -15,6 +15,31 @@ def _edit_interface(project):
     file.write_text(file.read_text(encoding="utf-8").replace("InputName=B", "InputName=Bee"), encoding="utf-8")
 
 
+def test_a_refresh_records_the_catalog_offline_queries_read(sync_workspace):
+    """A published catalog is keyed by its collection identity; lint reads the recorded key."""
+    ue, env, project = sync_workspace
+    info = json.loads((project / "project.json").read_text(encoding="utf-8"))
+    info["schema_key"] = "5.5.4-stale0000"
+    (project / "project.json").write_text(json.dumps(info), encoding="utf-8")
+
+    report = run_sync(ue, "schema", None, dict(refresh=True), env)
+
+    recorded = json.loads((project / "project.json").read_text(encoding="utf-8"))["schema_key"]
+    assert recorded == report["schema_key"] == SCHEMA_KEY
+
+
+def test_an_online_action_restores_a_stale_recorded_catalog_key(sync_workspace):
+    """The editor's identity is the current catalog, so a stale record must follow it."""
+    ue, env, project = sync_workspace
+    info = json.loads((project / "project.json").read_text(encoding="utf-8"))
+    info["schema_key"] = "5.5.4-stale0000"
+    (project / "project.json").write_text(json.dumps(info), encoding="utf-8")
+
+    run_sync(ue, "pull", [MAT], env=env)
+
+    assert json.loads((project / "project.json").read_text(encoding="utf-8"))["schema_key"] == SCHEMA_KEY
+
+
 def test_refresh_failure_returns_one_outcome_per_selected_asset(sync_workspace):
     ue, env, project = sync_workspace
     ue.referencers[MF] = [MAT]

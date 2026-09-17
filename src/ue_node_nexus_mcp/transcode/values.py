@@ -53,7 +53,34 @@ def values_equal(left: str | None, right: str | None) -> bool:
 
 
 def quote(raw: str) -> str:
-    return '"' + "".join(_ESCAPES.get(char, char) for char in raw) + '"'
+    """Escape a value for one text line.
+
+    Control characters are escaped rather than written verbatim: the reader splits
+    text into lines with ``str.splitlines`` and trims values, so a raw ``\\x0b`` (or a
+    binary stub tag payload) would silently move to the next line or lose bytes.
+    """
+    out: list[str] = ['"']
+    for char in raw:
+        mapped = _ESCAPES.get(char)
+        if mapped is not None:
+            out.append(mapped)
+        elif ord(char) < 0x20 or ord(char) == 0x7F:
+            out.append(f"\\x{ord(char):02x}")
+        else:
+            out.append(char)
+    out.append('"')
+    return "".join(out)
+
+
+def _unescape(char: str, body: str, index: int) -> tuple[str, int]:
+    """Value and next index for the escape sequence starting at ``index``."""
+    if char == "x" and index + 2 < len(body):
+        digits = body[index + 1:index + 3]
+        try:
+            return chr(int(digits, 16)), index + 3
+        except ValueError:
+            return char, index + 1
+    return _UNESCAPES.get(char, char), index + 1
 
 
 def unquote(token: str) -> str:
@@ -65,8 +92,8 @@ def unquote(token: str) -> str:
     while index < len(body):
         char = body[index]
         if char == "\\" and index + 1 < len(body):
-            out.append(_UNESCAPES.get(body[index + 1], body[index + 1]))
-            index += 2
+            text, index = _unescape(body[index + 1], body, index + 1)
+            out.append(text)
             continue
         out.append(char)
         index += 1

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from ..collaboration.store.io import atomic_write, canonical, digest, read_json
 from ..paths import object_path, schema_dir
-from ..sync_project import SyncError, call_ok, ensure_root_registered
+from ..sync_project import SyncError, call_ok, ensure_root_registered, write_project_info
 from ..lifecycle import schema_refresh_requested
 from .catalog import migrate, publish, read_entry
 from .lock import SchemaLock
@@ -130,6 +130,9 @@ def run(bridge, context, options: dict) -> dict:
         if not context.bridge_available:
             raise SyncError("bridge_unavailable", "refresh requires the bound editor")
         refresh(bridge, context)
+        # The published catalog is keyed by its own collection identity; recording it
+        # keeps offline queries (lint, schema reads) on the same catalog as the editor.
+        write_project_info(context)
     lock = context.schema
     if lock is None or not lock.available:
         raise SyncError("schema_missing", "initialize this project's schema first")

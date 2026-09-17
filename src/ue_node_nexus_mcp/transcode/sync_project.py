@@ -177,6 +177,10 @@ def ensure_schema(bridge: BridgeCall, context: ProjectContext, force: bool = Fal
             raise SyncError("schema_project_mismatch", "schema is bound to a different project")
         if info.get("format") != 2:
             migrate(context.schema.directory, context.schema.key, environment=dict(project_file=context.project_file))
+        if str(_read_project_info(context.project).get("schema_key", "")) != context.schema_key:
+            # Offline actions resolve through the recorded key, so a refresh that moved the
+            # catalog must reach the project record or lint keeps reading the old one.
+            write_project_info(context)
         return context.schema
     ensure_root_registered(bridge, context)
     if not context.schema_key:
