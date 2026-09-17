@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .ids import IdAllocator, niagara_module_candidate, short_class_name
+from .ids import niagara_module_candidate, short_class_name
 from .model import Decl, Document, Prop, Section
-from .raw_common import allocator_for, header_from_raw, non_default_params, prop_defaults, prop_types, prop_values, props_section, require_kind
+from .raw_common import allocator_for, claim_section_ids, header_from_raw, non_default_params, prop_defaults, prop_types, prop_values, props_section, require_kind, section_allocator
 
 STACK_GROUPS = ("EmitterSpawn", "EmitterUpdate", "ParticleSpawn", "ParticleUpdate")
 
@@ -79,7 +79,16 @@ def renderer_decl(identifier: str, renderer: dict[str, Any]) -> Decl:
     )
 
 
-def _emitter_sections(emitter: dict[str, Any], prefix: str, known_ids: dict[str, str]) -> tuple[list[Section], dict[str, str], dict[str, list[str]]]:
+def _section_guids(emitter: dict[str, Any]) -> list[list[str]]:
+    """Guids of every section ``_emitter_sections`` allocates, in allocation order."""
+    sections = [[str(module.get("guid", "")) for module in stack.get("modules") or []] for stack in emitter.get("stacks") or []]
+    renderers = [str(item.get("guid", "")) for item in emitter.get("renderers") or []]
+    if renderers:
+        sections.append(renderers)
+    return sections
+
+
+def _emitter_sections(emitter: dict[str, Any], prefix: str, claimed: dict[str, str], used: set[str]) -> tuple[list[Section], dict[str, str], dict[str, list[str]]]:
     sections: list[Section] = []
     ids: dict[str, str] = {}
     order: dict[str, list[str]] = {}
@@ -88,7 +97,7 @@ def _emitter_sections(emitter: dict[str, Any], prefix: str, known_ids: dict[str,
         modules = list(stack.get("modules") or [])
         args = f"{prefix}/{group}" if prefix else group
         key = f"stack:{args}"
-        allocator = IdAllocator({str(module.get("guid", "")): known_ids[str(module.get("guid", ""))] for module in modules if str(module.get("guid", "")) in known_ids})
+        allocator = section_allocator([str(module.get("guid", "")) for module in modules], claimed, used)
         section = Section(name="stack", args=args)
         module_ids: list[str] = []
         for module in modules:
@@ -97,6 +106,7 @@ def _emitter_sections(emitter: dict[str, Any], prefix: str, known_ids: dict[str,
             module_ids.append(identifier)
             section.entries.append(module_decl(identifier, module))
         ids.update(allocator.by_guid)
+        used.update(allocator.by_guid.values())
         order[key] = module_ids
         if modules or group in STACK_GROUPS:
             sections.append(section)
@@ -107,12 +117,13 @@ def _emitter_sections(emitter: dict[str, Any], prefix: str, known_ids: dict[str,
         sections.append(section)
     renderers = list(emitter.get("renderers") or [])
     if renderers:
-        allocator = IdAllocator({str(item.get("guid", "")): known_ids[str(item.get("guid", ""))] for item in renderers if str(item.get("guid", "")) in known_ids})
+        allocator = section_allocator([str(item.get("guid", "")) for item in renderers], claimed, used)
         section = Section(name="renderers", args=prefix)
         for renderer in renderers:
             identifier = allocator.allocate(str(renderer.get("guid", "")), renderer_type_name(renderer), "renderer")
             section.entries.append(renderer_decl(identifier, renderer))
         ids.update(allocator.by_guid)
+        used.update(allocator.by_guid.values())
         sections.append(section)
     return sections, ids, order
 
@@ -133,10 +144,12 @@ def niagara_document(
     if user.entries:
         document.sections.append(user)
 
+    emitters = list(niagara.get("emitters") or [])
     known_ids = dict(allocator_for(raw, previous_ids).by_guid)
+    claimed, used = claim_section_ids([guids for emitter in emitters for guids in _section_guids(emitter)], known_ids)
     ids: dict[str, str] = {}
     order: dict[str, list[str]] = {}
-    for emitter in niagara.get("emitters") or []:
+    for emitter in emitters:
         name = str(emitter.get("name", ""))
         prefix = name if kind == "niagara_system" else ""
         if kind == "niagara_system":
@@ -149,7 +162,7 @@ def niagara_document(
             document.sections.append(section)
         else:
             document.sections[0].entries.extend(props_section(emitter.get("props")).entries)
-        sections, emitter_ids, emitter_order = _emitter_sections(emitter, prefix, known_ids)
+        sections, emitter_ids, emitter_order = _emitter_sections(emitter, prefix, claimed, used)
         ids.update(emitter_ids)
         order.update(emitter_order)
         document.sections.extend(sections)

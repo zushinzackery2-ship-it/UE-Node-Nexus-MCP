@@ -23,6 +23,7 @@ from .raw_common import non_default_params, prop_defaults, prop_types, prop_valu
 from .values import values_equal
 
 EXEC_CATEGORY = "exec"
+IMPLICIT_ID_NAMES = {"FunctionEntry": "entry", "FunctionResult": "result"}
 _CLASS_POSITIONAL = {
     "CallFunction": "function",
     "CallParentFunction": "function",
@@ -101,8 +102,12 @@ def pin_default_params(pins: list[dict[str, Any]], prop_names: set[str]) -> list
     return params
 
 
+def node_class_short(node: dict[str, Any]) -> str:
+    return str(node.get("class_short") or short_class_name(str(node.get("class", ""))))
+
+
 def node_decl(identifier: str, node: dict[str, Any]) -> Decl:
-    class_short = str(node.get("class_short") or short_class_name(str(node.get("class", ""))))
+    class_short = node_class_short(node)
     config = dict(node.get("config") or {})
     pins = list(node.get("pins") or [])
     position = (int(node.get("x", 0)), int(node.get("y", 0)))
@@ -142,22 +147,25 @@ def node_decl(identifier: str, node: dict[str, Any]) -> Decl:
 
 
 def assign_node_ids(nodes: list[dict[str, Any]], allocator: IdAllocator) -> dict[str, str]:
+    """Name every node of one graph inside the allocator's cross-graph namespace.
+
+    FunctionEntry / FunctionResult are named ``entry`` / ``result`` in every function
+    graph (the bridge resolves them inside the target graph), so they keep those names
+    whether or not another graph already uses them.
+    """
     ids: dict[str, str] = {}
     for node in nodes:
         guid = str(node.get("guid", ""))
-        if guid in allocator.by_guid:
+        section_local = IMPLICIT_ID_NAMES.get(node_class_short(node))
+        if section_local is not None:
+            ids[guid] = allocator.allocate_section_local(guid, section_local)
+        elif guid in allocator.by_guid:
             ids[guid] = allocator.allocate(guid, "")
     for node in nodes:
         guid = str(node.get("guid", ""))
         if guid in ids:
             continue
-        class_short = str(node.get("class_short") or short_class_name(str(node.get("class", ""))))
-        if class_short == "FunctionEntry":
-            ids[guid] = allocator.allocate(guid, "entry")
-            continue
-        if class_short == "FunctionResult":
-            ids[guid] = allocator.allocate(guid, "result")
-            continue
+        class_short = node_class_short(node)
         candidate = blueprint_node_candidate(class_short, dict(node.get("config") or {}), str(node.get("title", "")))
         ids[guid] = allocator.allocate(guid, candidate, class_short)
     return ids

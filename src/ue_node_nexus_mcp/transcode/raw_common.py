@@ -126,6 +126,34 @@ def allocator_for(raw: dict[str, Any], previous_ids: dict[str, str] | None) -> I
     return IdAllocator(previous_ids if previous_ids is not None else base_ids(raw))
 
 
+def claim_section_ids(section_guids: list[list[str]], known_ids: dict[str, str]) -> tuple[dict[str, str], set[str]]:
+    """Claim the stored ids of every section, the first claimer in raw order winning.
+
+    One asset shares a single id namespace across its sections, but ids are allocated
+    section by section. Bookkeeping written before that rule can hand one id to two
+    guids in different sections; the losing owner is left unclaimed here so its own
+    section mints a suffixed id instead of shadowing the winner on push.
+    """
+    claimed: dict[str, str] = {}
+    used: set[str] = set()
+    for guids in section_guids:
+        for guid in guids:
+            identifier = known_ids.get(guid)
+            if identifier is None or identifier in used:
+                continue
+            claimed[guid] = identifier
+            used.add(identifier)
+    return claimed, used
+
+
+def section_allocator(guids: list[str], claimed: dict[str, str], used: set[str]) -> IdAllocator:
+    """Allocator for one section, barred from reusing or re-minting ids of its siblings."""
+    allocator = IdAllocator({guid: claimed[guid] for guid in guids if guid in claimed})
+    for identifier in used:
+        allocator.reserve(identifier)
+    return allocator
+
+
 def make_link(src: str, src_pin: str | None, dst: str, dst_pin: str | None) -> Link:
     return Link(src=src, src_pin=src_pin, dst=dst, dst_pin=dst_pin)
 

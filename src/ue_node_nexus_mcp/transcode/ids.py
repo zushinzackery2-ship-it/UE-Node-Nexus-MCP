@@ -56,7 +56,11 @@ def sanitize_id(candidate: str, fallback: str = "node") -> str:
 
 
 class IdAllocator:
-    """Allocates unique ids inside one namespace (a graph, a stack, ...)."""
+    """Allocates unique ids inside one section (a graph, a stack, ...).
+
+    A caller that spans several sections seeds every section allocator with the ids
+    the other sections already claimed, so one asset keeps a single id namespace.
+    """
 
     def __init__(self, reserved: dict[str, str] | None = None) -> None:
         # guid -> id for already known nodes
@@ -80,6 +84,18 @@ class IdAllocator:
         if guid:
             self.by_guid[guid] = identifier
         return identifier
+
+    def allocate_section_local(self, guid: str | None, name: str) -> str:
+        """Bind a name that repeats in every section (``entry`` / ``result``).
+
+        FunctionEntry / FunctionResult carry these names in every function graph and
+        the bridge resolves them inside the target graph, so they are exempt from the
+        uniqueness the other ids obey.
+        """
+        self.used.add(name)
+        if guid:
+            self.by_guid[guid] = name
+        return name
 
 
 def material_node_candidate(class_short: str, props: dict[str, str]) -> str:

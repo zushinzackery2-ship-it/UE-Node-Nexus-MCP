@@ -130,4 +130,4 @@ def material_document(
     section.entries.extend(link for _, link in links)
     section.entries.extend(output_links)
     document.sections.append(section)
-    return document, dict(allocator.by_guid), {"graph": order}
+    return document, ids, {"graph": order}

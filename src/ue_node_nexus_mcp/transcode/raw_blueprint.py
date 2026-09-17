@@ -6,12 +6,11 @@ from typing import Any
 
 from .bp_signature import signature_from_raw
 from .bp_types import is_zero_default, split_type_text, type_text
-from .ids import IdAllocator, short_class_name
+from .ids import short_class_name
 from .model import Bare, Decl, Document, Prop, Section
-from .raw_blueprint_nodes import assign_node_ids, build_links, node_decl
-from .raw_common import allocator_for, base_order, header_from_raw, non_default_params, order_ids, prop_defaults, prop_types, prop_values, props_section, require_kind
+from .raw_blueprint_nodes import IMPLICIT_ID_NAMES, assign_node_ids, build_links, node_decl
+from .raw_common import allocator_for, base_order, claim_section_ids, header_from_raw, non_default_params, order_ids, prop_defaults, prop_types, prop_values, props_section, require_kind, section_allocator
 
-IMPLICIT_FUNCTION_NODES = ("FunctionEntry", "FunctionResult")
 VARIABLE_FLAG_ORDER = (
     "InstanceEditable",
     "BlueprintReadOnly",
@@ -109,12 +108,22 @@ def _is_ghost_event(node: dict[str, Any]) -> bool:
     return not any(pin.get("linked") for pin in node.get("pins") or [])
 
 
-def graph_section(graph: dict[str, Any], known_ids: dict[str, str], previous_order: list[str] | None) -> tuple[Section, dict[str, str]]:
-    """Build one graph section; ids are unique per graph, GUID map is global."""
+def _visible_nodes(graph: dict[str, Any]) -> list[dict[str, Any]]:
+    """Nodes the text carries, in raw order; editor template scaffolding stays hidden."""
+    return [node for node in graph.get("nodes") or [] if not _is_ghost_event(node)]
+
+
+def _graph_guids(graphs: list[dict[str, Any]]) -> list[list[str]]:
+    """Guids of every section ``graph_section`` allocates, in allocation order."""
+    return [[str(node.get("guid", "")) for node in _visible_nodes(graph)] for graph in graphs]
+
+
+def graph_section(graph: dict[str, Any], claimed: dict[str, str], used: set[str], previous_order: list[str] | None) -> tuple[Section, dict[str, str]]:
+    """Build one graph section; ids stay unique across every graph of the Blueprint."""
     kind = str(graph.get("kind", "ubergraph"))
     name = str(graph.get("name", ""))
-    node_guids = {str(node.get("guid", "")) for node in graph.get("nodes") or []}
-    allocator = IdAllocator({guid: known_ids[guid] for guid in node_guids if guid in known_ids})
+    nodes = _visible_nodes(graph)
+    allocator = section_allocator([str(node.get("guid", "")) for node in nodes], claimed, used)
     if kind == "function":
         section = Section(name="function", args=signature_text(name, graph.get("signature") or {}))
         for local in (graph.get("signature") or {}).get("locals") or []:
@@ -123,7 +132,6 @@ def graph_section(graph: dict[str, Any], known_ids: dict[str, str], previous_ord
         section = Section(name="macro", args=name)
     else:
         section = Section(name="graph", args=name)
-    nodes = [node for node in graph.get("nodes") or [] if not _is_ghost_event(node)]
     ids = assign_node_ids(nodes, allocator)
     decls = {ids[str(node.get("guid", ""))]: node_decl(ids[str(node.get("guid", ""))], node) for node in nodes}
     links, depends_on = build_links(graph, ids)
@@ -132,7 +140,7 @@ def graph_section(graph: dict[str, Any], known_ids: dict[str, str], previous_ord
     position = {identifier: index for index, identifier in enumerate(order)}
     # FunctionEntry / FunctionResult are derived from the signature: keep them
     # addressable as ``entry`` / ``result`` in links but do not print them.
-    implicit = {identifier: decl for identifier, decl in decls.items() if decl.meta.get("class_short") in IMPLICIT_FUNCTION_NODES}
+    implicit = {identifier: decl for identifier, decl in decls.items() if decl.meta.get("class_short") in IMPLICIT_ID_NAMES}
     section.meta["implicit_nodes"] = implicit
     section.entries.extend(decls[identifier] for identifier in order if identifier not in implicit)
     pin_index = {identifier: {name: index for index, name in enumerate(decl.meta.get("pin_names", []))} for identifier, decl in decls.items()}
@@ -182,13 +190,16 @@ def blueprint_document(
     if interfaces.entries:
         document.sections.append(interfaces)
 
+    graphs = list(blueprint.get("graphs") or [])
     known_ids = dict(allocator_for(raw, previous_ids).by_guid)
+    claimed, used = claim_section_ids(_graph_guids(graphs), known_ids)
     ids: dict[str, str] = {}
     order: dict[str, list[str]] = {}
-    for graph in blueprint.get("graphs") or []:
+    for graph in graphs:
         key = f"graph:{graph.get('name', '')}"
         previous = (previous_order or {}).get(key) if previous_order is not None else base_order(raw, key)
-        section, graph_ids = graph_section(graph, known_ids, previous)
+        section, graph_ids = graph_section(graph, claimed, used, previous)
+        used.update(graph_ids.values())
         ids.update(graph_ids)
         order[key] = [decl.id for decl in section.decls() if decl.modifier != "local"]
         document.sections.append(section)
