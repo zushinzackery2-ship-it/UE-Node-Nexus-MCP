@@ -18,6 +18,7 @@
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "UeNodeNexusBridgeMaterialNodeFilter.h"
 
 namespace UeNodeNexusBridge
 {
@@ -149,16 +150,11 @@ TSharedPtr<FJsonObject> BuildMaterialGraphGroupedData(UMaterial* Material, const
     const TConstArrayView<TObjectPtr<UMaterialExpression>> AllExpressions = Material->GetExpressions();
     TMap<FString, TArray<FString>> Groups;
     TArray<FString> Order;
+    int32 MatchedNodes = 0;
     int32 ReturnedNodes = 0;
-
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : AllExpressions)
+    const TArray<UMaterialExpression*> Expressions = FilterMaterialNodes(Material, AllExpressions, MaxNodes, Payload, MatchedNodes);
+    for (UMaterialExpression* Expression : Expressions)
     {
-        UMaterialExpression* Expression = ExpressionPtr.Get();
-        if (Expression == nullptr || (MaxNodes > 0 && ReturnedNodes >= MaxNodes))
-        {
-            continue;
-        }
-
         TArray<FString> Parts = {
             GroupedParamText(BuildMaterialExpressionParams(Expression), TEXT("value")),
             MaterialGroupedInputs(Material, Expression)
@@ -176,7 +172,9 @@ TSharedPtr<FJsonObject> BuildMaterialGraphGroupedData(UMaterial* Material, const
         ++ReturnedNodes;
     }
 
-    if (MaxNodes == 0 || ReturnedNodes < MaxNodes)
+    const bool bOutputMatches = MatchesMaterialOutputKeyword(Payload);
+    MatchedNodes += bOutputMatches ? 1 : 0;
+    if (bOutputMatches && (MaxNodes == 0 || ReturnedNodes < MaxNodes))
     {
         AddGroupedRow(Groups, Order, TEXT("MaterialOutput"), FString::Printf(TEXT("%s{p[none];%s}"), *MaterialOutputNodeId(), *MaterialOutputGroupedInputs(Material)));
         ++ReturnedNodes;
@@ -189,7 +187,7 @@ TSharedPtr<FJsonObject> BuildMaterialGraphGroupedData(UMaterial* Material, const
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num() + 1);
     Data->SetNumberField(TEXT("returned_nodes"), ReturnedNodes);
-    Data->SetBoolField(TEXT("truncated"), ReturnedNodes < AllExpressions.Num());
+    Data->SetBoolField(TEXT("truncated"), ReturnedNodes < MatchedNodes);
     SetTextPayload(Data, BuildGroupedText(FString::Printf(TEXT("G:%s|material|MaterialGraph|%d\n"), *EscapeIndexedToken(Material->GetPathName()), AllExpressions.Num() + 1), Order, Groups));
     return Data;
 }
@@ -201,16 +199,11 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionGraphGroupedData(UMaterialFunction*
     const TConstArrayView<TObjectPtr<UMaterialExpression>> AllExpressions = Function->GetExpressions();
     TMap<FString, TArray<FString>> Groups;
     TArray<FString> Order;
+    int32 MatchedNodes = 0;
     int32 ReturnedNodes = 0;
-
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : AllExpressions)
+    const TArray<UMaterialExpression*> Expressions = FilterMaterialNodes(Function, AllExpressions, MaxNodes, Payload, MatchedNodes);
+    for (UMaterialExpression* Expression : Expressions)
     {
-        UMaterialExpression* Expression = ExpressionPtr.Get();
-        if (Expression == nullptr || (MaxNodes > 0 && ReturnedNodes >= MaxNodes))
-        {
-            continue;
-        }
-
         TArray<FString> Parts = {
             GroupedParamText(BuildMaterialExpressionParams(Expression), TEXT("value")),
             MaterialFunctionGroupedInputs(Function, Expression)
@@ -235,7 +228,7 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionGraphGroupedData(UMaterialFunction*
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialFunctionGraph"));
     Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num());
     Data->SetNumberField(TEXT("returned_nodes"), ReturnedNodes);
-    Data->SetBoolField(TEXT("truncated"), ReturnedNodes < AllExpressions.Num());
+    Data->SetBoolField(TEXT("truncated"), ReturnedNodes < MatchedNodes);
     SetTextPayload(Data, BuildGroupedText(FString::Printf(TEXT("G:%s|material_function|MaterialFunctionGraph|%d\n"), *EscapeIndexedToken(Function->GetPathName()), AllExpressions.Num()), Order, Groups));
     return Data;
 }

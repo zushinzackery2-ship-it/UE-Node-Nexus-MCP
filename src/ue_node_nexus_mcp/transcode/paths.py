@@ -76,7 +76,7 @@ def package_name(asset_path: str) -> str:
     text = asset_path.strip()
     if "'" in text:
         text = text.split("'", 2)[1] if text.count("'") >= 2 else text.replace("'", "")
-    dot = text.rfind(".")
+    dot = text.find(".", text.rfind("/") + 1)
     slash = text.rfind("/")
     if dot > slash:
         text = text[:dot]

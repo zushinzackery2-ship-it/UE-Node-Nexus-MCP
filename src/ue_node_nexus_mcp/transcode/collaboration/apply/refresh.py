@@ -33,9 +33,9 @@ def callers(bridge, context, workspace, function: str, source: str, candidate: s
             continue
         item = dict(asset=asset, kind=current["semantic"]["kind"], dependencies=[function],
                     payload=dict(asset_path=asset, kind=current["semantic"]["kind"], plan=[dict(op="refresh_function_calls", function=function)], ids=dict()))
-        record = transactions.request(workspace, item, source, observation["commit"], observation["commit"], observation, options)
+        record = transactions.request(workspace, item, source, observation["commit"], observation["commit"], observation, options, consume=False)
         transactions.execute(bridge, workspace, record)
-        published = transactions.publish(workspace, record, consume=False)
+        published = transactions.publish(workspace, record)
         adopt(observation, record, published, workspace.history)
         if asset not in batch["units"]:
             continue

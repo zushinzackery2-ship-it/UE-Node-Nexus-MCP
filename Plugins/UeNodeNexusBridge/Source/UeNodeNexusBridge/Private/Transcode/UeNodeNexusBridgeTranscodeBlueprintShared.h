@@ -33,6 +33,4 @@ bool IsSupportedNodeClass(const UClass* Class);
 TSharedPtr<FJsonObject> FunctionSignatureJson(UEdGraph* Graph);
 // User-defined pins of an entry/result node -> [{name,type,default}].
 TArray<TSharedPtr<FJsonValue>> UserPinsJson(UK2Node_EditablePinBase* Node);
-// Pin default as text (object / text / string variants collapsed).
-FString PinDefaultText(const UEdGraphPin* Pin);
 }

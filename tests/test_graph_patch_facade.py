@@ -1,15 +1,13 @@
 """graph_patch_apply behavior exercised through the live ue_execute path.
 
-These tests go through the registered MCP facade tool (not the legacy wrapper)
-so the material client_id expansion, the dry-run guard, and the response
-normalization are verified on the code path real clients hit.
+These tests go through the registered MCP facade tool on the native bridge path.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from tests.support.bridges import RecordingBridge, SequencedBridge
+from tests.support.bridges import RecordingBridge
 
 from ue_node_nexus_mcp.server import ue_execute
 
@@ -18,23 +16,8 @@ def _patch(payload: dict[str, Any]) -> dict[str, Any]:
     return ue_execute("graph_patch_apply", payload, response={"mode": "full"})
 
 
-def test_material_graph_patch_expands_create_node_client_ids(all_features, use_bridge) -> None:
-    bridge = use_bridge(
-        SequencedBridge(
-            [
-                {"ok": True, "data": {"node_id": "node-param", "node_alias": "Density"}},
-                {"ok": True, "data": {"node_id": "node-mul", "node_alias": "Multiply_01"}},
-                {
-                    "ok": True,
-                    "data": {
-                        "applied": True,
-                        "diff": {"nodes_created": [], "links_added": []},
-                        "post_checks": {"compile": {"error_count": 0}},
-                    },
-                },
-            ]
-        )
-    )
+def test_material_graph_patch_forwards_ordered_client_ids(all_features, use_bridge) -> None:
+    bridge = use_bridge(RecordingBridge())
 
     response = _patch(
         {
@@ -66,37 +49,12 @@ def test_material_graph_patch_expands_create_node_client_ids(all_features, use_b
     )
 
     assert response["ok"] is True
-    assert [call[0] for call in bridge.calls] == ["node_create", "node_create", "graph_patch_apply"]
-    assert bridge.calls[2][1]["operations"] == [
-        {
-            "op": "connect_pins",
-            "from_node_id": "node-param",
-            "from_pin": "0",
-            "to_node_id": "node-mul",
-            "to_pin": "B",
-        }
-    ]
-    assert bridge.calls[2][1]["dry_run"] is False
-    assert response["data"]["client_side_expansion"]["created_nodes"][0]["client_id"] == "density"
+    assert bridge.calls[0][0] == "graph_patch_apply"
+    assert bridge.calls[0][1]["operations"][0]["client_id"] == "density"
 
 
 def test_material_graph_patch_does_not_replace_pin_names_that_match_client_ids(all_features, use_bridge) -> None:
-    bridge = use_bridge(
-        SequencedBridge(
-            [
-                {"ok": True, "data": {"node_id": "node-source", "node_alias": "Source"}},
-                {"ok": True, "data": {"node_id": "node-target", "node_alias": "Target"}},
-                {
-                    "ok": True,
-                    "data": {
-                        "applied": True,
-                        "diff": {"nodes_created": [], "links_added": []},
-                        "post_checks": {"compile": {"error_count": 0}},
-                    },
-                },
-            ]
-        )
-    )
+    bridge = use_bridge(RecordingBridge())
 
     response = _patch(
         {
@@ -127,34 +85,7 @@ def test_material_graph_patch_does_not_replace_pin_names_that_match_client_ids(a
     )
 
     assert response["ok"] is True
-    assert bridge.calls[2][1]["operations"] == [
-        {
-            "op": "connect_pins",
-            "from_node_id": "node-source",
-            "from_pin": "target",
-            "to_node_id": "node-target",
-            "to_pin": "source",
-        }
-    ]
-
-
-def test_material_graph_patch_client_id_dry_run_returns_clear_error(all_features, use_bridge) -> None:
-    bridge = use_bridge(RecordingBridge())
-
-    response = _patch(
-        {
-            "asset_path": "/Game/Materials/M_Test.M_Test",
-            "graph_kind": "material",
-            "operations": [
-                {"op": "create_node", "client_id": "mul", "node_class": "MaterialExpressionMultiply"},
-                {"op": "connect_pins", "from_node_id": "mul", "from_pin": "0", "to_node_id": "Output", "to_pin": "A"},
-            ],
-        }
-    )
-
-    assert response["ok"] is False
-    assert response["error"]["code"] == "material_client_id_dry_run_unsupported"
-    assert bridge.calls == []
+    assert bridge.calls[0][1]["operations"][2]["from_pin"] == "target"
 
 
 def test_blueprint_graph_patch_forwards_payload_unchanged(all_features, use_bridge) -> None:

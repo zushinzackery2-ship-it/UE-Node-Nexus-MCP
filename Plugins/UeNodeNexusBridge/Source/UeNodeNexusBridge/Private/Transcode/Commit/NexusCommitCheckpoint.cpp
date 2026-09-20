@@ -49,6 +49,7 @@ bool Checkpoint(const FJson& Request, const FJson& Before, const FJson& Receipt,
             return false;
         }
     }
+    CaptureRecoveryMemory(Receipt, TEXT("package_memory_before"));
     return SaveReceipt(Receipt, TEXT("prepared"), Error);
 }
 

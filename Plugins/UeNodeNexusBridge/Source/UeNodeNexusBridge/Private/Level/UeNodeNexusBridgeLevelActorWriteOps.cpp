@@ -151,7 +151,20 @@ TSharedPtr<FJsonObject> HandleLevelActorSpawn(const FString& Operation, const FS
         return Response;
     }
 
-    AActor* Actor = ActorSubsystem->SpawnActorFromClass(ActorClass, Location, Rotation, false);
+    UWorld* World = GEditor->GetEditorWorldContext().World();
+    ULevel* Level = World != nullptr ? World->GetCurrentLevel() : nullptr;
+    if (Level == nullptr || World->WorldType != EWorldType::Editor)
+    {
+        return MakeOperationError(Operation, RequestId, TEXT("editor_world_unavailable"), TEXT("An editable level is required to spawn an actor"));
+    }
+
+    FActorSpawnParameters SpawnParameters;
+    SpawnParameters.OverrideLevel = Level;
+    SpawnParameters.ObjectFlags = RF_Transactional;
+    SpawnParameters.bCreateActorPackage = Level->IsUsingExternalActors();
+    SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    Level->Modify();
+    AActor* Actor = World->SpawnActor<AActor>(ActorClass, FTransform(Rotation, Location), SpawnParameters);
     if (Actor == nullptr)
     {
         return MakeOperationError(Operation, RequestId, TEXT("spawn_failed"), TEXT("Editor refused to spawn the actor"));

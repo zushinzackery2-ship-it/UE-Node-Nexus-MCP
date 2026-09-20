@@ -14,7 +14,7 @@ OPTIONS = dict(
     resolve=set(("merge_id", "conflict_id", "choice", "value", "name")),
     abort=set(("merge_id", "rebase_id")),
     push=set(("revision", "source", "merge_id", "compile", "save", "allow_delete", "stop_on_error", "replace")),
-    recover=set(("apply_id", "projection_id", "restore")), close=set(),
+    recover=set(("apply_id", "projection_id", "restore", "preserve_current")), close=set(),
     branch=set(("name", "revision", "delete", "expected")), switch=set(("name",)),
     tag=set(("name", "revision", "message", "expected")),
     log=set(("revision", "limit", "cursor", "author", "entity", "since", "until")),
@@ -31,7 +31,7 @@ OPTIONS = dict(
 OPTIONS["cherry-pick"] = set(OPTIONS["revert"])
 OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error"))
 ACTIONS = tuple(OPTIONS)
-BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore"))
+BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current"))
 
 
 def validate(action: str, options: dict) -> None:

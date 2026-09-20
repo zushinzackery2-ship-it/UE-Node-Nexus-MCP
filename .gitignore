@@ -124,3 +124,7 @@ logs/
 *.cache
 *.dmp
 *.stackdump
+EndministratorPBR/
+Issues.md
+tests/review/
+tests/compile_check/build_issues.bat

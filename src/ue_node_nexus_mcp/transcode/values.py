@@ -64,8 +64,10 @@ def quote(raw: str) -> str:
         mapped = _ESCAPES.get(char)
         if mapped is not None:
             out.append(mapped)
-        elif ord(char) < 0x20 or ord(char) == 0x7F:
+        elif ord(char) < 0x20 or ord(char) in (0x7F, 0x85):
             out.append(f"\\x{ord(char):02x}")
+        elif char in ("\u2028", "\u2029"):
+            out.append(f"\\u{ord(char):04x}")
         else:
             out.append(char)
     out.append('"')
@@ -74,10 +76,11 @@ def quote(raw: str) -> str:
 
 def _unescape(char: str, body: str, index: int) -> tuple[str, int]:
     """Value and next index for the escape sequence starting at ``index``."""
-    if char == "x" and index + 2 < len(body):
-        digits = body[index + 1:index + 3]
+    width = 2 if char == "x" else 4 if char == "u" else 0
+    if width and index + width < len(body):
+        digits = body[index + 1:index + width + 1]
         try:
-            return chr(int(digits, 16)), index + 3
+            return chr(int(digits, 16)), index + width + 1
         except ValueError:
             return char, index + 1
     return _UNESCAPES.get(char, char), index + 1
@@ -136,6 +139,8 @@ def is_marker(raw: str) -> bool:
 
 def needs_quotes(raw: str) -> bool:
     if raw == "" or raw != raw.strip():
+        return True
+    if any(ord(char) < 0x20 or ord(char) in (0x7F, 0x85, 0x2028, 0x2029) for char in raw):
         return True
     if is_marker(raw) or is_numeric(raw):
         return False

@@ -6,6 +6,7 @@
 #include "Engine/Blueprint.h"
 #include "UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "UeNodeNexusBridgeBlueprintPinDefaults.h"
 
 namespace UeNodeNexusBridge
 {
@@ -35,7 +36,7 @@ static TSharedPtr<FJsonObject> BlueprintPinToJson(const UEdGraphPin* Pin)
     Json->SetStringField(TEXT("name"), Pin->PinName.ToString());
     Json->SetStringField(TEXT("direction"), PinDirectionToString(Pin->Direction));
     Json->SetObjectField(TEXT("type"), PinTypeToJson(Pin->PinType));
-    Json->SetStringField(TEXT("default_value"), Pin->DefaultValue);
+    Json->SetStringField(TEXT("default_value"), BlueprintPinDefaultText(Pin));
 
     TArray<TSharedPtr<FJsonValue>> LinkedTo;
     for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)

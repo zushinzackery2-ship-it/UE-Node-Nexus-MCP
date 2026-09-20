@@ -206,6 +206,12 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
         Asset->Modify();
     }
     ApplyPlanForKind(Asset, Kind, *Plan, Context);
+    if (Transaction.IsValid() && !Context.Failures.IsEmpty())
+    {
+        // Failed publication is restored from its package checkpoint. Do not let
+        // this request's undo record keep the package loaded during that restore.
+        Transaction->Cancel();
+    }
     Transaction.Reset();
 
     FBridgeAssetCompileDiagnostics Compile;

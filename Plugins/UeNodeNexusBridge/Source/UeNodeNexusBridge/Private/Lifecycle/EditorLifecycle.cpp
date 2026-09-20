@@ -20,28 +20,6 @@ namespace UeNodeNexusBridge::Lifecycle
 {
 static FTSTicker::FDelegateHandle Ticker;
 
-static TArray<TSharedPtr<FJsonValue>> PendingRecovery()
-{
-    TArray<TSharedPtr<FJsonValue>> Result;
-    TArray<FString> Files;
-    IFileManager::Get().FindFilesRecursive(Files, *(FPaths::ProjectSavedDir() / TEXT("Nexus/Collaboration")), TEXT("receipt.json"), true, false);
-    for (const FString& File : Files)
-    {
-        TSharedPtr<FJsonObject> Receipt;
-        if (!Collaboration::ReadJournal(File, Receipt))
-        {
-            Result.Add(MakeShared<FJsonValueString>(File));
-            continue;
-        }
-        const FString Phase = Collaboration::Text(Receipt, TEXT("phase"));
-        if (Phase != TEXT("ue_committed") && Phase != TEXT("rolled_back") && Phase != TEXT("rejected"))
-        {
-            Result.Add(MakeShared<FJsonValueString>(Collaboration::Text(Receipt, TEXT("apply_id"))));
-        }
-    }
-    return Result;
-}
-
 static bool PersistentPackage(UPackage* Package)
 {
     if (GEditor && GEditor->GetEditorWorldContext().World()
@@ -89,7 +67,7 @@ static TSharedPtr<FJsonObject> Inspect(const TArray<FString>& SavePackages, bool
     {
         Dirty.Add(MakeShared<FJsonValueString>(Package->GetName()));
     }
-    const auto Recovery = PendingRecovery();
+    const auto Recovery = Collaboration::PendingRecovery();
     if (!Dirty.IsEmpty())
     {
         Blockers.Add(MakeShared<FJsonValueString>(TEXT("instance_dirty")));
@@ -149,5 +127,6 @@ void Stop()
 {
     FTSTicker::GetCoreTicker().RemoveTicker(Ticker);
     NexusLifecycle::Detach();
+    Collaboration::StopPendingIndex();
 }
 }

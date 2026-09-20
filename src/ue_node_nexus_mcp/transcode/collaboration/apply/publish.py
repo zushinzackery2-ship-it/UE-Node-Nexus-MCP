@@ -19,9 +19,17 @@ def push(bridge, context, workspace, paths, options: dict, proposal=None) -> dic
     if not options.get("save", True):
         raise SyncError("save_required", "collaboration publication saves its committed result")
     with workspace.store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=workspace.state["id"]):
-        from .recover import pending
+        from .recover import pending, pending_records
 
-        pending(bridge, context, workspace)
+        outstanding = pending_records(workspace)
+        if proposal and (outstanding or proposal["preview"].get("published") != workspace.store.ref("refs/ue/published")):
+            raise SyncError("stale_proposal", "publication or pending executions changed since preview")
+        if options.get("dry_run", True):
+            if outstanding:
+                raise SyncError("recovery_required", "recover pending executions before previewing publication",
+                                dict(pending=[dict(apply_id=row["id"], phase=row["phase"]) for row in outstanding]))
+        else:
+            pending(bridge, context, workspace)
         return publish_locked(bridge, context, workspace, paths, options, proposal)
 
 
@@ -65,7 +73,7 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
         merged.update(candidate=session["candidates"]["head"], conflicts=[])
     batch = planning.preflight(workspace, merged, observation, assets, options)
     if options.get("dry_run", True):
-        preview = dict(source=source, target=observation["commit"], target_tree=observation["tree"], revisions=observation["revisions"],
+        preview = dict(source=source, target=observation["commit"], target_tree=observation["tree"], revisions=observation["revisions"], published=store.ref("refs/ue/published"),
                        push_candidate=merged["candidate"], base=merged["base"], conflict_count=len(merged["conflicts"]), conflicts=merged["conflicts"],
                        plans=[batch["units"][asset].get("summary", batch["units"][asset]) for asset in batch["order"] if asset in batch["units"]], errors=batch["errors"])
         return create(workspace, "push", paths, options, preview)

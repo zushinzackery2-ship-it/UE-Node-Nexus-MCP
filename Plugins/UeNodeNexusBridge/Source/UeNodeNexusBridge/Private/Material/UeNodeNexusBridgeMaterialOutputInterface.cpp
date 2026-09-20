@@ -106,6 +106,32 @@ TSharedPtr<FJsonObject> BuildMaterialOutputInterfaceData(UMaterial* Material, co
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Data->SetStringField(TEXT("node_id"), MaterialOutputNodeId());
     Data->SetStringField(TEXT("node_alias"), MaterialOutputNodeId());
+    FString Format = TEXT("text");
+    Payload->TryGetStringField(TEXT("format"), Format);
+    if (Format.Equals(TEXT("compact_json"), ESearchCase::IgnoreCase))
+    {
+        TArray<TSharedPtr<FJsonValue>> InputRows;
+        for (EMaterialProperty Property : MaterialOutputProperties())
+        {
+            TArray<TSharedPtr<FJsonValue>> Cells;
+            Cells.Add(MakeShared<FJsonValueString>(MaterialOutputPropertyName(Property)));
+            FExpressionInput* Input = Material->GetExpressionInputForProperty(Property);
+            if (Input != nullptr && Input->Expression != nullptr)
+            {
+                Cells.Add(MakeShared<FJsonValueString>(MaterialNodeAlias(Material, Input->Expression)));
+                Cells.Add(MakeShared<FJsonValueString>(MaterialOutputName(Input->Expression, Input->OutputIndex)));
+            }
+            else
+            {
+                Cells.Add(MakeShared<FJsonValueNull>());
+            }
+            InputRows.Add(MakeShared<FJsonValueArray>(Cells));
+        }
+        Data->SetStringField(TEXT("format"), TEXT("node_info_compact_json"));
+        Data->SetArrayField(TEXT("input"), InputRows);
+        Data->SetArrayField(TEXT("param"), BuildCompactParamRows(BuildMaterialOutputParams(Material), TEXT("value")));
+        Data->SetArrayField(TEXT("output"), {});
+    }
     SetTextPayload(Data, bValid ? Text : TEXT("index_out_of_range"));
     Data->SetBoolField(TEXT("selection_ok"), bValid);
     return Data;

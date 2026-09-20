@@ -9,8 +9,9 @@ from . import transactions
 from .observe import capture
 
 
-def reconcile(bridge, context, workspace, record: dict, restore=False) -> dict:
-    response = call_ok(bridge, "transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root), restore=restore))
+def reconcile(bridge, context, workspace, record: dict, restore=False, preserve_current=False) -> dict:
+    response = call_ok(bridge, "transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root),
+                                                         restore=restore, preserve_current=preserve_current))
     receipt = transactions.verify(workspace, record, (response.get("data") or dict()).get("receipt"))
     if not receipt:
         raise SyncError("receipt_invalid", "recovery did not return a receipt for this apply", dict(apply_id=record["id"]))
@@ -23,7 +24,7 @@ def reconcile(bridge, context, workspace, record: dict, restore=False) -> dict:
         selector = (receipt.get("response_data") or dict()).get("result_selector")
         if selector:
             selectors[record["asset"]] = selector
-        current = capture(bridge, context, workspace.store, [record["asset"]], reference=record["candidate"], selectors=selectors, persist=False)
+        current = capture(bridge, context, workspace.store, [record["asset"]], reference=record["candidate"], selectors=selectors, persist=False, force_export=True)
         raw = current["raw"].get(record["asset"], dict(exists=False))
         if receipt["after"].get("exists") is False:
             compatible = raw.get("exists") is False
@@ -34,17 +35,20 @@ def reconcile(bridge, context, workspace, record: dict, restore=False) -> dict:
             raise SyncError("recovery_conflict", "UE changed after the saved receipt", dict(apply_id=record["id"], observation=current["id"]))
         record["phase"] = "ue_committed"
         transactions.save(workspace, record)
-        transactions.publish(workspace, record)
+        transactions.publish(workspace, record, recovery_target=current["previous"])
     else:
         record["phase"] = phase
         transactions.save(workspace, record)
     return record
 
 
+def pending_records(workspace) -> list[dict]:
+    return [record for record in workspace.store.records("apply")
+            if record["phase"] not in ("completed", "rolled_back", "rejected")]
+
+
 def pending(bridge, context, workspace) -> None:
-    for record in workspace.store.records("apply"):
-        if record["phase"] in ("completed", "rolled_back", "rejected"):
-            continue
+    for record in pending_records(workspace):
         owner = Workspace(workspace.store, record["workspace_id"], context.schema)
         if record["phase"] == "prepared":
             record["phase"] = "rejected"
@@ -84,4 +88,7 @@ def recover(bridge, context, workspace, options: dict) -> dict:
     if options.get("dry_run", True) or record["phase"] == "completed":
         return record
     with workspace.store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=workspace.state["id"]):
-        return reconcile(bridge, context, workspace, record, options.get("restore", False))
+        record = workspace.store.record("apply", identifier)
+        if record["phase"] == "completed":
+            return record
+        return reconcile(bridge, context, workspace, record, options.get("restore", False), options.get("preserve_current", False))

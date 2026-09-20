@@ -2,8 +2,10 @@
 
 #include "Level/Scene/NexusSceneWorld.h"
 #include "UeNodeNexusBridgeTranscode.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Misc/SecureHash.h"
 #include "Serialization/JsonWriter.h"
+#include "UObject/SoftObjectPath.h"
 
 namespace UeNodeNexusBridge::Collaboration
 {
@@ -125,6 +127,14 @@ FJson Observe(const FJson& Request)
         FString Error;
         UWorld* World = Scene::ResolveWorld(Scene::String(*Selector, TEXT("map_path")), Error);
         return World ? StampRaw(Scene::ExportScene(World, *Selector, Error)) : nullptr;
+    }
+    if (Kind == TEXT("stub"))
+    {
+        const FAssetData AssetData = FAssetRegistryModule::GetRegistry().GetAssetByObjectPath(FSoftObjectPath(AssetPath));
+        if (AssetData.IsValid())
+        {
+            return StampRaw(Transcode::BuildStubRaw(AssetData));
+        }
     }
     UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
     if (!Asset)

@@ -10,6 +10,7 @@
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "UeNodeNexusBridgeBlueprintPinDefaults.h"
 #include "UeNodeNexusBridgeGraphPatchShared.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -20,7 +21,7 @@ static TSharedPtr<FJsonObject> PinParamToJson(UEdGraphPin* Pin)
     TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
     Param->SetStringField(TEXT("name"), Pin->PinName.ToString());
     Param->SetStringField(TEXT("pin_id"), Pin->PinId.ToString(EGuidFormats::DigitsWithHyphens));
-    Param->SetStringField(TEXT("default_value"), Pin->DefaultValue);
+    Param->SetStringField(TEXT("default_value"), BlueprintPinDefaultText(Pin));
     Param->SetBoolField(TEXT("editable"), Pin->Direction == EGPD_Input && Pin->LinkedTo.Num() == 0);
     return Param;
 }
@@ -63,10 +64,10 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeParamsGet(const FString& Operation, c
     FString GraphName;
     FString NodeId;
     Payload->TryGetStringField(TEXT("graph_name"), GraphName);
-    if (!Payload->TryGetStringField(TEXT("node_id"), NodeId))
+    if (!Payload->TryGetStringField(TEXT("node_id"), NodeId) || GraphName.IsEmpty())
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("node_id is required")));
+        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("graph_name and node_id are required")));
         return Response;
     }
 
@@ -106,7 +107,7 @@ static bool ApplyParamObject(UEdGraph* Graph, UEdGraphNode* Node, const FString&
         return false;
     }
 
-    AddGraphParamChange(Diff, NodeId, Name, Pin->DefaultValue, ValueString);
+    AddGraphParamChange(Diff, NodeId, Name, BlueprintPinDefaultText(Pin), ValueString);
     if (!bDryRun)
     {
         Node->Modify();
@@ -126,10 +127,10 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeParamsSet(const FString& Operation, c
     UEdGraph* Graph = FindBlueprintGraph(Blueprint, GraphName);
     UEdGraphNode* Node = FindBlueprintNode(Graph, NodeId);
     const TSharedPtr<FJsonObject>* Params = nullptr;
-    if (Node == nullptr || !Payload->TryGetObjectField(TEXT("params"), Params) || Params == nullptr)
+    if (GraphName.IsEmpty() || Node == nullptr || !Payload->TryGetObjectField(TEXT("params"), Params) || Params == nullptr)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("node_id and params are required")));
+        Response->SetObjectField(TEXT("error"), MakeError(TEXT("invalid_request"), TEXT("graph_name, node_id and params are required")));
         return Response;
     }
 
@@ -165,7 +166,7 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeParamsSet(const FString& Operation, c
         FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
     }
 
-    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, false, !bCompileAfter, 0, 0);
+    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, false, bDryRun || !bCompileAfter, 0, 0);
     if (!bDryRun && bCompileAfter)
     {
         Diagnostics.Append(CompileBlueprintWithDiagnostics(Blueprint, Blueprint->GetPathName(), Compile));

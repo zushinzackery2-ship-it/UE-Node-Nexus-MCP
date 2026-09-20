@@ -12,6 +12,8 @@
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchContext.h"
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "UeNodeNexusMaterialPatchPreparation.h"
+#include "UObject/StrongObjectPtr.h"
 
 namespace UeNodeNexusBridge
 {
@@ -46,27 +48,48 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionGraphPatch(const FString& Operatio
         return Response;
     }
 
+    UMaterialFunction* Original = Function;
+    TStrongObjectPtr<UMaterialFunction> Preview;
+    const bool bPrepared = Diagnostics.IsEmpty() && ValidateMaterialPatchAliases(Function, NormalizedOperations, Diagnostics);
+    if (bDryRun && bPrepared)
+    {
+        Preview.Reset(Cast<UMaterialFunction>(MakeMaterialPatchPreview(Function)));
+        if (!Preview.IsValid())
+        {
+            auto Response = MakeEnvelope(Operation, RequestId, false);
+            Response->SetObjectField(TEXT("error"), MakeError(TEXT("preview_failed"), TEXT("cannot duplicate material function graph")));
+            return Response;
+        }
+        Function = Preview.Get();
+    }
     bool bChanged = false;
     TUniquePtr<FScopedTransaction> Transaction;
-    if (!bDryRun)
+    if (!bDryRun && bPrepared)
     {
         Transaction = MakeUnique<FScopedTransaction>(FText::FromString(TEXT("UE Node Nexus Material Function Patch")));
         Function->Modify();
     }
 
     FMaterialFunctionPatchContext Context;
+    int32 Completed = 0;
     for (const TSharedPtr<FJsonValue>& Value : NormalizedOperations)
     {
+        if (!bPrepared)
+        {
+            break;
+        }
         TSharedPtr<FJsonObject> Op = Value->AsObject();
-        if (!Op.IsValid() || !ApplyMaterialFunctionPatchOperation(Function, Op, bDryRun, Diff, Diagnostics, Context))
+        if (!Op.IsValid() || !ApplyMaterialFunctionPatchOperation(Function, Op, false, Diff, Diagnostics, Context))
         {
             if (Diagnostics.Num() == 0)
             {
                 AddFunctionPatchDiagnostic(Diagnostics, TEXT("patch_operation_failed"), TEXT("Material function patch operation failed validation or application"), Function);
             }
-            continue;
+            bChanged |= MaterialPatchHasChanges(Diff);
+            break;
         }
         bChanged = true;
+        ++Completed;
     }
 
     TSharedPtr<FJsonObject> Compile = CompileAssetWrite(Function, bCompileAfter, !bDryRun && bChanged && bCompileAfter, Diagnostics);
@@ -78,7 +101,11 @@ TSharedPtr<FJsonObject> HandleMaterialFunctionGraphPatch(const FString& Operatio
     TSharedPtr<FJsonObject> PinIntegrity = BuildMaterialFunctionPinIntegrity(Function);
     const bool bOk = Diagnostics.Num() == 0 && PinIntegrity->GetBoolField(TEXT("ok"));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, bOk);
-    Response->SetObjectField(TEXT("data"), MakeWriteDataWithDiffFormat(bDryRun, !bDryRun && bChanged, bChanged, Diff, PinIntegrity, Compile, MakeDirtyState(Function), DiffFormat));
+    auto Data = MakeWriteDataWithDiffFormat(bDryRun, !bDryRun && bChanged, bChanged, Diff, PinIntegrity, Compile, MakeDirtyState(Original), DiffFormat);
+    Data->SetBoolField(TEXT("partial"), !bDryRun && bChanged && !bOk);
+    Data->SetNumberField(TEXT("completed_operations"), Completed);
+    Data->SetNumberField(TEXT("operation_count"), NormalizedOperations.Num());
+    Response->SetObjectField(TEXT("data"), Data);
     Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
     return Response;
 }

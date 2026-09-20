@@ -5,10 +5,12 @@
 #include "Components/SceneComponent.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "Materials/MaterialInterface.h"
+#include "Misc/ScopeExit.h"
 #include "UeNodeNexusBridgeGraphPatchShared.h"
+#include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
 #include "UObject/UnrealType.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace UeNodeNexusBridge
 {
@@ -120,7 +122,8 @@ static bool ApplyRelativeTransformDefault(
     const TSharedPtr<FJsonValue>& Value,
     FString& OutError)
 {
-    TSharedPtr<FJsonObject> TransformObject = Value.IsValid() ? Value->AsObject() : nullptr;
+    TSharedPtr<FJsonObject> TransformObject = Value.IsValid() && Value->Type == EJson::Object
+        ? Value->AsObject() : nullptr;
     if (!TransformObject.IsValid())
     {
         OutError = TEXT("relative_transform_must_be_object");
@@ -180,35 +183,6 @@ static bool ApplyRelativeTransformDefault(
     return true;
 }
 
-static bool ApplyMaterialDefault(
-    UMeshComponent* MeshComponent,
-    const TSharedPtr<FJsonValue>& Value,
-    const TSharedPtr<FJsonObject>& Defaults,
-    FString& OutError)
-{
-    FString MaterialPath;
-    if (!Value.IsValid() || !Value->TryGetString(MaterialPath))
-    {
-        OutError = TEXT("material_value_must_be_path_string");
-        return false;
-    }
-    UMaterialInterface* Material =
-        MaterialPath.IsEmpty() || MaterialPath.Equals(TEXT("None"), ESearchCase::IgnoreCase)
-        ? nullptr
-        : LoadObject<UMaterialInterface>(nullptr, *MaterialPath);
-    if (Material == nullptr
-        && !MaterialPath.IsEmpty()
-        && !MaterialPath.Equals(TEXT("None"), ESearchCase::IgnoreCase))
-    {
-        OutError = TEXT("material_not_found");
-        return false;
-    }
-    int32 SlotIndex = 0;
-    Defaults->TryGetNumberField(TEXT("material_slot"), SlotIndex);
-    MeshComponent->SetMaterial(SlotIndex, Material);
-    return true;
-}
-
 bool ApplyBlueprintComponentDefaults(
     UActorComponent* ComponentTemplate,
     const TSharedPtr<FJsonObject>& Defaults,
@@ -221,27 +195,43 @@ bool ApplyBlueprintComponentDefaults(
     {
         return true;
     }
-    if (ComponentTemplate == nullptr && !bDryRun)
+    if (ComponentTemplate == nullptr)
     {
         OutError = TEXT("component_template_unavailable");
         return false;
     }
+    if (bDryRun)
+    {
+        ComponentTemplate = DuplicateObject<UActorComponent>(ComponentTemplate, GetTransientPackage());
+        if (ComponentTemplate == nullptr)
+        {
+            OutError = TEXT("component_dry_run_template_unavailable");
+            return false;
+        }
+    }
+    else if (!ApplyBlueprintComponentDefaults(ComponentTemplate, Defaults, true, MakeEmptyDiff(), ComponentName, OutError))
+    {
+        return false;
+    }
 
     TArray<TSharedPtr<FJsonValue>> Applied;
+    if (!bDryRun)
+    {
+        ComponentTemplate->Modify();
+        ComponentTemplate->PreEditChange(nullptr);
+    }
+    ON_SCOPE_EXIT
+    {
+        if (!bDryRun)
+        {
+            ComponentTemplate->PostEditChange();
+        }
+    };
     for (const TPair<FString, TSharedPtr<FJsonValue>>& Field : Defaults->Values)
     {
         const FString& PropertyName = Field.Key;
         if (PropertyName.Equals(TEXT("material_slot"), ESearchCase::IgnoreCase))
         {
-            continue;
-        }
-
-        if (bDryRun)
-        {
-            TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-            Item->SetStringField(TEXT("component"), ComponentName);
-            Item->SetStringField(TEXT("property"), PropertyName);
-            AppendDiffItem(Diff, TEXT("component_defaults_set"), Item);
             continue;
         }
 
@@ -283,8 +273,6 @@ bool ApplyBlueprintComponentDefaults(
         Item->SetStringField(TEXT("property"), PropertyName);
         Item->SetStringField(TEXT("value"), ValueText);
         Applied.Add(MakeShared<FJsonValueObject>(Item));
-        ComponentTemplate->Modify();
-        ComponentTemplate->PostEditChange();
     }
 
     for (const TSharedPtr<FJsonValue>& Item : Applied)

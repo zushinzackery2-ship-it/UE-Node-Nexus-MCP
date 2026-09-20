@@ -73,16 +73,20 @@ static bool AddComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& O
 
     if (bDryRun)
     {
+        const TSharedPtr<FJsonObject>* Defaults = nullptr;
+        if (TryGetComponentDefaultsObject(Op, Defaults))
+        {
+            UActorComponent* Template = NewObject<UActorComponent>(GetTransientPackage(), ComponentClass);
+            if (!ApplyBlueprintComponentDefaults(Template, *Defaults, true, Diff, Name, OutError))
+            {
+                return false;
+            }
+        }
         TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
         Item->SetStringField(TEXT("name"), Name);
         Item->SetStringField(TEXT("component_class"), ComponentClass->GetPathName());
         Item->SetStringField(TEXT("parent"), ParentName);
         AppendDiffItem(Diff, TEXT("components_added"), Item);
-        const TSharedPtr<FJsonObject>* Defaults = nullptr;
-        if (TryGetComponentDefaultsObject(Op, Defaults))
-        {
-            ApplyBlueprintComponentDefaults(nullptr, *Defaults, true, Diff, Name, OutError);
-        }
         return true;
     }
 
@@ -94,7 +98,6 @@ static bool AddComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& O
     if (ParentNode != nullptr)
     {
         ParentNode->AddChildNode(NewNode);
-        NewNode->SetParent(ParentNode);
     }
     else
     {
@@ -135,10 +138,12 @@ static bool RemoveComponent(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>
     {
         return false;
     }
+    USCS_Node* ParentNode = Script->FindParentNode(Node);
+    const FString Parent = ParentNode ? ParentNode->GetVariableName().ToString() : Node->ParentComponentOrVariableName.ToString();
     AppendDiffItem(
         Diff,
         TEXT("components_removed"),
-        MakeBlueprintComponentItem(Node, Node->ParentComponentOrVariableName.ToString()));
+        MakeBlueprintComponentItem(Node, Parent));
     if (!bDryRun)
     {
         Script->RemoveNodeAndPromoteChildren(Node);
@@ -250,7 +255,7 @@ TSharedPtr<FJsonObject> HandleBlueprintComponentsPatch(const FString& Operation,
         FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
     }
 
-    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, false, !bCompileAfter, 0, 0);
+    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, false, bDryRun || !bCompileAfter, 0, 0);
     if (!bDryRun && bCompileAfter)
     {
         Diagnostics.Append(CompileBlueprintWithDiagnostics(Blueprint, Blueprint->GetPathName(), Compile));

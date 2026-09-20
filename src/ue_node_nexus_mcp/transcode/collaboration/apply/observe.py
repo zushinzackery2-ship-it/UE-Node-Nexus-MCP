@@ -62,7 +62,7 @@ def scene_selector(asset: str, snapshot: dict | None, requested: dict | None = N
 
 
 def capture(bridge, context, store, assets: list[str] | None = None, *,
-            reference: str | None = None, discover=False, selectors=None, persist=True) -> dict:
+            reference: str | None = None, discover=False, selectors=None, persist=True, force_export=False) -> dict:
     binding = bind(bridge, context, store)
     history = History(store)
     previous = store.ref("refs/ue/observed")
@@ -94,7 +94,7 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
             raw_by_asset[asset] = read_json(file)
         elif asset not in infos:
             entries.pop(asset, None)
-        elif asset in entries and carried(memory.get(asset), entries[asset], infos[asset]):
+        elif not force_export and asset in entries and carried(memory.get(asset), entries[asset], infos[asset]):
             revisions[asset] = memory[asset][1]
         else:
             groups.setdefault(export_operation(infos[asset].kind), []).append(asset)

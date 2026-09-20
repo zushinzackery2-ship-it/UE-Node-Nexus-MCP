@@ -29,6 +29,7 @@ def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, ki
         implicit.setdefault("result", None)
     if kind == "material":
         implicit.setdefault(MATERIAL_OUT, None)
+    replaced_nodes: set[str] = set()
     for identifier in base_decls:
         if identifier not in local_decls:
             plan.add("delete_node", id=identifier, **extra)
@@ -37,6 +38,7 @@ def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, ki
         if before is not None and not (before.opaque and decl.opaque) and not same_class(schema, node_class_family(kind), decl.type_name, before.type_name):
             plan.warn("node_class_changed", f"{identifier}: class changed {before.type_name} -> {decl.type_name}; node is recreated (GUID changes)", decl.line)
             plan.add("delete_node", line=decl.line, id=identifier, **extra)
+            replaced_nodes.add(identifier)
             before = None
         if before is None:
             if decl.opaque:
@@ -44,8 +46,9 @@ def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, ki
                 continue
             _create_node(decl, plan, kind, extra)
             continue
-        _update_node(decl, before, plan, kind, extra)
-    _diff_links(local, base, local_decls, base_decls, implicit, plan, kind, extra)
+        if _update_node(decl, before, plan, kind, extra):
+            replaced_nodes.add(identifier)
+    _diff_links(local, base, local_decls, base_decls, implicit, plan, kind, extra, replaced_nodes)
 
 
 def _create_node(decl: Decl, plan: AssetPlan, kind: str, extra: dict[str, Any]) -> None:
@@ -63,7 +66,7 @@ def _create_node(decl: Decl, plan: AssetPlan, kind: str, extra: dict[str, Any]) 
     plan.add("create_node", line=decl.line, **args, **extra)
 
 
-def _update_node(decl: Decl, before: Decl, plan: AssetPlan, kind: str, extra: dict[str, Any]) -> None:
+def _update_node(decl: Decl, before: Decl, plan: AssetPlan, kind: str, extra: dict[str, Any]) -> bool:
     if decl.opaque:
         for key, _ in decl.args:
             if key is not None:
@@ -74,7 +77,7 @@ def _update_node(decl: Decl, before: Decl, plan: AssetPlan, kind: str, extra: di
             plan.warn("positional_changed", f"{decl.id}: positional arguments changed; node is recreated", decl.line)
             plan.add("delete_node", line=decl.line, id=decl.id, **extra)
             _create_node(decl, plan, kind, extra)
-            return
+            return True
         skip = {"pins"}
         diff_params(decl, before, plan, "set_node_param", skip=skip, id=decl.id, **extra)
         local_pins, base_pins = decl.keyed().get("pins"), before.keyed().get("pins")
@@ -86,6 +89,7 @@ def _update_node(decl: Decl, before: Decl, plan: AssetPlan, kind: str, extra: di
         plan.add("set_node_enabled", line=decl.line, id=decl.id, enabled="disabled" not in decl.flags, **extra)
     if decl.annotations.get("comment", "") != before.annotations.get("comment", ""):
         plan.add("set_node_comment", line=decl.line, id=decl.id, text=decl.annotations.get("comment", ""), **extra)
+    return False
 
 
 def canonical_pin(decl: Decl | None, pin: str | None, direction: str, kind: str) -> str:
@@ -128,21 +132,21 @@ def _link_key(link: Link, decls: dict[str, Decl], kind: str) -> tuple[str, str, 
     return (link.src, src_pin, link.dst, dst_pin)
 
 
-def _diff_links(local: Section, base: Section | None, local_decls: dict[str, Decl], base_decls: dict[str, Decl], implicit: dict[str, Decl | None], plan: AssetPlan, kind: str, extra: dict[str, Any]) -> None:
+def _diff_links(local: Section, base: Section | None, local_decls: dict[str, Decl], base_decls: dict[str, Decl], implicit: dict[str, Decl | None], plan: AssetPlan, kind: str, extra: dict[str, Any], replaced_nodes: set[str]) -> None:
     # nodes known to the base give pin lists for canonicalization on both sides
     known: dict[str, Decl] = dict(base_decls)
     known.update({identifier: decl for identifier, decl in implicit.items() if decl is not None})
     local_links = {_link_key(link, known, kind): link for link in local.links()}
     base_links = {_link_key(link, known, kind): link for link in base.links()} if base else {}
-    removed_nodes = set(base_decls) - set(local_decls)
+    removed_nodes = (set(base_decls) - set(local_decls)) | replaced_nodes
     for key, link in base_links.items():
-        if key in local_links:
+        if key in local_links or link.src in replaced_nodes or link.dst in replaced_nodes:
             continue
         if link.src in removed_nodes or link.dst in removed_nodes:
             continue
         plan.add("disconnect_pins", **{"from": link.src, "from_pin": link.src_pin, "to": link.dst, "to_pin": link.dst_pin}, **extra)
     for key, link in local_links.items():
-        if key in base_links:
+        if key in base_links and link.src not in replaced_nodes and link.dst not in replaced_nodes:
             continue
         if link.src not in local_decls and link.src not in implicit:
             continue

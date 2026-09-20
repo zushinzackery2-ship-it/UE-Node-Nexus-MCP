@@ -44,6 +44,27 @@ FJson Recover(const FString& Operation, const FString& RequestId, const FJson& P
     }
     FString Error;
     FString Phase = Text(Receipt, TEXT("phase"));
+    if (Flag(Payload, TEXT("preserve_current")) && Phase != TEXT("rolled_back") && Phase != TEXT("rejected"))
+    {
+        const FJson Current = ResultSnapshot(Object(Receipt, TEXT("request")), Object(Receipt, TEXT("response")));
+        if (!Current.IsValid())
+        {
+            return CommitError(Operation, RequestId, TEXT("recovery_conflict"), TEXT("cannot observe the current asset state"), Receipt);
+        }
+        Receipt->SetObjectField(TEXT("recovery_observation"), Current);
+        Receipt->SetStringField(TEXT("recovery_resolution"), TEXT("preserve_current"));
+        Receipt->SetStringField(TEXT("recovery_reason"), TEXT("current editor state was explicitly retained; checkpoint was not restored"));
+        if (!SaveReceipt(Receipt, TEXT("rejected"), Error))
+        {
+            return CommitError(Operation, RequestId, TEXT("journal_failed"), Error, Receipt);
+        }
+        FJson Data = MakeShared<FJsonObject>();
+        Data->SetObjectField(TEXT("receipt"), Receipt);
+        Data->SetBoolField(TEXT("preserved_current"), true);
+        FJson Response = MakeEnvelope(Operation, RequestId, true);
+        Response->SetObjectField(TEXT("data"), Data);
+        return Response;
+    }
     if (Phase == TEXT("saving") && SavedFilesMatch(Receipt))
     {
         FJson SavedResponse = MakeEnvelope(Text(Object(Receipt, TEXT("request")), TEXT("operation")), Text(Receipt, TEXT("request_id")), true);
@@ -70,13 +91,11 @@ FJson Recover(const FString& Operation, const FString& RequestId, const FJson& P
         {
             return CommitError(Operation, RequestId, TEXT("published_history"), TEXT("recover the saved receipt or create a revert commit"), Receipt);
         }
-        const FJson Current = ResultSnapshot(Object(Receipt, TEXT("request")), Object(Receipt, TEXT("response")));
-        const FString Content = Text(Current, TEXT("content_revision"));
-        const bool bSameEpoch = Text(Receipt, TEXT("editor_epoch")) == EditorEpoch();
-        const bool bKnownMemory = Content == Text(Object(Receipt, TEXT("before")), TEXT("content_revision"))
-            || Content == Text(Object(Receipt, TEXT("applied")), TEXT("content_revision"));
-        if ((bSameEpoch && !bKnownMemory) || !CheckRecoveryFiles(Receipt, Error))
+        if (!CheckRecoveryMemory(Receipt, Error) || !CheckRecoveryFiles(Receipt, Error))
         {
+            FString JournalError;
+            Receipt->SetStringField(TEXT("recovery_error"), Error);
+            SaveReceipt(Receipt, TEXT("recovery_required"), JournalError);
             return CommitError(Operation, RequestId, TEXT("recovery_conflict"), Error.IsEmpty() ? TEXT("memory changed after the recorded apply") : Error, Receipt);
         }
         if (!RestoreCheckpoint(Receipt, Error))

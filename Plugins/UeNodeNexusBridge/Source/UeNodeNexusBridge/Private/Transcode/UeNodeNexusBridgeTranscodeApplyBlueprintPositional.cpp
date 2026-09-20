@@ -6,6 +6,7 @@
 #include "K2Node_CustomEvent.h"
 #include "K2Node_DynamicCast.h"
 #include "K2Node_Event.h"
+#include "K2Node_InputAxisEvent.h"
 #include "K2Node_MacroInstance.h"
 #include "K2Node_StructOperation.h"
 #include "K2Node_Variable.h"
@@ -35,6 +36,18 @@ bool ConfigureFromPositional(UBlueprint* Blueprint, UClass* NodeClass, const TAr
     if (NodeClass->IsChildOf(UK2Node_CustomEvent::StaticClass()))
     {
         Config->SetStringField(TEXT("event_name"), First);
+        return true;
+    }
+    const FString ClassName = NodeClass->GetName();
+    if (NodeClass->IsChildOf(UK2Node_InputAxisEvent::StaticClass()))
+    {
+        Config->SetStringField(TEXT("axis_name"), First);
+        return true;
+    }
+    if (ClassName == TEXT("K2Node_InputKey") || ClassName == TEXT("K2Node_InputAction") || ClassName == TEXT("K2Node_EnhancedInputAction"))
+    {
+        Config->SetStringField(ClassName == TEXT("K2Node_InputKey") ? TEXT("input_key")
+            : ClassName == TEXT("K2Node_InputAction") ? TEXT("input_action_name") : TEXT("input_action"), First);
         return true;
     }
     if (NodeClass->IsChildOf(UK2Node_Event::StaticClass()) || NodeClass->IsChildOf(UK2Node_CallFunction::StaticClass()))
@@ -88,23 +101,6 @@ bool ConfigureFromPositional(UBlueprint* Blueprint, UClass* NodeClass, const TAr
     {
         Config->SetStringField(TEXT("struct_type"), First);
         return true;
-    }
-    const FString ClassName = NodeClass->GetName();
-    if (ClassName == TEXT("K2Node_InputKey"))
-    {
-        Config->SetStringField(TEXT("input_key"), First);
-    }
-    else if (ClassName == TEXT("K2Node_InputAction"))
-    {
-        Config->SetStringField(TEXT("input_action_name"), First);
-    }
-    else if (ClassName == TEXT("K2Node_InputAxisEvent"))
-    {
-        Config->SetStringField(TEXT("axis_name"), First);
-    }
-    else if (ClassName == TEXT("K2Node_EnhancedInputAction"))
-    {
-        Config->SetStringField(TEXT("input_action"), First);
     }
     return true;
 }

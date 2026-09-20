@@ -11,6 +11,7 @@
 #include "UeNodeNexusBridgeGraphGroupedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "UeNodeNexusBridgeMaterialNodeFilter.h"
 
 namespace UeNodeNexusBridge
 {
@@ -78,16 +79,18 @@ static TSharedPtr<FJsonObject> BuildMaterialGraphNodeInfo(const FString& Operati
 
     FString Text = FString::Printf(TEXT("Graph.Asset = %s\nGraph.Kind = material\nGraph.Name = MaterialGraph\nGraph.Nodes = %d\n\n"), *Material->GetPathName(), Expressions.Num());
     int32 ReturnedNodes = 0;
+    int32 MatchedNodes = 0;
     for (TObjectPtr<UMaterialExpression> ExpressionPtr : Expressions)
     {
         UMaterialExpression* Expression = ExpressionPtr.Get();
-        if (Expression == nullptr)
+        if (Expression == nullptr || !MatchesMaterialNodeKeyword(Material, Expression, Payload))
         {
             continue;
         }
+        ++MatchedNodes;
         if (MaxNodes > 0 && ReturnedNodes >= MaxNodes)
         {
-            break;
+            continue;
         }
 
         TSharedPtr<FJsonObject> NodeData = BuildMaterialNodeInterfaceData(Material, Expression, NodePayload, FString());
@@ -98,7 +101,9 @@ static TSharedPtr<FJsonObject> BuildMaterialGraphNodeInfo(const FString& Operati
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), MakeGraphNodeInfoData(Material->GetPathName(), TEXT("material"), TEXT("MaterialGraph"), Expressions.Num(), ReturnedNodes, Text));
+    TSharedPtr<FJsonObject> Data = MakeGraphNodeInfoData(Material->GetPathName(), TEXT("material"), TEXT("MaterialGraph"), Expressions.Num(), ReturnedNodes, Text);
+    Data->SetBoolField(TEXT("truncated"), ReturnedNodes < MatchedNodes);
+    Response->SetObjectField(TEXT("data"), Data);
     return Response;
 }
 
@@ -126,16 +131,18 @@ static TSharedPtr<FJsonObject> BuildMaterialFunctionGraphNodeInfo(const FString&
 
     FString Text = FString::Printf(TEXT("Graph.Asset = %s\nGraph.Kind = material_function\nGraph.Name = MaterialFunctionGraph\nGraph.Nodes = %d\n\n"), *Function->GetPathName(), Expressions.Num());
     int32 ReturnedNodes = 0;
+    int32 MatchedNodes = 0;
     for (TObjectPtr<UMaterialExpression> ExpressionPtr : Expressions)
     {
         UMaterialExpression* Expression = ExpressionPtr.Get();
-        if (Expression == nullptr)
+        if (Expression == nullptr || !MatchesMaterialNodeKeyword(Function, Expression, Payload))
         {
             continue;
         }
+        ++MatchedNodes;
         if (MaxNodes > 0 && ReturnedNodes >= MaxNodes)
         {
-            break;
+            continue;
         }
 
         TSharedPtr<FJsonObject> NodeData = BuildMaterialFunctionNodeInterfaceData(Function, Expression, NodePayload, FString());
@@ -146,7 +153,9 @@ static TSharedPtr<FJsonObject> BuildMaterialFunctionGraphNodeInfo(const FString&
     }
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
-    Response->SetObjectField(TEXT("data"), MakeGraphNodeInfoData(Function->GetPathName(), TEXT("material_function"), TEXT("MaterialFunctionGraph"), Expressions.Num(), ReturnedNodes, Text));
+    TSharedPtr<FJsonObject> Data = MakeGraphNodeInfoData(Function->GetPathName(), TEXT("material_function"), TEXT("MaterialFunctionGraph"), Expressions.Num(), ReturnedNodes, Text);
+    Data->SetBoolField(TEXT("truncated"), ReturnedNodes < MatchedNodes);
+    Response->SetObjectField(TEXT("data"), Data);
     return Response;
 }
 

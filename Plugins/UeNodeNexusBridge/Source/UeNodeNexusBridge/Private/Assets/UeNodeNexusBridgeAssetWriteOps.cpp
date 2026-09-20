@@ -4,6 +4,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
 #include "Misc/PackageName.h"
+#include "RenderAssetUpdate.h"
 #include "UeNodeNexusBridgeDiagnostics.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
@@ -49,6 +50,7 @@ TSharedPtr<FJsonObject> HandleAssetCompile(const FString& Operation, const FStri
     Data->SetStringField(TEXT("asset_class"), Asset->GetClass()->GetPathName());
 
     FBridgeAssetCompileDiagnostics CompileDiagnostics = CollectAssetCompileDiagnostics(Asset, AssetPath, true);
+    Data->SetBoolField(TEXT("save_ready"), !IsAssetStreamingSuspended());
     if (CompileDiagnostics.bSupported)
     {
         Data->SetObjectField(TEXT("compile"), CompileDiagnosticsJson(CompileDiagnostics, true));
@@ -102,6 +104,7 @@ TSharedPtr<FJsonObject> HandleAssetSave(const FString& Operation, const FString&
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("asset_path"), Asset->GetPathName());
     Data->SetObjectField(TEXT("dirty_state"), DirtyState);
+    Data->SetBoolField(TEXT("save_ready"), !IsAssetStreamingSuspended());
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, bSaved);
     Response->SetObjectField(TEXT("data"), Data);
@@ -110,6 +113,7 @@ TSharedPtr<FJsonObject> HandleAssetSave(const FString& Operation, const FString&
         const FString Code = SaveCode.IsEmpty() ? FString(TEXT("save_failed")) : SaveCode;
         const FString Message = SaveError.IsEmpty() ? FString(TEXT("Package save failed or package is unavailable")) : SaveError;
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(Code, Message));
+        Data->SetBoolField(TEXT("retryable"), Code == TEXT("save_blocked_asset_streaming_suspended"));
     }
     return Response;
 }

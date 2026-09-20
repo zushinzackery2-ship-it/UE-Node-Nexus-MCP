@@ -55,6 +55,8 @@ def save_asset(bridge, asset):
         if response.get("ok"):
             return
         assert response.get("error", dict()).get("code") == "save_blocked_asset_streaming_suspended", response
+        assert response.get("data", dict()).get("retryable") is True, response
+        assert response.get("data", dict()).get("save_ready") is False, response
         assert time.monotonic() < deadline, response
         time.sleep(1)
 

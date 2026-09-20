@@ -160,6 +160,36 @@ def test_missing_and_unselected_dependencies_are_reported_apart(tmp_path):
     assert batch["errors"][MATERIAL]["details"]["assets"] == [TEXTURE]
 
 
+def test_blueprint_class_method_dependency_survives_collaboration_preflight(tmp_path):
+    def self_call_blueprint_raw():
+        raw = blueprint_raw()
+        node = raw["blueprint"]["graphs"][0]["nodes"][2]
+        node["config"] = {
+            "function_owner": "/Game/Blueprints/BP_Door.BP_Door_C",
+            "function_name": "TakeDamage",
+            "self_context": "true",
+        }
+        mesh = raw["blueprint"]["components"][1]
+        mesh["props"] = [prop for prop in mesh["props"] if prop["name"] != "StaticMesh"]
+        return raw
+
+    store, root, workspace, snapshots = repository(tmp_path, self_call_blueprint_raw)
+    asset = next(iter(snapshots))
+    target = "/Game/Blueprints/BP_Door.BP_Door_C.TakeDamage"
+    retext(workspace, asset, "self.TakeDamage", target)
+
+    candidate = candidate_of(workspace, asset)
+    entries = workspace.history.entries(root)
+    entries[asset] = store.objects.put("snapshot", candidate)
+    tree = workspace.history.tree(entries)
+    observation = dict(commit=root, raw={asset: snapshots[asset]["raw"]}, revisions=dict())
+    batch = planning.preflight(
+        workspace, dict(candidate=tree, ours=tree, conflicts=[]), observation, [asset], dict(allow_delete=True))
+
+    assert batch["errors"] == {}
+    assert batch["units"][asset]["dependencies"] == []
+
+
 def test_a_conflicted_asset_blocks_only_itself_and_its_consumers(tmp_path):
     store, root, workspace, snapshots = repository(tmp_path, material_raw, material_function_raw, texture_raw)
     history = workspace.history

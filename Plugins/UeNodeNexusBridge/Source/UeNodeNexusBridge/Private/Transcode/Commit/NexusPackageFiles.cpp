@@ -5,6 +5,7 @@
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "RenderAssetUpdate.h"
+#include "UObject/Linker.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
@@ -107,9 +108,14 @@ bool RestorePackageFiles(const FJson& Package, bool bMemory, FString& Error)
                 return false;
             }
         }
-        else if (FileHash(Source) != Hash || !CopyFile(Source, Path, Error))
+        else if (FileHash(Source) != Hash)
         {
-            Error = TEXT("checkpoint is corrupt or cannot be restored: ") + Source + TEXT(" ") + Error;
+            Error = TEXT("checkpoint is corrupt: ") + Source;
+            return false;
+        }
+        else if (!CopyFile(Source, Path, Error))
+        {
+            Error = TEXT("checkpoint cannot be restored: ") + Source + TEXT(" ") + Error;
             return false;
         }
     }

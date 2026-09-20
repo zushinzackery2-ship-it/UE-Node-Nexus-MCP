@@ -85,7 +85,9 @@ void AddSCSComponents(UBlueprintGeneratedClass* GeneratedClass, bool bCompact, T
         }
 
         UActorComponent* Component = Node->GetActualComponentTemplate(GeneratedClass);
-        AddComponentEntry(Components, SeenNames, bCompact, Node->GetVariableName().ToString(), Component, Node->ParentComponentOrVariableName.ToString(), Node->AttachToName.ToString(), Origin);
+        USCS_Node* ParentNode = Script->FindParentNode(Node);
+        const FString Parent = ParentNode ? ParentNode->GetVariableName().ToString() : Node->ParentComponentOrVariableName.ToString();
+        AddComponentEntry(Components, SeenNames, bCompact, Node->GetVariableName().ToString(), Component, Parent, Node->AttachToName.ToString(), Origin);
     }
 }
 

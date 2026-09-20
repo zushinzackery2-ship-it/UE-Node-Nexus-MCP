@@ -26,8 +26,9 @@ names are easier, GUIDs are unambiguous for duplicate pin names.
 - Same-batch node references: `create_node` with `client_id`, then use that
   `client_id` in later `connect_pins` / `set_node_param` entries.
   Blueprint patches support this in dry-run too; Material / MaterialFunction
-  `client_id` expansion happens on the Python side and only when
-  `dry_run=false`.
+  Material and MaterialFunction patches resolve `client_id` in the native
+  ordered patch context. Dry-run uses a transient graph and follows the same
+  operation order as the real write.
 - Always run once with `dry_run=true` and read the reported diff and pin
   integrity before applying.
 - After applying, the response carries applied changes, compile state, and

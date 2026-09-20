@@ -16,6 +16,7 @@ from tests.support.bridges import RecordingBridge, RoutingBridge
 
 from ue_node_nexus_mcp import runtime
 from ue_node_nexus_mcp.errors import BridgeError
+from ue_node_nexus_mcp.facade_execute import preflight_execute_request
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from ue_node_nexus_mcp.server import (
     ue_capability_get,
@@ -30,6 +31,24 @@ _FEATURE_ENV_VARS = (
     "UE_NEXUS_DISABLE_FEATURES",
     "UE_NEXUS_VFX_SUPPORT",
 )
+
+
+def test_heavy_blueprint_graph_read_recommends_named_node_read() -> None:
+    response = preflight_execute_request(
+        "graph_snapshot_get",
+        {
+            "asset_path": "/Game/BP_Demo.BP_Demo",
+            "graph_kind": "blueprint",
+            "graph_name": "Replay",
+            "format": "full",
+            "include_node_params": True,
+            "node_params_format": "full",
+        },
+        {},
+    )
+
+    assert response is not None
+    assert response["data"]["recommended_param_read"]["payload"]["graph_name"] == "Replay"
 
 
 # --- diagnostics_get enrichment ---------------------------------------------

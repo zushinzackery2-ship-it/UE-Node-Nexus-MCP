@@ -93,7 +93,10 @@ bool SaveReceipt(const FJson& Receipt, const FString& Phase, FString& Error)
     Receipt->SetStringField(TEXT("phase"), Phase);
     Receipt->SetStringField(TEXT("updated_at"), FDateTime::UtcNow().ToIso8601());
     UE_LOG(LogTemp, Display, TEXT("Nexus apply_id=%s phase=%s"), *Text(Receipt, TEXT("apply_id")), *Phase);
-    return WriteJournal(TransactionDirectory(Text(Receipt, TEXT("apply_id"))) / TEXT("receipt.json"), Receipt, Error);
+    const FString File = TransactionDirectory(Text(Receipt, TEXT("apply_id"))) / TEXT("receipt.json");
+    const bool bDurable = WriteJournal(File, Receipt, Error);
+    UpdatePendingReceipt(File, Receipt, bDurable);
+    return bDurable;
 }
 
 FString BoundRepository()
@@ -125,24 +128,4 @@ bool BindRepository(const FString& Repository, const FString& ProjectId, FString
     return WriteJournal(FPaths::ProjectSavedDir() / TEXT("Nexus/collaboration-binding.json"), Binding, Error);
 }
 
-bool HasPending(const FJson& Request, const FString& ApplyId, FString& Error)
-{
-    TArray<FString> Files;
-    IFileManager::Get().FindFilesRecursive(Files, *(FPaths::ProjectSavedDir() / TEXT("Nexus/Collaboration")), TEXT("receipt.json"), true, false);
-    for (const FString& File : Files)
-    {
-        FJson Receipt;
-        if (ReadJournal(File, Receipt) && Text(Receipt, TEXT("apply_id")) != ApplyId
-            && Text(Object(Receipt, TEXT("request")), TEXT("asset_path")) == Text(Request, TEXT("asset_path")))
-        {
-            const FString Phase = Text(Receipt, TEXT("phase"));
-            if (Phase != TEXT("ue_committed") && Phase != TEXT("rolled_back") && Phase != TEXT("rejected"))
-            {
-                Error = TEXT("recover pending apply_id ") + Text(Receipt, TEXT("apply_id"));
-                return true;
-            }
-        }
-    }
-    return false;
-}
 }

@@ -53,6 +53,7 @@ static bool ApplyFunctionConnect(UMaterialFunction* Function, const TSharedPtr<F
     AppendMaterialDiff(Diff, TEXT("links_added"), MakeFunctionPatchLinkJson(MaterialExpressionNodeId(FromExpression), FromPinId, MaterialExpressionNodeId(ToExpression), ToPinId));
     if (!bDryRun)
     {
+        ToExpression->Modify();
         ToInput->Connect(FromOutputIndex, FromExpression);
     }
     return true;
@@ -82,6 +83,7 @@ static bool ApplyFunctionDisconnect(UMaterialFunction* Function, const TSharedPt
     AppendMaterialDiff(Diff, TEXT("links_removed"), MakeFunctionPatchLinkJson(MaterialExpressionNodeId(FromExpression), FString::Printf(TEXT("%s:out:%d"), *MaterialExpressionNodeId(FromExpression), Input->OutputIndex), MaterialExpressionNodeId(ToExpression), ToPinId));
     if (!bDryRun)
     {
+        ToExpression->Modify();
         Input->Expression = nullptr;
         Input->OutputIndex = 0;
     }
@@ -120,6 +122,18 @@ static bool ApplyFunctionCreateNode(UMaterialFunction* Function, const TSharedPt
     if (!bDryRun)
     {
         UMaterialExpression* NewExpression = UMaterialEditingLibrary::CreateMaterialExpressionInFunction(Function, ExpressionClass, X, Y);
+        if (!NewExpression)
+        {
+            AddFunctionPatchDiagnostic(Diagnostics, TEXT("node_create_failed"), ClassPath, Function);
+            return false;
+        }
+        Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(NewExpression));
+        Item->SetStringField(TEXT("node_alias"), MaterialNodeAlias(Function, NewExpression));
+        AppendMaterialDiff(Diff, TEXT("nodes_created"), Item);
+        if (!ClientId.IsEmpty())
+        {
+            Context.ClientNodes.Add(ClientId, NewExpression);
+        }
         const TSharedPtr<FJsonObject>* Params = nullptr;
         if (NewExpression != nullptr && Op->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)
         {
@@ -134,14 +148,11 @@ static bool ApplyFunctionCreateNode(UMaterialFunction* Function, const TSharedPt
             }
             NewExpression->PostEditChange();
         }
-        Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(NewExpression));
-        Item->SetStringField(TEXT("node_alias"), MaterialNodeAlias(Function, NewExpression));
-        if (!ClientId.IsEmpty())
-        {
-            Context.ClientNodes.Add(ClientId, NewExpression);
-        }
     }
-    AppendMaterialDiff(Diff, TEXT("nodes_created"), Item);
+    else
+    {
+        AppendMaterialDiff(Diff, TEXT("nodes_created"), Item);
+    }
     return true;
 }
 
@@ -184,6 +195,13 @@ bool ApplyMaterialFunctionPatchOperation(UMaterialFunction* Function, const TSha
         AppendMaterialDiff(Diff, TEXT("nodes_deleted"), Item);
         if (!bDryRun)
         {
+            for (auto& Pair : Context.ClientNodes)
+            {
+                if (Pair.Value == Expression)
+                {
+                    Pair.Value = nullptr;
+                }
+            }
             UMaterialEditingLibrary::DeleteMaterialExpressionInFunction(Function, Expression);
         }
         return true;

@@ -4,7 +4,6 @@
 
 class FJsonObject;
 class FJsonValue;
-class UObjectRedirector;
 
 namespace UeNodeNexusBridge
 {
@@ -17,5 +16,17 @@ TSharedPtr<FJsonObject> MakeAssetOpDiff(const FString& FieldName, const TSharedP
 TSharedPtr<FJsonObject> MakeAssetWriteData(bool bDryRun, bool bApplied, bool bChanged, const TSharedPtr<FJsonObject>& Diff, const FString& PackageName, bool bDirty, bool bSaved);
 TArray<TSharedPtr<FJsonValue>> PackageNamesToJson(const TArray<FName>& PackageNames);
 void GetAssetReferencers(const FString& AssetPath, TArray<FName>& OutReferencers);
-int32 FixRedirectorsUnderFolder(const FString& FolderPath, bool bDryRun, TArray<TSharedPtr<FJsonValue>>& OutItems);
+struct FRedirectorFixupProgress
+{
+    TArray<TSharedPtr<FJsonValue>> Redirectors;
+    TArray<TSharedPtr<FJsonValue>> ModifiedPackages;
+    TArray<TSharedPtr<FJsonValue>> SavedPackages;
+    TArray<TSharedPtr<FJsonValue>> FailedPackages;
+    TArray<TSharedPtr<FJsonValue>> RemainingReferencers;
+    TArray<TSharedPtr<FJsonValue>> DeletedRedirectors;
+    int32 Count = 0;
+    bool bDirty = false;
+    FString Error;
+};
+FRedirectorFixupProgress FixRedirectorsUnderFolder(const FString& FolderPath, bool bDryRun);
 }

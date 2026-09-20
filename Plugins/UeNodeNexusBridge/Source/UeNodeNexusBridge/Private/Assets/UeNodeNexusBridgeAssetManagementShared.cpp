@@ -1,13 +1,8 @@
 #include "UeNodeNexusBridgeAssetManagementShared.h"
 
-#include "AssetRegistry/AssetData.h"
-#include "AssetRegistry/ARFilter.h"
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "AssetToolsModule.h"
-#include "IAssetTools.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UObject/ObjectRedirector.h"
 
 namespace UeNodeNexusBridge
 {
@@ -123,34 +118,4 @@ void GetAssetReferencers(const FString& AssetPath, TArray<FName>& OutReferencers
     }
 }
 
-int32 FixRedirectorsUnderFolder(const FString& FolderPath, bool bDryRun, TArray<TSharedPtr<FJsonValue>>& OutItems)
-{
-    FARFilter Filter;
-    Filter.PackagePaths.Add(FName(*FolderPath));
-    Filter.bRecursivePaths = true;
-    Filter.ClassPaths.Add(UObjectRedirector::StaticClass()->GetClassPathName());
-
-    TArray<FAssetData> RedirectorAssets;
-    FAssetRegistryModule::GetRegistry().GetAssets(Filter, RedirectorAssets);
-
-    TArray<UObjectRedirector*> Redirectors;
-    for (const FAssetData& AssetData : RedirectorAssets)
-    {
-        OutItems.Add(MakeShared<FJsonValueString>(AssetData.GetObjectPathString()));
-        if (!bDryRun)
-        {
-            if (UObjectRedirector* Redirector = Cast<UObjectRedirector>(AssetData.GetAsset()))
-            {
-                Redirectors.Add(Redirector);
-            }
-        }
-    }
-
-    if (!bDryRun && Redirectors.Num() > 0)
-    {
-        FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools"));
-        AssetToolsModule.Get().FixupReferencers(Redirectors, false, ERedirectFixupMode::DeleteFixedUpRedirectors);
-    }
-    return RedirectorAssets.Num();
-}
 }

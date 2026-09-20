@@ -52,6 +52,7 @@ static TSharedPtr<FJsonObject> HandleAssetMoveLike(const FString& Operation, con
 
     bool bMoved = true;
     bool bSaved = false;
+    FString FixupError;
     if (!bDryRun)
     {
         FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools"));
@@ -65,12 +66,17 @@ static TSharedPtr<FJsonObject> HandleAssetMoveLike(const FString& Operation, con
         if (bMoved && bFixRedirectors)
         {
             TArray<TSharedPtr<FJsonValue>> Redirectors;
-            FixRedirectorsUnderFolder(FPackageName::GetLongPackagePath(FPackageName::ObjectPathToPackageName(SourceAssetPath)), false, Redirectors);
-            Item->SetArrayField(TEXT("redirectors_fixed"), Redirectors);
+            TArray<TSharedPtr<FJsonValue>> Fixed;
+            FixRedirectorsUnderFolder(FPackageName::GetLongPackagePath(FPackageName::ObjectPathToPackageName(SourceAssetPath)), false, Redirectors, Fixed, FixupError);
+            Item->SetArrayField(TEXT("redirectors_fixed"), Fixed);
+            if (!FixupError.IsEmpty())
+            {
+                Item->SetStringField(TEXT("redirector_fixup_error"), FixupError);
+            }
         }
     }
 
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, bMoved && (!bSave || bDryRun || bSaved));
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, bMoved && FixupError.IsEmpty() && (!bSave || bDryRun || bSaved));
     Response->SetObjectField(TEXT("data"), MakeAssetWriteData(bDryRun, !bDryRun && bMoved, bMoved, MakeAssetOpDiff(TEXT("assets_moved"), Item), DestinationPackageName, !bDryRun && bMoved && !bSaved, bSaved));
     if (!bMoved)
     {
@@ -79,6 +85,10 @@ static TSharedPtr<FJsonObject> HandleAssetMoveLike(const FString& Operation, con
     else if (bSave && !bDryRun && !bSaved)
     {
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("save_failed"), TEXT("Asset was moved but save failed")));
+    }
+    else if (!FixupError.IsEmpty())
+    {
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("redirector_fixup_failed"), FixupError));
     }
     return Response;
 }

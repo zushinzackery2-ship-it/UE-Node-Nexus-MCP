@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import socket
@@ -57,25 +58,31 @@ class FileLock:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             descriptor = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
-            self._file = os.fdopen(descriptor, "r+b")
-            self._file.seek(0, os.SEEK_END)
-            if self._file.tell() == 0:
-                self._file.write(b"\0")
-                self._file.flush()
+            try:
+                self._file = os.fdopen(descriptor, "r+b", buffering=0)
+            except BaseException:
+                os.close(descriptor)
+                raise
+            # Windows permits locking a byte beyond EOF. Never initialise the
+            # shared byte before locking: another process may already own it.
             while True:
                 try:
                     self._lock()
                     break
                 except OSError as exc:
+                    if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                        raise
                     if time.monotonic() - started >= self.timeout:
                         raise LockBusy(self.describe()) from exc
                     time.sleep(min(0.02, max(0, self.timeout - (time.monotonic() - started))))
             self._write_holder()
         except BaseException:
-            if self._file is not None:
-                self._file.close()
-                self._file = None
-            self._mutex.release()
+            try:
+                self._close()
+            except OSError:
+                pass  # Preserve the acquisition error; close releases OS locks.
+            finally:
+                self._mutex.release()
             raise
         finally:
             self.waited = time.monotonic() - started
@@ -100,7 +107,13 @@ class FileLock:
         self._file.write(payload.ljust(HOLDER_BYTES, b"\0"))
         self._file.flush()
 
-    def __exit__(self, *_: object) -> None:
+    def _close(self) -> None:
+        stream, self._file = self._file, None
+        if stream is not None:
+            stream.close()
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        cleanup_error = None
         try:
             self._write_holder(clear=True)
             self._file.seek(0)
@@ -110,8 +123,15 @@ class FileLock:
             else:
                 import fcntl
                 fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
+        except OSError as error:
+            cleanup_error = error
         finally:
             self.held = time.monotonic() - self._acquired_at
-            self._file.close()
-            self._file = None
-            self._mutex.release()
+            try:
+                self._close()
+            except OSError as error:
+                cleanup_error = cleanup_error or error
+            finally:
+                self._mutex.release()
+        if cleanup_error is not None and exc_type is None:
+            raise cleanup_error

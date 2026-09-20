@@ -96,10 +96,16 @@ bool AttachComponentNode(UBlueprint* Blueprint, USCS_Node* Node, const FString& 
     USimpleConstructionScript* Scs = Blueprint->SimpleConstructionScript;
     if (USCS_Node* ParentNode = Scs->FindSCSNode(FName(*Parent)))
     {
+        Node->bIsParentComponentNative = false;
+        Node->ParentComponentOrVariableName = NAME_None;
+        Node->ParentComponentOwnerClassName = NAME_None;
         ParentNode->AddChildNode(Node);
     }
     else if (Parent.IsEmpty())
     {
+        Node->bIsParentComponentNative = false;
+        Node->ParentComponentOrVariableName = NAME_None;
+        Node->ParentComponentOwnerClassName = NAME_None;
         Scs->AddNode(Node);
     }
     else

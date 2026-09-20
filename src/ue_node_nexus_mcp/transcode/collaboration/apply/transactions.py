@@ -21,7 +21,7 @@ def save(workspace, record: dict) -> None:
     workspace.store.event("apply", workspace_id=workspace.state["id"], apply_id=record["id"], phase=record["phase"], asset=record["asset"])
 
 
-def request(workspace, item: dict, source: str, candidate: str, target: str, observation: dict, options: dict) -> dict:
+def request(workspace, item: dict, source: str, candidate: str, target: str, observation: dict, options: dict, *, consume=True) -> dict:
     identifier = uuid4().hex
     directory = workspace.store.root / "transactions" / identifier
     payload = deepcopy(item["payload"])
@@ -50,7 +50,7 @@ def request(workspace, item: dict, source: str, candidate: str, target: str, obs
         operation = "scene_apply"
     record = dict(id=identifier, workspace_id=workspace.state["id"], asset=item["asset"], kind=item["kind"], phase="prepared",
                   source=source, candidate=candidate, target=target, request=payload, operation=operation,
-                  request_digest=digest(payload), generation=0, response=None)
+                  request_digest=digest(payload), generation=0, response=None, consume=consume)
     save(workspace, record)
     return record
 
@@ -91,7 +91,11 @@ def execute(bridge, workspace, record: dict) -> dict:
         response = dict(ok=False, error=dict(code="transport_lost", message=str(exc)))
     record["response"] = response
     receipt = (response.get("data") or dict()).get("receipt")
-    if not receipt and (not response.get("ok") or not response.get("data")):
+    error_code = (response.get("error") or dict()).get("code")
+    preflight_error = error_code in ("stale_target", "protocol_mismatch", "save_required", "idempotency_mismatch")
+    if preflight_error and isinstance(receipt, dict) and not receipt.get("apply_id"):
+        receipt = None
+    if not receipt and not preflight_error and (not response.get("ok") or not response.get("data")):
         try:
             recovered = envelope(bridge("transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root))))
             receipt = (recovered.get("data") or dict()).get("receipt")
@@ -102,7 +106,7 @@ def execute(bridge, workspace, record: dict) -> dict:
         record["phase"] = "ue_committed"
     elif receipt and receipt.get("phase") in ("rolled_back", "rejected"):
         record["phase"] = receipt["phase"]
-    elif (response.get("error") or dict()).get("code") in ("stale_target", "protocol_mismatch", "save_required"):
+    elif preflight_error:
         record["phase"] = "rejected"
     else:
         record["phase"] = "recovery_required"
@@ -133,12 +137,13 @@ def actual_snapshot(workspace, record: dict) -> dict | None:
     return from_raw(raw, prior, schema=workspace.schema)
 
 
-def publish(workspace, record: dict, consume=True) -> str:
+def publish(workspace, record: dict, *, recovery_target: str | None = None) -> str:
     if record["phase"] == "completed":
         return record["published"]
     store, history = workspace.store, workspace.history
     target = store.ref("refs/ue/observed") or record["target"]
-    if target != record["target"]:
+    expected = recovery_target if recovery_target is not None else record["target"]
+    if target != expected:
         raise SyncError("publication_moved", "observation changed before this receipt was published", dict(apply_id=record["id"], expected=record["target"], actual=target))
     actual = actual_snapshot(workspace, record)
     entries = history.entries(target)
@@ -153,7 +158,7 @@ def publish(workspace, record: dict, consume=True) -> str:
     with store.db.connection(write=True) as connection:
         move_ref(connection, "refs/ue/published", identifier, old_published, workspace.state["id"], "publish")
         move_ref(connection, "refs/ue/observed", identifier, target, workspace.state["id"], "publish")
-        if consume:
+        if record.get("consume", True):
             integration = dict(workspace_id=workspace.state["id"], asset=record["asset"], source_commit=record["source"],
                                source_snapshot=history.entries(record["source"]).get(record["asset"]), candidate_snapshot=history.entries(record["candidate"]).get(record["asset"]),
                                published_commit=identifier, apply_id=record["id"])

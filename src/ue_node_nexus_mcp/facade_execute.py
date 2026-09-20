@@ -24,10 +24,8 @@ def execute_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]
 def _client_side_handler(operation: str) -> Callable[[dict[str, Any]], dict[str, Any]] | None:
     """Bridge operations that carry Python-side behavior on top of the raw call.
 
-    This dispatch table is the single place that guarantees client-side logic
-    (material client_id expansion, diagnostics log enrichment, Niagara verbose
-    field trimming) actually runs on the live ue_execute/ue_read path instead
-    of only inside unregistered legacy wrappers.
+    This dispatch table keeps the remaining client-side response shaping on the
+    live ue_execute/ue_read path; graph client IDs are resolved natively.
     """
     if operation == "graph_patch_apply":
         from .tools_graph_writes import execute_graph_patch_apply
@@ -159,6 +157,15 @@ def preflight_execute_request(operation: str, payload: dict[str, Any], response_
     }
     if graph_name:
         recommended_payload["graph_name"] = graph_name
+    recommended_param_payload = {
+        "asset_path": asset_path,
+        "graph_kind": graph_kind,
+        "node_id": "<node_id from graph snapshot>",
+    }
+    if graph_name:
+        recommended_param_payload["graph_name"] = graph_name
+    elif graph_kind in ("blueprint", "auto"):
+        recommended_param_payload["graph_name"] = "<graph_name from graph snapshot>"
 
     return {
         "ok": False,
@@ -179,11 +186,7 @@ def preflight_execute_request(operation: str, payload: dict[str, Any], response_
             },
             "recommended_param_read": {
                 "operation": "node_params_get",
-                "payload": {
-                    "asset_path": asset_path,
-                    "graph_kind": graph_kind,
-                    "node_id": "<node_id from graph snapshot>",
-                },
+                "payload": recommended_param_payload,
                 "response": {"mode": "summary"},
             },
         }

@@ -1,7 +1,11 @@
 #include "UeNodeNexusBridgeObjectHelpers.h"
+#include "UeNodeNexusBridgeObjectPropertyJsonValidation.h"
+#include "UeNodeNexusPropertyValue.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "JsonObjectConverter.h"
+#include "UObject/StructOnScope.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
@@ -114,10 +118,14 @@ bool JsonValueToPropertyImportText(FProperty* Property, const TSharedPtr<FJsonVa
         return false;
     }
 
-    TSharedPtr<FJsonObject> Json = Value->AsObject();
+    TSharedPtr<FJsonObject> Json = Value->Type == EJson::Object ? Value->AsObject() : nullptr;
     if (FStructProperty* StructProperty = CastField<FStructProperty>(Property))
     {
         if (Json.IsValid() && TryBuildStructImportText(StructProperty, Json, OutValueText))
+        {
+            return true;
+        }
+        if (Value->TryGetString(OutValueText) && !OutValueText.IsEmpty())
         {
             return true;
         }
@@ -134,12 +142,40 @@ bool JsonValueToPropertyImportText(FProperty* Property, const TSharedPtr<FJsonVa
     return true;
 }
 
-bool ApplyPropertyJsonValue(UObject* Object, FProperty* Property, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError)
+bool ConvertPropertyJsonValue(UObject* Object, FProperty* Property, void* Storage, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError)
 {
+    if (FStructProperty* StructProperty = CastField<FStructProperty>(Property))
+    {
+        const TSharedPtr<FJsonObject> Json = Value.IsValid() && Value->Type == EJson::Object
+            ? Value->AsObject() : nullptr;
+        if (Json.IsValid())
+        {
+            if (!ValidateStructJson(StructProperty->Struct, Json, FString(), OutError))
+            {
+                return false;
+            }
+            FStructOnScope Converted(StructProperty->Struct);
+            StructProperty->Struct->CopyScriptStruct(Converted.GetStructMemory(), Storage);
+            const auto Normalized = NormalizeStructJson(StructProperty->Struct, Json);
+            if (!FJsonObjectConverter::JsonObjectToUStruct(
+                Normalized.ToSharedRef(),
+                StructProperty->Struct,
+                Converted.GetStructMemory(),
+                0,
+                0))
+            {
+                OutError = TEXT("struct_json_conversion_failed");
+                return false;
+            }
+            StructProperty->Struct->CopyScriptStruct(Storage, Converted.GetStructMemory());
+            Property->ExportTextItem_Direct(OutValueText, Storage, nullptr, Object, PPF_None);
+            return true;
+        }
+    }
     if (FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))
     {
         FString Path;
-        if (!Value.IsValid() || !Value->TryGetString(Path))
+        if (!Value.IsValid() || (Value->Type != EJson::Null && !Value->TryGetString(Path)))
         {
             OutError = TEXT("object_property_value_must_be_path_string");
             return false;
@@ -155,7 +191,7 @@ bool ApplyPropertyJsonValue(UObject* Object, FProperty* Property, const TSharedP
             OutError = TEXT("object_property_class_mismatch");
             return false;
         }
-        ObjectProperty->SetObjectPropertyValue_InContainer(Object, NewValue);
+        ObjectProperty->SetObjectPropertyValue(Storage, NewValue);
         OutValueText = NewValue ? NewValue->GetPathName() : TEXT("None");
         return true;
     }
@@ -164,6 +200,27 @@ bool ApplyPropertyJsonValue(UObject* Object, FProperty* Property, const TSharedP
     {
         return false;
     }
-    return ApplyPropertyText(Object, Property, OutValueText);
+    if (Property->ImportText_Direct(*OutValueText, Storage, Object, PPF_None) == nullptr)
+    {
+        OutError = TEXT("property_import_failed");
+        return false;
+    }
+    return true;
+}
+
+bool ApplyPropertyJsonValue(UObject* Object, FProperty* Property, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError)
+{
+    if (!Object || !Property)
+    {
+        OutError = TEXT("missing_property_or_object");
+        return false;
+    }
+    FPropertyValueBuffer Buffer(Object, Property);
+    if (!Buffer.ApplyJson(Value, OutValueText, OutError))
+    {
+        return false;
+    }
+    Buffer.Commit();
+    return true;
 }
 }

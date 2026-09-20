@@ -39,6 +39,12 @@ bool SaveStagedPackage(UPackage* Package, const FJson& Receipt, const FJson& Row
             return false;
         }
         const bool bAbsent = Text(File, TEXT("planned_hash")) == TEXT("absent");
+        if (!bAbsent)
+        {
+            // The staged save targets a separate file. Release the live target
+            // loader before replacing the package on disk.
+            ResetLoadersForSave(Package, *Path);
+        }
         const bool bOk = bAbsent ? !IFileManager::Get().FileExists(*Path) || IFileManager::Get().Delete(*Path, false, false, true)
             : CopyFile(Text(File, TEXT("planned_file")), Path, Error);
         if (!bOk)

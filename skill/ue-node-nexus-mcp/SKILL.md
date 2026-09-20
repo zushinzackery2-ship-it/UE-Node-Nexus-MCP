@@ -176,7 +176,7 @@ Sequence: `ue_capability_get(op, detail="schema")` → minimal payload → `ue_p
 
 Wiring order that survives review: connect exec pins before data pins, read the exact pin names with `node_params_get` / `graph_node_info_get` before any `connect_pins` (dynamic nodes and overloads do not have stable names), set defaults only where no data source exists, and compile after each logical chunk rather than after a whole batch of edits.
 
-Blueprint `create_node.client_id` works in dry run; for Material / MaterialFunction the Python layer expands same-batch `client_id` links only when `dry_run=false`.
+`create_node.client_id` works in dry run for Blueprint, Material, and MaterialFunction. Native patch contexts preserve operation order, reject duplicate or forward aliases, and use transient graphs for preview.
 
 **blueprint_components_patch** — `op`: `add_component | remove_component | set_component_defaults | set_component_properties`; `defaults` and `properties` are aliases, plus `RelativeTransform` and `material` conveniences.
 

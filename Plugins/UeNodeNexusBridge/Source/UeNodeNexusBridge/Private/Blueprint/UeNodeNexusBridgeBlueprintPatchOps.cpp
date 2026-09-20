@@ -266,7 +266,7 @@ TSharedPtr<FJsonObject> HandleBlueprintGraphPatch(const FString& Operation, cons
         FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
     }
 
-    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, false, !bCompileAfter, 0, 0);
+    TSharedPtr<FJsonObject> Compile = MakeCompilePostCheck(bCompileAfter, false, bDryRun || !bCompileAfter, 0, 0);
     if (!bDryRun && bCompileAfter)
     {
         Diagnostics.Append(CompileBlueprintWithDiagnostics(Blueprint, Blueprint->GetPathName(), Compile));

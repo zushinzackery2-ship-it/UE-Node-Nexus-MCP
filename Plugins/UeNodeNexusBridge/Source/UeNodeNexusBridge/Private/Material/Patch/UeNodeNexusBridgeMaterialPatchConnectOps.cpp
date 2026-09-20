@@ -109,6 +109,10 @@ bool ApplyMaterialPatchConnect(UMaterial* Material, const TSharedPtr<FJsonObject
     AppendMaterialDiff(Diff, TEXT("links_added"), MakeMaterialPatchLinkJson(MaterialExpressionNodeId(FromExpression), FromPinId, ResolvedToNodeId, ToPinId));
     if (!bDryRun)
     {
+        if (ToExpression)
+        {
+            ToExpression->Modify();
+        }
         ToInput->Connect(FromOutputIndex, FromExpression);
     }
     return true;
@@ -152,6 +156,10 @@ bool ApplyMaterialPatchDisconnect(UMaterial* Material, const TSharedPtr<FJsonObj
     AppendMaterialDiff(Diff, TEXT("links_removed"), MakeMaterialPatchLinkJson(FromNodeId, FromPinId, ResolvedToNodeId, ToPinId));
     if (!bDryRun)
     {
+        if (ToExpression)
+        {
+            ToExpression->Modify();
+        }
         Input->Expression = nullptr;
         Input->OutputIndex = 0;
     }

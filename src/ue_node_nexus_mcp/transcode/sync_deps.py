@@ -21,9 +21,14 @@ def _value_dependencies(value: str | None, owner: str) -> set[str]:
     value = unquote(value.strip())
     match = _REFERENCE.fullmatch(value)
     if match:
-        asset = object_path(match.group(1))
+        reference = match.group(1)
+        asset = object_path(reference)
         # Serialized node connections reference subobjects owned by this asset.
         if match.group(2) and asset == owner:
+            return set()
+        # A Blueprint's generated class method is a member of the owning asset,
+        # not a publication dependency on a second package.
+        if asset == owner and reference.startswith(owner + "_C."):
             return set()
         return set((asset,))
     if is_balanced_group(value):

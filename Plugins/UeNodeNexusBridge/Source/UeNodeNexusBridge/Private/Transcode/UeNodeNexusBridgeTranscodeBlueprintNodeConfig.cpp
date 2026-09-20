@@ -55,6 +55,18 @@ TSharedPtr<FJsonObject> NodeConfigJson(UBlueprint* Blueprint, UEdGraphNode* Node
     {
         Config->SetStringField(TEXT("event_name"), Custom->CustomFunctionName.ToString());
     }
+    else if (UK2Node_InputAxisEvent* InputAxis = Cast<UK2Node_InputAxisEvent>(Node))
+    {
+        Config->SetStringField(TEXT("input_axis_name"), InputAxis->InputAxisName.ToString());
+    }
+    else if (UK2Node_InputAction* InputAction = Cast<UK2Node_InputAction>(Node))
+    {
+        Config->SetStringField(TEXT("input_action_name"), InputAction->InputActionName.ToString());
+    }
+    else if (UK2Node_InputKey* InputKey = Cast<UK2Node_InputKey>(Node))
+    {
+        Config->SetStringField(TEXT("input_key"), InputKey->InputKey.ToString());
+    }
     else if (UK2Node_Event* Event = Cast<UK2Node_Event>(Node))
     {
         UClass* Owner = Event->EventReference.GetMemberParentClass(SelfClass);
@@ -93,18 +105,6 @@ TSharedPtr<FJsonObject> NodeConfigJson(UBlueprint* Blueprint, UEdGraphNode* Node
     else if (UK2Node_StructOperation* StructOperation = Cast<UK2Node_StructOperation>(Node))
     {
         Config->SetStringField(TEXT("struct_type"), StructOperation->StructType ? StructOperation->StructType->GetPathName() : FString());
-    }
-    else if (UK2Node_InputKey* InputKey = Cast<UK2Node_InputKey>(Node))
-    {
-        Config->SetStringField(TEXT("input_key"), InputKey->InputKey.ToString());
-    }
-    else if (UK2Node_InputAction* InputAction = Cast<UK2Node_InputAction>(Node))
-    {
-        Config->SetStringField(TEXT("input_action_name"), InputAction->InputActionName.ToString());
-    }
-    else if (UK2Node_InputAxisEvent* InputAxis = Cast<UK2Node_InputAxisEvent>(Node))
-    {
-        Config->SetStringField(TEXT("input_axis_name"), InputAxis->InputAxisName.ToString());
     }
     else if (Cast<UK2Node_ExecutionSequence>(Node))
     {

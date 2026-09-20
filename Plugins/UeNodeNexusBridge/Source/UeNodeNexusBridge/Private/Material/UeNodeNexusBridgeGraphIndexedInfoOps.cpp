@@ -13,6 +13,7 @@
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "UeNodeNexusBridgeMaterialNodeFilter.h"
 
 namespace UeNodeNexusBridge
 {
@@ -30,19 +31,8 @@ TSharedPtr<FJsonObject> BuildMaterialGraphIndexedData(UMaterial* Material, const
     const int32 MaxNodes = ReadIndexedMaxNodes(Payload);
     const bool bRealIds = WantsRealIds(Payload);
     const TConstArrayView<TObjectPtr<UMaterialExpression>> AllExpressions = Material->GetExpressions();
-
-    TArray<UMaterialExpression*> Expressions;
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : AllExpressions)
-    {
-        if (ExpressionPtr.Get() != nullptr)
-        {
-            if (MaxNodes > 0 && Expressions.Num() >= MaxNodes)
-            {
-                break;
-            }
-            Expressions.Add(ExpressionPtr.Get());
-        }
-    }
+    int32 Matched = 0;
+    const TArray<UMaterialExpression*> Expressions = FilterMaterialNodes(Material, AllExpressions, MaxNodes, Payload, Matched);
 
     TMap<UMaterialExpression*, int32> NodeIndices;
     for (int32 Index = 0; Index < Expressions.Num(); ++Index)
@@ -107,8 +97,13 @@ TSharedPtr<FJsonObject> BuildMaterialGraphIndexedData(UMaterial* Material, const
         }
     }
 
+    const bool bIncludeOutput = MatchesMaterialOutputKeyword(Payload) && (MaxNodes == 0 || Expressions.Num() < MaxNodes);
     for (EMaterialProperty Property : MaterialOutputProperties())
     {
+        if (!bIncludeOutput)
+        {
+            break;
+        }
         FExpressionInput* Input = Material->GetExpressionInputForProperty(Property);
         if (Input == nullptr || Input->Expression == nullptr)
         {
@@ -143,8 +138,8 @@ TSharedPtr<FJsonObject> BuildMaterialGraphIndexedData(UMaterial* Material, const
     Data->SetStringField(TEXT("graph_kind"), TEXT("material"));
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialGraph"));
     Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num() + 1);
-    Data->SetNumberField(TEXT("returned_nodes"), Expressions.Num() + 1);
-    Data->SetBoolField(TEXT("truncated"), Expressions.Num() < AllExpressions.Num());
+    Data->SetNumberField(TEXT("returned_nodes"), Expressions.Num() + (bIncludeOutput ? 1 : 0));
+    Data->SetBoolField(TEXT("truncated"), Expressions.Num() + (bIncludeOutput ? 1 : 0) < Matched + (MatchesMaterialOutputKeyword(Payload) ? 1 : 0));
     SetTextPayload(Data, Text);
     return Data;
 }
@@ -154,19 +149,8 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionGraphIndexedData(UMaterialFunction*
     const int32 MaxNodes = ReadIndexedMaxNodes(Payload);
     const bool bRealIds = WantsRealIds(Payload);
     const TConstArrayView<TObjectPtr<UMaterialExpression>> AllExpressions = Function->GetExpressions();
-
-    TArray<UMaterialExpression*> Expressions;
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : AllExpressions)
-    {
-        if (ExpressionPtr.Get() != nullptr)
-        {
-            if (MaxNodes > 0 && Expressions.Num() >= MaxNodes)
-            {
-                break;
-            }
-            Expressions.Add(ExpressionPtr.Get());
-        }
-    }
+    int32 Matched = 0;
+    const TArray<UMaterialExpression*> Expressions = FilterMaterialNodes(Function, AllExpressions, MaxNodes, Payload, Matched);
 
     TMap<UMaterialExpression*, int32> NodeIndices;
     for (int32 Index = 0; Index < Expressions.Num(); ++Index)
@@ -253,7 +237,7 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionGraphIndexedData(UMaterialFunction*
     Data->SetStringField(TEXT("graph_name"), TEXT("MaterialFunctionGraph"));
     Data->SetNumberField(TEXT("total_nodes"), AllExpressions.Num());
     Data->SetNumberField(TEXT("returned_nodes"), Expressions.Num());
-    Data->SetBoolField(TEXT("truncated"), Expressions.Num() < AllExpressions.Num());
+    Data->SetBoolField(TEXT("truncated"), Expressions.Num() < Matched);
     SetTextPayload(Data, Text);
     return Data;
 }

@@ -7,6 +7,7 @@
 #include "UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "UeNodeNexusBridgeBlueprintGraphJson.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "UeNodeNexusBridgeBlueprintPinDefaults.h"
 #include "UeNodeNexusBridgeCompactGraph.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeWireGraph.h"
@@ -44,7 +45,7 @@ static void AppendBlueprintCompactNode(FCompactGraphBuilder& Builder, UEdGraphNo
         }
 
         const FString PinId = Pin->PinId.ToString(EGuidFormats::DigitsWithHyphens);
-        Builder.AddPin(PinId, NodeId, PinDirectionToString(Pin->Direction), Pin->PinName.ToString(), CompactBlueprintPinType(Pin), Pin->DefaultValue);
+        Builder.AddPin(PinId, NodeId, PinDirectionToString(Pin->Direction), Pin->PinName.ToString(), CompactBlueprintPinType(Pin), BlueprintPinDefaultText(Pin));
         if (bIncludeLinks && Pin->Direction == EGPD_Output)
         {
             for (UEdGraphPin* LinkedPin : Pin->LinkedTo)

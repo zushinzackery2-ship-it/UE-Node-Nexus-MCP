@@ -73,12 +73,12 @@ FJson RunCommit(const FString& Operation, const FString& RequestId, const FJson&
     FJson Before;
     if (!CheckRevisions(Request, Before, Error))
     {
-        FJson Evidence = MakeShared<FJsonObject>();
+        FJson Response = CommitError(Operation, RequestId, TEXT("stale_target"), Error);
         if (Before.IsValid())
         {
-            Evidence->SetObjectField(TEXT("current"), Before);
+            Object(Response, TEXT("data"))->SetObjectField(TEXT("current"), Before);
         }
-        return CommitError(Operation, RequestId, TEXT("stale_target"), Error, Evidence);
+        return Response;
     }
     if (Flag(Request, TEXT("dry_run"), true))
     {
@@ -112,6 +112,7 @@ FJson RunCommit(const FString& Operation, const FString& RequestId, const FJson&
     {
         Receipt->SetObjectField(TEXT("applied"), Applied);
     }
+    CaptureRecoveryMemory(Receipt, TEXT("package_memory_applied"));
     if (!Flag(Response, TEXT("ok")) || !Applied.IsValid())
     {
         return Rollback(Operation, RequestId, Receipt, Text(Object(Response, TEXT("error")), TEXT("message")));

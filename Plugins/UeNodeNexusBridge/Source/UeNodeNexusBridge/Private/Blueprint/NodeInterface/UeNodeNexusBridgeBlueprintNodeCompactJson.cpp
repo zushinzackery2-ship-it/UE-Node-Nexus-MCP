@@ -5,6 +5,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
+#include "Blueprint/UeNodeNexusBridgeBlueprintPinDefaults.h"
 
 namespace UeNodeNexusBridge
 {
@@ -53,11 +54,6 @@ TArray<TSharedPtr<FJsonValue>> BuildBlueprintCompactInputRows(UEdGraph* Graph, U
             Rows.Add(MakeNullLinkRow(Pin->PinName.ToString()));
             continue;
         }
-        if (Pin->LinkedTo.Num() == 0)
-        {
-            Rows.Add(MakeNullLinkRow(Pin->PinName.ToString()));
-            continue;
-        }
         for (UEdGraphPin* Linked : Pin->LinkedTo)
         {
             UEdGraphNode* Other = Linked ? Linked->GetOwningNode() : nullptr;
@@ -82,7 +78,7 @@ TArray<TSharedPtr<FJsonValue>> BuildBlueprintCompactParamRows(UEdGraphNode* Node
     {
         if (Pin != nullptr && Pin->Direction == EGPD_Input)
         {
-            Rows.Add(MakeParamRow(Pin->PinName.ToString(), Pin->DefaultValue));
+            Rows.Add(MakeParamRow(Pin->PinName.ToString(), BlueprintPinDefaultText(Pin)));
         }
     }
     return Rows;

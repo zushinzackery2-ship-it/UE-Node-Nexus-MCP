@@ -102,9 +102,10 @@ def vfx_transcode_apply(
 
 
 @default_tool()
-def transcode_recover(apply_id: str, repository: str, restore: bool = False) -> dict[str, Any]:
+def transcode_recover(apply_id: str, repository: str, restore: bool = False, preserve_current: bool = False) -> dict[str, Any]:
     """Query the durable receipt or restore an interrupted apply's verified checkpoint."""
-    return call_bridge("transcode_recover", dict(apply_id=apply_id, repository=repository, restore=restore))
+    return call_bridge("transcode_recover", dict(apply_id=apply_id, repository=repository, restore=restore,
+                                                  preserve_current=preserve_current))
 
 
 def _protocol(apply_id, repository, version, revision, absent, read_set) -> dict:

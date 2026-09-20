@@ -44,6 +44,18 @@ bool ApplyMaterialPatchCreateNode(UMaterial* Material, const TSharedPtr<FJsonObj
     if (!bDryRun)
     {
         UMaterialExpression* NewExpression = UMaterialEditingLibrary::CreateMaterialExpression(Material, ExpressionClass, X, Y);
+        if (!NewExpression)
+        {
+            AddMaterialPatchDiagnostic(Diagnostics, TEXT("node_create_failed"), ClassPath, Material);
+            return false;
+        }
+        Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(NewExpression));
+        Item->SetStringField(TEXT("node_alias"), MaterialNodeAlias(Material, NewExpression));
+        AppendMaterialDiff(Diff, TEXT("nodes_created"), Item);
+        if (!ClientId.IsEmpty())
+        {
+            Context.ClientNodes.Add(ClientId, NewExpression);
+        }
         const TSharedPtr<FJsonObject>* Params = nullptr;
         if (NewExpression != nullptr && Op->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)
         {
@@ -58,14 +70,11 @@ bool ApplyMaterialPatchCreateNode(UMaterial* Material, const TSharedPtr<FJsonObj
             }
             NewExpression->PostEditChange();
         }
-        Item->SetStringField(TEXT("node_id"), MaterialExpressionNodeId(NewExpression));
-        Item->SetStringField(TEXT("node_alias"), MaterialNodeAlias(Material, NewExpression));
-        if (!ClientId.IsEmpty())
-        {
-            Context.ClientNodes.Add(ClientId, NewExpression);
-        }
     }
-    AppendMaterialDiff(Diff, TEXT("nodes_created"), Item);
+    else
+    {
+        AppendMaterialDiff(Diff, TEXT("nodes_created"), Item);
+    }
     return true;
 }
 
@@ -88,6 +97,13 @@ bool ApplyMaterialPatchNodeOperation(UMaterial* Material, const FString& OpName,
         AppendMaterialDiff(Diff, TEXT("nodes_deleted"), Item);
         if (!bDryRun)
         {
+            for (auto& Pair : Context.ClientNodes)
+            {
+                if (Pair.Value == Expression)
+                {
+                    Pair.Value = nullptr;
+                }
+            }
             UMaterialEditingLibrary::DeleteMaterialExpression(Material, Expression);
         }
         return true;
