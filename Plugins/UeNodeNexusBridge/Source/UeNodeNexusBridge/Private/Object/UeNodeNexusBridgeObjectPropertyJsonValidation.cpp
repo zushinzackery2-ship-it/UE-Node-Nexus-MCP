@@ -11,7 +11,7 @@ const FProperty* ResolveStructJsonField(const UStruct* Struct, const FString& Na
     const FProperty* Result = nullptr;
     for (TFieldIterator<FProperty> It(Struct); It; ++It)
     {
-        if (It->GetName().ToString().Equals(Name, ESearchCase::IgnoreCase)
+        if (It->GetName().Equals(Name, ESearchCase::IgnoreCase)
             || It->GetAuthoredName().Equals(Name, ESearchCase::IgnoreCase))
         {
             if (Result && Result != *It)

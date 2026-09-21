@@ -65,10 +65,10 @@ static TSharedPtr<FJsonObject> HandleAssetMoveLike(const FString& Operation, con
         }
         if (bMoved && bFixRedirectors)
         {
-            TArray<TSharedPtr<FJsonValue>> Redirectors;
-            TArray<TSharedPtr<FJsonValue>> Fixed;
-            FixRedirectorsUnderFolder(FPackageName::GetLongPackagePath(FPackageName::ObjectPathToPackageName(SourceAssetPath)), false, Redirectors, Fixed, FixupError);
-            Item->SetArrayField(TEXT("redirectors_fixed"), Fixed);
+            const FRedirectorFixupProgress Progress = FixRedirectorsUnderFolder(
+                FPackageName::GetLongPackagePath(FPackageName::ObjectPathToPackageName(SourceAssetPath)), false);
+            FixupError = Progress.Error;
+            Item->SetArrayField(TEXT("redirectors_fixed"), Progress.DeletedRedirectors);
             if (!FixupError.IsEmpty())
             {
                 Item->SetStringField(TEXT("redirector_fixup_error"), FixupError);
