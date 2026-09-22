@@ -11,7 +11,7 @@ import pytest
 from ue_node_nexus_mcp.transcode.collaboration.history import History
 from ue_node_nexus_mcp.transcode.collaboration.merge.engine import merge_snapshots
 from ue_node_nexus_mcp.transcode.collaboration.merge.resolutions import resolve_tree
-from ue_node_nexus_mcp.transcode.collaboration.merge.trees import merge_trees, pair_key
+from ue_node_nexus_mcp.transcode.collaboration.merge.trees import merge_trees
 from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import from_raw
 from ue_node_nexus_mcp.transcode.collaboration.semantic.validation import validate
 from ue_node_nexus_mcp.transcode.collaboration.store import Store
@@ -78,15 +78,18 @@ def test_conflicting_ancestors_are_resolved_once_and_then_reused(project):
     assert sorted(report["conflicts"][0]["snapshots"][1:]) != []
     published = resolve_all(project, second, report)
     assert published["status"] == "published", published
-    recorded = store.record("virtual_base", pair_key(left, right))
-    assert recorded and sorted(recorded["inputs"]) == sorted([left, right])
+    # The ancestor key is scoped to the assets the publication covered, so the
+    # record is found through the store rather than by rebuilding the scope here.
+    bases = store.records("virtual_base")
+    assert len(bases) == 1 and sorted(bases[0]["inputs"]) == sorted([left, right])
+    recorded = bases[0]
     assert value(ue, MATERIAL, "BlendMode") == "BLEND_Translucent"
 
     change(second, MATERIAL, "TwoSided = true", "TwoSided = false")
     call(project, "commit", second, all=True, message="B again")
     again = call(project, "push", second)
     assert again["status"] == "published", again
-    assert store.record("virtual_base", pair_key(left, right))["generation"] == recorded["generation"]
+    assert store.record("virtual_base", recorded["id"])["generation"] == recorded["generation"]
 
 
 def test_a_dry_run_reports_ancestor_conflicts_without_opening_a_session(project):

@@ -23,6 +23,10 @@ class Policy:
     shutdown_seconds: float = 60
     broker_idle_seconds: float = 60
     recovery_seconds: float = 60
+    # A pin is renewed by pinning again, but a single hold has to outlast the
+    # work it protects: reading engine source or chasing one compile error keeps
+    # an editor busy far longer than it keeps the manager busy.
+    max_pin_seconds: float = 14400
     max_editors: int = 2
     max_startups: int = 1
     min_free_gib: float = 4

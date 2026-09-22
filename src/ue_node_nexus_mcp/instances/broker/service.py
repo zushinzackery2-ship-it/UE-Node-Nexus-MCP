@@ -41,7 +41,7 @@ class BrokerService:
         for item in self.instances.values():
             self.projects.setdefault(item["project_key"], set()).add(item["instance_id"])
             item.update(created_at=self.started, idle_since=self.started, stopping_since=self.started)
-            item["pin_until"] = self.started + max(0, min(3600, item.get("pin_expires_at", 0) - time.time()))
+            item["pin_until"] = self.started + max(0, min(self.policy.max_pin_seconds, item.get("pin_expires_at", 0) - time.time()))
         self.recovery_until = self.started + (self.policy.recovery_seconds if self.instances else 0)
         self.ready = False
         self.sessions = Sessions(self)

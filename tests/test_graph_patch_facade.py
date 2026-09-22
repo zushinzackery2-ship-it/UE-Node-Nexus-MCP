@@ -93,18 +93,36 @@ def test_blueprint_graph_patch_forwards_payload_unchanged(all_features, use_brid
     payload = {
         "asset_path": "/Game/BP/BP_Test.BP_Test",
         "graph_kind": "blueprint",
+        "graph_name": "EventGraph",
         "dry_run": False,
         "operations": [
             {"op": "create_node", "client_id": "branch", "node_class": "Branch"},
             {"op": "connect_pins", "from_node_id": "branch", "from_pin": "Then", "to_node_id": "x", "to_pin": "execute"},
         ],
-        "bridge_only_future_field": 123,
     }
 
     response = _patch(payload)
 
     assert response["ok"] is True
     assert bridge.calls == [("graph_patch_apply", payload)]
+
+
+def test_a_field_the_operation_does_not_declare_is_refused_with_the_accepted_list(all_features, use_bridge) -> None:
+    bridge = use_bridge(RecordingBridge())
+
+    response = _patch(
+        {
+            "asset_path": "/Game/BP/BP_Test.BP_Test",
+            "graph": "EventGraph",
+            "operations": [],
+        }
+    )
+
+    assert response["ok"] is False
+    assert response["error"]["code"] == "unknown_field"
+    assert response["error"]["details"]["fields"] == ["graph"]
+    assert "graph_name" in response["error"]["details"]["accepted_fields"]
+    assert bridge.calls == []
 
 
 def test_graph_patch_nonfatal_material_attribute_pin_integrity_does_not_fail_root(all_features, use_bridge) -> None:

@@ -37,8 +37,6 @@ void ApplyMaterialPlan(UObject* Owner, const TArray<TSharedPtr<FJsonValue>>& Pla
 void ApplyMaterialInstancePlan(UMaterialInstanceConstant* Instance, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context);
 void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context);
 void ApplyGenericPlan(UObject* Asset, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context);
-// Creates a new asset of the given kind at asset_path; nullptr + error on failure.
-UObject* CreateAssetForKind(const FString& AssetPath, const FString& Kind, const FString& AssetClass, FString& OutError);
 
 // --- schema pieces (K2 lives in its own TU) --------------------------------
 TSharedPtr<FJsonObject> BuildK2NodeSchema();

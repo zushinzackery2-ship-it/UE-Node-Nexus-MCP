@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .paths import project_dir, project_info_path, resolve_root
+from .paths import project_dir, project_info_path, project_label, resolve_root
 from .schema_lock import SchemaLock, load_schema_lock
 
 BridgeCall = Callable[[str, dict[str, Any]], dict[str, Any]]
@@ -89,13 +89,15 @@ def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: 
             warnings.append(f"UE bridge unavailable: {exc}")
             if require_bridge:
                 raise
+    hint = project_label(project_hint)
     if not project_name:
-        project_name = project_hint or stored_project_name(root)
+        project_name = hint or stored_project_name(root)
         if not project_name:
             raise SyncError("no_project", "no UE editor is bound and no mirrored project exists yet; start the editor and run ue_sync init")
-    if project_hint and os.path.normcase(project_hint) != os.path.normcase(project_name):
-        raise SyncError("project_mismatch", "the bound editor is for another project", dict(requested=project_hint, actual=project_name))
-    project_name = project_hint or project_name
+    if hint and os.path.normcase(hint) != os.path.normcase(project_name):
+        raise SyncError("project_mismatch", "the bound editor is for another project",
+                        dict(requested=project_hint, resolved=hint, actual=project_name))
+    project_name = hint or project_name
     project = project_dir(root, project_name)
     stored = _read_project_info(project)
     if not schema_key:

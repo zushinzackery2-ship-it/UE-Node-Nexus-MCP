@@ -56,7 +56,10 @@ def references(workspace, source: str, assets: list[str], explicit: bool) -> set
 
 def merge(workspace, source: str, target: str, assets: list[str]) -> dict:
     history, store = workspace.history, workspace.store
-    resolved = resolve_base(history, source, target, workspace.schema, store)
+    # The ancestor only has to agree about what this publication merges. Resolving
+    # it project-wide is what dragged unrelated historical assets, and their stale
+    # validation findings, into a single-asset push.
+    resolved = resolve_base(history, source, target, workspace.schema, store, assets)
     if resolved["conflicts"]:
         return dict(base=resolved["base"], ancestors=resolved["bases"], ours=None, theirs=target, candidate=None,
                     conflicts=resolved["conflicts"], base_pair=resolved["pair"], base_inputs=resolved["inputs"])

@@ -57,7 +57,11 @@ def create(workspace, action: str, paths, options: dict, preview: dict | None = 
     store.put_record("proposal", record["id"], record, roots, expected=0)
     file = store.root / "proposals" / (record["id"] + ".json")
     atomic_write(file, canonical(record))
-    return dict(record["preview"], action=action, dry_run=True, proposal_id=record["id"], workspace_id=state["id"], candidate=candidate,
+    # ``status`` is the field callers branch on; a preview says so at the top
+    # level so ``ok=true`` is never mistaken for "the workspace moved".
+    return dict(record["preview"], action=action, dry_run=True, status="preview", applied=0,
+                proposal_id=record["id"], workspace_id=state["id"], candidate=candidate,
+                execute=dict(action=action, paths=paths, options=dict(options, dry_run=False, proposal_id=record["id"])),
                 changes=record["changes"], artifact=str(file))
 
 

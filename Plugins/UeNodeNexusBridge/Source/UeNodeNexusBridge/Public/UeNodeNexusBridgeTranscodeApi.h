@@ -24,12 +24,21 @@ struct FApplyContext
     // local id -> GUID string for nodes created by this plan (returned to Python as id_map)
     TMap<FString, FString> Created;
     TArray<FApplyFailure> Failures;
+    // Findings the caller needs but that must not roll the transaction back, such
+    // as pins whose type never settled. A plan that only reports what it refused
+    // to do leaves the caller guessing about what it did.
+    TArray<FApplyFailure> Notes;
     bool bChanged = false;
     bool bDryRun = false;
 
     void Fail(int32 Index, const FString& Code, const FString& Message)
     {
         Failures.Add({ Index, Code, Message });
+    }
+
+    void Note(const FString& Code, const FString& Message)
+    {
+        Notes.Add({ INDEX_NONE, Code, Message });
     }
 };
 

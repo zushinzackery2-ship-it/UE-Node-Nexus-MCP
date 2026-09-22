@@ -25,6 +25,7 @@ from .facade_response import (
 )
 from .facade_state import facade_state
 from .operation_registry import get_operation_spec
+from .operation_validation import unknown_field_error
 from .runtime import enabled_features, thin_tool
 
 VALID_RESPONSE_OPTION_FIELDS = {"allow_heavy", "mode"}
@@ -62,6 +63,9 @@ def ue_execute(
     mode = str(response_options.get("mode", spec.default_response))
     if mode not in EXECUTE_RESPONSE_MODES:
         return minimal_error("invalid_response_mode", f"unsupported response mode: {mode}", {"mode": mode})
+    unknown = unknown_field_error(operation, payload)
+    if unknown is not None:
+        return minimal_error(unknown["code"], unknown["message"], {"operation": operation, **unknown})
     preflight_response = preflight_execute_request(operation, payload, response_options)
     if preflight_response is not None:
         return preflight_response
@@ -98,7 +102,9 @@ def ue_read(
         artifact = facade_state.get_artifact(artifact_id)
         if artifact is None:
             return minimal_error("token_expired", "artifact was not found or expired", {"artifact_id": artifact_id})
-        return {"ok": True, "data": artifact.payload}
+        from .facade_artifact import read as read_artifact
+
+        return read_artifact(artifact, query_payload)
     if target == "auto":
         requested_path = asset_path or str(query_payload.get("path") or query_payload.get("asset_path") or "")
         try:
@@ -130,6 +136,9 @@ def ue_read(
     if asset_path is not None:
         query_payload.setdefault("asset_path", asset_path)
     apply_read_format_defaults(operation, format, query_payload)
+    unknown = unknown_field_error(operation, query_payload, "unknown_query_field")
+    if unknown is not None:
+        return minimal_error(unknown["code"], unknown["message"], {"target": target, **unknown})
 
     try:
         raw_response = execute_operation(operation, query_payload)

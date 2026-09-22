@@ -59,7 +59,8 @@ def syntax(family: str, name: str) -> dict:
     if family == "material_expression":
         return dict(section="graph", declaration=f"node : {short}", parameter="node : Type(Property=value)", link="source.Pin -> destination.Pin")
     if family in ("k2node", "functions", "callable_functions"):
-        return dict(section="graph/function/macro", declaration=f"node : {short}", context="function signature or target Blueprint required for dynamic pins")
+        return dict(section="graph/function/macro", declaration=f"node : {short}",
+                    context='pins come from the owning asset: schema(target="/Game/Path/BP_Thing.BP_Thing")')
     if family in ("component", "niagara_renderer"):
         return dict(section="components" if family == "component" else "renderers", declaration=f"item : {short} {{ Property=value }}")
     if family == "niagara_modules":

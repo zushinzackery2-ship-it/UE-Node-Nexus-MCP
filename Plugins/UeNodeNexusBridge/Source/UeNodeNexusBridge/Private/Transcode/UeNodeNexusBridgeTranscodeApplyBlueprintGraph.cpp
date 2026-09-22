@@ -3,6 +3,7 @@
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
+#include "Blueprint/NexusBlueprintPinNames.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "K2Node_AddPinInterface.h"
@@ -61,6 +62,10 @@ UEdGraphPin* ResolvePin(UEdGraphNode* Node, const FString& PinName, EEdGraphPinD
             }
         }
         return Count == 1 ? Single : nullptr;
+    }
+    if (UEdGraphPin* Aliased = FindAliasedPin(Node, PinName, Direction))
+    {
+        return Aliased;
     }
     for (UEdGraphPin* Pin : Node->Pins)
     {

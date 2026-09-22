@@ -15,6 +15,33 @@ from .payload_schema import payload_schema_for
 from .runtime import enabled_features
 
 
+def unknown_payload_fields(operation: str, payload: dict[str, Any]) -> list[str]:
+    """Fields the operation does not declare, sorted.
+
+    Silently dropping them is worse than refusing them: a caller that mistypes a
+    filter name gets an unfiltered result and no way to tell the filter never
+    applied. Operations with no typed wrapper declare no fields at all, so their
+    payload is passed through unchecked.
+    """
+    schema = payload_schema_for(operation)
+    properties = schema.get("properties")
+    if not properties:
+        return []
+    return sorted(set(payload) - set(properties))
+
+
+def unknown_field_error(operation: str, payload: dict[str, Any], code: str = "unknown_field") -> dict[str, Any] | None:
+    unknown = unknown_payload_fields(operation, payload)
+    if not unknown:
+        return None
+    return {
+        "code": code,
+        "message": f"unsupported field(s) for {operation}: {', '.join(unknown)}",
+        "fields": unknown,
+        "accepted_fields": sorted(payload_schema_for(operation).get("properties", {})),
+    }
+
+
 def validate_operation_call(
     name: Any,
     payload: Any,
@@ -44,4 +71,4 @@ def validate_operation_call(
             "message": f"missing required field(s): {', '.join(missing)}",
             "fields": missing,
         }
-    return None
+    return unknown_field_error(name, payload)

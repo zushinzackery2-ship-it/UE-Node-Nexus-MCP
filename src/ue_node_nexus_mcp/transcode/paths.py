@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 ROOT_ENV = "UE_NEXUS_TRANSCODE_DIR"
 DEFAULT_ROOT_NAME = "Content_Transcoded"
@@ -46,8 +46,24 @@ def schema_dir(root: Path, schema_key: str) -> Path:
     return root / NEXUS_DIR / "schema" / schema_key
 
 
+def project_label(text: str | None) -> str:
+    """A project is named by its ``.uproject`` stem, however the caller spells it.
+
+    Callers reasonably pass the same value they gave the editor - a full
+    ``.uproject`` path - and comparing that against a bare project name reads as
+    "you bound the wrong project" when the only difference is the spelling.
+    """
+    value = (text or "").strip().strip('"')
+    if not value:
+        return ""
+    if value.lower().endswith(".uproject") or "/" in value or "\\" in value:
+        # Windows semantics parse both separators, so one spelling works anywhere.
+        return PureWindowsPath(value).stem
+    return value
+
+
 def project_dir(root: Path, project_name: str) -> Path:
-    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", project_name.strip()) or "Project"
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", project_label(project_name)) or "Project"
     return root / safe
 
 

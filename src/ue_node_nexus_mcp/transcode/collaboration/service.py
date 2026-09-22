@@ -38,6 +38,12 @@ def run(bridge, context, action: str, paths, options: dict) -> dict:
         from .apply.recover import recover
 
         return recover(bridge, context, workspace, options)
+    if action == "abort" and options.get("apply_id"):
+        # Publication is the outer lock everywhere else; ending a transaction
+        # must not take it from inside the workspace lock.
+        from .apply.recover import discard
+
+        return discard(workspace, options)
     with store.lock("workspace-" + identifier):
         workspace.reload()
         if proposal:

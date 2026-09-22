@@ -7,6 +7,7 @@
 #include "Engine/Blueprint.h"
 #include "K2Node_FunctionEntry.h"
 #include "K2Node_FunctionResult.h"
+#include "Blueprint/NexusBlueprintPinNames.h"
 #include "Blueprint/UeNodeNexusBridgeBlueprintPinDefaults.h"
 
 namespace UeNodeNexusBridge::Transcode
@@ -43,7 +44,7 @@ static TSharedPtr<FJsonObject> PinJson(const UEdGraphPin* Pin)
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     Json->SetStringField(TEXT("guid"), Pin->PinId.ToString(EGuidFormats::DigitsWithHyphens));
-    Json->SetStringField(TEXT("name"), Pin->PinName.ToString());
+    Json->SetStringField(TEXT("name"), MirrorPinName(Pin));
     Json->SetStringField(TEXT("dir"), Pin->Direction == EGPD_Input ? TEXT("in") : TEXT("out"));
     Json->SetObjectField(TEXT("type"), PinTypeJson(Pin->PinType));
     Json->SetStringField(TEXT("default"), BlueprintPinDefaultText(Pin));

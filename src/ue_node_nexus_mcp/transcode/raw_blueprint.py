@@ -159,6 +159,12 @@ def blueprint_document(
     document = Document(header=header_from_raw(raw))
 
     asset = props_section(raw.get("props"))
+    # Both are fixed at creation and rejected as edits afterwards, but without
+    # them the mirror cannot say what to build: a macro library and an actor
+    # Blueprint differ only by type, an interface only by parent.
+    blueprint_type = str(blueprint.get("blueprint_type", "") or "")
+    if blueprint_type:
+        asset.entries.insert(0, Prop(key="BlueprintType", value=blueprint_type, type_name="EBlueprintType"))
     parent = str(blueprint.get("parent_class", "") or "")
     if parent:
         asset.entries.insert(0, Prop(key="ParentClass", value=parent, type_name="UClass"))

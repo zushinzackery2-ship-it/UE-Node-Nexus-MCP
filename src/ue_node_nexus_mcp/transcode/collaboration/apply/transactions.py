@@ -112,10 +112,30 @@ def execute(bridge, workspace, record: dict) -> dict:
         record["phase"] = "recovery_required"
     save(workspace, record)
     if record["phase"] != "ue_committed":
+        from .observe import forget
+
+        # UE either rolled this back or is holding a state nobody recorded; the
+        # remembered package evidence no longer describes what it now has.
+        forget(workspace.store, [record["asset"]])
         error = response.get("error") or dict()
         raise SyncError(error.get("code", "recovery_required"), error.get("message", "execution did not produce a committed receipt"),
-                        dict(apply_id=record["id"], phase=record["phase"], receipt=receipt))
+                        dict(apply_id=record["id"], phase=record["phase"], receipt=receipt,
+                             diagnostics=diagnostics(response, receipt)))
     return record
+
+
+def diagnostics(response: dict, receipt) -> list:
+    """Compiler and validation messages, wherever this failure carried them.
+
+    A rolled back apply answers with a fresh error envelope, so the body's own
+    ``data`` is gone; the receipt still holds the response data the run produced.
+    """
+    for source in (response.get("data"), (receipt or dict()).get("response_data"),
+                   ((receipt or dict()).get("response") or dict()).get("data")):
+        items = (source or dict()).get("diagnostics") if isinstance(source, dict) else None
+        if items:
+            return items
+    return []
 
 
 def actual_snapshot(workspace, record: dict) -> dict | None:

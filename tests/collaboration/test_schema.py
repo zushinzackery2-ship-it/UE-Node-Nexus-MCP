@@ -139,8 +139,13 @@ def test_dynamic_pin_classes_are_marked_as_needing_a_target_context(project):
     row = next(item for item in catalog["rows"] if item["name"] == "K2Node_CallFunction")
     assert row["coverage"] == "context_required"
     assert row["definition"]["dynamic_pins"] is True
-    assert "context" in row["definition"]["syntax"]
-    assert catalog["coverage"]["blueprint_pins"] == "context_required"
+    assert "schema(target=" in row["definition"]["syntax"]["context"]
+    # The gap is answered with the call that closes it, not just named.
+    pins = catalog["coverage"]["blueprint_pins"]
+    assert pins["state"] == "context_required"
+    assert pins["resolve_with"]["action"] == "schema"
+    assert "target" in pins["resolve_with"]["options"]
+    assert "pins" in pins["resolve_with"]["returns"]
 
 
 def test_a_target_context_is_collected_once_and_then_served_from_the_catalog(project):

@@ -78,16 +78,41 @@ def encode(document: Document, kind: str, previous: dict | None, namespace: str,
     return dict(kind=kind, header=header, sections=sections), identities.bindings, locations
 
 
+def is_exec_pin(bindings: dict, node: str, name, direction: str) -> bool:
+    """Whether this endpoint carries execution, as far as its binding records.
+
+    An unnamed endpoint means "the obvious pin", so any execution pin in that
+    direction answers for it; a named one must match by name.
+    """
+    for pin in bindings.get(node, dict()).get("meta", dict()).get("pins", []):
+        if pin.get("dir") != direction or (name is not None and pin.get("name") != name):
+            continue
+        if (pin.get("type") or dict()).get("category") == "exec":
+            return True
+        if name is not None:
+            return False
+    return False
+
+
 def encode_links(section: Section, aliases: dict, bindings: dict) -> dict:
+    """One slot per pin that UE allows only one connection on.
+
+    UE constrains execution on the output side and data on the input side: an
+    execution output drives exactly one place, while any number of lines may join
+    at an execution input, and a data input takes one source while a data output
+    fans out. Deciding this from the source endpoint alone made a graph that
+    rejoins after a branch - the most ordinary shape there is - unrepresentable
+    whenever the source binding carried no pin metadata.
+    """
     result = dict()
     for link in section.links():
         src, dst = aliases.get(link.src, "@" + link.src), aliases.get(link.dst, "@" + link.dst)
         record = dict(src=src, dst=dst, src_pin=link.src_pin, dst_pin=link.dst_pin)
-        pins = bindings.get(src, dict()).get("meta", dict()).get("pins", [])
-        is_exec = any(pin.get("dir") == "out" and (pin.get("name") == link.src_pin or link.src_pin is None) and (pin.get("type") or dict()).get("category") == "exec" for pin in pins)
-        slot = f"out:{src}:{link.src_pin or ''}" if is_exec else f"in:{dst}:{link.dst_pin or ''}"
+        execution = is_exec_pin(bindings, src, link.src_pin, "out") or is_exec_pin(bindings, dst, link.dst_pin, "in")
+        slot = f"out:{src}:{link.src_pin or ''}" if execution else f"in:{dst}:{link.dst_pin or ''}"
         if slot in result and result[slot] != record:
-            raise SyncError("pin_cardinality", f"multiple connections occupy {link.dst}.{link.dst_pin or ''}")
+            endpoint = (link.src, link.src_pin) if execution else (link.dst, link.dst_pin)
+            raise SyncError("pin_cardinality", f"multiple connections occupy {endpoint[0]}.{endpoint[1] or ''}")
         result[slot] = record
     return result
 

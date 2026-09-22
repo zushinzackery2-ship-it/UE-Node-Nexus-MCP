@@ -14,6 +14,15 @@ FJson CommitError(const FString& Operation, const FString& RequestId, const FStr
     if (Receipt.IsValid())
     {
         Data->SetObjectField(TEXT("receipt"), Receipt);
+        // A rolled back apply answers with a fresh error envelope, so the body's
+        // own data - including every compiler message that explains the failure -
+        // is gone by the time the caller sees anything. Those messages are the
+        // only thing that says which node was wrong, so they travel with the error.
+        const TArray<TSharedPtr<FJsonValue>> Diagnostics = Rows(Object(Receipt, TEXT("response_data")), TEXT("diagnostics"));
+        if (Diagnostics.Num() > 0)
+        {
+            Data->SetArrayField(TEXT("diagnostics"), Diagnostics);
+        }
     }
     Response->SetObjectField(TEXT("data"), Data);
     return Response;

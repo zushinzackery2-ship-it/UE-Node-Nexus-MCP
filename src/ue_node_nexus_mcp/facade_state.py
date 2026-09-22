@@ -13,6 +13,9 @@ class StoredArtifact:
     payload: dict[str, Any]
     created_at: float
     expires_at: float
+    # Serialized once on first paged read; a large artifact is read in several
+    # calls and re-encoding tens of megabytes per page is the whole cost.
+    encoded: str | None = None
 
 
 @dataclass

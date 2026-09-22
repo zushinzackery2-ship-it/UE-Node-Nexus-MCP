@@ -40,6 +40,24 @@ def remember(store, context, commit: str, epoch: str, entries: dict, revisions: 
     store.put_record("memory", "observed", dict(commit=commit, editor_epoch=epoch, schema_key=context.schema_key, entries=memo), [commit])
 
 
+def forget(store, assets: list[str]) -> None:
+    """Drop remembered memory evidence for assets whose memory can no longer be trusted.
+
+    A rollback that could not unload the package leaves the editor holding one
+    state and the disk another. ``carried`` compares saved package hashes, which
+    a restored file makes identical again, so without this the next observation
+    keeps returning the pre-failure snapshot and every push reports
+    ``stale_target`` against a revision computed from live memory.
+    """
+    record = store.record("memory", "observed")
+    if not record:
+        return
+    entries = dict(record["entries"])
+    if not any(entries.pop(asset, None) is not None for asset in assets):
+        return
+    store.put_record("memory", "observed", dict(record, entries=entries), [record["commit"]], record["generation"])
+
+
 def carried(known: list | None, snapshot: str, info) -> bool:
     """A saved asset whose package hash never moved still holds observed memory.
 

@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Blueprint/NexusBlueprintVariableType.h"
 
 #include "Components/ActorComponent.h"
 #include "EdGraphSchema_K2.h"
@@ -152,7 +153,10 @@ bool ApplyVariableVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
             {
                 return false;
             }
-            FBlueprintEditorUtils::ChangeMemberVariableType(Blueprint, Name, Type);
+            if (!ChangeVariableType(Blueprint, Name, Type, OutError) || !VerifyVariableType(Blueprint, Name, Type, OutError))
+            {
+                return false;
+            }
         }
         ApplyVariableFields(Blueprint, Name, Op);
         return true;

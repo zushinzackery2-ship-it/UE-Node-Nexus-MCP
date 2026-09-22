@@ -60,5 +60,18 @@ def preview(workspace, sandbox, action: str, paths, options: dict) -> dict:
     updated = sandbox.refs()
     ref_changes = [dict(ref=name, before=refs.get(name), after=updated.get(name))
                    for name in sorted(refs.keys() | updated.keys()) if refs.get(name) != updated.get(name)]
-    return dict(candidate=candidate, result=result, layers=layers, refs=ref_changes,
+    return dict(candidate=candidate, result=previewed(result), layers=layers, refs=ref_changes,
                 objects=[candidate, clone.state["head"], clone.state["index"], after_files])
+
+
+def previewed(result: dict) -> dict:
+    """A simulation ran against a throwaway copy; it must not read as done.
+
+    ``commit`` answering ``action=committed`` is indistinguishable from a real
+    commit at a glance, and the branch has not moved. The completed-form verb is
+    kept under ``preview_of`` so the caller can still see what would happen.
+    """
+    shown = dict(result, dry_run=True, status="preview")
+    if isinstance(result.get("action"), str):
+        shown.update(action="preview", preview_of=result["action"])
+    return shown

@@ -32,7 +32,7 @@ def test_conflict_resolve_after_restart_and_idempotent_continue(tmp_path):
     assert values(b)["A"] == "2"
     sessions = Sessions(Workspace(store, b.state["id"]))
     item = report["conflicts"][0]
-    ready = sessions.resolve(report["merge_id"], item["conflict_id"], dict(choice="theirs"))
+    ready = sessions.resolve(report["merge_id"], dict(conflict_id=item["conflict_id"], choice="theirs"))
     assert ready["status"] == "ready"
     result = sessions.finish(report["merge_id"])
     assert sessions.finish(report["merge_id"])["commit_id"] == result["commit_id"]

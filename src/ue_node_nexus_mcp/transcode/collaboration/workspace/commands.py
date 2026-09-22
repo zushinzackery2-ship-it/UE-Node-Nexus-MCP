@@ -48,9 +48,8 @@ def run(workspace, action: str, paths, options: dict) -> dict:
         source_ref = source if store.ref(source) else "refs/heads/" + source if store.ref("refs/heads/" + source) else None
         return integrate.integrate(workspace, action, source, options.get("mainline"), selected, options.get("message"), source_ref)
     if action == "resolve":
-        decision = dict((key, options[key]) for key in ("choice", "value", "name") if key in options)
         required(options, "choice")
-        return Sessions(workspace).resolve(required(options, "merge_id"), required(options, "conflict_id"), decision)
+        return Sessions(workspace).resolve(required(options, "merge_id"), options)
     if action == "abort":
         return rebase.abort(workspace, options["rebase_id"]) if options.get("rebase_id") else Sessions(workspace).abort(required(options, "merge_id"))
     if action == "continue":

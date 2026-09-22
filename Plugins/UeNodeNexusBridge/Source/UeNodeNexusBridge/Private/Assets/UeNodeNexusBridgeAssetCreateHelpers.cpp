@@ -1,20 +1,21 @@
 #include "UeNodeNexusBridgeAssetCreateHelpers.h"
 
+#include "NexusBlueprintAssetType.h"
+
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Editor.h"
-#include "Engine/Blueprint.h"
+#include "Engine/DataAsset.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Factories/DataAssetFactory.h"
 #include "Factories/MaterialFactoryNew.h"
 #include "Factories/MaterialFunctionFactoryNew.h"
 #include "Factories/MaterialInstanceConstantFactoryNew.h"
 #include "Factories/TextureRenderTargetFactoryNew.h"
-#include "GameFramework/Actor.h"
-#include "Kismet2/KismetEditorUtilities.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialInstanceConstant.h"
+#include "Materials/MaterialInterface.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeDataAsset.h"
 #include "UeNodeNexusBridgeJson.h"
@@ -106,20 +107,6 @@ UObject* CreateMaterialInstanceAsset(UPackage* Package, FName AssetName, const F
     return Factory->FactoryCreateNew(UMaterialInstanceConstant::StaticClass(), Package, AssetName, RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn);
 }
 
-UObject* CreateBlueprintAsset(UPackage* Package, FName AssetName, const FString& ParentClassPath)
-{
-    UClass* ParentClass = AActor::StaticClass();
-    if (!ParentClassPath.IsEmpty())
-    {
-        ParentClass = LoadObject<UClass>(nullptr, *ParentClassPath);
-    }
-    if (ParentClass == nullptr || !FKismetEditorUtilities::CanCreateBlueprintOfClass(ParentClass))
-    {
-        return nullptr;
-    }
-    return FKismetEditorUtilities::CreateBlueprint(ParentClass, Package, AssetName, BPTYPE_Normal);
-}
-
 UObject* CreateMaterialFunctionAsset(UPackage* Package, FName AssetName)
 {
     UMaterialFunctionFactoryNew* Factory = NewObject<UMaterialFunctionFactoryNew>();
@@ -140,6 +127,57 @@ UObject* CreateDataAsset(UPackage* Package, FName AssetName, const FString& Pare
     UDataAssetFactory* Factory = NewObject<UDataAssetFactory>();
     Factory->DataAssetClass = DataAssetClass;
     return Factory->FactoryCreateNew(DataAssetClass, Package, AssetName, RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn);
+}
+
+bool CheckAssetCreate(
+    const FString& AssetKind,
+    const FString& ParentAssetPath,
+    const FString& ParentClassPath,
+    const FString& BlueprintType,
+    FString& OutError)
+{
+    if (AssetKind.Equals(TEXT("blueprint"), ESearchCase::IgnoreCase))
+    {
+        return CheckBlueprintAsset(ParentClassPath, BlueprintType, OutError);
+    }
+    if (AssetKind.Equals(TEXT("material_instance"), ESearchCase::IgnoreCase))
+    {
+        if (!ParentAssetPath.IsEmpty() && LoadObject<UMaterialInterface>(nullptr, *ParentAssetPath) == nullptr)
+        {
+            OutError = FString::Printf(TEXT("parent material could not be loaded: %s"), *ParentAssetPath);
+            return false;
+        }
+        return true;
+    }
+    if (AssetKind.Equals(TEXT("data_asset"), ESearchCase::IgnoreCase) || AssetKind.Equals(TEXT("asset"), ESearchCase::IgnoreCase))
+    {
+        if (ParentClassPath.IsEmpty())
+        {
+            return true;
+        }
+        const UClass* DataAssetClass = LoadObject<UClass>(nullptr, *ParentClassPath);
+        if (DataAssetClass == nullptr)
+        {
+            OutError = FString::Printf(TEXT("data asset class could not be loaded: %s"), *ParentClassPath);
+            return false;
+        }
+        if (!DataAssetClass->IsChildOf(UDataAsset::StaticClass()))
+        {
+            OutError = FString::Printf(TEXT("class '%s' does not derive from DataAsset"), *ParentClassPath);
+            return false;
+        }
+        return true;
+    }
+    static const TCHAR* Parameterless[] = { TEXT("material"), TEXT("material_function"), TEXT("texture_render_target_2d") };
+    for (const TCHAR* Kind : Parameterless)
+    {
+        if (AssetKind.Equals(Kind, ESearchCase::IgnoreCase))
+        {
+            return true;
+        }
+    }
+    OutError = FString::Printf(TEXT("unsupported asset_kind: %s"), *AssetKind);
+    return false;
 }
 
 UObject* CreateTextureRenderTarget2DAsset(UPackage* Package, FName AssetName)

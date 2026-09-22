@@ -37,31 +37,41 @@ def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None
     return history.tree(result), conflicts
 
 
-def pair_key(left: str, right: str) -> str:
-    return digest(sorted([left, right]))
+def pair_key(left: str, right: str, selected: list[str] | None = None) -> str:
+    """A narrowed ancestor resolution answers only for the assets it looked at.
+
+    Recording it under the project-wide key would let a later, wider merge reuse
+    an ancestor that never examined the assets it now needs.
+    """
+    material = sorted([left, right])
+    return digest(material if selected is None else dict(pair=material, scope=sorted(selected)))
 
 
-def resolve_base(history: History, ours: str, theirs: str, schema=None, store=None) -> dict:
+def resolve_base(history: History, ours: str, theirs: str, schema=None, store=None, selected: list[str] | None = None) -> dict:
     """The virtual ancestor, or the exact inputs whose merge would produce it.
 
     Two independent ancestors that disagree cannot be collapsed by guessing. The
     conflicting triple is returned so the caller can open a durable resolution
     whose result is recorded and reused by every later attempt.
+
+    ``selected`` scopes the ancestor merge to the assets a publication actually
+    covers. Without it a one-asset push inherits every historical validation
+    conflict the project ever accumulated, none of which it can act on.
     """
     bases = history.merge_bases(ours, theirs)
     if not bases:
         raise SyncError("unrelated_history", "versions have no recorded common ancestor")
     merged = bases[0]
     for next_base in bases[1:]:
-        key = pair_key(merged, next_base)
+        key = pair_key(merged, next_base, selected)
         recorded = store.record("virtual_base", key) if store else None
         if recorded:
             merged = recorded["commit"]
             continue
-        inner = resolve_base(history, merged, next_base, schema, store)
+        inner = resolve_base(history, merged, next_base, schema, store, selected)
         if inner["conflicts"]:
             return dict(inner, bases=bases)
-        tree, conflicts = merge_trees(history, inner["base"], merged, next_base, schema, layer="base")
+        tree, conflicts = merge_trees(history, inner["base"], merged, next_base, schema, selected, "base")
         if conflicts:
             return dict(base=inner["base"], bases=bases, conflicts=conflicts, pair=key,
                         inputs=[inner["base"], merged, next_base])

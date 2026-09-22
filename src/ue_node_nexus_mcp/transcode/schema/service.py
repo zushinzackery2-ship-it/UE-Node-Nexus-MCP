@@ -11,6 +11,7 @@ from ..paths import object_path, schema_dir
 from ..sync_project import SyncError, call_ok, ensure_root_registered, write_project_info
 from ..lifecycle import schema_refresh_requested
 from .catalog import migrate, publish, read_entry
+from .coverage import CONTEXT_REQUIRED, expand, target_resolution
 from .lock import SchemaLock
 from .records import FAMILIES
 
@@ -23,7 +24,7 @@ def collect(bridge, context, staging: Path) -> SchemaLock:
     core = read_json(staging / "key.json")
     environment = dict(core.get("environment", dict()), project_file=context.project_file,
                        engine_version=context.engine_version, schema_key=key)
-    coverage = dict(core="registered_types", blueprint_pins="context_required", functions="registered_callable_index")
+    coverage = dict(core="registered_types", blueprint_pins=CONTEXT_REQUIRED, functions="registered_callable_index")
     try:
         call_ok(bridge, "vfx_transcode_export", dict(schema_out_dir=str(staging), asset_paths=[]))
         coverage["niagara"] = "provider_loaded"
@@ -72,7 +73,7 @@ def query(lock: SchemaLock, category=None, text=None, limit=40, cursor=0, detail
             row["definition"] = read_entry(lock, family, name, entry)
         rows.append(row)
     return dict(schema_key=lock.key, generation=manifest.get("generation"), index=str(lock.directory / "index.md"),
-                coverage=manifest.get("coverage", dict()), total=len(matches), rows=rows,
+                coverage=expand(manifest.get("coverage", dict())), total=len(matches), rows=rows,
                 cursor=start + count if start + count < len(matches) else None)
 
 
@@ -111,7 +112,7 @@ def target_context(bridge, context, target: str, conditions: dict | None = None)
     definition = raw_evidence(raw)
     record = dict(target=target, kind=kind, schema_key=context.schema_key, context=conditions,
                   context_hash=digest(conditions), revision=raw.get("revision"), editor_epoch=raw.get("editor_epoch"),
-                  interface_hash=digest(definition), definition=definition, coverage="context_required" if conditions else "target_export",
+                  interface_hash=digest(definition), definition=definition, coverage=CONTEXT_REQUIRED if conditions else "target_export",
                   freshness="observed", conditions_evaluated=False if conditions else True)
     record_hash = digest(record)
     path = context.schema.directory / "contexts" / f"{record_hash}.json"
@@ -151,7 +152,8 @@ def run(bridge, context, options: dict) -> dict:
         key = object_path(target) + ":" + digest(options.get("context") or dict())
         entry = lock.info().get("contexts", dict()).get(key)
         if not entry:
-            raise SyncError("context_required", "no bound target context is cached", dict(target=target))
+            raise SyncError("context_required", "no bound target context is cached",
+                            dict(target=target, resolve_with=target_resolution(target)))
         return dict(schema_key=lock.key, context=read_json(lock.directory / entry["file"]), freshness="unknown")
     result = query(lock, options.get("category"), options.get("query"), options.get("limit", 40), options.get("cursor", 0), options.get("details", False))
     result["freshness"] = "observed" if refresh_requested else "cached" if context.bridge_available else "unknown"

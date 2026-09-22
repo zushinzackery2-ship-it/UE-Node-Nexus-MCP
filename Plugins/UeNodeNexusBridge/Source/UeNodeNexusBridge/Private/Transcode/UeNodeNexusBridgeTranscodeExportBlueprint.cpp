@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "NexusBlueprintAssetType.h"
 
 #include "Components/ActorComponent.h"
 #include "EdGraph/EdGraph.h"
@@ -129,6 +130,9 @@ TSharedPtr<FJsonObject> BuildBlueprintRaw(UBlueprint* Blueprint)
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("parent_class"), Blueprint->ParentClass ? Blueprint->ParentClass->GetPathName() : FString());
+    // A macro library has no distinguishing parent class, so without this the
+    // mirror cannot say what to recreate the asset as.
+    Data->SetStringField(TEXT("blueprint_type"), BlueprintTypeName(Blueprint));
     TArray<TSharedPtr<FJsonValue>> Variables;
     for (const FBPVariableDescription& Variable : Blueprint->NewVariables)
     {

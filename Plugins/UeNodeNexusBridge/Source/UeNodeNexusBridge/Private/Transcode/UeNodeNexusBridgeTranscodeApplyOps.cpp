@@ -1,97 +1,20 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusCollaboration.h"
+#include "Apply/NexusApplyAssetCreate.h"
 #include "Apply/UeNodeNexusBridgeTranscodeApplyResult.h"
 #include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
 
-#include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/Blueprint.h"
-#include "Materials/Material.h"
-#include "Materials/MaterialFunction.h"
 #include "Materials/MaterialInstanceConstant.h"
-#include "Misc/PackageName.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UObject/Package.h"
-#include "UeNodeNexusBridgeAssetCreateHelpers.h"
-#include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeDiagnostics.h"
 #include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
 {
 using namespace Transcode;
-
-namespace Transcode
-{
-// Blueprints and DataAssets take their class at creation; the plan carries it as a set_asset_prop.
-static FString PlanCreationClass(const TArray<TSharedPtr<FJsonValue>>& Plan, const FString& Kind, const FString& AssetClass)
-{
-    if (Kind != TEXT("blueprint"))
-    {
-        return AssetClass;
-    }
-    for (const TSharedPtr<FJsonValue>& Value : Plan)
-    {
-        const TSharedPtr<FJsonObject>* Verb = nullptr;
-        FString Op;
-        FString Name;
-        FString Text;
-        if (Value.IsValid() && Value->TryGetObject(Verb) && (*Verb)->TryGetStringField(TEXT("op"), Op) && Op == TEXT("set_asset_prop")
-            && (*Verb)->TryGetStringField(TEXT("name"), Name) && Name == TEXT("ParentClass") && (*Verb)->TryGetStringField(TEXT("value"), Text))
-        {
-            return Text;
-        }
-    }
-    return FString();
-}
-
-UObject* CreateAssetForKind(const FString& AssetPath, const FString& Kind, const FString& AssetClass, FString& OutError)
-{
-    FString PackageName;
-    FString AssetName;
-    FText Reason;
-    if (!ParseAssetPath(AssetPath, PackageName, AssetName, Reason))
-    {
-        OutError = Reason.ToString();
-        return nullptr;
-    }
-    if (FPackageName::DoesPackageExist(PackageName))
-    {
-        OutError = FString::Printf(TEXT("package already exists on disk: %s"), *PackageName);
-        return nullptr;
-    }
-    UPackage* Package = CreatePackage(*PackageName);
-    UObject* Asset = nullptr;
-    if (Kind == TEXT("material"))
-    {
-        Asset = CreateMaterialAsset(Package, FName(*AssetName));
-    }
-    else if (Kind == TEXT("material_function"))
-    {
-        Asset = CreateMaterialFunctionAsset(Package, FName(*AssetName));
-    }
-    else if (Kind == TEXT("material_instance"))
-    {
-        Asset = CreateMaterialInstanceAsset(Package, FName(*AssetName), FString());
-    }
-    else if (Kind == TEXT("blueprint"))
-    {
-        Asset = CreateBlueprintAsset(Package, FName(*AssetName), AssetClass);
-    }
-    else if (Kind == TEXT("asset"))
-    {
-        Asset = CreateDataAsset(Package, FName(*AssetName), AssetClass);
-    }
-    if (Asset == nullptr)
-    {
-        OutError = FString::Printf(TEXT("could not create %s asset %s"), *Kind, *AssetPath);
-        return nullptr;
-    }
-    FAssetRegistryModule::AssetCreated(Asset);
-    Package->MarkPackageDirty();
-    return Asset;
-}
-}
 
 static void ApplyPlanForKind(UObject* Asset, const FString& Kind, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context)
 {
@@ -160,8 +83,15 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
         {
             return MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), FString::Printf(TEXT("asset could not be loaded: %s"), *AssetPath));
         }
+        FString Error;
         if (bDryRun)
         {
+            FString PackageName;
+            FString AssetName;
+            if (!CheckAssetForKind(AssetPath, Kind, *Plan, AssetClass, PackageName, AssetName, Error))
+            {
+                return MakeOperationError(Operation, RequestId, TEXT("create_failed"), Error);
+            }
             TSharedPtr<FJsonObject> DryData = MakeShared<FJsonObject>();
             DryData->SetBoolField(TEXT("dry_run"), true);
             DryData->SetBoolField(TEXT("would_create"), true);
@@ -170,8 +100,7 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
             DryResponse->SetObjectField(TEXT("data"), DryData);
             return DryResponse;
         }
-        FString Error;
-        Asset = CreateAssetForKind(AssetPath, Kind, PlanCreationClass(*Plan, Kind, AssetClass), Error);
+        Asset = CreateAssetForKind(AssetPath, Kind, *Plan, AssetClass, Error);
         if (Asset == nullptr)
         {
             return MakeOperationError(Operation, RequestId, TEXT("create_failed"), Error);
@@ -250,7 +179,13 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
         Failed.Add(MakeShared<FJsonValueObject>(Item));
     }
     Data->SetArrayField(TEXT("failed"), Failed);
-    Data->SetArrayField(TEXT("diagnostics"), Compile.Diagnostics);
+    TArray<TSharedPtr<FJsonValue>> Diagnostics = Compile.Diagnostics;
+    for (const FApplyFailure& Note : Context.Notes)
+    {
+        Diagnostics.Add(MakeShared<FJsonValueObject>(
+            MakeDiagnostic(TEXT("warning"), Note.Code, Note.Message, AssetPath, TEXT("UeNodeNexusBridge"))));
+    }
+    Data->SetArrayField(TEXT("diagnostics"), Diagnostics);
     Data->SetObjectField(TEXT("compile"), CompileDiagnosticsJson(Compile, bCompile && !bDryRun));
     Data->SetBoolField(TEXT("saved"), bSaved);
     Data->SetBoolField(TEXT("save_required"), bSaveRequired);

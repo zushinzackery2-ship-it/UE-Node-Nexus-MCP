@@ -19,15 +19,17 @@ def push(bridge, context, workspace, paths, options: dict, proposal=None) -> dic
     if not options.get("save", True):
         raise SyncError("save_required", "collaboration publication saves its committed result")
     with workspace.store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=workspace.state["id"]):
-        from .recover import pending, pending_records
+        from .recover import outstanding, pending, pending_records
 
-        outstanding = pending_records(workspace)
-        if proposal and (outstanding or proposal["preview"].get("published") != workspace.store.ref("refs/ue/published")):
+        unfinished = pending_records(workspace)
+        if proposal and (unfinished or proposal["preview"].get("published") != workspace.store.ref("refs/ue/published")):
             raise SyncError("stale_proposal", "publication or pending executions changed since preview")
         if options.get("dry_run", True):
-            if outstanding:
+            if unfinished:
+                # Naming the pending rows is not enough: every supported way out
+                # has to be in the error, or the caller has no move to make.
                 raise SyncError("recovery_required", "recover pending executions before previewing publication",
-                                dict(pending=[dict(apply_id=row["id"], phase=row["phase"]) for row in outstanding]))
+                                outstanding(unfinished))
         else:
             pending(bridge, context, workspace)
         return publish_locked(bridge, context, workspace, paths, options, proposal)
@@ -57,7 +59,7 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
             options.pop("merge_id")
     merged = planning.merge(workspace, source, observation["commit"], assets)
     if merged.get("base_pair"):
-        return ancestors(workspace, merged, observation, source, paths, options, original)
+        return ancestors(workspace, merged, observation, source, paths, options, original, assets)
     session = None
     if options.get("merge_id"):
         session = Sessions(workspace).get(options["merge_id"])
@@ -76,6 +78,12 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
         preview = dict(source=source, target=observation["commit"], target_tree=observation["tree"], revisions=observation["revisions"], published=store.ref("refs/ue/published"),
                        push_candidate=merged["candidate"], base=merged["base"], conflict_count=len(merged["conflicts"]), conflicts=merged["conflicts"],
                        plans=[batch["units"][asset].get("summary", batch["units"][asset]) for asset in batch["order"] if asset in batch["units"]], errors=batch["errors"])
+        if merged["conflicts"]:
+            # A preview must not open a durable session, so it cannot hand out a
+            # merge_id; say which call does, instead of returning merge_id=None.
+            preview["merge_id"] = None
+            preview["resolve_with"] = dict(action="push", paths=paths, options=dict(options, dry_run=False),
+                                           note="a real push opens the merge session whose merge_id resolve/continue take")
         return create(workspace, "push", paths, options, preview)
     conflict_report = None
     if merged["conflicts"]:
@@ -126,8 +134,12 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
         target = final
     if store.ref("refs/ue/observed") == target:
         # Each receipt states the memory the editor now holds, so publication
-        # leaves the project fully measured instead of forcing a re-export.
-        remember(store, context, target, observation["editor_epoch"], history.entries(target), observation["revisions"])
+        # leaves the project fully measured instead of forcing a re-export. An
+        # asset whose apply did not commit is deliberately left out: its last
+        # measurement predates an attempt that may or may not have unwound, and
+        # re-asserting it would restore the very evidence the failure dropped.
+        measured = dict((asset, value) for asset, value in observation["revisions"].items() if asset not in batch["errors"])
+        remember(store, context, target, observation["editor_epoch"], history.entries(target), measured)
     if session and not batch["errors"]:
         session.update(status="completed", result_commit=target)
         Sessions(workspace).save(session)
@@ -149,7 +161,7 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
                 conflicts=conflict_report["conflicts"] if conflict_report else [])
 
 
-def ancestors(workspace, merged: dict, observation: dict, source: str, paths, options: dict, original: dict) -> dict:
+def ancestors(workspace, merged: dict, observation: dict, source: str, paths, options: dict, original: dict, assets: list[str]) -> dict:
     """Independent ancestors disagree; resolve them once and reuse the result."""
     if options.get("dry_run", True):
         return dict(action="push", dry_run=True, status="base-conflict", base_ancestors=merged["ancestors"],
@@ -160,7 +172,7 @@ def ancestors(workspace, merged: dict, observation: dict, source: str, paths, op
     if open_session:
         return Sessions(workspace).report(open_session)
     previous, left, right = merged["base_inputs"]
-    return Sessions(workspace).start("push", previous, right, [left, right], ours=left, deferred=True,
+    return Sessions(workspace).start("push", previous, right, [left, right], ours=left, deferred=True, selected=assets,
                                      source=source, revisions=observation["revisions"], base_pair=merged["base_pair"],
                                      roles=dict(ours="ancestor", theirs="ancestor"), paths=paths, options=options,
                                      refs=dict(((original["branch"], original["head"]),)))

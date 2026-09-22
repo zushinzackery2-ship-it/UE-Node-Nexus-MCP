@@ -45,6 +45,14 @@ def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, op
         validate(action, options)
         with MirrorLock(context.root, context.root / ".nexus" / "schema.lock"):
             return dict(action=action, **run(bridge, context, options))
+    if action == "lint" and options.get("files_root"):
+        # A directory of mirror files needs the cached schema, not a registered
+        # mirror root and not an owning workspace; it is checkable on its own.
+        from .collaboration.report.options import validate
+        from .collaboration.workspace.lint import lint_root
+
+        validate(action, options)
+        return dict(context.info(), **lint_root(context, options["files_root"], paths))
     from .collaboration.store.migration import enabled
 
     if enabled(context) or options.get("workspace_id") or action not in LEGACY_ACTIONS:

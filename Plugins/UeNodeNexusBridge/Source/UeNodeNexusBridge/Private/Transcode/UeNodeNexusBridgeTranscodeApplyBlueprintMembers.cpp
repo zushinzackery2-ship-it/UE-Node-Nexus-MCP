@@ -1,6 +1,8 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Blueprint/NexusBlueprintPinTypes.h"
+#include "NexusBlueprintAssetType.h"
 
 #include "EdGraph/EdGraph.h"
 #include "Engine/Blueprint.h"
@@ -91,6 +93,24 @@ bool ApplyBlueprintMemberVerb(UBlueprint* Blueprint, const FString& Verb, const 
     return true;
 }
 
+static void SettleGraphPinTypes(const TArray<UEdGraph*>& Graphs, FApplyContext& Context)
+{
+    if (Graphs.Num() == 0)
+    {
+        return;
+    }
+    const FWildcardResolution Resolution = ResolveWildcardPins(Graphs);
+    if (Resolution.Remaining == 0)
+    {
+        return;
+    }
+    // Not a failure by itself: a macro graph's tunnel pins are wildcards by
+    // design. The compile gate decides; this names the pins it would blame.
+    Context.Note(TEXT("pin_type_unresolved"),
+        FString::Printf(TEXT("%d linked pin(s) still have no type: %s"),
+            Resolution.Remaining, *FString::Join(Resolution.Unresolved, TEXT(", "))));
+}
+
 void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context)
 {
     if (Blueprint == nullptr)
@@ -98,6 +118,7 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
         Context.Fail(INDEX_NONE, TEXT("invalid_asset"), TEXT("asset is not a Blueprint"));
         return;
     }
+    TArray<UEdGraph*> Touched;
     for (int32 Index = 0; Index < Plan.Num(); ++Index)
     {
         const TSharedPtr<FJsonObject> Op = Plan[Index].IsValid() ? Plan[Index]->AsObject() : nullptr;
@@ -122,6 +143,15 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
                     Context.Fail(Index, TEXT("unsupported_verb"), TEXT("ParentClass cannot be changed from text; reparent in the editor"));
                 }
             }
+            else if (Name == TEXT("BlueprintType"))
+            {
+                // Carried by the mirror so a create knows what to build; on an
+                // existing Blueprint the type is fixed and only ever verified.
+                if (BlueprintTypeName(Blueprint) != ReadOpString(Op, TEXT("value")))
+                {
+                    Context.Fail(Index, TEXT("unsupported_verb"), TEXT("BlueprintType is fixed at creation and cannot be changed from text"));
+                }
+            }
             else if (!Context.bDryRun && !ImportPropertyValue(Blueprint, Name, ReadOpString(Op, TEXT("value")), Error))
             {
                 Context.Fail(Index, TEXT("prop_failed"), Error);
@@ -143,10 +173,12 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
             Context.Fail(Index, TEXT("graph_not_found"), FString::Printf(TEXT("graph not found: %s"), *GraphName));
             continue;
         }
+        Touched.AddUnique(Graph);
         ApplyBlueprintGraphVerb(Blueprint, Graph, Op, Index, Context);
     }
     if (Context.bChanged && !Context.bDryRun)
     {
+        SettleGraphPinTypes(Touched, Context);
         FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
     }
 }

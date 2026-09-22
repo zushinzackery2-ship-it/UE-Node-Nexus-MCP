@@ -209,12 +209,12 @@ def test_a_resolution_that_breaks_a_constraint_reopens_the_session(tmp_path):
     assert [item["conflict_type"] for item in report["conflicts"]] == ["type-conflict"], report
     sessions = Sessions(Workspace(store, b.state["id"]))
 
-    collision = sessions.resolve(report["merge_id"], report["conflicts"][0]["conflict_id"], dict(choice="rename", name="add"))
+    collision = sessions.resolve(report["merge_id"], dict(conflict_id=report["conflicts"][0]["conflict_id"], choice="rename", name="add"))
     assert collision["status"] == "conflict", collision
     assert collision["conflicts"][0]["conflict_type"] == "name-collision"
     assert collision["conflicts"][0]["allowed_resolutions"] == ["custom", "delete", "rename"]
 
-    ready = sessions.resolve(report["merge_id"], collision["conflicts"][0]["conflict_id"], dict(choice="rename", name="scale"))
+    ready = sessions.resolve(report["merge_id"], dict(conflict_id=collision["conflicts"][0]["conflict_id"], choice="rename", name="scale"))
     assert ready["status"] == "ready", ready
     sessions.finish(report["merge_id"])
     from ue_node_nexus_mcp.transcode.collaboration.semantic.validation import validate
@@ -241,11 +241,12 @@ def test_a_custom_resolution_must_match_the_conflicting_field_shape(tmp_path):
     sessions = Sessions(Workspace(store, b.state["id"]))
     conflict = report["conflicts"][0]
     with pytest.raises(SyncError) as failure:
-        sessions.resolve(report["merge_id"], conflict["conflict_id"], dict(choice="custom", value="7"))
+        sessions.resolve(report["merge_id"], dict(conflict_id=conflict["conflict_id"], choice="custom", value="7"))
     assert failure.value.code == "resolution_type"
     assert store.record("session", report["merge_id"])["status"] == "conflict"
-    ready = sessions.resolve(report["merge_id"], conflict["conflict_id"],
-                             dict(choice="custom", value=dict(type="float", state="explicit", value="7")))
+    ready = sessions.resolve(report["merge_id"],
+                             dict(conflict_id=conflict["conflict_id"], choice="custom",
+                                  value=dict(type="float", state="explicit", value="7")))
     assert ready["status"] == "ready", ready
     sessions.finish(report["merge_id"])
     assert values(sessions.workspace)["A"] == "7"

@@ -9,6 +9,7 @@ WRAPPER_MODULES = (
     "task_queue",
     "tools_animation",
     "tools_assets",
+    "tools_assets_paths",
     "tools_audio",
     "tools_auto_index",
     "tools_blueprints",

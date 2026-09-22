@@ -52,6 +52,7 @@ Configure an exact `.uproject`, then follow section 9 to ensure/reuse it. Queryi
 | Node the mirror shows as `@opaque` | `graph_patch_apply` on that node only |
 | Inspect a graph, instance parameters, an asset's metadata | `ue_read` (section 5) |
 | Create / delete / move / rename / duplicate assets, folders, fix redirectors | `asset_create`, `asset_delete`, `asset_move`, `asset_rename`, `asset_move_batch`, `asset_rename_batch`, `asset_duplicate`, `folder_create`, `folder_delete`, `asset_redirectors_fixup` |
+| Blueprint that is not a plain actor Blueprint | `asset_create(asset_kind="blueprint", blueprint_type=...)` — `normal \| const \| macro_library \| interface \| function_library`. Leave it unset to take what the parent implies (`BlueprintFunctionLibrary` → function library, an `Interface` parent → interface). A macro library has no distinguishing parent, so it must be named |
 | Asset dependencies / referencers, find who uses a material | `asset_dependencies_get`, `asset_referencers_get`, `material_usage_find` |
 | Level actors, components, material slots, landscape layer info | `level_*`, `component_*`, `landscape_layer_info_set` |
 | Read or set a level actor, its transform, component materials, or its instances without a scene group | `level_actor_get`, `level_actor_transform_get`, `level_mesh_instances_list`, `material_usage_find`, `component_materials_get`, `component_materials_set`, `component_material_instance_params_get/set` |
@@ -70,16 +71,39 @@ Configure an exact `.uproject`, then follow section 9 to ensure/reuse it. Queryi
 Each agent creates its own checkout with `dry_run=False`, then edits the
 returned `files_root`/`file_paths`. Pass the returned `id` as `workspace_id`.
 Stage and commit locally; push merges committed HEAD with current UE memory.
-Keep later file edits local. Use `resolve`/`continue`/`abort` with returned
-merge IDs; inspect apply receipts with `recover` after interrupted publication.
+Keep later file edits local.
 Use branch/tag, log/show/diff/blame, restore/revert, private reset/rebase/amend,
 cherry-pick, stash and reflog for version operations. Mutations default to
-preview; `proposal_id` binds the preview when provided.
+preview; `proposal_id` binds the preview when provided. A preview answers
+`status="preview"`, `applied=0` and `execute={...}`; its `action` is `preview`
+with the completed-form verb under `preview_of`, so a preview never reads as a
+finished write.
+
+**Resolving conflicts**: `resolve` takes one decision and the set it applies to —
+`conflict_id`, `conflict_ids: [...]`, `asset` (glob), `conflict_type`, `layer`, or
+`all: true` — and replays the three layers once for the whole batch. It answers
+`resolved` and `resolved_count`. `choice="custom"`/`"rename"` name one conflict at
+a time. A selection that matches nothing is refused with the open conflict count,
+types and layers, so you can widen it without re-reading the session.
+
+**Recovering an interrupted publication**: `recover` with no `apply_id` clears
+every pending transaction the repository owns, including one whose workspace was
+closed. `resolution` is `inspect` (read the durable receipt, publish one UE
+already committed), `restore` (replay the package checkpoint, the default) or
+`abandon` (keep current editor memory and end the record). `abort {apply_id}`
+gives up on one transaction without asking UE. A publication blocked by pending
+work returns the pending rows plus the exact `recover` / `abort` calls that clear
+them, so there is always a next call.
 
 Schema is the parameter catalog: `schema(category=..., query=..., details=True)`
 through `options` reads classified JSON also used by lint. Function and target
 context queries supplement dynamic pins and inherited parameters. Read the
-returned `schema_path` index first; respect support flags and `context_required`.
+returned `schema_path` index first and respect support flags. A coverage gap
+carries its own resolution: `coverage.blueprint_pins` answers
+`{state: "context_required", reason, resolve_with}`, and `resolve_with` is the
+`schema(target="<Blueprint asset path>")` call that returns the real pins under
+`context.definition.blueprint.graphs[].nodes[].pins[]` — a Blueprint node's pins
+come from the owning asset, never from the node class.
 Offline/historical schema describes its bound version, and current publication
 still checks the editor environment.
 
@@ -94,9 +118,9 @@ Layout: `<shared mirror_root returned by ensure>/<Project>/<Path>/<Asset>.<kind>
 1. `ue_sync("init")` once per mirror root (binds root, exports schema, pulls everything).
 2. `ue_sync("status")` — per-asset state: `clean`, `local-modified`, `ue-modified`, `both-modified`, `local-new`, `ue-new`, `local-deleted`, `ue-deleted`.
 3. Edit the `.nexus` file with Read / grep / StrReplace. Only non-default values are written; delete a line to reset.
-4. `ue_sync("lint", paths)` — offline: unknown class / property / enum / pin / type, dangling links, opaque edits.
+4. `ue_sync("lint", paths)` — offline: unknown class / property / enum / pin / type, dangling links, opaque edits. `options={"files_root": "<dir>"}` lints a plain directory of `.nexus` files that no workspace owns (a hand-prepared or handed-over tree), against the cached schema.
 5. `ue_sync("push", paths)` — dry run returns the plan (verb counts, risky verbs).
-6. `ue_sync("push", paths, options={"dry_run": false})` — one editor transaction per asset, compile, save touched packages only, re-export, rewrite text to canonical form. Diagnostics come back as `file:line: message`.
+6. `ue_sync("push", paths, options={"dry_run": false})` — one editor transaction per asset, compile, save touched packages only, re-export, rewrite text to canonical form. Diagnostics come back as `file:line: message`. A rolled back apply still carries the compiler messages that explain it under `details.diagnostics` (they name the node), so read those rather than re-running the push to see what broke.
 7. `ue_sync("pull", paths)` after the editor changed something (`ue-modified`).
 
 **Options**: `push` → `dry_run` `compile` `save` `force` `allow_delete` `stop_on_error`; `pull` → `discover` `include_stubs` `force`; `status` → `discover` `include_stubs` `include_clean`; `init` → `pull_all` `include_stubs` `auto_export` `refresh_schema`. `force` is `"local"` or `"ue"` and is the only way past `both-modified`.
@@ -117,9 +141,13 @@ call -> out.BaseColor                                    # materials: implicit `
 c_eps -> out.WorldPositionOffset
 ```
 
-- Blueprint: `[variables] Health : float = 100 { Category=Stats, InstanceEditable }`, `[components] Mesh : StaticMeshComponent(parent=Root) { RelativeLocation=(X=0,Y=0,Z=50) }`, `[graph EventGraph]` nodes such as `Event(Actor.ReceiveBeginPlay)`, `CallFunction(KismetSystemLibrary.PrintString, InString="Hi")`, `VariableGet(Health)`, `Sequence(pins=3)`; exec pins are `execute` / `then`; `[function Name(A: double) -> (R: bool)]` has implicit `entry` / `result`; `@renamed(Old)` renames. `ParentClass` is honoured only when the asset is created.
+- Blueprint: `[variables] Health : float = 100 { Category=Stats, InstanceEditable }`, `[components] Mesh : StaticMeshComponent(parent=Root) { RelativeLocation=(X=0,Y=0,Z=50) }`, `[graph EventGraph]` nodes such as `Event(Actor.ReceiveBeginPlay)`, `CallFunction(KismetSystemLibrary.PrintString, InString="Hi")`, `VariableGet(Health)`, `Sequence(pins=3)`; exec pins are `execute` / `then`; `[function Name(A: double) -> (R: bool)]` has implicit `entry` / `result`; `@renamed(Old)` renames.
+- Blueprint `[asset]` carries `ParentClass` and `BlueprintType` (`normal | const | macro_library | interface | function_library`). Both are honoured only when the asset is created and are verified, never changed, on an existing one — a macro library is indistinguishable from an actor Blueprint without the type, so a create needs it.
+- A `DynamicCast` result pin is written as `AsResult`, not `As<TargetType>`: the engine names that pin after the target class's **localized** display name, which would make the same `.nexus` unusable on an editor in another language. The bridge maps the alias back on apply.
+- An execution output drives exactly one place; any number of execution lines may join at one execution input, and a data input takes one source while a data output fans out. `pin_cardinality` means a link violated the side that is actually constrained.
 - Niagara: `[emitter Name]`, `[stack Name/ParticleUpdate]` lines like `spawn_rate : SpawnRate(SpawnRate=25, Spawn Probability=0.5) !disabled` list what the Stack panel shows; `[renderers Name] sprite : Sprite { SubImageSize=(X=2,Y=2) }`; `[user] Speed : float = 3` with types `float int bool Vector2 Vector Vector4 Color Position Quat` or a class name. `@link(...)` / `@dynamic` inputs are read-only; `SetVariables(...)` can be edited, not created.
 - Ids are yours and stable; GUIDs never appear. Renaming an id recreates the node. A link to a new multi-pin node must name the pin.
+- A struct property prints every member, including members whose value is zero. A property the engine never reflected (a plain C++ member with no `UPROPERTY`) cannot be set from text at all, and the error says so instead of failing silently.
 - A MaterialFunction interface change refreshes every caller automatically.
 - `schema_stale` → `ue_sync("schema")` (engine or plugin set changed). `.stub.nexus` files are read-only registry tags.
 
@@ -142,6 +170,10 @@ Save callbacks enqueue exports; mirror transactions share a process/file lock.
 
 **Getting data out**: `ue_execute` reads default to a one-line summary. Use `ue_read(target=...)` (artifact token for the full body) or `ue_execute(..., response={"mode": "full"})`. `response` accepts only `mode` and `allow_heavy`; `response.format` is invalid — read shape goes into the operation payload (`format`) or `ue_read(format="detail")`. Modes: `silent | brief | ids_only | delta | summary | full | debug`.
 
+**Payload fields are checked, not filtered**: `ue_execute`, `ue_read(query=...)` and `batch_execute` refuse a field the operation does not declare and answer `unknown_field` / `unknown_query_field` with the accepted names. A filter that never applied used to look exactly like a filter that found nothing — `graph` is `graph_name`, and `graph_node_search` takes `filters: {...}`, not a bare `node_class`.
+
+**Reading a large artifact**: `ue_read(target="artifact", query={"artifact_id": ...})` returns the payload inline when it fits the transport frame. Anything larger comes back as `encoding="json-text"` chunks: concatenate every `chunk` in cursor order, then parse. Follow `next_read` (or pass `cursor=next_cursor`) until `next_cursor` is null; `total_bytes` is stable across pages and `limit_bytes` may ask for less, never more.
+
 | Intent | Call |
 |:-------|:-----|
 | Asset metadata | `ue_read(target="asset")` / `asset_get` |
@@ -160,7 +192,7 @@ Save callbacks enqueue exports; mirror transactions share a process/file lock.
 | Project diagnostics | `diagnostics_get` → `data.error_count / warning_count / items`; `related_log_items` are historical (`stale_possible=true`) |
 | UE log tail | `log_tail_get(tail_kb, match, max_lines)` |
 
-Gotchas: there is no `ue_read(target="material")`; `asset_list(format="indexed")` has no row items (use `compact` or `full`); `graph_snapshot_get` does not descend AnimBP state machines; a `*_patch` / `*_set` op never reads.
+Gotchas: there is no `ue_read(target="material")`; `asset_list(format="indexed")` has no row items (use `compact` or `full`); `graph_snapshot_get` does not descend AnimBP state machines; a `*_patch` / `*_set` op never reads; a `query` key must be a field the backing operation declares — the facade refuses unknown ones instead of dropping them.
 
 ## 6. Writing outside the mirror
 
@@ -239,7 +271,9 @@ Load `workflow_guide_get(category="instances")` for schemas, state transitions, 
 - Existing compatible editors remain `external`. Automatic cleanup applies to clean, unused managed editors; interactive editors are protected. Other users, work, dirty packages, PIE, compilation/saving and recovery block close.
 - All workspaces use ensure's shared repository; each gets its own checkout. Conflicting `mirror_root` returns `repository_mismatch`; preserve the existing history. Offline lint/stage/commit keep working after UE exits.
 - Use list/status/reap to inspect users, scopes, resource samples and blockers. Explicit close uses a preview and named `save_packages`; `EXITED` and its exit code confirm the actual outcome.
-- `adopt` transfers ownership only with exact project/instance/process creation identity and a reason. It is protected by default. `pin` requires a reason and a finite duration up to 3600 s.
+- `adopt` transfers ownership only with exact project/instance/process creation identity and a reason. It is protected by default.
+- `pin` requires a reason and `seconds` greater than zero, up to `policy.max_pin_seconds` (default 14400). It is renewable — pin again to extend — and accepts a `STARTING` editor, which is the window worth protecting because losing it costs the whole startup. The response echoes `max_pin_seconds`, `state` and `renewable`; a rejected call names the field it rejected, and an unrecognised field is refused rather than ignored.
+- Every listed row states how old its evidence is: `snapshot_age_seconds` and `stale`. `list` / `status` refresh a snapshot older than `policy.sweep_seconds` before answering, so a read never reports readiness a write would not accept. A row whose observation aged out drops `ready` and carries `snapshot_stale` instead of claiming a state nobody measured.
 - Explicit instance selection stays stale after that process exits. Authorized project-level `reuse_or_start` can restore the same project; accepted tasks retain their original instance.
 - A possibly executed write with `operation_outcome_unknown` is not replayed. Query state or use the recorded apply ID for publication recovery. A `manager_response_unknown` ensure can be inspected/retried with the same idempotency key.
 - Install matching Wheel/Core/Guard before enabling managed startup. Legacy `editor_request_exit` uses the same ownership/usage checks; its old force/blanket save modes are rejected.
@@ -255,12 +289,15 @@ Load `workflow_guide_get(category="instances")` for schemas, state transitions, 
 | `invalid_request` | required field missing, or a read op called with no target | read the schema |
 | `target_conflict` | more than one target given (e.g. `material_interface_resolve`) | pass exactly one |
 | `invalid_response_field` | `response.format` or another unknown response key | use `response.mode` |
+| `unknown_field` / `unknown_query_field` | the payload or `ue_read` query named a field the operation does not declare | read `details.accepted_fields` and rename (`graph` → `graph_name`, bare `node_class` → `filters`) |
+| `invalid_pin` | `pin` was called without `seconds`, over `max_pin_seconds`, or with an unrecognised field | the error names `field` and lists the accepted ones |
+| `pin_cardinality` | a link occupies a pin UE allows one connection on (execution output, data input) | reroute; joining several execution lines at one execution input is legal |
 | `workspace_required` | collaboration is enabled and the action came without `options.workspace_id`; `init` always returns it once collaboration is on | run `checkout` (the error lists existing workspaces), then pass the returned `id` as `workspace_id` |
 | `both-modified` (status) | text and editor both changed | pull first, or push with `force="local"` |
 | `sync_busy` | another transaction owns the mirror root | wait for it to finish and retry |
 | `dependency_not_selected` | a newly referenced asset is not in the same selection | include it and push again |
 | `dependency_cycle` | new assets reference each other in a cycle | break the cycle before pushing |
-| `recovery_required` | an interrupted apply left a durable receipt | `ue_sync("recover")` with the `apply_id` and read the evidence |
+| `recovery_required` | an interrupted apply left a durable receipt | the error lists the pending rows and the `recover` / `abort` calls that clear them; `ue_sync("recover")` with no `apply_id` clears the whole repository |
 | `stale_proposal` / `stale_session` / `stale_target` | the input changed since the preview or session was produced | keep your edits, re-observe, then merge and preview again |
 | `bridge_busy` | request arrived while another one was executing | retried automatically; if it persists, wait |
 | `save_blocked_read_only` | file checked in / read-only | check out in the editor, retry |

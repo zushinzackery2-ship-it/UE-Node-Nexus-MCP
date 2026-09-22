@@ -87,10 +87,17 @@ FString ExportPropertyValue(const UObject* Object, FProperty* Property)
             return Value ? Value->GetPathName() : TEXT("None");
         }
     }
-    // ExportTextItem_* always exports; ExportText_* would skip values equal to the
-    // zero/"delta" value when no default container is given.
+    // ExportTextItem_* always exports the property itself, but it forwards the
+    // delta pointer to the members inside it: UScriptStruct::ExportText hands a
+    // null Defaults to every member, and FProperty::Identical compares against
+    // zero when its other side is null, so any member whose value is zero is
+    // dropped. TickGroup=TG_PrePhysics is zero, which is how a written value
+    // came back missing and then read as a conflict against the mirror text.
+    // Pointing the delta at the value itself makes every member compare equal
+    // by address and export unconditionally, so the text round-trips.
+    const void* Delta = Property->ContainerPtrToValuePtr<void>(Object);
     FString Value;
-    Property->ExportTextItem_InContainer(Value, Object, nullptr, const_cast<UObject*>(Object), PPF_None);
+    Property->ExportTextItem_InContainer(Value, Object, Delta, const_cast<UObject*>(Object), PPF_None);
     return Value;
 }
 
@@ -135,12 +142,18 @@ bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Va
     FProperty* Property = Object->GetClass()->FindPropertyByName(FName(*Name));
     if (Property == nullptr)
     {
-        OutError = FString::Printf(TEXT("%s has no property %s"), *Object->GetClass()->GetName(), *Name);
+        // Saying "no property" reads as a typo when the member exists in C++ but
+        // carries no UPROPERTY (UActorComponent::bTickInEditor is one): nothing
+        // in the reflection system can reach it, so no text form can express it.
+        OutError = FString::Printf(
+            TEXT("%s has no reflected property %s; a plain C++ member without UPROPERTY cannot be set from text"),
+            *Object->GetClass()->GetName(), *Name);
         return false;
     }
     if (!IsEditableProperty(Property))
     {
-        OutError = FString::Printf(TEXT("%s.%s is not editable"), *Object->GetClass()->GetName(), *Name);
+        OutError = FString::Printf(TEXT("%s.%s is reflected but not editable (EditConst, Deprecated or no CPF_Edit)"),
+            *Object->GetClass()->GetName(), *Name);
         return false;
     }
     Object->Modify();

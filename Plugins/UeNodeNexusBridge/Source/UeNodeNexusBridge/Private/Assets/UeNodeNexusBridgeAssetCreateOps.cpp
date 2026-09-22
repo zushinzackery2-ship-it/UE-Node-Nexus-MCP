@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeOperations.h"
 
+#include "NexusBlueprintAssetType.h"
 #include "UeNodeNexusBridgeAssetCreateHelpers.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -59,6 +60,21 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     Payload->TryGetBoolField(TEXT("save"), bSave);
 
+    FString ParentAssetPath;
+    FString ParentClassPath;
+    FString BlueprintType;
+    Payload->TryGetStringField(TEXT("parent_asset_path"), ParentAssetPath);
+    Payload->TryGetStringField(TEXT("parent_class_path"), ParentClassPath);
+    Payload->TryGetStringField(TEXT("blueprint_type"), BlueprintType);
+
+    FString CreateError;
+    if (!CheckAssetCreate(AssetKind, ParentAssetPath, ParentClassPath, BlueprintType, CreateError))
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("asset_create_failed"), CreateError));
+        return Response;
+    }
+
     if (bDryRun)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
@@ -68,10 +84,6 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
 
     UPackage* Package = CreatePackage(*PackageName);
     UObject* Asset = nullptr;
-    FString ParentAssetPath;
-    FString ParentClassPath;
-    Payload->TryGetStringField(TEXT("parent_asset_path"), ParentAssetPath);
-    Payload->TryGetStringField(TEXT("parent_class_path"), ParentClassPath);
 
     if (AssetKind.Equals(TEXT("material"), ESearchCase::IgnoreCase))
     {
@@ -83,7 +95,7 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
     }
     else if (AssetKind.Equals(TEXT("blueprint"), ESearchCase::IgnoreCase))
     {
-        Asset = CreateBlueprintAsset(Package, FName(*AssetName), ParentClassPath);
+        Asset = CreateTypedBlueprintAsset(Package, FName(*AssetName), ParentClassPath, BlueprintType, CreateError);
     }
     else if (AssetKind.Equals(TEXT("material_function"), ESearchCase::IgnoreCase))
     {
@@ -101,7 +113,9 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
     if (Asset == nullptr)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("asset_create_failed"), TEXT("Asset kind is unsupported or required parent could not be loaded")));
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(
+            TEXT("asset_create_failed"),
+            CreateError.IsEmpty() ? FString::Printf(TEXT("factory produced no %s asset"), *AssetKind) : CreateError));
         return Response;
     }
 
