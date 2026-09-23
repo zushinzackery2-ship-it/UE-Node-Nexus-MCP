@@ -89,6 +89,12 @@ def ue_read(
     Niagara, diagnostics). There is no target for mirror text: ``.nexus`` files are
     ordinary files on disk, so read them with your own file tools and validate an
     edit with ``ue_sync("lint")``.
+
+    ``target="artifact"`` pages a stored response: ``query={artifact_id, path,
+    cursor, limit_bytes}``. ``path`` is a dotted path such as ``data.conflicts``;
+    a list there is returned as whole items from ``cursor`` with ``next_cursor``
+    and ``total``, anything else as JSON text chunks to concatenate. Pages default
+    to 48 KiB and never exceed 4 MiB; follow ``next_read`` or ``page_lists_with``.
     """
     if not isinstance(target, str) or not target.strip():
         return minimal_error("invalid_request", "target must be a non-empty string", {"target": target})

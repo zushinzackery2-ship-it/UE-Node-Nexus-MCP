@@ -33,6 +33,8 @@ one-line text summary, not the data payload. To get real data:
 
 Responses larger than the inline limit come back as an artifact handle instead
 of raw data; fetch with `ue_read(target="artifact", query={"artifact_id": "..."})`.
+Pages default to 48 KiB; add `path` (e.g. `"data.conflicts"`) to page a list by
+whole items, and follow `next_read` / `page_lists_with`.
 
 ## Writes are dry-run first
 

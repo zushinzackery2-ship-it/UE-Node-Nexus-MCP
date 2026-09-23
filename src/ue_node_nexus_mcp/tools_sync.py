@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from .facade_artifact import follow, list_reads
 from .facade_response import LARGE_RESPONSE_INLINE_BYTE_LIMIT, artifact_handle, minimal_error, response_payload_bytes
 from .runtime import call_bridge, thin_tool
 from .transcode.sync import ACTIONS, run_sync
@@ -97,12 +98,16 @@ def _finish(report: dict[str, Any]) -> dict[str, Any]:
         compact["scene_rows_truncated"] = max(0, len(report["scene_rows"]) - _ROW_INLINE_LIMIT)
     compact["diagnostics"] = (report.get("diagnostics") or [])[:20]
     compact["artifact"] = artifact
-    compact["next_read"] = {"tool": "ue_read", "args": {"target": "artifact", "query": {"artifact_id": artifact["id"]}}}
+    compact["next_read"] = follow(artifact["id"])
+    # The whole report can be far larger than a response; each list in it is
+    # readable item by item from here, never as one megabyte-sized value.
+    compact["page_lists_with"] = list_reads(artifact["id"], result)
     if response_payload_bytes(dict(ok=result["ok"], data=compact)) > LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         keys = ("action", "status", "workspace_id", "merge_id", "apply_id", "proposal_id", "commit_id", "source_commit",
                 "published_commit", "candidate", "base", "ours", "theirs", "error_count", "conflict_count", "applied",
                 "source_integrated", "workspace_rebase_required", "dry_run", "schema_key")
         summary = dict((key, compact[key]) for key in keys if key in compact)
-        summary.update(artifact=artifact, next_read=compact["next_read"], rows_count=len(rows), inline_truncated=True)
+        summary.update(artifact=artifact, next_read=compact["next_read"], page_lists_with=compact["page_lists_with"],
+                       rows_count=len(rows), inline_truncated=True)
         compact = summary
     return {"ok": result["ok"], "data": compact}

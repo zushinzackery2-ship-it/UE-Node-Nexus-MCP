@@ -34,6 +34,11 @@ Use `graph_patch_apply(graph_kind="blueprint")`:
   `variable_name`, `event_name`, `input_key`, `input_action_name`, `axis_name`.
 - A generic `K2Node_Event` without `function_name`/`function_owner` is rejected
   (`node_config_required`) instead of creating a meaningless event node.
+- `K2Node_CallFunction` creates the class the editor spawns for that function:
+  `K2Node_CallArrayFunction` for array functions (`Array_Clear`, `Array_AddUnique`),
+  which is what types their wildcard pins, and the data-table / collection call
+  classes likewise. `class_path` in the result is the class created; a
+  specialised class that does not match the function is refused, dry run included.
 - Same-batch `client_id` references work for Blueprints, including dry-run.
 
 ## Input wiring

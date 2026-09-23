@@ -185,15 +185,12 @@ def _artifact_summary_for_large_response(
     asset_path = asset_path_from_payload(payload)
     if asset_path:
         summary["state_token"] = f"state:{asset_path}:{diff.diff_token}"
-        summary["next_read"] = {
-            "tool": "ue_read",
-            "args": {
-                "target": "artifact",
-                "query": {
-                    "artifact_id": artifact["id"],
-                },
-            },
-        }
+    # Paged reads of what did not fit: the response as a whole, and each of its
+    # lists item by item. The artifact module serves pages and imports this one.
+    from .facade_artifact import follow, list_reads
+
+    summary["next_read"] = follow(artifact["id"])
+    summary["page_lists_with"] = list_reads(artifact["id"], response)
 
     return with_optional_remaining_errors({
         "ok": response.get("ok", False),

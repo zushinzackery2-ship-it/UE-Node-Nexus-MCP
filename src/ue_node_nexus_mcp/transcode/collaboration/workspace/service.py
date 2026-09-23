@@ -80,12 +80,16 @@ class Workspace:
 
         Re-checking an entry the index already holds re-reads and re-lints the
         whole project on every stage, and can only ever reach the same verdict
-        unless the schema itself moved.
+        unless the schema itself moved. When it did, only what this workspace
+        authored is re-checked: an untouched asset is the project's history, and
+        its findings under a newer catalog must not stop a commit that never
+        touched it. Publication still validates every state it writes.
         """
         indexed = self.history.entries(self.state["index"])
         stale = bool(self.schema) and self.state.get("schema_key") != self.schema.key
+        base = self.history.entries(self.state["base"]) if stale else dict()
         wanted = entries.keys() if selected is None else entries.keys() & set(selected)
-        return sorted(asset for asset in wanted if stale or entries[asset] != indexed.get(asset))
+        return sorted(asset for asset in wanted if entries[asset] != indexed.get(asset) or (stale and entries[asset] != base.get(asset)))
 
     def accept(self, entries: dict, selected=None, code="candidate_invalid") -> None:
         for asset in self.introduced(entries, selected):

@@ -4,8 +4,26 @@ from __future__ import annotations
 
 from ...sync_project import SyncError
 from ..history import History
+from ..semantic.snapshot import rebind
 from ..store.io import digest
 from .engine import merge_snapshots
+
+
+def aligned(history: History, identifiers: list, schema) -> tuple[list, list, str | None]:
+    """The three inputs read under one schema environment, and their stored ids.
+
+    A conflict names the snapshots it compared, so a re-read input is recorded
+    and named instead of the one it replaced. When the text no longer encodes the
+    inputs keep their own environments and the reason travels with the conflict.
+    """
+    snapshots = [history.store.objects.data(identifier, "snapshot") if identifier else None for identifier in identifiers]
+    try:
+        rebound = [rebind(snapshot, schema) for snapshot in snapshots]
+    except SyncError as exc:
+        return snapshots, identifiers, f"{exc.code}: {exc}"
+    stored = [identifier if new is old else history.store.snapshot(new, schema)
+              for identifier, old, new in zip(identifiers, snapshots, rebound)]
+    return rebound, stored, None
 
 
 def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None,
@@ -24,7 +42,7 @@ def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None
             else:
                 result.pop(asset, None)
             continue
-        snapshots = [history.store.objects.data(identifier, "snapshot") if identifier else None for identifier in identifiers]
+        snapshots, identifiers, unreadable = aligned(history, identifiers, schema)
         merged = merge_snapshots(*snapshots, schema)
         if merged.candidate is None:
             result.pop(asset, None)
@@ -33,6 +51,8 @@ def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None
         for item in merged.conflicts:
             item.update(asset=asset, layer=layer, kind=(snapshots[1] or snapshots[2])["semantic"]["kind"], snapshots=identifiers)
             item["conflict_id"] = digest(dict(layer=layer, inputs=identifiers, id=item["conflict_id"]))[:24]
+            if unreadable and item["conflict_type"] == "history_schema_conflict":
+                item["reason"] += f"; re-reading under the current schema failed ({unreadable})"
             conflicts.append(item)
     return history.tree(result), conflicts
 

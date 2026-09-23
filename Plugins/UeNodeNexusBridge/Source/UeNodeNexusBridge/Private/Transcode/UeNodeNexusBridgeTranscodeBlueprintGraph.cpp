@@ -7,13 +7,15 @@
 #include "Engine/Blueprint.h"
 #include "K2Node_FunctionEntry.h"
 #include "K2Node_FunctionResult.h"
+#include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "Blueprint/NexusBlueprintPinNames.h"
 #include "Blueprint/UeNodeNexusBridgeBlueprintPinDefaults.h"
 
 namespace UeNodeNexusBridge::Transcode
 {
 static const TCHAR* GSupportedNodeClasses[] = {
-    TEXT("K2Node_CallFunction"), TEXT("K2Node_CallParentFunction"), TEXT("K2Node_Message"), TEXT("K2Node_CommutativeAssociativeBinaryOperator"),
+    TEXT("K2Node_CallFunction"), TEXT("K2Node_CallArrayFunction"), TEXT("K2Node_CallDataTableFunction"),
+    TEXT("K2Node_CallMaterialParameterCollectionFunction"), TEXT("K2Node_CallParentFunction"), TEXT("K2Node_Message"), TEXT("K2Node_CommutativeAssociativeBinaryOperator"),
     TEXT("K2Node_PromotableOperator"), TEXT("K2Node_Event"), TEXT("K2Node_CustomEvent"), TEXT("K2Node_VariableGet"), TEXT("K2Node_VariableSet"),
     TEXT("K2Node_IfThenElse"), TEXT("K2Node_ExecutionSequence"), TEXT("K2Node_Knot"), TEXT("EdGraphNode_Comment"), TEXT("K2Node_Select"),
     TEXT("K2Node_DynamicCast"), TEXT("K2Node_ClassDynamicCast"), TEXT("K2Node_SpawnActorFromClass"), TEXT("K2Node_MakeStruct"),
@@ -70,6 +72,12 @@ TSharedPtr<FJsonObject> NodeJson(UBlueprint* Blueprint, UEdGraphNode* Node, bool
     FString Short = Node->GetClass()->GetName();
     Short.RemoveFromStart(TEXT("K2Node_"));
     Short.RemoveFromStart(TEXT("EdGraphNode_"));
+    if (IsCallHostClass(Node->GetClass()))
+    {
+        // The function decides the host class, so the text names only the call;
+        // creating from it picks the same class again.
+        Short = TEXT("CallFunction");
+    }
     Json->SetStringField(TEXT("class_short"), Short);
     Json->SetNumberField(TEXT("x"), Node->NodePosX);
     Json->SetNumberField(TEXT("y"), Node->NodePosY);
@@ -87,7 +95,11 @@ TSharedPtr<FJsonObject> NodeJson(UBlueprint* Blueprint, UEdGraphNode* Node, bool
         }
     }
     Json->SetArrayField(TEXT("pins"), Pins);
-    const bool bSupported = !bForceOpaque && IsSupportedNodeClass(Node->GetClass());
+    // A call node on the wrong host class (a plain call to an array function)
+    // cannot compile and its text would read as correct. Exported opaque, it
+    // differs from the ``CallFunction`` the author states, so the next apply
+    // recreates it on the class the function requires.
+    const bool bSupported = !bForceOpaque && IsSupportedNodeClass(Node->GetClass()) && HasRequiredCallHost(Node);
     Json->SetBoolField(TEXT("supported"), bSupported);
     if (!bSupported)
     {

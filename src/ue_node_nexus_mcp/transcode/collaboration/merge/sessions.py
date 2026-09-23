@@ -6,11 +6,10 @@ from fnmatch import fnmatchcase
 from uuid import uuid4
 
 from ...sync_project import SyncError
-from ..semantic.validation import validate
-from ..store.io import atomic_write, canonical, digest
+from ..store.io import atomic_write, canonical
 from ..workspace.files import capture_files, hashes
+from .findings import Findings
 from .resolutions import resolve_tree
-from .engine import at, wire
 from .trees import merge_trees
 
 
@@ -19,17 +18,36 @@ class Sessions:
         self.workspace = workspace
         self.store, self.history = workspace.store, workspace.history
 
-    def start(self, operation: str, base: str, theirs: str, parents: list[str],
+    def draft(self, operation: str, base: str, theirs: str, parents: list[str],
               replay_layers=False, source_ref: str | None = None, selected=None, **metadata) -> dict:
+        """The session ``start`` would record, evaluated but not yet durable.
+
+        A preview answers from this very object, so the conflicts it reports are
+        the ones the session opens with, not an estimate computed another way.
+        """
         workspace = self.workspace
-        entries, files, captured = capture_files(workspace, delete=True)
         state = dict(workspace.state)
+        if operation == "push":
+            # A publication reads committed history and never replays the files
+            # layer, so a half-edited local file is not its input and must not
+            # be able to fail it.
+            original_files, files = state["index"], state["files"]
+        else:
+            entries, files, _ = capture_files(workspace, delete=True)
+            original_files = self.history.tree(entries)
+        # The environment the merge below runs in. Recording the key the workspace
+        # was checked out under made every session opened after a plugin rebuild
+        # stale on arrival.
+        schema_key = workspace.schema.key if workspace.schema else state.get("schema_key")
         session = dict(id=uuid4().hex, workspace_id=state["id"], operation=operation, status="preparing",
                        base=base, ours=metadata.get("ours", state["head"]), theirs=theirs, parents=parents, source_ref=source_ref,
-                       original=state, original_files=self.history.tree(entries), original_hashes=hashes(workspace.root, files),
+                       original=state, original_files=original_files, original_hashes=hashes(workspace.root, files),
                        replay_layers=replay_layers, selected=selected, resolutions=dict(), metadata=metadata,
-                       schema_key=state.get("schema_key"), roles=metadata.get("roles") or dict(ours="workspace", theirs=operation), generation=0)
-        return self.refresh(session)
+                       schema_key=schema_key, roles=metadata.get("roles") or dict(ours="workspace", theirs=operation), generation=0)
+        return self.evaluate(session)
+
+    def start(self, *args, **kwargs) -> dict:
+        return self.save(self.draft(*args, **kwargs))
 
     def save(self, session: dict) -> dict:
         roots = [session["base"], session["ours"], session["theirs"], session["original"]["index"], session["original_files"]]
@@ -50,17 +68,22 @@ class Sessions:
                            ("files", session["original"]["index"], "index", session["original_files"])])
         return stages
 
-    def refresh(self, session: dict) -> dict:
+    def evaluate(self, session: dict) -> dict:
         candidates, conflicts, all_conflicts = dict(), [], []
+        self._documents = dict()
+        findings = Findings(self.history, self.workspace.schema)
         for layer, base, ours, theirs in self.stages(session):
             base, ours = candidates.get(base, base), candidates.get(ours, ours)
             tree, found = merge_trees(self.history, base, ours, theirs, self.workspace.schema, session["selected"], layer)
             tree = self.decide(session, tree, found, conflicts)
             all_conflicts.extend(found)
-            candidates[layer] = self.check_tree(session, tree, layer, conflicts, all_conflicts)
+            candidates[layer] = findings.check_tree(session, tree, layer, (ours, theirs), conflicts, all_conflicts)
         session.update(candidates=candidates, conflicts=conflicts, all_conflicts=all_conflicts,
                        status="conflict" if conflicts else "ready")
-        return self.save(session)
+        return session
+
+    def refresh(self, session: dict) -> dict:
+        return self.save(self.evaluate(session))
 
     def decide(self, session: dict, tree: str, found: list[dict], conflicts: list[dict]) -> str:
         """Apply the decisions already recorded; leave the rest open in ``conflicts``."""
@@ -74,50 +97,6 @@ class Sessions:
                 conflicts.append(conflict)
         return tree
 
-    def check_tree(self, session: dict, tree: str, layer: str, conflicts: list[dict], all_conflicts: list[dict]) -> str:
-        """Schema findings on the merged result, scoped exactly like the merge.
-
-        Reporting findings for assets this session never touches gives the caller
-        conflicts it cannot act on and cannot publish past.
-        """
-        scope = set(session["selected"]) if session["selected"] is not None else None
-        for asset, snapshot_id in self.history.entries(tree).items():
-            if scope is None or asset in scope:
-                tree = self.check_asset(session, tree, layer, asset, snapshot_id, conflicts, all_conflicts)
-        return tree
-
-    def check_asset(self, session: dict, tree: str, layer: str, asset: str, snapshot_id: str,
-                    conflicts: list[dict], all_conflicts: list[dict]) -> str:
-        snapshot = self.store.objects.data(snapshot_id, "snapshot")
-        for issue in validate(snapshot, self.workspace.schema):
-            if any(item["asset"] == asset and item["field_path"] == issue["path"] and item["layer"] == layer for item in conflicts):
-                continue
-            item = self.finding(layer, asset, snapshot, snapshot_id, issue)
-            decision = session["resolutions"].get(item["conflict_id"])
-            if decision:
-                tree = resolve_tree(self.history, tree, item, decision)
-                if self.unresolved(tree, asset, issue):
-                    conflicts.append(item)
-            else:
-                conflicts.append(item)
-            all_conflicts.append(item)
-        return tree
-
-    def finding(self, layer: str, asset: str, snapshot: dict, snapshot_id: str, issue: dict) -> dict:
-        value = wire(at(snapshot["semantic"], issue["path"]))
-        return dict(conflict_id=digest(dict(layer=layer, snapshot=snapshot_id, issue=issue))[:24], asset=asset,
-                    field_path=issue["path"], entity_path=issue["path"][:4], kind=snapshot["semantic"]["kind"],
-                    conflict_type=issue["conflict_type"], reason=issue["reason"], layer=layer,
-                    base=value, ours=value, theirs=value,
-                    snapshots=[snapshot_id] * 3, allowed_resolutions=["custom", "delete", "rename"])
-
-    def unresolved(self, tree: str, asset: str, issue: dict) -> bool:
-        """Whether the decision left the finding it answered still standing."""
-        updated_id = self.history.entries(tree).get(asset)
-        updated = self.store.objects.data(updated_id, "snapshot") if updated_id else None
-        remaining = validate(updated, self.workspace.schema) if updated else []
-        return any(issue["path"] == entry["path"] and issue["conflict_type"] == entry["conflict_type"] for entry in remaining)
-
     def _line(self, conflict: dict) -> int | None:
         from ...parser import parse
 
@@ -129,7 +108,12 @@ class Sessions:
         file = Path(path)
         if not file.is_file():
             return None
-        document, _ = parse(file.read_text(encoding="utf-8"))
+        # Conflicts cluster in a few files; parsing the file once per conflict
+        # made a replay cost the conflict count times the file size.
+        memo = getattr(self, "_documents", dict())
+        if path not in memo:
+            memo[path] = parse(file.read_text(encoding="utf-8"))[0]
+        document = memo[path]
         identifier = conflict["field_path"][3] if len(conflict["field_path"]) > 3 else None
         before = self.history.entries(self.workspace.state["head"]).get(conflict["asset"])
         binding = self.store.objects.data(before, "snapshot").get("bindings", dict()).get(identifier) if before else None
@@ -148,7 +132,13 @@ class Sessions:
             return
         original = session["original"]
         if self.workspace.schema and session["schema_key"] != self.workspace.schema.key:
-            raise SyncError("stale_session", "schema environment changed", dict(merge_id=session["id"]))
+            # Its conflicts were computed under the old catalog. The inputs are
+            # recorded, so running the operation again re-reads them under the
+            # current one; nothing has to be redone by hand.
+            raise SyncError("stale_session", "schema environment changed since this session was opened",
+                            dict(merge_id=session["id"], session_schema=session["schema_key"], current_schema=self.workspace.schema.key,
+                                 abort=dict(action="abort", options=dict(merge_id=session["id"], dry_run=False)),
+                                 retry=dict(action=session["operation"], options=dict(dry_run=False))))
         changed = session["operation"] != "push" and (current["generation"] != original["generation"] or hashes(self.workspace.root, current["files"]) != session["original_hashes"])
         if any(self.store.ref(ref) != value for ref, value in session["metadata"].get("refs", dict()).items()):
             changed = True

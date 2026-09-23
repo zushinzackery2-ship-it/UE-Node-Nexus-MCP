@@ -44,5 +44,23 @@ def capture(text: str, previous: dict | None, namespace: str, kind: str, schema=
                 raw=(previous or dict()).get("raw", dict()), schema_key=document.header.schema or (previous or dict()).get("schema_key", ""), codec_version=1)
 
 
+def rebind(snapshot: dict | None, schema) -> dict | None:
+    """The same mirror text, encoded the way ``schema`` reads it.
+
+    Property types and defaults come from the schema, so two states recorded
+    under different environments disagree about fields nobody edited. Comparing
+    them reports the upgrade, not an edit, and refusing to compare them strands
+    every workspace that was open when the plugin was rebuilt. The mirror is text:
+    reading that text again under the current schema is exactly the state a fresh
+    checkout would have recorded, with every identity kept.
+    """
+    if snapshot is None or schema is None or not schema.available or snapshot.get("schema_key") == schema.key:
+        return snapshot
+    document = to_document(snapshot)
+    document.header.schema = schema.key
+    semantic, bindings, _ = encode(document, snapshot["semantic"]["kind"], snapshot, "rebind", schema)
+    return dict(snapshot, semantic=semantic, semantic_hash=digest(semantic), bindings=bindings, schema_key=schema.key)
+
+
 def text_of(snapshot: dict) -> str:
     return emit(to_document(snapshot))

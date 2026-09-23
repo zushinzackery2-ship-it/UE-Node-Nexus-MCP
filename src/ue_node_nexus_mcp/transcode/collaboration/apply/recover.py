@@ -27,7 +27,7 @@ def reconcile(bridge, context, workspace, record: dict, restore=False, preserve_
         selector = (receipt.get("response_data") or dict()).get("result_selector")
         if selector:
             selectors[record["asset"]] = selector
-        current = capture(bridge, context, workspace.store, [record["asset"]], reference=record["candidate"], selectors=selectors, persist=False, force_export=True)
+        current = capture(bridge, context, workspace.store, [record["asset"]], reference=record["candidate"], selectors=selectors, persist=False, fresh=[record["asset"]])
         raw = current["raw"].get(record["asset"], dict(exists=False))
         if receipt["after"].get("exists") is False:
             compatible = raw.get("exists") is False

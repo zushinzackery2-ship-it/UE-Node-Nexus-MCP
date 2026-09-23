@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ...bp_call_host import call_spelling
 from ...bp_types import type_text
 from ...model import Document, Section
 from ...sync_project import SyncError
@@ -51,11 +52,13 @@ def encode(document: Document, kind: str, previous: dict | None, namespace: str,
             identifier, metadata = identities.entity(scope, decl)
             aliases[decl.id] = identifier
             old = before.get("entities", dict()).get(identifier, dict())
-            types, defaults = property_metadata(metadata, schema, family_for(kind, section.name), decl.type_name)
+            family = family_for(kind, section.name)
+            types, defaults = property_metadata(metadata, schema, family, decl.type_name)
             # A declaration's named arguments and property block are different
             # namespaces. Defaults belong to the one used by its adapter.
             prop_style = section.name in ("components", "actors", "instances", "renderers")
-            entities[identifier] = dict(alias=decl.id, type=decl.type_name,
+            # Host spellings of one call are one state; the bridge picks the host.
+            entities[identifier] = dict(alias=decl.id, type=call_spelling(decl.type_name) if family == "k2node" else decl.type_name,
                 positional=[value(text) for text in decl.positional()],
                 args=field_values(decl.keyed(), types, dict() if prop_style else defaults, old.get("args")),
                 props=field_values(decl.prop_map(), types, defaults if prop_style else dict(), old.get("props")),

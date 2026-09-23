@@ -208,9 +208,10 @@ def test_publishing_one_edit_touches_one_asset(project):
     result = project.timed("push", "push")
     assert result["status"] == "published", result
     assert [row["action"] for row in result["rows"]] == ["pushed"]
-    # The editor already reported every other asset as saved and unchanged, so
-    # publication re-reads nothing and applies only the asset that moved.
-    assert project.counted() == (exports, applies + 1)
+    # Every other asset is carried on the editor's saved-and-unchanged report.
+    # What UE is asked to verify, the edited asset and the textures it reads,
+    # is measured: remembered evidence cannot see a compile.
+    assert project.counted() == (exports + 1 + FANOUT, applies + 1)
     assert project.timings["push"][0] < project.checkout_seconds / 2
 
 

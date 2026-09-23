@@ -1,5 +1,6 @@
 #include "NexusSchema.h"
 
+#include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
 #include "K2Node.h"
@@ -40,7 +41,12 @@ void AddClassMetadata(UClass* Class, const TSharedPtr<FJsonObject>& Record)
     Bridge->SetBoolField(TEXT("delete"), bSupported);
     Bridge->SetStringField(TEXT("source"), bK2 ? TEXT("Transcode::IsSupportedNodeClass") : TEXT("Transcode kind and entity adapters"));
     Bridge->SetStringField(TEXT("entry"), bActor || bComponent ? TEXT("scene_apply/transcode_apply") : Kind == TEXT("niagara_system") ? TEXT("vfx_transcode_apply") : TEXT("transcode_apply"));
-    if (bK2)
+    if (bK2 && IsCallHostClass(Class))
+    {
+        Bridge->SetStringField(TEXT("context"), TEXT("write CallFunction(Owner.Function); the bridge picks this class from the function's metadata"));
+        Bridge->SetStringField(TEXT("spelling"), TEXT("CallFunction"));
+    }
+    else if (bK2)
     {
         Bridge->SetStringField(TEXT("context"), TEXT("valid Blueprint graph; dynamic pins require target/function context"));
     }

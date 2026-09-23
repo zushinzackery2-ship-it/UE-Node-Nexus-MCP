@@ -72,6 +72,23 @@ Each agent creates its own checkout with `dry_run=False`, then edits the
 returned `files_root`/`file_paths`. Pass the returned `id` as `workspace_id`.
 Stage and commit locally; push merges committed HEAD with current UE memory.
 Keep later file edits local.
+**Work on a few assets from a sparse checkout**: `checkout(paths=[...])` answers
+`sparse: true` and holds only those assets and what they reference. A push checks
+and merges exactly its selection either way, but a sparse workspace also stages,
+commits and projects only its own files, so it is the default for single-asset
+work. `push(dry_run=True)` computes the very merge session a real push opens: the
+conflict count and ids it previews are the ones the session starts with.
+**Plugin or engine rebuilt mid-task**: a changed `schema_key` does not strand a
+workspace. Merges re-read older states under the current schema (the mirror is
+text), so only real edits conflict; a session opened before the change answers
+`stale_session` with ready `abort` and `retry` calls, and re-running the push
+re-reads everything — no edit has to be redone.
+**Publications that call other Blueprints**: every revision a push asks UE to
+verify (the target and each asset it references) is measured from the editor, not
+taken from memory, and re-measured after an earlier apply of the same push
+compiled. A `stale_target` therefore means another writer; its `details.stale`
+names the asset (`role`: `target` or `dependency`), the expected revision and the
+one UE holds.
 Use branch/tag, log/show/diff/blame, restore/revert, private reset/rebase/amend,
 cherry-pick, stash and reflog for version operations. Mutations default to
 preview; `proposal_id` binds the preview when provided. A preview answers
@@ -144,6 +161,7 @@ c_eps -> out.WorldPositionOffset
 - Blueprint: `[variables] Health : float = 100 { Category=Stats, InstanceEditable }`, `[components] Mesh : StaticMeshComponent(parent=Root) { RelativeLocation=(X=0,Y=0,Z=50) }`, `[graph EventGraph]` nodes such as `Event(Actor.ReceiveBeginPlay)`, `CallFunction(KismetSystemLibrary.PrintString, InString="Hi")`, `VariableGet(Health)`, `Sequence(pins=3)`; exec pins are `execute` / `then`; `[function Name(A: double) -> (R: bool)]` has implicit `entry` / `result`; `@renamed(Old)` renames.
 - Blueprint `[asset]` carries `ParentClass` and `BlueprintType` (`normal | const | macro_library | interface | function_library`). Both are honoured only when the asset is created and are verified, never changed, on an existing one — a macro library is indistinguishable from an actor Blueprint without the type, so a create needs it.
 - A `DynamicCast` result pin is written as `AsResult`, not `As<TargetType>`: the engine names that pin after the target class's **localized** display name, which would make the same `.nexus` unusable on an editor in another language. The bridge maps the alias back on apply.
+- A function call is always `CallFunction(Owner.Function)`, including array, data-table and collection functions (`KismetArrayLibrary.Array_Clear`, `Array_AddUnique`, …). The bridge creates the node class the editor itself spawns for that function — `CallArrayFunction` is what types `TargetArray` / `NewItem` from their links — and the mirror writes every such node back as `CallFunction`. A specialised spelling is accepted only if it matches the function (`node_class_mismatch` otherwise, in lint and in a dry run). A node an older bridge built on the wrong class (a plain call to an array function, which can never compile) exports as `@opaque`; state `CallFunction(...)` for it and the next push recreates it.
 - An execution output drives exactly one place; any number of execution lines may join at one execution input, and a data input takes one source while a data output fans out. `pin_cardinality` means a link violated the side that is actually constrained.
 - Niagara: `[emitter Name]`, `[stack Name/ParticleUpdate]` lines like `spawn_rate : SpawnRate(SpawnRate=25, Spawn Probability=0.5) !disabled` list what the Stack panel shows; `[renderers Name] sprite : Sprite { SubImageSize=(X=2,Y=2) }`; `[user] Speed : float = 3` with types `float int bool Vector2 Vector Vector4 Color Position Quat` or a class name. `@link(...)` / `@dynamic` inputs are read-only; `SetVariables(...)` can be edited, not created.
 - Ids are yours and stable; GUIDs never appear. Renaming an id recreates the node. A link to a new multi-pin node must name the pin.
@@ -172,7 +190,8 @@ Save callbacks enqueue exports; mirror transactions share a process/file lock.
 
 **Payload fields are checked, not filtered**: `ue_execute`, `ue_read(query=...)` and `batch_execute` refuse a field the operation does not declare and answer `unknown_field` / `unknown_query_field` with the accepted names. A filter that never applied used to look exactly like a filter that found nothing — `graph` is `graph_name`, and `graph_node_search` takes `filters: {...}`, not a bare `node_class`.
 
-**Reading a large artifact**: `ue_read(target="artifact", query={"artifact_id": ...})` returns the payload inline when it fits the transport frame. Anything larger comes back as `encoding="json-text"` chunks: concatenate every `chunk` in cursor order, then parse. Follow `next_read` (or pass `cursor=next_cursor`) until `next_cursor` is null; `total_bytes` is stable across pages and `limit_bytes` may ask for less, never more.
+**Reading a large artifact**: `ue_read(target="artifact", query={"artifact_id", "path", "cursor", "limit_bytes"})`. A page defaults to 48 KiB and never exceeds 4 MiB. With `path` (dotted, e.g. `data.conflicts`) a list comes back as whole items from `cursor`, with `next_cursor` and a stable `total`; an item larger than a page is named by `oversized_item` and readable under `path.<index>`. Anything else that does not fit comes back as `encoding="json-text"` chunks: concatenate every `chunk` in cursor order, then parse. A truncated `ue_sync` / `ue_execute` summary carries `next_read` for the whole payload and `page_lists_with` with one ready call per list — page conflicts that way instead of pulling the whole report.
+- A conflict names its values but does not always carry them: a value over 2 KiB (an asset-level finding holds the whole asset) reads `{"state": "elided", "bytes", "digest"}`. `resolve` still takes `ours` / `theirs` / `base` for it; the value comes from the snapshot the conflict names.
 
 | Intent | Call |
 |:-------|:-----|
@@ -298,7 +317,7 @@ Load `workflow_guide_get(category="instances")` for schemas, state transitions, 
 | `dependency_not_selected` | a newly referenced asset is not in the same selection | include it and push again |
 | `dependency_cycle` | new assets reference each other in a cycle | break the cycle before pushing |
 | `recovery_required` | an interrupted apply left a durable receipt | the error lists the pending rows and the `recover` / `abort` calls that clear them; `ue_sync("recover")` with no `apply_id` clears the whole repository |
-| `stale_proposal` / `stale_session` / `stale_target` | the input changed since the preview or session was produced | keep your edits, re-observe, then merge and preview again |
+| `stale_proposal` / `stale_session` / `stale_target` | the input changed since the preview or session was produced | keep your edits, re-observe, then merge and preview again; `stale_target` names the moved asset in `details.stale`, a schema-changed `stale_session` carries the `abort` / `retry` calls |
 | `bridge_busy` | request arrived while another one was executing | retried automatically; if it persists, wait |
 | `save_blocked_read_only` | file checked in / read-only | check out in the editor, retry |
 | `schema_stale` | mirror text written against an older schema key | `ue_sync("schema")` |

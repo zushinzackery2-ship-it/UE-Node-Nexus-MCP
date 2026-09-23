@@ -2,6 +2,7 @@
 #include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 
+#include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
@@ -175,6 +176,15 @@ void ApplyBlueprintCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TSha
     if (!ConfigureFromPositional(Blueprint, NodeClass, Positional, Config, Error))
     {
         Context.Fail(Index, TEXT("invalid_positional"), Error);
+        return;
+    }
+    // ``CallFunction`` names a call, not a host class: the function decides it,
+    // exactly as the editor's spawner does. Deciding here, before the dry-run
+    // return, makes the preview refuse what the real apply would.
+    const UFunction* Function = FindCallFunction(ReadOpString(Config, TEXT("function_owner")), ReadOpString(Config, TEXT("function_name")));
+    if (!SelectCallHostClass(NodeClass, Function, Error))
+    {
+        Context.Fail(Index, TEXT("node_class_mismatch"), FString::Printf(TEXT("%s: %s"), *Id, *Error));
         return;
     }
     if (Context.bDryRun)

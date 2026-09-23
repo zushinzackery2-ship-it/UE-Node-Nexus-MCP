@@ -115,13 +115,34 @@ def execute(bridge, workspace, record: dict) -> dict:
         from .observe import forget
 
         # UE either rolled this back or is holding a state nobody recorded; the
-        # remembered package evidence no longer describes what it now has.
-        forget(workspace.store, [record["asset"]])
+        # remembered package evidence no longer describes what it now has. A
+        # rejected precondition says the same of whichever guarded asset failed
+        # it, and the bridge checks the target before any dependency.
+        guarded = [record["asset"]] + [row["asset_path"] for row in record["request"].get("read_set", [])]
+        forget(workspace.store, guarded)
         error = response.get("error") or dict()
         raise SyncError(error.get("code", "recovery_required"), error.get("message", "execution did not produce a committed receipt"),
                         dict(apply_id=record["id"], phase=record["phase"], receipt=receipt,
-                             diagnostics=diagnostics(response, receipt)))
+                             stale=(response.get("data") or dict()).get("stale"), diagnostics=diagnostics(response, receipt)))
     return record
+
+
+def adopt(observation: dict, record: dict, published: str, history) -> None:
+    """Fold a committed receipt into the running observation of a publication.
+
+    The receipt is the only state known to be current afterwards: compiling the
+    asset may have reinstanced objects inside any package built from its class.
+    """
+    raw = record["receipt"]["after"]
+    observation.update(commit=published, tree=history.commit(published)["tree"])
+    observation["current"] = set((record["asset"],))
+    if raw.get("exists") is False:
+        observation["raw"].pop(record["asset"], None)
+        observation["revisions"].pop(record["asset"], None)
+    else:
+        observation["raw"][record["asset"]] = raw
+        observation["revisions"][record["asset"]] = dict(revision=raw["live_revision"], editor_epoch=raw["editor_epoch"], dirty=raw.get("dirty", False),
+                                                       saved_hash=raw.get("saved_hash", ""), content_revision=raw.get("content_revision"))
 
 
 def diagnostics(response: dict, receipt) -> list:

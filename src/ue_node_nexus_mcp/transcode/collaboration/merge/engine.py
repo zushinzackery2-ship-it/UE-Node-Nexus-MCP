@@ -6,14 +6,27 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from ..semantic.validation import validate
-from ..store.io import digest
+from ..store.io import canonical, digest
 from .order import merge_order
 
 MISSING = object()
+# A conflict names the values it is about; it does not have to carry them. An
+# asset-level finding sits at the empty path, whose value is the whole state, so
+# three inline copies per finding made one conflict worth megabytes and a session
+# worth tens of them. A larger value stays in the snapshot the conflict names.
+INLINE_VALUE_BYTES = 2048
 
 
 def wire(value):
     return dict(state="missing") if value is MISSING else value
+
+
+def shown(value):
+    """The value as a conflict record carries it: inline, or named by digest."""
+    size = len(canonical(value))
+    if size <= INLINE_VALUE_BYTES:
+        return value
+    return dict(state="elided", bytes=size, digest=digest(value)[:24])
 
 
 def at(value, path):
@@ -43,7 +56,8 @@ class Comparison:
         values = dict(base=wire(base), ours=wire(ours), theirs=wire(theirs))
         identifier = digest(dict(asset=self.asset, path=path, code=code, **values))[:24]
         entry = dict(conflict_id=identifier, asset=self.asset, entity_path=list(path[:4]), field_path=list(path),
-                     conflict_type=code, reason=reason, allowed_resolutions=["ours", "theirs", "base", "custom", "delete", "rename"], **values)
+                     conflict_type=code, reason=reason, allowed_resolutions=["ours", "theirs", "base", "custom", "delete", "rename"],
+                     **dict((side, shown(item)) for side, item in values.items()))
         if identifier not in self.conflict_ids:
             self.conflicts.append(entry)
             self.conflict_ids.add(identifier)
@@ -95,6 +109,8 @@ def merge_snapshots(base: dict | None, ours: dict | None, theirs: dict | None, s
     candidate["bindings"].update((ours or dict()).get("bindings", dict()))
     candidate["bindings"].update((theirs or dict()).get("bindings", dict()))
     if ours and theirs and ours["schema_key"] != theirs["schema_key"]:
+        # Reached only when the inputs could not be re-read under one environment
+        # (no schema is available, or the text no longer encodes under it).
         compare.conflict([], *inputs, "history_schema_conflict", "snapshots bind different schema environments")
     for item in validate(candidate, schema):
         path = item["path"]

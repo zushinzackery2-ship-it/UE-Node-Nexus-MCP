@@ -71,12 +71,17 @@ FJson RunCommit(const FString& Operation, const FString& RequestId, const FJson&
         return CommitError(Operation, RequestId, TEXT("recovery_required"), Error);
     }
     FJson Before;
-    if (!CheckRevisions(Request, Before, Error))
+    FJson Stale;
+    if (!CheckRevisions(Request, Before, Stale, Error))
     {
         FJson Response = CommitError(Operation, RequestId, TEXT("stale_target"), Error);
         if (Before.IsValid())
         {
             Object(Response, TEXT("data"))->SetObjectField(TEXT("current"), Before);
+        }
+        if (Stale.IsValid())
+        {
+            Object(Response, TEXT("data"))->SetObjectField(TEXT("stale"), Stale);
         }
         return Response;
     }

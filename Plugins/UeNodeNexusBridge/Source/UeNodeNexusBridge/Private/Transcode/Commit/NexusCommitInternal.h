@@ -18,7 +18,7 @@ void UpdatePendingReceipt(const FString& File, const FJson& Receipt, bool bDurab
 void StopPendingIndex();
 void CaptureRecoveryMemory(const FJson& Receipt, const TCHAR* Field);
 bool CheckRecoveryMemory(const FJson& Receipt, FString& Error);
-bool CheckRevisions(const FJson& Request, FJson& Current, FString& Error);
+bool CheckRevisions(const FJson& Request, FJson& Current, FJson& Stale, FString& Error);
 bool Checkpoint(const FJson& Request, const FJson& Before, const FJson& Receipt, FString& Error);
 bool SavePackages(const FJson& Request, const FJson& Receipt, FString& Error);
 bool RestoreCheckpoint(const FJson& Receipt, FString& Error);

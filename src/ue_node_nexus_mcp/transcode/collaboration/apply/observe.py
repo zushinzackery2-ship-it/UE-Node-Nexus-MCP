@@ -53,7 +53,9 @@ def forget(store, assets: list[str]) -> None:
     if not record:
         return
     entries = dict(record["entries"])
-    if not any(entries.pop(asset, None) is not None for asset in assets):
+    # Every asset is dropped; a short-circuiting test would stop at the first.
+    dropped = [asset for asset in assets if entries.pop(asset, None) is not None]
+    if not dropped:
         return
     store.put_record("memory", "observed", dict(record, entries=entries), [record["commit"]], record["generation"])
 
@@ -64,6 +66,11 @@ def carried(known: list | None, snapshot: str, info) -> bool:
     The editor answers ``transcode_status`` for the whole project in one call,
     while exporting is per asset; re-exporting thousands of untouched assets to
     rediscover bytes the editor just reported as unchanged is the whole cost.
+
+    It is evidence for describing the project, never for a precondition: a
+    compile regenerates class defaults, component templates and pin types, and
+    reinstances them inside other packages, all without dirtying anything. A
+    revision UE is asked to verify is always measured, through ``fresh``.
     """
     if not known or known[0] != snapshot or known[1]["dirty"] or info.dirty:
         return False
@@ -80,7 +87,12 @@ def scene_selector(asset: str, snapshot: dict | None, requested: dict | None = N
 
 
 def capture(bridge, context, store, assets: list[str] | None = None, *,
-            reference: str | None = None, discover=False, selectors=None, persist=True, force_export=False) -> dict:
+            reference: str | None = None, discover=False, selectors=None, persist=True, fresh=()) -> dict:
+    """Record what UE holds for ``assets``; every asset in ``fresh`` is exported.
+
+    ``measured`` names the assets this call read from UE itself: exported, or
+    confirmed absent. Only those revisions may become preconditions.
+    """
     binding = bind(bridge, context, store)
     history = History(store)
     previous = store.ref("refs/ue/observed")
@@ -88,7 +100,8 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
     entries = history.entries(previous)
     identities = history.entries(baseline)
     identities.update(entries)
-    selected = set(assets or [])
+    fresh = set(fresh)
+    selected = set(assets or []) | fresh
     if assets is None:
         selected.update(identities)
     core_paths = [asset for asset in selected if "#" not in asset]
@@ -100,7 +113,7 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
     identifier = uuid4().hex
     directory = store.root / "observations" / identifier
     memory = remembered(store, context, binding["editor_epoch"])
-    groups, raw_by_asset, revisions = dict(), dict(), dict()
+    groups, raw_by_asset, revisions, absent = dict(), dict(), dict(), set()
     for asset in sorted(selected):
         if "#" in asset:
             # Only a scene needs its previous state here; loading every other
@@ -112,7 +125,8 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
             raw_by_asset[asset] = read_json(file)
         elif asset not in infos:
             entries.pop(asset, None)
-        elif not force_export and asset in entries and carried(memory.get(asset), entries[asset], infos[asset]):
+            absent.add(asset)
+        elif asset not in fresh and asset in entries and carried(memory.get(asset), entries[asset], infos[asset]):
             revisions[asset] = memory[asset][1]
         else:
             groups.setdefault(export_operation(infos[asset].kind), []).append(asset)
@@ -146,7 +160,8 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
     if not previous or history.commit(previous)["tree"] != tree:
         commit = history.create(tree, [previous] if previous else [], "Observe current UE memory", "UE", "external_ue", observed=True, saved=all(not item["dirty"] for item in revisions.values()))
     record = dict(id=identifier, commit=commit, tree=tree, revisions=revisions, assets=sorted(selected),
-                  editor_epoch=binding["editor_epoch"], previous=previous, raw_files=str(directory), generation=0)
+                  measured=sorted(absent | raw_by_asset.keys()), editor_epoch=binding["editor_epoch"], previous=previous,
+                  raw_files=str(directory), generation=0)
     atomic_write(directory / "observation.json", canonical(record))
     if persist:
         store.put_record("observation", identifier, record, [commit], expected=0)

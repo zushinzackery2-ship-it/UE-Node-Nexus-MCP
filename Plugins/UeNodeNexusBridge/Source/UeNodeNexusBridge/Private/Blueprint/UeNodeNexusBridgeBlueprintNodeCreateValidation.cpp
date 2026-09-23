@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 
+#include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "Dom/JsonObject.h"
 #include "K2Node_CallFunction.h"
 #include "K2Node_Event.h"
@@ -12,7 +13,7 @@
 namespace UeNodeNexusBridge
 {
 bool ValidateBlueprintNodeCreateConfig(
-    UClass* NodeClass,
+    UClass*& NodeClass,
     UBlueprint* Blueprint,
     const TSharedPtr<FJsonObject>& Payload,
     FString& OutError)
@@ -41,6 +42,12 @@ bool ValidateBlueprintNodeCreateConfig(
             || !ReadBlueprintNodeStringField(Payload, TEXT("function_owner"), FunctionOwner))
         {
             OutError = TEXT("function_name and function_owner are required for K2Node_CallFunction");
+            return false;
+        }
+        // Chosen before anything is created, so a dry run refuses what the
+        // real call would, and a plain request becomes the class UE spawns.
+        if (!SelectCallHostClass(NodeClass, FindCallFunction(FunctionOwner, FunctionName), OutError))
+        {
             return false;
         }
     }

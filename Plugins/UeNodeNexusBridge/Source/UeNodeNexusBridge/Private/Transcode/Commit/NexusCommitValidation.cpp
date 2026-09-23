@@ -54,17 +54,44 @@ static bool CheckOne(const FJson& Expected, FJson& Current, FString& Error)
     return true;
 }
 
-bool CheckRevisions(const FJson& Request, FJson& Current, FString& Error)
+// Which guarded asset failed, and what it holds now. Without it every failure
+// reads as the target's, and the caller cannot tell its own publication's side
+// effect on a dependency from a concurrent edit of the asset it is writing.
+static FJson StaleReport(const FJson& Expected, const FJson& Current, const TCHAR* Role)
+{
+    FJson Stale = MakeShared<FJsonObject>();
+    Stale->SetStringField(TEXT("role"), Role);
+    Stale->SetStringField(TEXT("asset_path"), Text(Expected, TEXT("asset_path")));
+    Stale->SetStringField(TEXT("expected_revision"), Text(Expected, TEXT("expected_revision")));
+    Stale->SetBoolField(TEXT("expected_absent"), Flag(Expected, TEXT("expected_absent")));
+    if (Current.IsValid())
+    {
+        Stale->SetStringField(TEXT("live_revision"), Text(Current, TEXT("live_revision")));
+        Stale->SetStringField(TEXT("content_revision"), Text(Current, TEXT("content_revision")));
+        Stale->SetBoolField(TEXT("exists"), !Current->HasField(TEXT("exists")) || Flag(Current, TEXT("exists")));
+        Stale->SetBoolField(TEXT("dirty"), Flag(Current, TEXT("dirty")));
+    }
+    return Stale;
+}
+
+bool CheckRevisions(const FJson& Request, FJson& Current, FJson& Stale, FString& Error)
 {
     if (!CheckOne(Request, Current, Error))
     {
+        Stale = StaleReport(Request, Current, TEXT("target"));
         return false;
     }
     for (const auto& Value : Rows(Request, TEXT("read_set")))
     {
-        FJson Dependency;
-        if (!Value.IsValid() || Value->Type != EJson::Object || !CheckOne(Value->AsObject(), Dependency, Error))
+        if (!Value.IsValid() || Value->Type != EJson::Object)
         {
+            Error = TEXT("read_set rows must be objects");
+            return false;
+        }
+        FJson Dependency;
+        if (!CheckOne(Value->AsObject(), Dependency, Error))
+        {
+            Stale = StaleReport(Value->AsObject(), Dependency, TEXT("dependency"));
             return false;
         }
     }

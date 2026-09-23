@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .bp_call_host import call_spelling, host_name, required_host
 from .bp_signature import parse_signature
 from .bp_types import join_type_text, parse_type_text
 from .errors import DiagnosticSink
@@ -118,14 +119,17 @@ def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], sch
             sink.error("opaque_param", "@opaque nodes cannot carry parameters", line=decl.line)
         return None
     positional = decl.positional()
-    required = POSITIONAL_REQUIRED.get(decl.type_name)
+    spelled = call_spelling(decl.type_name)
+    if spelled != decl.type_name:
+        _lint_call_host(decl, schema, sink)
+    required = POSITIONAL_REQUIRED.get(spelled)
     if required and not positional:
         sink.error("missing_positional", f"{decl.type_name} needs a positional argument: {required}", line=decl.line)
     if decl.type_name in ("VariableGet", "VariableSet") and positional:
         target = positional[0]
         if "." not in target and target not in member_names:
             sink.error("unknown_variable", f"{target!r} is not a declared variable or component", line=decl.line)
-    if decl.type_name == "CallFunction" and positional and positional[0].startswith("self."):
+    if spelled == "CallFunction" and positional and positional[0].startswith("self."):
         name = positional[0][5:]
         if name not in function_names:
             sink.warning("unknown_self_function", f"self.{name} is not declared in this file; it must exist on the parent class", line=decl.line)
@@ -134,7 +138,7 @@ def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], sch
         sink.error("invalid_pins", "pins=N must be a positive integer", line=decl.line)
     if schema is None:
         return None
-    info = schema.resolve_class("k2node", decl.type_name)
+    info = schema.resolve_class("k2node", spelled)
     if info is None:
         sink.error("unknown_class", f"unknown Blueprint node class {decl.type_name!r}", line=decl.line)
         return None
@@ -145,6 +149,25 @@ def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], sch
             if key[5:] not in info.props:
                 sink.error("unknown_param", f"{decl.type_name} has no editable property {key[5:]!r}", line=decl.line)
     return info
+
+
+def _lint_call_host(decl: Decl, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
+    """A specialised call spelling must be the host the function's metadata picks.
+
+    ``CallFunction`` always is: the bridge chooses. A spelling that disagrees
+    names a class that cannot call the function, and the bridge refuses it.
+    """
+    positional = decl.positional()
+    if not positional:
+        return
+    owner, _, name = positional[0].rpartition(".")
+    spelled = host_name(decl.type_name)
+    if owner == "self":
+        sink.error("node_class_mismatch", f"{decl.id}: a Blueprint function is called by CallFunction, not {spelled}", line=decl.line)
+        return
+    required = required_host(schema.function(owner, name)) if schema is not None else None
+    if required is not None and required != spelled:
+        sink.error("node_class_mismatch", f"{decl.id}: {owner}.{name} is called by {required}, not {spelled}; write CallFunction and the bridge picks it", line=decl.line)
 
 
 def _lint_pin(decl: Decl, info: ClassInfo | None, pin: str | None, line: int, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
@@ -159,7 +182,7 @@ def _lint_pin(decl: Decl, info: ClassInfo | None, pin: str | None, line: int, sc
         if pin not in names:
             sink.error("unknown_pin", f"{decl.id} ({decl.type_name}) has no pin {pin!r}; pins: {', '.join(sorted(names))}", line=line)
         return
-    if decl.type_name in ("CallFunction", "CallParentFunction") and schema is not None and decl.positional():
+    if call_spelling(decl.type_name) in ("CallFunction", "CallParentFunction") and schema is not None and decl.positional():
         owner, _, name = decl.positional()[0].rpartition(".")
         record = schema.function(owner, name)
         if record is not None:

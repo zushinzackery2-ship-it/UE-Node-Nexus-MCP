@@ -9,7 +9,7 @@ from ...scene.diff import build_plan as scene_plan
 from ...scene.model import from_document as scene_model
 from ...sync_deps import document_dependencies, order_assets
 from ...sync_project import SyncError
-from ..merge.trees import merge_trees, resolve_base
+from ..merge.trees import resolve_base
 from ..semantic.decode import physical_ids, to_document
 from ..semantic.validation import validate
 from .observe import scene_selector
@@ -34,27 +34,51 @@ def selected_assets(workspace, source: str, paths) -> list[str]:
     return select(workspace.root, files, paths)
 
 
-def references(workspace, source: str, assets: list[str], explicit: bool) -> set[str]:
-    """Assets the observation must cover beyond the ones being published.
+def dependencies(workspace, source: str, assets) -> set[str]:
+    entries, result = workspace.history.entries(source), set()
+    for asset in assets:
+        value = snapshot(workspace, entries.get(asset))
+        if value:
+            result.update(document_dependencies(to_document(value), value["semantic"]["kind"]))
+    return result
+
+
+def scope(workspace, source: str, assets: list[str], explicit: bool) -> tuple[set[str], set[str]]:
+    """What the observation must cover beyond ``assets``, and what it must measure.
 
     A narrowed selection has to be closed over its dependencies, because even an
     untouched member is published when the editor holds it dirty. A full
     workspace already observed every asset the project had, so there only an
     edited one can point somewhere new and the rest need no decoding.
+
+    The second set is the first estimate of what the publication guards: the
+    edited assets and what they reference. ``guarded`` states the exact set once
+    the plan exists.
     """
     entries, base = workspace.history.entries(source), workspace.history.entries(workspace.state["base"])
+    edited = set(asset for asset in assets if entries.get(asset) != base.get(asset))
+    own = dependencies(workspace, source, edited)
     partial = explicit or bool(workspace.state.get("sparse"))
+    wider = (dependencies(workspace, source, set(assets) - edited) | own) if partial else own
+    return wider - set(assets), edited | own
+
+
+def guarded(batch: dict) -> set[str]:
+    """Every asset whose revision an execution of this plan sends UE to verify."""
     result = set()
-    for asset in assets:
-        identifier = entries.get(asset)
-        if not identifier or (not partial and identifier == base.get(asset)):
-            continue
-        value = snapshot(workspace, identifier)
-        result.update(document_dependencies(to_document(value), value["semantic"]["kind"]))
-    return result - set(assets)
+    for asset, item in batch["units"].items():
+        if not item["empty"] and asset not in batch["errors"]:
+            result.add(asset)
+            result.update(item["dependencies"])
+    return result
 
 
 def merge(workspace, source: str, target: str, assets: list[str]) -> dict:
+    """The fixed three-way inputs of a publication: ancestor, submitted state, UE.
+
+    Merging them is the session's job, preview or not, so that a preview and the
+    session it would open cannot report different conflicts.
+    """
     history, store = workspace.history, workspace.store
     # The ancestor only has to agree about what this publication merges. Resolving
     # it project-wide is what dragged unrelated historical assets, and their stale
@@ -81,9 +105,7 @@ def merge(workspace, source: str, target: str, assets: list[str]) -> dict:
             ours[asset] = source_entries[asset]
         else:
             ours.pop(asset, None)
-    base_tree, ours_tree = history.tree(baselines), history.tree(ours)
-    candidate, conflicts = merge_trees(history, base_tree, ours_tree, target, workspace.schema, assets)
-    return dict(base=base_tree, ancestors=ancestors, ours=ours_tree, theirs=target, candidate=candidate, conflicts=conflicts)
+    return dict(base=history.tree(baselines), ancestors=ancestors, ours=history.tree(ours), theirs=target)
 
 
 def align_aliases(current: dict, candidate: dict) -> dict:

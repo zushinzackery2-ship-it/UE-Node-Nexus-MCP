@@ -63,7 +63,9 @@ tex.R -> out.Roughness         # materials: implicit `out` node = material outpu
 - Blueprint: `[asset] ParentClass = /Script/Engine.Actor` (only honoured when the
   asset is created), `[variables]` `Name : float = 1 { Category=X, InstanceEditable }`,
   `[components]` `Mesh : StaticMeshComponent(parent=Root) { StaticMesh=... }`,
-  `[graph EventGraph]` nodes like `CallFunction(KismetSystemLibrary.PrintString, InString="Hi")`,
+  `[graph EventGraph]` nodes like `CallFunction(KismetSystemLibrary.PrintString, InString="Hi")`
+  (array, data-table and collection functions too: the bridge picks the node class
+  the function needs and writes it back as `CallFunction`),
   `VariableGet(Health)`, `Event(Actor.ReceiveBeginPlay)` (adopts the template's disabled
   ghost event instead of duplicating it), `Sequence(pins=3)`; exec pins are `execute` /
   `then`; functions are `[function Name(A: double) -> (R: bool)]` with implicit `entry` /

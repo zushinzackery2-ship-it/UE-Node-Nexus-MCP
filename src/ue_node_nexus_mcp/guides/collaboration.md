@@ -26,6 +26,16 @@ Mutations default to `dry_run=True`; queries run directly. `push` defaults to
 committed HEAD, or accepts `source`/`revision`. A changed preview input returns
 `stale_proposal`. Uncommitted file changes remain local.
 
+For work on a few assets, check out only those paths: the workspace answers
+`sparse: true` and holds them plus what they reference. A push merges and checks
+exactly its selection, and its dry run computes the same merge session the real
+push opens, so the previewed conflicts are the session's conflicts.
+
+Every revision a push asks UE to verify, the target and each referenced asset,
+is measured from the editor rather than taken from memory, and measured again
+after an earlier apply of the same push compiled. `stale_target` then means
+another writer; `details.stale` names the asset, its role and both revisions.
+
 `fetch` observes UE without moving workspace layers. `pull` integrates that
 version and replays staged and unstaged changes separately. `status` reports
 both layers, branch movement, active conflicts, pending applies and file paths.
@@ -45,9 +55,15 @@ ue_sync("continue", options=dict(workspace_id="<id>", merge_id="<merge-id>", dry
 ```
 
 Use the conflict's `allowed_resolutions` for supported choices. Custom values
-must use its typed representation. `abort` cancels an unresolved operation;
-original files remain available. A changed source, target or schema produces
-a stale session with preserved evidence. Refresh and create a new merge.
+must use its typed representation. A value over 2 KiB is carried as
+`{"state": "elided", "bytes", "digest"}`; `ours`/`theirs`/`base` still resolve it
+from the snapshot the conflict names. Page a large conflict list with
+`ue_read(target="artifact", query={"artifact_id", "path": "data.conflicts"})`.
+`abort` cancels an unresolved operation; original files remain available. A
+changed source or target produces a stale session with preserved evidence.
+A changed schema does not strand work: merges re-read older states under the
+current schema, and a session opened before the change answers `stale_session`
+with ready `abort` and `retry` calls; re-running the push re-reads everything.
 
 ## History actions
 

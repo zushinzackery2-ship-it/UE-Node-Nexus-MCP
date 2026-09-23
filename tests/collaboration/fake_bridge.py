@@ -74,11 +74,15 @@ class ProtocolUe(FakeUe):
         if self.before_apply:
             callback, self.before_apply = self.before_apply, None
             callback()
-        for expected in [payload, *payload.get("read_set", [])]:
+        for role, expected in [("target", payload), *(("dependency", row) for row in payload.get("read_set", []))]:
             raw = self.assets.get(expected["asset_path"])
-            matching = raw is None if expected.get("expected_absent") else raw and self.stamped(raw)["live_revision"] == expected.get("expected_revision")
+            live = self.stamped(raw)["live_revision"] if raw else ""
+            matching = raw is None if expected.get("expected_absent") else raw and live == expected.get("expected_revision")
             if not matching:
-                return dict(ok=False, error=dict(code="stale_target", message="memory changed"), data=dict(applied=0))
+                stale = dict(role=role, asset_path=expected["asset_path"], expected_revision=expected.get("expected_revision", ""),
+                             expected_absent=bool(expected.get("expected_absent")), live_revision=live, exists=raw is not None)
+                return dict(ok=False, error=dict(code="stale_target", message="revision changed: " + expected["asset_path"]),
+                            data=dict(applied=0, stale=stale))
         before, before_dirty = deepcopy(self.assets), set(self.dirty)
         # Saving the package is part of the apply: the memory checkpoint is gone
         # once it succeeds, and comes back with the assets when it is rolled back.

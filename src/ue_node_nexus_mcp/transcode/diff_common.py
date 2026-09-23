@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .bp_call_host import call_spelling
 from .model import Decl, Section
 from .plan import AssetPlan
 from .schema.records import class_aliases
@@ -40,8 +41,11 @@ def same_class(schema: SchemaLock | None, family: str, left: str, right: str) ->
     the mirror writes for nodes, so comparing the spellings literally reads a
     notation switch as a class change and rejects text the schema itself resolved.
     When only one side resolves, that record decides identity, which covers shortcut
-    names several records share.
+    names several records share. Every host class of a function call is the same
+    call: the bridge picks the host from the function, not from the spelling.
     """
+    if family == "k2node":
+        left, right = call_spelling(left), call_spelling(right)
     if left == right:
         return True
     left_path = class_path(schema, family, left)

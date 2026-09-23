@@ -6,6 +6,9 @@ from copy import deepcopy
 
 from ...sync_project import SyncError
 from ..store.io import digest
+from .engine import at, wire
+
+SIDES = ("base", "ours", "theirs")
 
 
 def set_path(root: dict, path: list, value, delete=False) -> dict | None:
@@ -43,6 +46,17 @@ def remove_references(semantic: dict, identifier: str) -> None:
         semantic["sections"].pop(scope)
 
 
+def side_value(history, conflict: dict, side: str):
+    """What one side holds at the conflict's path, including a value the record elided."""
+    value = conflict[side]
+    if not (isinstance(value, dict) and value.get("state") == "elided"):
+        return value
+    identifier = conflict["snapshots"][SIDES.index(side)]
+    if not identifier:
+        return dict(state="missing")
+    return wire(at(history.store.objects.data(identifier, "snapshot")["semantic"], conflict["field_path"]))
+
+
 def resolve_tree(history, tree: str, conflict: dict, decision: dict) -> str:
     choice = decision["choice"]
     if choice not in conflict["allowed_resolutions"]:
@@ -58,13 +72,13 @@ def resolve_tree(history, tree: str, conflict: dict, decision: dict) -> str:
     snapshot = deepcopy(snapshot)
     delete = choice == "delete"
     if choice in ("ours", "theirs", "base"):
-        value = conflict[choice]
+        value = side_value(history, conflict, choice)
         delete = value == dict(state="missing")
     elif choice == "custom":
         if "value" not in decision:
             raise SyncError("invalid_resolution", "custom resolution requires value")
         value = decision["value"]
-        original = conflict["ours"]
+        original = side_value(history, conflict, "ours")
         if isinstance(original, dict) and "type" in original and "state" in original:
             if not isinstance(value, dict) or value.get("type") != original["type"] or value.get("state") not in ("explicit", "default", "missing", "opaque"):
                 raise SyncError("resolution_type", "custom field values require matching type and explicit state")
