@@ -76,6 +76,20 @@ def hashes(root: Path, files: dict[str, str]) -> dict[str, str | None]:
     return dict((asset, byte_hash(path.read_bytes()) if (path := confined(root, relative)).is_file() else None) for asset, relative in files.items())
 
 
+def select_history(workspace, paths, *revisions) -> list[str] | None:
+    """Resolve projected paths using all compared versions, including deletions."""
+    if paths is None:
+        return None
+    entries = dict()
+    for revision in revisions:
+        entries.update(workspace.history.entries(revision))
+    files = dict(workspace.state["files"])
+    for asset, identifier in entries.items():
+        if asset not in files:
+            files[asset] = filename(asset, workspace.store.objects.data(identifier, "snapshot"))
+    return select(workspace.root, files, paths)
+
+
 def capture_files(workspace, paths: list[str] | None = None, delete: bool = False) -> tuple[dict, dict, dict]:
     state, history, store = workspace.state, workspace.history, workspace.store
     entries = history.entries(state["index"])
@@ -108,7 +122,11 @@ def capture_files(workspace, paths: list[str] | None = None, delete: bool = Fals
         snapshot = capture(data.decode("utf-8-sig"), prior, f"{state['id']}:{state['head']}", kind, workspace.schema, str(path))
         if kind != "scene" and object_path(snapshot["semantic"]["header"]["asset"]) != asset:
             raise SyncError("asset_identity_changed", "asset header does not match its file path", dict(file=str(path)))
-        entries[asset] = workspace.snapshot(snapshot)
+        if (prior and snapshot["semantic_hash"] == prior["semantic_hash"]
+                and snapshot["schema_key"] == prior["schema_key"]):
+            entries[asset] = previous_id
+        else:
+            entries[asset] = workspace.snapshot(snapshot)
         fresh[asset], changed = [captured_hashes[asset], previous_id, entries[asset]], True
     kept = dict((asset, value) for asset, value in memo.items() if asset in registered and asset not in fresh)
     fresh = (kept | fresh) if paths is not None else fresh

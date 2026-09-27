@@ -36,7 +36,8 @@ def replace(workspace, new):
 def test_lint_stage_and_commit_keep_working_offline(workspace):
     replace(workspace, "0.04")
     result = command(workspace, "lint")
-    assert result["error_count"] == 0 and not result["bridge_available"], result
+    assert result["error_count"] == 0 and not result["bridge_contacted"], result
+    assert "bridge_available" not in result
     assert [row["asset"] for row in result["rows"]] == [MATERIAL]
     command(workspace, "stage")
     assert command(workspace, "commit", message="offline edit")["commit_id"]

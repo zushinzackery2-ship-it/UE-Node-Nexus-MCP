@@ -13,7 +13,7 @@ OPTIONS = dict(
     merge=set(("revision", "source", "message")), pull=set(("message", "discover")),
     resolve=set(("merge_id", "conflict_id", "conflict_ids", "choice", "value", "name", "asset", "conflict_type", "layer", "all")),
     abort=set(("merge_id", "rebase_id", "apply_id")),
-    push=set(("revision", "source", "merge_id", "compile", "save", "allow_delete", "stop_on_error", "replace")),
+    push=set(("revision", "source", "merge_id", "compile", "save", "allow_delete", "stop_on_error", "replace", "force")),
     recover=set(("apply_id", "projection_id", "restore", "preserve_current", "resolution")), close=set(),
     branch=set(("name", "revision", "delete", "expected")), switch=set(("name",)),
     tag=set(("name", "revision", "message", "expected")),
@@ -29,7 +29,7 @@ OPTIONS = dict(
     schema=set(("refresh", "category", "query", "details", "function", "target", "context", "limit", "cursor", "revision")),
 )
 OPTIONS["cherry-pick"] = set(OPTIONS["revert"])
-OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error"))
+OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error", "force"))
 ACTIONS = tuple(OPTIONS)
 BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current"))
 STRING_LIST_KEYS = set(("conflict_ids",))
@@ -39,6 +39,11 @@ def validate(action: str, options: dict) -> None:
     unknown = set(options) - OPTIONS[action] - COMMON
     if unknown:
         raise SyncError("invalid_option", "unsupported options", dict(action=action, unknown=sorted(unknown), allowed=sorted(OPTIONS[action] | COMMON)))
+    if "force" in options and options["force"] != "local":
+        raise SyncError("invalid_option", "force must be 'local' to publish the selected source over UE state")
+    if options.get("force") and options.get("merge_id"):
+        raise SyncError("invalid_option", "force=local publishes the source directly; abort the existing merge session first",
+                        dict(abort=dict(action="abort", options=dict(merge_id=options["merge_id"], dry_run=False))))
     for key in BOOL_KEYS & options.keys():
         if type(options[key]) is not bool:
             raise SyncError("invalid_option", f"{key} must be a boolean")

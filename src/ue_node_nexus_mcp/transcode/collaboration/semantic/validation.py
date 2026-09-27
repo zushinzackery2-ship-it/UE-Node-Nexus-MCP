@@ -55,7 +55,8 @@ def validate(snapshot: dict, schema=None) -> list[dict]:
             scene_model(document, base if base.get("map_path") else None)
         else:
             sink = lint_document(document, state["kind"], schema, current_key=snapshot.get("schema_key"))
-            findings.extend(problem([], item.code, item.message) for item in sink.errors())
+            findings.extend(dict(problem([], item.code, item.message), file=item.file,
+                                 line=item.line, col=item.col) for item in sink.errors())
     except SyncError as exc:
         findings.append(problem([], exc.code, str(exc)))
     return findings

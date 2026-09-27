@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from ...bp_call_host import call_spelling
-from ...bp_types import type_text
-from ...model import Document, Section
+from ...blueprint.classes import node_name
+from ...model import Document
+from ...raw_simple import INSTANCE_TYPES
 from ...sync_project import SyncError
+from .blueprint import input_metadata, positional_values, signature, signature_contracts
 from .identity import Identities
+from .links import encode_links
 from .values import field_values, value
 
 
@@ -20,9 +22,8 @@ def property_metadata(metadata: dict, schema, family: str, class_name: str) -> t
                 types.setdefault(name, item.get("type", "text"))
                 if "default" in item:
                     defaults.setdefault(name, item["default"])
-    for pin in metadata.get("pins", []):
-        if pin.get("dir") == "in":
-            types[pin["name"]] = type_text(pin.get("type"))
+    if family == "k2node":
+        input_metadata(metadata, types, defaults)
     return types, defaults
 
 
@@ -36,8 +37,9 @@ def family_for(kind: str, section: str) -> str:
     return "niagara_renderer" if section == "renderers" else ""
 
 
-def encode(document: Document, kind: str, previous: dict | None, namespace: str, schema=None) -> tuple[dict, dict, dict]:
+def encode(document: Document, kind: str, previous: dict | None, namespace: str, schema=None, *, raw=None) -> tuple[dict, dict, dict]:
     identities = Identities(previous, namespace, document.header.asset)
+    contracts = signature_contracts(raw if raw is not None else (previous or dict()).get("raw"))
     sections, locations, scopes = dict(), dict(), dict()
     for section in document.sections:
         scope = identities.scope(section)
@@ -45,6 +47,9 @@ def encode(document: Document, kind: str, previous: dict | None, namespace: str,
             raise SyncError("duplicate_section", section.header())
         scopes[(section.name, section.args)] = scope
         before = identities.sections.get(scope, dict())
+        locations["@section:" + scope] = section.line
+        for prop in section.props():
+            locations["@prop:" + scope + ":" + prop.key] = prop.line
         entities, aliases = dict(), dict()
         for decl in section.decls():
             if decl.id in aliases:
@@ -54,70 +59,44 @@ def encode(document: Document, kind: str, previous: dict | None, namespace: str,
             old = before.get("entities", dict()).get(identifier, dict())
             family = family_for(kind, section.name)
             types, defaults = property_metadata(metadata, schema, family, decl.type_name)
+            class_name = node_name(decl.type_name) if family == "k2node" else decl.type_name
             # A declaration's named arguments and property block are different
             # namespaces. Defaults belong to the one used by its adapter.
             prop_style = section.name in ("components", "actors", "instances", "renderers")
             # Host spellings of one call are one state; the bridge picks the host.
-            entities[identifier] = dict(alias=decl.id, type=call_spelling(decl.type_name) if family == "k2node" else decl.type_name,
-                positional=[value(text) for text in decl.positional()],
+            entities[identifier] = dict(alias=decl.id, type=class_name,
+                positional=[value(text) for text in positional_values(decl, family)],
                 args=field_values(decl.keyed(), types, dict() if prop_style else defaults, old.get("args")),
                 props=field_values(decl.prop_map(), types, defaults if prop_style else dict(), old.get("props")),
-                default=value(decl.default, decl.type_name), position=list(decl.pos) if decl.pos else None,
+                default=value(decl.default, class_name), position=list(decl.pos) if decl.pos else None,
                 flags=dict.fromkeys(decl.flags, True), annotations=dict(decl.annotations), modifier=decl.modifier)
             if decl.opaque:
                 entities[identifier]["opaque"] = metadata.get("t3d", old.get("opaque", ""))
             locations[identifier] = decl.line
-        props = dict((prop.key, value(prop.value, prop.type_name or before.get("props", dict()).get(prop.key, dict()).get("type", "text"))) for prop in section.props())
+        section_type = INSTANCE_TYPES.get(section.name) if kind == "material_instance" else None
+        asset_info = schema.resolve_class("asset", document.header.cls) if schema and section.name == "asset" else None
+        asset_types = dict((name, item.get("type")) for name, item in asset_info.props.items()) if asset_info else dict()
+        props = dict((prop.key, value(prop.value, prop.type_name or section_type or
+                      before.get("props", dict()).get(prop.key, dict()).get("type") or
+                      asset_types.get(prop.key) or "text")) for prop in section.props())
         if len(props) != len(section.props()):
             raise SyncError("duplicate_property", section.header())
-        links = encode_links(section, aliases, identities.bindings)
-        bare = dict((entry.text.split("(", 1)[0] if section.name == "dispatchers" else entry.text, entry.text) for entry in section.bares())
-        item = dict(name=section.name, args=section.args, props=props, entities=entities, links=links, bare=bare)
+        links = encode_links(section, aliases, identities.bindings, document, schema, kind)
+        bare = dict()
+        for entry in section.bares():
+            if section.name == "dispatchers":
+                parsed = signature(entry.text, entry.line, contracts=contracts)
+                bare[parsed.name] = parsed.text()
+            else:
+                bare[entry.text] = entry.text
+        args = signature(section.args, section.line, function=True, contracts=contracts).text() if section.name == "function" else section.args
+        item = dict(name=section.name, args=args, props=props, entities=entities, links=links, bare=bare)
         if section.name == "stack":
             item["order"] = list(entities)
         sections[scope] = item
     normalize_references(sections, kind)
     header = dict(nexus=document.header.nexus, asset=document.header.asset, cls=document.header.cls, extra=document.header.extra)
     return dict(kind=kind, header=header, sections=sections), identities.bindings, locations
-
-
-def is_exec_pin(bindings: dict, node: str, name, direction: str) -> bool:
-    """Whether this endpoint carries execution, as far as its binding records.
-
-    An unnamed endpoint means "the obvious pin", so any execution pin in that
-    direction answers for it; a named one must match by name.
-    """
-    for pin in bindings.get(node, dict()).get("meta", dict()).get("pins", []):
-        if pin.get("dir") != direction or (name is not None and pin.get("name") != name):
-            continue
-        if (pin.get("type") or dict()).get("category") == "exec":
-            return True
-        if name is not None:
-            return False
-    return False
-
-
-def encode_links(section: Section, aliases: dict, bindings: dict) -> dict:
-    """One slot per pin that UE allows only one connection on.
-
-    UE constrains execution on the output side and data on the input side: an
-    execution output drives exactly one place, while any number of lines may join
-    at an execution input, and a data input takes one source while a data output
-    fans out. Deciding this from the source endpoint alone made a graph that
-    rejoins after a branch - the most ordinary shape there is - unrepresentable
-    whenever the source binding carried no pin metadata.
-    """
-    result = dict()
-    for link in section.links():
-        src, dst = aliases.get(link.src, "@" + link.src), aliases.get(link.dst, "@" + link.dst)
-        record = dict(src=src, dst=dst, src_pin=link.src_pin, dst_pin=link.dst_pin)
-        execution = is_exec_pin(bindings, src, link.src_pin, "out") or is_exec_pin(bindings, dst, link.dst_pin, "in")
-        slot = f"out:{src}:{link.src_pin or ''}" if execution else f"in:{dst}:{link.dst_pin or ''}"
-        if slot in result and result[slot] != record:
-            endpoint = (link.src, link.src_pin) if execution else (link.dst, link.dst_pin)
-            raise SyncError("pin_cardinality", f"multiple connections occupy {endpoint[0]}.{endpoint[1] or ''}")
-        result[slot] = record
-    return result
 
 
 def normalize_references(sections: dict, kind: str) -> None:
@@ -139,8 +118,11 @@ def normalize_references(sections: dict, kind: str) -> None:
     for section in sections.values():
         if kind == "scene" and section["name"] == "components" and section["args"] in actor_aliases:
             section["owner"] = actor_aliases[section["args"]]
+        local_variables = dict((entity["alias"], identifier) for identifier, entity in section["entities"].items()
+                               if entity.get("modifier") == "local")
+        visible = dict(variables, **local_variables)
         for entity in section["entities"].values():
             if entity["type"] in ("VariableGet", "VariableSet") and entity["positional"]:
                 field = entity["positional"][0]
-                if field.get("value") in variables:
-                    field["ref"] = variables[field.pop("value")]
+                if field.get("value") in visible:
+                    field["ref"] = visible[field.pop("value")]

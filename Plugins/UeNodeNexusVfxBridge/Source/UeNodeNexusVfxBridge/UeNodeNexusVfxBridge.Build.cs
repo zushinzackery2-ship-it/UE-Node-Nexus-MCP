@@ -96,11 +96,26 @@ public class UeNodeNexusVfxBridge : ModuleRules
         {
             throw new BuildException("Invalid source commit in build identity");
         }
-        PrivateDefinitions.Add("NEXUS_BUILD_VERSION=\"" + Version + "\"");
-        PrivateDefinitions.Add("NEXUS_SOURCE_COMMIT=\"" + Commit + "\"");
-        PrivateDefinitions.Add("NEXUS_SOURCE_FINGERPRINT=\"" + Fingerprint + "\"");
-        PrivateDefinitions.Add("NEXUS_SOURCE_DIRTY=" + (Dirty ? "1" : "0"));
-        PrivateDefinitions.Add("NEXUS_IDENTITY_RECORDED=" + (Recorded ? "1" : "0"));
+        // Keep dynamic provenance local to the build-info translation unit.
+        string DirectoryPath = System.IO.Path.Combine(Root, "Intermediate", "Build", "Identity", System.IO.Path.GetFileName(ModuleDirectory));
+        string Header = System.IO.Path.Combine(DirectoryPath, "NexusBuildIdentity.h");
+        string Content = string.Join("\n", new string[]
+        {
+            "#pragma once",
+            "#define NEXUS_BUILD_VERSION \"" + Version + "\"",
+            "#define NEXUS_SOURCE_COMMIT \"" + Commit + "\"",
+            "#define NEXUS_SOURCE_FINGERPRINT \"" + Fingerprint + "\"",
+            "#define NEXUS_SOURCE_DIRTY " + (Dirty ? "1" : "0"),
+            "#define NEXUS_IDENTITY_RECORDED " + (Recorded ? "1" : "0"),
+            ""
+        });
+        System.IO.Directory.CreateDirectory(DirectoryPath);
+        if (!System.IO.File.Exists(Header) || System.IO.File.ReadAllText(Header) != Content)
+        {
+            System.IO.File.WriteAllText(Header, Content, new System.Text.UTF8Encoding(false));
+        }
+        PrivateIncludePaths.Add(DirectoryPath);
+        ExternalDependencies.Add(Header);
         PrivateDefinitions.Add("NEXUS_CONTRACT_VERSION=4");
     }
 

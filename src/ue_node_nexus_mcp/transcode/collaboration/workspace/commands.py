@@ -7,7 +7,7 @@ from ..history import actions, integrate, query, rebase
 from ..merge.sessions import Sessions
 from ..semantic.snapshot import text_of
 from . import stash
-from .files import capture_files, select
+from .files import capture_files, select, select_history
 
 
 def revision(workspace, name: str) -> str:
@@ -75,13 +75,17 @@ def run(workspace, action: str, paths, options: dict) -> dict:
             return stash.drop(workspace, required(options, "stash_id"))
         raise SyncError("invalid_option", "stash mode must be list, push, apply, pop or drop")
     if action == "log":
-        return query.log(history, revision(workspace, target), options.get("limit", 50), options.get("cursor"),
-                         paths[0] if paths else None, options.get("author"), options.get("entity"),
+        head = revision(workspace, target)
+        selected = select_history(workspace, paths, head)
+        return query.log(history, head, options.get("limit", 50), options.get("cursor"),
+                         selected[0] if selected else None, options.get("author"), options.get("entity"),
                          options.get("since"), options.get("until"))
     if action == "reflog":
         return dict(entries=store.reflog(options.get("ref"), options.get("before"), options.get("limit", 50)))
     if action == "blame":
-        return query.blame(history, revision(workspace, target), options.get("asset") or (paths[0] if paths else required(options, "asset")), required(options, "field_path"))
+        head = revision(workspace, target)
+        selected = select_history(workspace, [options["asset"]] if options.get("asset") else paths, head)
+        return query.blame(history, head, selected[0] if selected else required(options, "asset"), required(options, "field_path"))
     if action == "show":
         return show(workspace, paths, options)
     if action == "diff":
@@ -91,7 +95,7 @@ def run(workspace, action: str, paths, options: dict) -> dict:
             left, right = aliases[options.get("left", "ours")], aliases[options.get("right", "candidate")]
         else:
             left, right = (revision(workspace, options.get(key, default)) for key, default in (("left", "HEAD"), ("right", "files")))
-        rows = query.diff(history, left, right, paths, options.get("entity"), options.get("field"))
+        rows = query.diff(history, left, right, select_history(workspace, paths, left, right), options.get("entity"), options.get("field"))
         return paged(rows, options, left=left, right=right)
     if action == "lint":
         from .lint import lint
@@ -133,7 +137,8 @@ def show(workspace, paths, options: dict) -> dict:
         return record
     head = revision(workspace, options.get("revision", "HEAD"))
     commit = history.commit(head)
-    items = [item for item in sorted(history.entries(head).items()) if paths is None or item[0] in paths]
+    selected = select_history(workspace, paths, head)
+    items = [item for item in sorted(history.entries(head).items()) if selected is None or item[0] in selected]
     render = lambda item: dict(asset=item[0], snapshot=item[1], text=text_of(store.objects.data(item[1], "snapshot")))
     return page(items, options, render, commit_id=head, commit=commit,
                 published=bool(store.ref("refs/ue/published") and history.is_ancestor(head, store.ref("refs/ue/published"))))

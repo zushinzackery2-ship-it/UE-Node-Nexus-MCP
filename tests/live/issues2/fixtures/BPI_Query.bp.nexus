@@ -1,0 +1,8 @@
+nexus: 1
+asset: /Game/NexusIssues2/BPI_Query
+class: Blueprint
+
+[asset]
+ParentClass = /Script/CoreUObject.Interface
+
+[function Query() -> (Result: float)]

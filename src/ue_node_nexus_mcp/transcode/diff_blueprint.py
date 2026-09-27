@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .bp_signature import FunctionSignature, parse_signature
 from .bp_types import join_type_text, parse_type_text
+from .blueprint.members import declarations_first, diff_members
 from .diff_common import diff_brace_props, diff_prop_section, match_renamed, same_class
 from .diff_graph import diff_graph_section
 from .lexer import LexError
@@ -18,12 +19,9 @@ def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, sche
     _diff_variables(local.section("variables"), base.section("variables") if base else None, plan)
     _diff_components(local.section("components"), base.section("components") if base else None, plan, schema)
     diff_prop_section(local.section("defaults"), base.section("defaults") if base else None, plan, "bp_default_set")
-    for name in ("dispatchers", "interfaces"):
-        local_lines = [bare.text for bare in (local.section(name).bares() if local.section(name) else [])]
-        base_lines = [bare.text for bare in (base.section(name).bares() if base and base.section(name) else [])]
-        if local_lines != base_lines:
-            plan.error("unsupported_edit", f"[{name}] is read-only in this version; revert the change", line=local.section(name).line if local.section(name) else None)
+    diff_members(local, base, plan)
     _diff_graphs(local, base, plan, schema)
+    declarations_first(plan)
 
 
 def _variable_payload(decl: Decl) -> dict[str, object]:

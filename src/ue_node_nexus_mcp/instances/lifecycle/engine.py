@@ -30,14 +30,18 @@ def resolve_engine(project: str, configured: str | None) -> Path:
 
 
 def launch_options(project: dict, payload: dict) -> dict:
-    profile = payload.get("launch_profile", "offscreen")
-    require(profile in ("interactive", "offscreen"), "invalid_request", "unknown launch profile")
+    profile = payload.get("launch_profile") or "interactive"
+    require(profile == "interactive", "invalid_request", "managed editors use visible windows; set launch_profile=interactive",
+            field="launch_profile", accepted=["interactive"])
+    rhi = payload.get("rhi")
+    if rhi is None:
+        rhi = "d3d12"
+    require(rhi in ("d3d12", "d3d11"), "invalid_request", "visible editor windows require d3d12 or d3d11",
+            field="rhi", accepted=["d3d12", "d3d11"])
     root = resolve_engine(project["project_path"], payload.get("engine_path"))
-    executable = root / "Engine/Binaries/Win64" / ("UnrealEditor.exe" if profile == "interactive" else "UnrealEditor-Cmd.exe")
+    executable = root / "Engine/Binaries/Win64/UnrealEditor.exe"
     require(executable.is_file(), "engine_not_found", "editor executable does not exist", executable=str(executable))
     verify(project, root)
-    rhi = payload.get("rhi") or "d3d12"
-    require(rhi in ("d3d12", "d3d11", "nullrhi"), "invalid_request", "unknown RHI requirement")
     return dict(executable=canonical_path(executable), engine_dir=canonical_path(root / "Engine"),
                 launch_profile=profile, rhi=rhi)
 
@@ -51,5 +55,6 @@ def compatible(instance: dict, payload: dict) -> None:
         require(canonical_path(expected) == instance["engine_dir"], "instance_incompatible", "different engine is already running")
     if payload.get("rhi"):
         require(payload["rhi"] == instance.get("rhi"), "instance_incompatible", "running RHI does not meet the requirement")
-    if payload.get("launch_profile") == "interactive":
-        require(instance.get("launch_profile") == "interactive", "instance_incompatible", "drain and restart to change the display profile")
+    if payload.get("launch_profile") == "interactive" or not (payload.get("instance_id") or payload.get("pid")):
+        require(instance.get("launch_profile") == "interactive" and instance.get("rhi") != "nullrhi",
+                "instance_incompatible", "drain and restart to change the display profile or RHI")

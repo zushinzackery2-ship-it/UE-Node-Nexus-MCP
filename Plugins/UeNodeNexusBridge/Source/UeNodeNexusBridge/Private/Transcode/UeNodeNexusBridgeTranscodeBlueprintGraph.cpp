@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Blueprint/Members/NexusBlueprintSignaturePins.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -13,7 +14,8 @@
 
 namespace UeNodeNexusBridge::Transcode
 {
-static const TCHAR* GSupportedNodeClasses[] = {
+static const TCHAR* GSupportedNodeClasses[] =
+{
     TEXT("K2Node_CallFunction"), TEXT("K2Node_CallArrayFunction"), TEXT("K2Node_CallDataTableFunction"),
     TEXT("K2Node_CallMaterialParameterCollectionFunction"), TEXT("K2Node_CallParentFunction"), TEXT("K2Node_Message"), TEXT("K2Node_CommutativeAssociativeBinaryOperator"),
     TEXT("K2Node_PromotableOperator"), TEXT("K2Node_Event"), TEXT("K2Node_CustomEvent"), TEXT("K2Node_VariableGet"), TEXT("K2Node_VariableSet"),
@@ -142,8 +144,8 @@ TSharedPtr<FJsonObject> FunctionSignatureJson(UEdGraph* Graph)
     TArray<UK2Node_FunctionResult*> Results;
     Graph->GetNodesOfClass(Results);
     UK2Node_FunctionEntry* Entry = Entries.Num() > 0 ? Entries[0] : nullptr;
-    Signature->SetArrayField(TEXT("inputs"), UserPinsJson(Entry));
-    Signature->SetArrayField(TEXT("outputs"), UserPinsJson(Results.Num() > 0 ? Results[0] : nullptr));
+    Signature->SetArrayField(TEXT("inputs"), SignaturePinsJson(Entry, EGPD_Output));
+    Signature->SetArrayField(TEXT("outputs"), SignaturePinsJson(Results.Num() > 0 ? Results[0] : nullptr, EGPD_Input));
     TArray<TSharedPtr<FJsonValue>> Flags;
     TArray<TSharedPtr<FJsonValue>> Locals;
     FString Category;

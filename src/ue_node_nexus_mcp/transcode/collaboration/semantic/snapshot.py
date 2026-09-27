@@ -11,6 +11,7 @@ from ..store.io import digest
 from .decode import physical_ids, to_document
 from .encode import encode
 from .identity import plain, scene_metadata
+from .locations import stamp
 
 VOLATILE = set(("dirty", "saved_hash", "exported_at", "generated_at", "timestamp", "revision", "live_revision", "content_revision", "editor_epoch", "request_token", "apply_id"))
 
@@ -28,9 +29,10 @@ def from_raw(raw: dict, previous: dict | None = None, namespace: str = "ue", sch
     else:
         previous_ids = physical_ids(previous) if previous else raw.get("ids")
         document, _, _ = document_from_raw(raw, previous_ids=previous_ids, schema=schema)
-    semantic, bindings, _ = encode(document, kind, previous, namespace, schema)
+    stamp(document)
+    semantic, bindings, locations = encode(document, kind, previous, namespace, schema, raw=raw)
     return dict(semantic=semantic, semantic_hash=digest(semantic), bindings=bindings,
-                raw=raw_evidence(raw), schema_key=raw.get("schema_key", ""), codec_version=1)
+                raw=raw_evidence(raw), schema_key=raw.get("schema_key", ""), locations=locations, codec_version=1)
 
 
 def capture(text: str, previous: dict | None, namespace: str, kind: str, schema=None, file: str = "") -> dict:
@@ -39,9 +41,10 @@ def capture(text: str, previous: dict | None, namespace: str, kind: str, schema=
         raise SyncError("invalid_document", "\n".join(item.format() for item in diagnostics.errors()))
     if previous and document.header.asset != previous["semantic"]["header"]["asset"]:
         raise SyncError("asset_identity_changed", "file asset header differs from its registered identity")
-    semantic, bindings, _ = encode(document, kind, previous, namespace, schema)
+    semantic, bindings, locations = encode(document, kind, previous, namespace, schema)
     return dict(semantic=semantic, semantic_hash=digest(semantic), bindings=bindings,
-                raw=(previous or dict()).get("raw", dict()), schema_key=document.header.schema or (previous or dict()).get("schema_key", ""), codec_version=1)
+                raw=(previous or dict()).get("raw", dict()), schema_key=document.header.schema or (previous or dict()).get("schema_key", ""),
+                locations=locations, codec_version=1)
 
 
 def rebind(snapshot: dict | None, schema) -> dict | None:

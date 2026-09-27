@@ -90,7 +90,7 @@ TSharedPtr<FJsonObject> HandleTranscodeStatus(const FString& Operation, const FS
     for (const FString& AssetPath : ReadStringArray(Payload, TEXT("asset_paths")))
     {
         const FAssetData AssetData = Registry.GetAssetByObjectPath(FSoftObjectPath(AssetPath));
-        if (!AssetData.IsValid())
+        if (!IsAssetDataCurrent(AssetData))
         {
             continue;
         }
@@ -103,7 +103,7 @@ TSharedPtr<FJsonObject> HandleTranscodeStatus(const FString& Operation, const FS
         Registry.GetAssetsByPath(FName(TEXT("/Game")), Assets, true);
         for (const FAssetData& AssetData : Assets)
         {
-            if (Seen.Contains(AssetData.GetObjectPathString()))
+            if (!IsAssetDataCurrent(AssetData) || Seen.Contains(AssetData.GetObjectPathString()))
             {
                 continue;
             }

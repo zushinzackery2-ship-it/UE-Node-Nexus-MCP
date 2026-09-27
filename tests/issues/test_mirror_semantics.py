@@ -12,7 +12,8 @@ import copy
 import pytest
 
 from ue_node_nexus_mcp.transcode.codec import document_from_raw
-from ue_node_nexus_mcp.transcode.collaboration.semantic.encode import encode, is_exec_pin
+from ue_node_nexus_mcp.transcode.collaboration.semantic.encode import encode
+from ue_node_nexus_mcp.transcode.collaboration.semantic.links import is_exec_pin
 from ue_node_nexus_mcp.transcode.emitter import emit
 from ue_node_nexus_mcp.transcode.parser import parse
 from ue_node_nexus_mcp.transcode.sync_project import SyncError

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 import subprocess
 import threading
@@ -72,6 +71,10 @@ class WindowsPlatform:
             return [dict(item) for item in self.catalog if not project_key or item["project_key"] == project_key]
 
     def _probe(self, record: dict) -> dict:
+        from ..identity.window_state import captions
+
+        titles = captions(record["pid"])
+        record.update(window_visible=bool(titles), window_titles=titles)
         try:
             observed = self.control(record, "status", dict())
             if any(observed.get(key) != record.get(key) for key in ("pid", "process_created", "project_key")):
@@ -174,12 +177,10 @@ class WindowsPlatform:
         command = [options["executable"], instance["project_path"], "-" + options["rhi"], "-nosplash",
                    "-NexusInstance=" + instance["instance_id"], "-NexusIntent=" + instance["start_intent_id"],
                    "-NexusRuntime=" + str(self.root), "-abslog=" + str(logs / (instance["instance_id"] + ".log"))]
-        if options["launch_profile"] == "offscreen":
-            command.extend(["-unattended", "-RenderOffscreen", "-nosound", "-NoVSync", "-NoSourceControl", "-nop4"])
         with (logs / (instance["instance_id"] + "-console.log")).open("ab") as output:
             process = subprocess.Popen(command, cwd=str(Path(instance["project_path"]).parent),
                                        stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                       creationflags=subprocess.CREATE_NO_WINDOW)
+                                       creationflags=0)
         self.processes[instance["instance_id"]] = process
         try:
             identity = self.inspect(process.pid)

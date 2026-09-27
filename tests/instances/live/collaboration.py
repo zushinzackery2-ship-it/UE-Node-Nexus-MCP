@@ -11,6 +11,7 @@ import ue_node_nexus_mcp
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from ue_node_nexus_mcp.transcode.paths import text_path
+from tests.live.editor.windows import acknowledge_test_disk_warning
 from .host import ROOT, prepare
 from .stdio import connect
 
@@ -26,6 +27,8 @@ async def wait_state(controller, identifier, expected, timeout=240):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         state = await asyncio.to_thread(controller.call, "status", dict(instance_id=identifier))
+        if state["state"] == "STARTING" and state.get("pid"):
+            acknowledge_test_disk_warning(state["pid"], state["project_path"])
         if state["state"] in expected:
             return state
         assert state["state"] not in ("BLOCKED", "UNRESPONSIVE"), state

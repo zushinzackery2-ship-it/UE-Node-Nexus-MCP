@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "Schema/NexusSchema.h"
+#include "Properties/NexusPropertyText.h"
 
 #include "UObject/Class.h"
 #include "UObject/TextProperty.h"
@@ -87,18 +88,15 @@ FString ExportPropertyValue(const UObject* Object, FProperty* Property)
             return Value ? Value->GetPathName() : TEXT("None");
         }
     }
-    // ExportTextItem_* always exports the property itself, but it forwards the
-    // delta pointer to the members inside it: UScriptStruct::ExportText hands a
-    // null Defaults to every member, and FProperty::Identical compares against
-    // zero when its other side is null, so any member whose value is zero is
-    // dropped. TickGroup=TG_PrePhysics is zero, which is how a written value
-    // came back missing and then read as a conflict against the mirror text.
-    // Pointing the delta at the value itself makes every member compare equal
-    // by address and export unconditionally, so the text round-trips.
-    const void* Delta = Property->ContainerPtrToValuePtr<void>(Object);
-    FString Value;
-    Property->ExportTextItem_InContainer(Value, Object, Delta, const_cast<UObject*>(Object), PPF_None);
-    return Value;
+    if (Property->HasGetter())
+    {
+        void* Value = Property->AllocateAndInitializeValue();
+        Property->GetValue_InContainer(Object, Value);
+        const FString Text = ExportPrecisePropertyText(Property, Value, const_cast<UObject*>(Object));
+        Property->DestroyAndFreeValue(Value);
+        return Text;
+    }
+    return ExportPrecisePropertyText(Property, Property->ContainerPtrToValuePtr<void>(Object), const_cast<UObject*>(Object));
 }
 
 TArray<TSharedPtr<FJsonValue>> ExportEditableProps(UObject* Object, UObject* Defaults)

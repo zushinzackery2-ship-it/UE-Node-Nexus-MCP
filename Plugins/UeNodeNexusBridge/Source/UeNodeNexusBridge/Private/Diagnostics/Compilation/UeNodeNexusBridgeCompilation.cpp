@@ -6,6 +6,7 @@
 #include "Materials/MaterialInstance.h"
 #include "RenderCommandFence.h"
 #include "RHI.h"
+#include "ShaderCompilerCore.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeRequestDispatch.h"
 
@@ -52,6 +53,14 @@ FBridgeAssetCompileDiagnostics MaterialResourceStatus(UMaterialInterface* Materi
     if (Resource && bWait)
     {
         UE_LOG(LogTemp, Display, TEXT("Nexus request=%s phase=compile_submitted asset=%s"), *ActiveBridgeRequestId(), *Material->GetPathName());
+        // Editor caching (PostLoad, PostEditChange, UpdateStaticPermutation) registers shader
+        // maps with EMaterialShaderPrecompileMode::None and compiles them on first use, so a
+        // resource that has not rendered yet has no jobs for FinishCompilation to wait on.
+        // Submit them first, as UMaterialEditingLibrary::GetStatistics does.
+        if (!Resource->IsGameThreadShaderMapComplete())
+        {
+            Resource->SubmitCompileJobs_GameThread(EShaderCompileJobPriority::High);
+        }
         Resource->FinishCompilation();
     }
     if (Resource)

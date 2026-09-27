@@ -113,10 +113,6 @@ FJson Observe(const FJson& Request)
     FString Kind, AssetPath;
     Request->TryGetStringField(TEXT("kind"), Kind);
     Request->TryGetStringField(TEXT("asset_path"), AssetPath);
-    if (FObserver* Provider = Observers.Find(Kind))
-    {
-        return StampRaw((*Provider)(Request));
-    }
     if (Kind == TEXT("scene"))
     {
         const FJson* Selector = nullptr;
@@ -131,18 +127,25 @@ FJson Observe(const FJson& Request)
     if (Kind == TEXT("stub"))
     {
         const FAssetData AssetData = FAssetRegistryModule::GetRegistry().GetAssetByObjectPath(FSoftObjectPath(AssetPath));
-        if (AssetData.IsValid())
+        if (Transcode::IsAssetDataCurrent(AssetData))
         {
             return StampRaw(Transcode::BuildStubRaw(AssetData));
         }
     }
     UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
-    if (!Asset)
+    // ObjectTools deletion only clears RF_Public and RF_Standalone; the object stays in
+    // memory until garbage collection, which the deleting apply's own references and the
+    // transaction buffer postpone. LoadObject still finds it, but it is no longer an asset.
+    if (!IsValid(Asset) || !Asset->IsAsset())
     {
         const FJson Missing = MakeShared<FJsonObject>();
         Missing->SetBoolField(TEXT("exists"), false);
         Missing->SetStringField(TEXT("asset_path"), AssetPath);
         return StampRaw(Missing);
+    }
+    if (FObserver* Provider = Observers.Find(Kind))
+    {
+        return StampRaw((*Provider)(Request, Asset));
     }
     return StampRaw(Transcode::BuildRawForAsset(Asset, Transcode::KindForClass(Asset->GetClass())));
 }

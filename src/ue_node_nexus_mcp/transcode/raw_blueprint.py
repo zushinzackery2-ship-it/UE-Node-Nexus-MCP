@@ -186,8 +186,9 @@ def blueprint_document(
 
     dispatchers = Section(name="dispatchers")
     for dispatcher in blueprint.get("dispatchers") or []:
-        params = ", ".join(f"{param.get('name', '')}: {type_text(param.get('type'))}" for param in dispatcher.get("params") or [])
-        dispatchers.entries.append(Bare(text=f"{dispatcher.get('name', '')}({params})"))
+        signature = signature_from_raw(str(dispatcher.get("name", "")),
+                                       dict(inputs=dispatcher.get("params", []), category=dispatcher.get("category", "")))
+        dispatchers.entries.append(Bare(text=signature.text()))
     if dispatchers.entries:
         document.sections.append(dispatchers)
 

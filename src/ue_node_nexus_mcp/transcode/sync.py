@@ -60,7 +60,8 @@ def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, op
             raise SyncError("workspace_required", "collaboration is enabled; use checkout to create a workspace")
         from .collaboration.service import run
 
-        return dict(context.info(), **run(bridge, context, action, paths, options))
+        result = run(bridge, context, action, paths, options)
+        return dict(context.info(), **result)
     with MirrorLock(context.root):
         return _run_locked(bridge, context, action, paths, options)
 

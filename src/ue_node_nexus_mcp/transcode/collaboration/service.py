@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 from ..sync_project import SyncError, ensure_schema, write_project_info
 from .apply.observe import capture
 from .history import History
@@ -27,10 +29,12 @@ def run(bridge, context, action: str, paths, options: dict) -> dict:
     if not identifier:
         raise SyncError("workspace_required", "use an independent workspace for this task", dict(workspaces=[row["id"] for row in store.records("workspace")], checkout=dict(action="checkout", options=dict(dry_run=False))))
     workspace = Workspace(store, identifier, context.schema)
+    if action == "continue" and options.get("merge_id") and Sessions(workspace).get(options["merge_id"])["operation"] == "push":
+        action = "push"
     proposal = check(workspace, action, paths, options) if options.get("proposal_id") else None
     if proposal:
         options, paths = proposal["execution_options"], proposal["paths"]
-    if action == "push" or (action == "continue" and options.get("merge_id") and Sessions(workspace).get(options["merge_id"])["operation"] == "push"):
+    if action == "push":
         from .apply.publish import push
 
         return push(bridge, context, workspace, paths, options, proposal)
@@ -44,7 +48,10 @@ def run(bridge, context, action: str, paths, options: dict) -> dict:
         from .apply.recover import discard
 
         return discard(workspace, options)
-    with store.lock("workspace-" + identifier):
+    # Observers must queue before holding the workspace: publication installs
+    # its canonical result under that same lock before releasing the gate.
+    gate = store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=identifier) if action in ("fetch", "pull") else nullcontext()
+    with gate, store.lock("workspace-" + identifier):
         workspace.reload()
         if proposal:
             check(workspace, action, paths, options)
@@ -129,14 +136,14 @@ def checkout_paths(bridge, context, paths):
 
 
 def fetch(bridge, context, workspace, action: str, paths, options: dict, proposal) -> dict:
+    """Observe with publication then workspace locks held by the dispatcher."""
     from .workspace.files import select
 
     assets = select(workspace.root, workspace.state["files"], paths) if paths else None
-    with workspace.store.lock("publication", PUBLICATION_WAIT_SECONDS, workspace_id=workspace.state["id"]):
-        observation = capture(bridge, context, workspace.store, assets, reference=workspace.state["head"],
-                              discover=options.get("discover", False), persist=not options.get("dry_run", True))
-        if proposal and proposal["preview"].get("target_tree") != observation["tree"]:
-            raise SyncError("stale_proposal", "UE state changed since preview")
+    observation = capture(bridge, context, workspace.store, assets, reference=workspace.state["head"],
+                          discover=options.get("discover", False), persist=not options.get("dry_run", True))
+    if proposal and proposal["preview"].get("target_tree") != observation["tree"]:
+        raise SyncError("stale_proposal", "UE state changed since preview")
     if options.get("dry_run", True):
         preview = dict(target=observation["commit"], target_tree=observation["tree"], revisions=observation["revisions"])
         return create(workspace, action, paths, options, preview)

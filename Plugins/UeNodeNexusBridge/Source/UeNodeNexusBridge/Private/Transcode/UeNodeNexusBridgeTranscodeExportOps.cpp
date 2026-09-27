@@ -23,33 +23,9 @@ TSharedPtr<FJsonObject> BuildGenericRaw(UObject* Asset)
     return Raw;
 }
 
-TSharedPtr<FJsonObject> BuildStubRaw(const FAssetData& AssetData)
-{
-    TSharedPtr<FJsonObject> Raw = MakeShared<FJsonObject>();
-    Raw->SetNumberField(TEXT("raw_version"), 1);
-    Raw->SetStringField(TEXT("asset_path"), AssetData.GetObjectPathString());
-    Raw->SetStringField(TEXT("class"), AssetData.AssetClassPath.ToString());
-    Raw->SetStringField(TEXT("class_short"), AssetData.AssetClassPath.GetAssetName().ToString());
-    Raw->SetStringField(TEXT("kind"), TEXT("stub"));
-    Raw->SetStringField(TEXT("schema_key"), SchemaKey());
-    Raw->SetStringField(TEXT("saved_hash"), PackageSavedHash(AssetData.PackageName.ToString()));
-    Raw->SetBoolField(TEXT("dirty"), IsPackageDirty(AssetData.PackageName.ToString()));
-    Raw->SetArrayField(TEXT("props"), TArray<TSharedPtr<FJsonValue>>());
-    TArray<TSharedPtr<FJsonValue>> Tags;
-    AssetData.EnumerateTags([&Tags](TPair<FName, FAssetTagValueRef> Pair)
-    {
-        TSharedPtr<FJsonObject> Tag = MakeShared<FJsonObject>();
-        Tag->SetStringField(TEXT("name"), Pair.Key.ToString());
-        Tag->SetStringField(TEXT("value"), Pair.Value.AsString());
-        Tags.Add(MakeShared<FJsonValueObject>(Tag));
-    });
-    Raw->SetArrayField(TEXT("tags"), Tags);
-    return Raw;
-}
-
 TSharedPtr<FJsonObject> BuildRawForAsset(UObject* Asset, const FString& Kind)
 {
-    if (Asset == nullptr)
+    if (!IsValid(Asset) || !Asset->IsAsset())
     {
         return nullptr;
     }
@@ -116,8 +92,13 @@ TSharedPtr<FJsonObject> HandleTranscodeExport(const FString& Operation, const FS
         }
         const FAssetData AssetData = Registry.GetAssetByObjectPath(FSoftObjectPath(AssetPath));
         UObject* Asset = AssetData.IsValid() ? nullptr : LoadObject<UObject>(nullptr, *AssetPath);
-        FString Kind = AssetData.IsValid() ? KindForClass(AssetData.GetClass(EResolveClass::Yes)) : (Asset ? KindForClass(Asset->GetClass()) : TEXT("stub"));
-        if (!AssetData.IsValid() && Asset == nullptr)
+        const FString Kind = AssetData.IsValid() ? KindForClass(AssetData.GetClass(EResolveClass::Yes)) : (IsValid(Asset) ? KindForClass(Asset->GetClass()) : TEXT("stub"));
+        if (Kind != TEXT("stub") && Asset == nullptr)
+        {
+            Asset = AssetData.GetAsset();
+        }
+        const bool bExists = Kind == TEXT("stub") ? IsAssetDataCurrent(AssetData) : IsValid(Asset) && Asset->IsAsset();
+        if (!bExists)
         {
             TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
             Item->SetStringField(TEXT("asset_path"), AssetPath);
@@ -132,14 +113,15 @@ TSharedPtr<FJsonObject> HandleTranscodeExport(const FString& Operation, const FS
             {
                 continue;
             }
-            Raw = Collaboration::StampRaw(BuildStubRaw(AssetData));
+            FString StubError;
+            Raw = Collaboration::StampRaw(BuildStubRaw(AssetData, &StubError));
+            if (!Raw.IsValid())
+            {
+                return MakeOperationError(Operation, RequestId, TEXT("stub_metadata_unreadable"), StubError);
+            }
         }
         else
         {
-            if (Asset == nullptr)
-            {
-                Asset = AssetData.GetAsset();
-            }
             Raw = BuildRawForAsset(Asset, Kind);
         }
         if (!Raw.IsValid())

@@ -58,7 +58,7 @@ def prepare(bridge, context, workspace, source: str, assets: list[str], paths, o
 
 
 def plan(workspace, source: str, assets: list[str], paths, options: dict, original: dict, observation: dict, session) -> Prepared:
-    merged = planning.merge(workspace, source, observation["commit"], assets)
+    merged = planning.merge(workspace, source, observation["commit"], assets, force_local=options.get("force") == "local")
     identity = dict(deferred=True, source=source, revisions=observation["revisions"], paths=paths, options=options,
                     refs=dict(((original["branch"], original["head"]),)))
     if merged.get("base_pair"):
@@ -69,7 +69,7 @@ def plan(workspace, source: str, assets: list[str], paths, options: dict, origin
     else:
         # The preview reads the very session a real push would open, so the two
         # cannot disagree about scope or count.
-        prepared.draft = Sessions(workspace).draft("push", merged["base"], observation["commit"], [observation["commit"], source],
+        prepared.draft = Sessions(workspace).draft("push", merged["base"], merged["theirs"], [observation["commit"], source],
                                                    ours=merged["ours"], selected=assets, **identity)
         merged.update(candidate=prepared.draft["candidates"]["head"], conflicts=prepared.draft["conflicts"])
     prepared.batch = planning.preflight(workspace, merged, observation, assets, options)

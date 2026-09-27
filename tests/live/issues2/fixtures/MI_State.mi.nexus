@@ -1,0 +1,12 @@
+nexus: 1
+asset: /Game/NexusIssues2/MI_State
+class: MaterialInstanceConstant
+
+[asset]
+Parent = /Game/NexusIssues2/M_State.M_State
+
+[scalar]
+Amount = 0.338
+
+[switch]
+UseHigh = True

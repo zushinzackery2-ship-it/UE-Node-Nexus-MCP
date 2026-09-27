@@ -2,6 +2,7 @@
 
 from ..errors import InstanceError, require
 from ..session import instance_manager
+from ..session.shutdown import close_instance
 
 
 def execute(operation: str, payload: dict, session=instance_manager) -> dict:
@@ -24,7 +25,7 @@ def execute(operation: str, payload: dict, session=instance_manager) -> dict:
             if action == "close" and not payload.get("instance_id"):
                 payload["instance_id"] = session.current().get("instance_id")
                 require(bool(payload["instance_id"]), "project_required", "select the instance to close")
-            result = session.call(action, payload)
+            result = close_instance(session, payload) if action == "close" else session.call(action, payload)
         return dict(ok=True, operation=operation, data=result, diagnostics=[], warnings=[])
     except InstanceError as exc:
         return dict(exc.envelope(), operation=operation, diagnostics=[], warnings=[])

@@ -2,6 +2,7 @@
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 
 namespace UeNodeNexusBridge
 {
@@ -72,7 +73,13 @@ TSharedPtr<FJsonObject> HandleAssetPackageLinks(
     const FString PackageName = PackageNameFromAssetPath(AssetPath);
     IAssetRegistry& Registry = FAssetRegistryModule::GetRegistry();
     TArray<FAssetData> PackageAssets;
-    Registry.GetAssetsByPackageName(FName(*PackageName), PackageAssets, true);
+    // A newly saved or recreated asset is already registered in memory while
+    // disk discovery can still lag behind its publication.
+    Registry.GetAssetsByPackageName(FName(*PackageName), PackageAssets);
+    PackageAssets.RemoveAll([](const FAssetData& AssetData)
+    {
+        return !Transcode::IsAssetDataCurrent(AssetData);
+    });
     if (PackageAssets.Num() == 0)
     {
         return MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), TEXT("No asset registry entry for the package"));

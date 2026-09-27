@@ -7,6 +7,8 @@ import re
 from collections import defaultdict
 
 from .lexer import parse_kv_list
+from .bp_signature import parse_signature
+from .bp_types import join_type_text, parse_type_text
 from .model import Document
 from .paths import object_path
 from .sync_project import SyncError
@@ -39,20 +41,38 @@ def _value_dependencies(value: str | None, owner: str) -> set[str]:
     return set()
 
 
+def _type_dependencies(text: str, owner: str) -> set[str]:
+    parsed = parse_type_text(text)
+    return set().union(*(_value_dependencies(parsed.get(key), owner) for key in ("subobject", "value_subobject")))
+
+
 def document_dependencies(document: Document, kind: str) -> set[str]:
     """Inspect AST values, including UE import-text structs and object arrays."""
     dependencies: set[str] = set()
     owner = object_path(document.header.asset)
     for section in document.sections:
+        if section.name == "interfaces":
+            for entry in section.bares():
+                dependencies.update(_value_dependencies(entry.text, owner))
+        signatures = [section.args] if section.name == "function" else []
+        if section.name == "dispatchers":
+            signatures.extend(entry.text for entry in section.bares())
+        for text in signatures:
+            signature = parse_signature(text)
+            for parameter in (*signature.inputs, *signature.outputs):
+                dependencies.update(_type_dependencies(parameter.type_text, owner))
+                dependencies.update(_value_dependencies(parameter.default, owner))
         for prop in section.props():
             dependencies.update(_value_dependencies(prop.value, owner))
         for decl in section.decls():
+            if kind == "blueprint" and (section.name == "variables" or decl.modifier == "local"):
+                dependencies.update(_type_dependencies(join_type_text(decl.type_name, decl.args), owner))
             values = [decl.default, decl.type_name]
             values.extend(value for _, value in decl.args)
             values.extend(value for _, value in decl.props)
             for value in values:
                 dependencies.update(_value_dependencies(value, owner))
-    return dependencies
+    return dependencies - set((owner,)) if kind in ("blueprint", "asset", "scene") else dependencies
 
 
 def order_assets(documents: dict[str, tuple[str, Document]], required: set[str] | None = None) -> list[str]:

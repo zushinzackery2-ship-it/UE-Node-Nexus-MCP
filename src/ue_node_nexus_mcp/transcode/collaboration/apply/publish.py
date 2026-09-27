@@ -5,6 +5,7 @@ from __future__ import annotations
 from ...sync_project import SyncError, ensure_schema
 from ..merge.sessions import Sessions
 from ..report.proposals import create
+from ..report.publication import describe
 from ..store.refs import move_ref
 from ..store.repository import PUBLICATION_WAIT_SECONDS
 from ..workspace.files import discover, hashes
@@ -55,10 +56,11 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
     if prepared.answer is not None:
         return prepared.answer
     observation, merged, batch, session = prepared.observation, prepared.merged, prepared.batch, prepared.session
+    explanation = describe(workspace, merged, assets, paths, options)
     if options.get("dry_run", True):
         preview = dict(source=source, target=observation["commit"], target_tree=observation["tree"], revisions=observation["revisions"], published=store.ref("refs/ue/published"),
                        push_candidate=merged["candidate"], base=merged["base"], conflict_count=len(merged["conflicts"]), conflicts=merged["conflicts"],
-                       plans=[batch["units"][asset].get("summary", batch["units"][asset]) for asset in batch["order"] if asset in batch["units"]], errors=batch["errors"])
+                       plans=[batch["units"][asset].get("summary", batch["units"][asset]) for asset in batch["order"] if asset in batch["units"]], errors=batch["errors"], **explanation)
         if merged["conflicts"]:
             # A preview must not open a durable session, so it cannot hand out a
             # merge_id; say which call does, instead of returning merge_id=None.
@@ -69,10 +71,11 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
     conflict_report = None
     if merged["conflicts"]:
         conflict_report = Sessions(workspace).save(prepared.draft)
+        conflict_report.update(explanation)
         if options.get("stop_on_error", True):
             return conflict_report
     if batch["errors"] and options.get("stop_on_error", True):
-        return dict(action="push", status="blocked", errors=batch["errors"], error_count=len(batch["errors"]), applied=0)
+        return dict(action="push", status="blocked", errors=batch["errors"], error_count=len(batch["errors"]), applied=0, **explanation)
     candidate = history.create(merged["candidate"], [observation["commit"], source], "Fixed submitted candidate", original["agent_id"], "candidate")
     rows, succeeded = [], set()
     for asset in batch["order"]:
@@ -92,7 +95,7 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
             else:
                 record = transactions.request(workspace, item, source, batch.get("candidate", candidate), observation["commit"], observation, options)
                 transactions.execute(bridge, workspace, record)
-                published = transactions.publish(workspace, record)
+                published = publish_verified(bridge, context, workspace, record)
                 transactions.adopt(observation, record, published, history)
                 rows.append(dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published))
                 if item.get("interface_changed"):
@@ -143,7 +146,22 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
                 error_count=len(batch["errors"]), errors=batch["errors"], rows=rows, applied=len([row for row in rows if row["action"] == "pushed"]),
                 source_integrated=complete, workspace_rebase_required=workspace_rebase, workspace_id=original["id"],
                 merge_id=conflict_report["merge_id"] if conflict_report else None,
-                conflicts=conflict_report["conflicts"] if conflict_report else [])
+                conflicts=conflict_report["conflicts"] if conflict_report else [], **explanation)
+
+
+def publish_verified(bridge, context, workspace, record) -> str:
+    try:
+        return transactions.publish(workspace, record)
+    except SyncError as exc:
+        if record["phase"] == "result_rejected":
+            from .recover import reconcile
+
+            try:
+                reconcile(bridge, context, workspace, record, restore=True)
+            except SyncError as recovery:
+                exc.details["recovery_error"] = dict(code=recovery.code, message=str(recovery), details=recovery.details)
+            exc.details["phase"] = record["phase"]
+        raise
 
 
 def consume_unchanged(workspace, source: str, candidate: str, target: str, asset: str) -> None:

@@ -68,7 +68,7 @@ def parse(text: str, file: str | None = None) -> tuple[Document, DiagnosticSink]
             _parse_header_line(document.header, line, line_no, sink)
             continue
         try:
-            entry = _parse_entry(line, line_no)
+            entry = Bare(text=line, line=line_no) if current.name in ("interfaces", "dispatchers") else _parse_entry(line, line_no)
         except LexError as exc:
             sink.error("syntax", str(exc), line=line_no, col=exc.col)
             continue

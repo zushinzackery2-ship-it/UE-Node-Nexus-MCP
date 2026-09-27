@@ -1,0 +1,9 @@
+nexus: 1
+asset: /Game/NexusIssues2/MF_Retry
+class: MaterialFunction
+
+[graph]
+invalid : Custom(Code="return missing_identifier;",OutputType=CMOT_Float1) @ 0,0
+output : FunctionOutput(OutputName=Result) @ 200,0
+
+invalid -> output

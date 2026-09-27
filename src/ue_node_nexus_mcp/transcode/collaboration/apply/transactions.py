@@ -164,6 +164,8 @@ def actual_snapshot(workspace, record: dict) -> dict | None:
     raw = receipt.get("after")
     if not raw:
         raise SyncError("receipt_invalid", "saved receipt has no verified result snapshot", dict(apply_id=record["id"]))
+    if record["request"].get("delete_asset") and raw.get("exists") is not False:
+        raise SyncError("receipt_invalid", "deletion receipt still reports an existing asset", dict(apply_id=record["id"], asset=record["asset"]))
     if raw.get("exists") is False or record["request"].get("delete_scene"):
         return None
     candidate = workspace.history.entries(record["candidate"]).get(record["asset"])
@@ -175,7 +177,11 @@ def actual_snapshot(workspace, record: dict) -> dict | None:
             if physical:
                 binding["physical"] = physical
                 binding["meta"]["guid"] = physical
-    return from_raw(raw, prior, schema=workspace.schema)
+    actual = from_raw(raw, prior, schema=workspace.schema)
+    from .readback import verify_result
+
+    verify_result(workspace, record, prior, actual)
+    return actual
 
 
 def publish(workspace, record: dict, *, recovery_target: str | None = None) -> str:
@@ -186,7 +192,13 @@ def publish(workspace, record: dict, *, recovery_target: str | None = None) -> s
     expected = recovery_target if recovery_target is not None else record["target"]
     if target != expected:
         raise SyncError("publication_moved", "observation changed before this receipt was published", dict(apply_id=record["id"], expected=record["target"], actual=target))
-    actual = actual_snapshot(workspace, record)
+    try:
+        actual = actual_snapshot(workspace, record)
+    except SyncError as exc:
+        if exc.code in ("apply_result_mismatch", "receipt_invalid"):
+            record.update(phase="result_rejected", verification_error=dict(code=exc.code, message=str(exc), details=exc.details))
+            save(workspace, record)
+        raise
     entries = history.entries(target)
     if actual:
         entries[record["asset"]] = workspace.snapshot(actual)

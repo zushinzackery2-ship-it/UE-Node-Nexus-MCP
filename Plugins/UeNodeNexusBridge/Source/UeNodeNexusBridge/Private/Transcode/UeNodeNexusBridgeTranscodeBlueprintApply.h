@@ -34,6 +34,9 @@ bool ApplyVariableVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
 bool ApplyComponentVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError);
 bool ApplyFunctionVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError);
 bool ApplyLocalVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError);
+bool ApplyInterfaceVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError);
+bool ApplyDispatcherVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError);
+bool ApplyBlueprintFunctionSignature(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Signature, FString& OutError);
 // Shared payload readers.
 TArray<FString> ReadOpStrings(const TSharedPtr<FJsonObject>& Op, const TCHAR* Field);
 bool ReadOpPinType(const TSharedPtr<FJsonObject>& Op, FEdGraphPinType& OutType, FString& OutError);

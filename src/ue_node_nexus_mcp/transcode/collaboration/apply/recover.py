@@ -20,6 +20,10 @@ def reconcile(bridge, context, workspace, record: dict, restore=False, preserve_
         raise SyncError("receipt_invalid", "recovery did not return a receipt for this apply", dict(apply_id=record["id"]))
     record["receipt"] = receipt
     phase = receipt["phase"]
+    if phase == "ue_committed" and record.get("verification_error") and not restore and not preserve_current:
+        record["phase"] = "result_rejected"
+        transactions.save(workspace, record)
+        return record
     if phase == "ue_committed":
         # A later manual edit is an independent state, not permission to publish
         # the old receipt over it. Both observations remain inspectable.

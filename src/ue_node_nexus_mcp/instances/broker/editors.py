@@ -50,15 +50,17 @@ class Editors:
                 if not alive:
                     if hasattr(service.platform, "exit_result"):
                         item.update(service.platform.exit_result(item))
-                    item.update(state="EXITED", exited_at=service.clock(), generation=item.get("generation", 0) + 1)
+                    item.update(state="EXITED", ready=False, window_visible=False, window_titles=[],
+                                exited_at=service.clock(), generation=item.get("generation", 0) + 1)
                     service.save(item)
                     service.event("exit_confirmed", instance_id=item["instance_id"], pid=item["pid"])
                 elif (not item.get("pid") and item["instance_id"] not in self.jobs
                       and not getattr(service.platform, "discovery_errors", [])):
-                    item.update(state="EXITED", error=dict(code="startup_interrupted", message="no process matches the durable launch intent"))
+                    item.update(state="EXITED", ready=False, window_visible=False, window_titles=[],
+                                error=dict(code="startup_interrupted", message="no process matches the durable launch intent"))
                     service.save(item)
                 elif item["state"] == "STARTING" and service.clock() - item["created_at"] > service.policy.startup_seconds:
-                    item.update(state="UNRESPONSIVE", error=dict(code="startup_timeout", message="process is still alive"))
+                    item.update(state="UNRESPONSIVE", error=dict(code="startup_timeout", message="process is still alive; inspect window_titles and the editor log"))
                     service.save(item)
                 elif item["state"] == "STOPPING" and service.clock() - item["stopping_since"] > service.policy.shutdown_seconds:
                     item.update(state="UNRESPONSIVE", exit_committed=True,
@@ -78,7 +80,7 @@ class Editors:
                 "pending", "inflight", "snapshot_at", "runtime_dir", "start_intent_id", "dirty_packages",
                 "recovery_pending", "state_sampled_at", "compiling", "saving", "pie", "collaboration_binding", "stopping", "vfx_available",
                 "private_working_set_bytes", "handle_count", "cpu_seconds", "resources_sampled_at", "control_available", "control_error",
-                "blockers", "failed_packages", "close_revision", "guard_build"))
+                "blockers", "failed_packages", "close_revision", "guard_build", "window_visible", "window_titles"))
             if not accept_discovery(service, observed):
                 continue
             identifier = observed["instance_id"]
@@ -120,6 +122,8 @@ class Editors:
         leases = service.sessions.for_instance(instance["instance_id"])
         scopes = service.scopes.for_instance(instance["instance_id"])
         result = dict(instance)
+        if instance["state"] == "EXITED":
+            result.update(ready=False, window_visible=False, window_titles=[])
         result.pop("manager_secret", None)
         result["users"] = [dict(lease_id=item["lease_id"], client_session_id=item["client_session_id"],
                                 workspace=item["workspace"], last_use=item["last_use"], releasing=item.get("releasing", False),
@@ -236,7 +240,11 @@ class Editors:
             # not ready yet, and losing it costs the whole startup again.
             require(item["state"] in ("STARTING", "READY", "IDLE", "BLOCKED"), "instance_unavailable",
                     "pin requires a live editor", state=item["state"])
-            if not payload.get("dry_run", True):
+            profile = item.get("launch_profile") or item.get("launch", dict()).get("launch_profile")
+            if profile == "interactive":
+                return dict(instance_id=item["instance_id"], state=item["state"], protection="interactive",
+                            renewable=False, requires_renewal=False, effective=False, dry_run=payload.get("dry_run", False))
+            if not payload.get("dry_run", False):
                 require(not payload.get("proposal_id") or payload["proposal_id"] == proposal(item, payload),
                         "stale_plan", "pin preconditions changed")
                 item["pin_until"] = service.clock() + seconds
@@ -245,7 +253,7 @@ class Editors:
                 service.save(item)
                 service.event("pinned", instance_id=item["instance_id"], seconds=seconds, reason=payload["reason"])
             return dict(instance_id=item["instance_id"], pin_seconds=seconds, max_pin_seconds=limit,
-                        state=item["state"], renewable=True, dry_run=payload.get("dry_run", True),
+                        state=item["state"], renewable=True, dry_run=payload.get("dry_run", False),
                         proposal_id=proposal(item, payload))
 
 

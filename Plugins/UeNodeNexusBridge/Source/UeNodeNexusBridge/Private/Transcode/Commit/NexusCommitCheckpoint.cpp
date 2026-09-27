@@ -11,6 +11,30 @@
 
 namespace UeNodeNexusBridge::Collaboration
 {
+static FJson AbsentPackage(const FString& Name)
+{
+    const FString File = FPaths::ConvertRelativePathToFull(FPackageName::LongPackageNameToFilename(Name, FPackageName::GetAssetPackageExtension()));
+    FJson Row = MakeShared<FJsonObject>();
+    Row->SetStringField(TEXT("package"), Name);
+    Row->SetStringField(TEXT("file"), File);
+    Row->SetBoolField(TEXT("existed"), false);
+    TArray<TSharedPtr<FJsonValue>> Files;
+    const TArray<FString> Extensions
+    {
+        TEXT(".uasset"), TEXT(".uexp"), TEXT(".ubulk"), TEXT(".uptnl"), TEXT(".m.ubulk")
+    };
+    for (const FString& Extension : Extensions)
+    {
+        FJson Item = MakeShared<FJsonObject>();
+        Item->SetStringField(TEXT("path"), FPaths::ChangeExtension(File, Extension));
+        Item->SetStringField(TEXT("disk_hash"), TEXT("absent"));
+        Item->SetStringField(TEXT("memory_hash"), TEXT("absent"));
+        Files.Add(MakeShared<FJsonValueObject>(Item));
+    }
+    Row->SetArrayField(TEXT("files"), Files);
+    return Row;
+}
+
 bool Checkpoint(const FJson& Request, const FJson& Before, const FJson& Receipt, FString& Error)
 {
     TSet<UPackage*> Packages;
@@ -38,6 +62,21 @@ bool Checkpoint(const FJson& Request, const FJson& Before, const FJson& Receipt,
             }
         }
     }
+    else if (Flag(Request, TEXT("expected_absent")))
+    {
+        const FJson Row = AbsentPackage(FPackageName::ObjectPathToPackageName(Text(Request, TEXT("asset_path"))));
+        for (const auto& Value : Rows(Row, TEXT("files")))
+        {
+            if (FileHash(Text(Value->AsObject(), TEXT("path"))) != TEXT("absent"))
+            {
+                Error = TEXT("new asset has an existing package file: ") + Text(Row, TEXT("file"));
+                return false;
+            }
+        }
+        TArray<TSharedPtr<FJsonValue>> Absent;
+        Absent.Add(MakeShared<FJsonValueObject>(Row));
+        Receipt->SetArrayField(TEXT("packages"), Absent);
+    }
     else if (UObject* Asset = LoadObject<UObject>(nullptr, *Text(Request, TEXT("asset_path"))))
     {
         Packages.Add(Asset->GetOutermost());
@@ -51,25 +90,6 @@ bool Checkpoint(const FJson& Request, const FJson& Before, const FJson& Receipt,
     }
     CaptureRecoveryMemory(Receipt, TEXT("package_memory_before"));
     return SaveReceipt(Receipt, TEXT("prepared"), Error);
-}
-
-static FJson NewPackage(UPackage* Package)
-{
-    FJson Row = MakeShared<FJsonObject>();
-    Row->SetStringField(TEXT("package"), Package->GetName());
-    Row->SetStringField(TEXT("file"), PackageFile(Package));
-    Row->SetBoolField(TEXT("existed"), false);
-    TArray<TSharedPtr<FJsonValue>> Files;
-    for (const FString& Extension : { FPaths::GetExtension(PackageFile(Package), true), FString(TEXT(".uexp")), FString(TEXT(".ubulk")) })
-    {
-        FJson Item = MakeShared<FJsonObject>();
-        Item->SetStringField(TEXT("path"), FPaths::ChangeExtension(PackageFile(Package), Extension));
-        Item->SetStringField(TEXT("disk_hash"), TEXT("absent"));
-        Item->SetStringField(TEXT("memory_hash"), TEXT("absent"));
-        Files.Add(MakeShared<FJsonValueObject>(Item));
-    }
-    Row->SetArrayField(TEXT("files"), Files);
-    return Row;
 }
 
 bool SavePackages(const FJson& Request, const FJson& Receipt, FString& Error)
@@ -120,7 +140,7 @@ bool SavePackages(const FJson& Request, const FJson& Receipt, FString& Error)
                 Error = TEXT("uncheckpointed existing package: ") + Name;
                 return false;
             }
-            Row = NewPackage(Package);
+            Row = AbsentPackage(Package->GetName());
             Packages.Add(MakeShared<FJsonValueObject>(Row));
             ByName.Add(Name, Row);
             Receipt->SetArrayField(TEXT("packages"), Packages);

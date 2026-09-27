@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .bp_call_host import call_spelling
+from .blueprint.classes import node_name
 from .model import Decl, Section
 from .plan import AssetPlan
 from .schema.records import class_aliases
@@ -45,7 +45,7 @@ def same_class(schema: SchemaLock | None, family: str, left: str, right: str) ->
     call: the bridge picks the host from the function, not from the spelling.
     """
     if family == "k2node":
-        left, right = call_spelling(left), call_spelling(right)
+        left, right = node_name(left), node_name(right)
     if left == right:
         return True
     left_path = class_path(schema, family, left)

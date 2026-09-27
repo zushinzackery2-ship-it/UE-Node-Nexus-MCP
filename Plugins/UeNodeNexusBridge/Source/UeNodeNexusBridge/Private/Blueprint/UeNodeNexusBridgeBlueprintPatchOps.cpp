@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeBlueprintPatchOps.h"
 
 #include "Dom/JsonValue.h"
+#include "Blueprint/Creation/NexusBlueprintNodeDefaults.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
@@ -104,6 +105,7 @@ static bool ApplyCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TShare
             return false;
         }
         Creator.Finalize();
+        InitializeBlueprintNodeDefaults(NewNode);
         Item->SetStringField(TEXT("node_id"), NewNode->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
         Item->SetStringField(TEXT("node_alias"), BlueprintNodeAlias(Graph, NewNode));
         if (!ClientId.IsEmpty())

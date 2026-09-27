@@ -12,6 +12,12 @@ namespace UeNodeNexusBridge::Transcode
 static const TCHAR* GReadOnlyPrefix = TEXT("read-only on disk");
 static const TCHAR* GStreamingSuspendedPrefix = TEXT("asset streaming is suspended");
 
+static FString PackageSaveFailure(const UPackage* Package)
+{
+    return FString::Printf(TEXT("SavePackage failed for %s (fully_loaded=%d, loaded_path=%s, file_size=%lld)"),
+        *Package->GetName(), Package->IsFullyLoaded(), *Package->GetLoadedPath().GetPackageName(), Package->GetFileSize());
+}
+
 static bool PackageFilename(const UPackage* Package, FString& OutFilename)
 {
     if (Package == nullptr)
@@ -85,7 +91,7 @@ bool SavePackageDirect(UPackage* Package, UObject* Base, FString& OutError, FStr
                 *ActiveBridgeRequestId(), *Package->GetName(), (FPlatformTime::Seconds() - Started) * 1000.0);
             return true;
         }
-        OutError = FString::Printf(TEXT("SavePackage failed for %s"), *Package->GetName());
+        OutError = PackageSaveFailure(Package);
     }
     if (OutCode != nullptr)
     {
@@ -112,12 +118,14 @@ bool SavePackageTo(UPackage* Package, UObject* Base, const FString& Filename, bo
     }
     FSavePackageArgs Args;
     Args.TopLevelFlags = RF_Public | RF_Standalone;
-    Args.SaveFlags = SAVE_NoError | (bKeepDirty ? SAVE_KeepDirty : 0);
+    // Checkpoints and staged copies must retain the source package identity.
+    // UE's autosave flag keeps LoadedPath and NewlyCreated unchanged for a copy.
+    Args.SaveFlags = SAVE_NoError | (bKeepDirty ? (SAVE_KeepDirty | SAVE_FromAutosave) : 0);
     Args.Error = GLog;
     const bool bWasDirty = Package->IsDirty();
     if (!UPackage::SavePackage(Package, Base, *Filename, Args))
     {
-        OutError = TEXT("SavePackage failed for ") + Package->GetName();
+        OutError = PackageSaveFailure(Package);
         return false;
     }
     if (bKeepDirty)

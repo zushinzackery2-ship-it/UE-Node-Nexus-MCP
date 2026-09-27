@@ -49,6 +49,7 @@ public class UeNodeNexusBridge : ModuleRules
             "EditorFramework",
             "DirectoryWatcher",
             "EnhancedInput",
+            "GraphEditor",
             "InputCore",
             "JsonUtilities",
             "Landscape",
@@ -119,11 +120,27 @@ public class UeNodeNexusBridge : ModuleRules
         {
             throw new BuildException("Invalid source commit in build identity");
         }
-        Rules.PrivateDefinitions.Add("NEXUS_BUILD_VERSION=\"" + Version + "\"");
-        Rules.PrivateDefinitions.Add("NEXUS_SOURCE_COMMIT=\"" + Commit + "\"");
-        Rules.PrivateDefinitions.Add("NEXUS_SOURCE_FINGERPRINT=\"" + Fingerprint + "\"");
-        Rules.PrivateDefinitions.Add("NEXUS_SOURCE_DIRTY=" + (Dirty ? "1" : "0"));
-        Rules.PrivateDefinitions.Add("NEXUS_IDENTITY_RECORDED=" + (Recorded ? "1" : "0"));
+        // Only the identity TU consumes changing provenance. Module-wide defines
+        // would recompile every TU whenever any source file changes.
+        string DirectoryPath = System.IO.Path.Combine(Root, "Intermediate", "Build", "Identity", System.IO.Path.GetFileName(Rules.ModuleDirectory));
+        string Header = System.IO.Path.Combine(DirectoryPath, "NexusBuildIdentity.h");
+        string Content = string.Join("\n", new string[]
+        {
+            "#pragma once",
+            "#define NEXUS_BUILD_VERSION \"" + Version + "\"",
+            "#define NEXUS_SOURCE_COMMIT \"" + Commit + "\"",
+            "#define NEXUS_SOURCE_FINGERPRINT \"" + Fingerprint + "\"",
+            "#define NEXUS_SOURCE_DIRTY " + (Dirty ? "1" : "0"),
+            "#define NEXUS_IDENTITY_RECORDED " + (Recorded ? "1" : "0"),
+            ""
+        });
+        System.IO.Directory.CreateDirectory(DirectoryPath);
+        if (!System.IO.File.Exists(Header) || System.IO.File.ReadAllText(Header) != Content)
+        {
+            System.IO.File.WriteAllText(Header, Content, new System.Text.UTF8Encoding(false));
+        }
+        Rules.PrivateIncludePaths.Add(DirectoryPath);
+        Rules.ExternalDependencies.Add(Header);
         Rules.PrivateDefinitions.Add("NEXUS_CONTRACT_VERSION=4");
     }
 

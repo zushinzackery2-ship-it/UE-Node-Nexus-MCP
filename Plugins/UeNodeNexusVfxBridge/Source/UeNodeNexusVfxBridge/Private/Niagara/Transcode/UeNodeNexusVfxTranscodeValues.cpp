@@ -4,6 +4,7 @@
 #include "NiagaraParameterStore.h"
 #include "NiagaraTypes.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
+#include "UeNodeNexusBridgeTranscodeApi.h"
 
 namespace UeNodeNexusBridge::VfxTranscode
 {
@@ -119,7 +120,7 @@ FString ParameterValueText(const FNiagaraParameterStore& Store, const FNiagaraVa
     const FNiagaraTypeDefinition& Type = Variable.GetType();
     if (Type == FNiagaraTypeDefinition::GetFloatDef())
     {
-        return FString::SanitizeFloat(Store.GetParameterValue<float>(Variable));
+        return Transcode::ExportFloat(Store.GetParameterValue<float>(Variable));
     }
     if (Type == FNiagaraTypeDefinition::GetIntDef())
     {
@@ -132,21 +133,22 @@ FString ParameterValueText(const FNiagaraParameterStore& Store, const FNiagaraVa
     if (Type == FNiagaraTypeDefinition::GetVec2Def())
     {
         const FVector2f Value = Store.GetParameterValue<FVector2f>(Variable);
-        return FString::Printf(TEXT("(X=%s,Y=%s)"), *FString::SanitizeFloat(Value.X), *FString::SanitizeFloat(Value.Y));
+        return FString::Printf(TEXT("(X=%s,Y=%s)"), *Transcode::ExportFloat(Value.X), *Transcode::ExportFloat(Value.Y));
     }
     if (Type == FNiagaraTypeDefinition::GetVec3Def() || Type == FNiagaraTypeDefinition::GetPositionDef())
     {
         const FVector3f Value = Store.GetParameterValue<FVector3f>(Variable);
-        return FString::Printf(TEXT("(X=%s,Y=%s,Z=%s)"), *FString::SanitizeFloat(Value.X), *FString::SanitizeFloat(Value.Y), *FString::SanitizeFloat(Value.Z));
+        return FString::Printf(TEXT("(X=%s,Y=%s,Z=%s)"), *Transcode::ExportFloat(Value.X), *Transcode::ExportFloat(Value.Y), *Transcode::ExportFloat(Value.Z));
     }
     if (Type == FNiagaraTypeDefinition::GetVec4Def())
     {
         const FVector4f Value = Store.GetParameterValue<FVector4f>(Variable);
-        return FString::Printf(TEXT("(X=%s,Y=%s,Z=%s,W=%s)"), *FString::SanitizeFloat(Value.X), *FString::SanitizeFloat(Value.Y), *FString::SanitizeFloat(Value.Z), *FString::SanitizeFloat(Value.W));
+        return FString::Printf(TEXT("(X=%s,Y=%s,Z=%s,W=%s)"), *Transcode::ExportFloat(Value.X), *Transcode::ExportFloat(Value.Y), *Transcode::ExportFloat(Value.Z), *Transcode::ExportFloat(Value.W));
     }
     if (Type == FNiagaraTypeDefinition::GetColorDef())
     {
-        return Store.GetParameterValue<FLinearColor>(Variable).ToString();
+        const FLinearColor Value = Store.GetParameterValue<FLinearColor>(Variable);
+        return FString::Printf(TEXT("(R=%s,G=%s,B=%s,A=%s)"), *Transcode::ExportFloat(Value.R), *Transcode::ExportFloat(Value.G), *Transcode::ExportFloat(Value.B), *Transcode::ExportFloat(Value.A));
     }
     if (Type.GetClass() != nullptr)
     {

@@ -68,6 +68,10 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
     }
 
     UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
+    if (!IsValid(Asset) || !Asset->IsAsset())
+    {
+        Asset = nullptr;
+    }
     if (Kind == TEXT("material_instance"))
     {
         FString ParentError;

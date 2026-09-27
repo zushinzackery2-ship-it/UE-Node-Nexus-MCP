@@ -116,7 +116,19 @@ FBridgeAssetCompileDiagnostics CollectAssetCompileDiagnostics(UObject* Asset, co
         Result.bSupported = true;
         Result.bRan = true;
 
-        Material->ForceRecompileForRendering();
+        {
+            // The material editor's graph-edit path (FMaterialEditor::UpdatePreviewMaterial).
+            // PostEditChange mutates StateId, so the shader map id and the DDC key follow
+            // the edited graph; ForceRecompileForRendering alone keeps StateId and reuses
+            // the shader map already registered for it. The update context re-registers
+            // every primitive and instance that renders with the material.
+            FMaterialUpdateContext UpdateContext(FMaterialUpdateContext::EOptions::SyncWithRenderingThread);
+            UpdateContext.AddMaterial(Material);
+            Material->PreEditChange(nullptr);
+            Material->PostEditChange();
+        }
+        // PostEditChange registers the new id with EMaterialShaderPrecompileMode::None;
+        // MaterialResourceStatus submits its compile jobs before waiting.
         if (bMarkMaterialDirty)
         {
             Material->MarkPackageDirty();

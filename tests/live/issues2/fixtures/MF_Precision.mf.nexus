@@ -1,0 +1,13 @@
+nexus: 1
+asset: /Game/NexusIssues2/MF_Precision
+class: MaterialFunction
+
+[graph]
+color : Constant3Vector(Constant=(R=0.338,G=0.7,B=0.1,A=1)) @ -600,0
+mask : ComponentMask(B=True) @ -400,0
+epsilon : Max(ConstB=0.000000000001) @ -200,0
+output : FunctionOutput(OutputName=Result) @ 0,0
+
+color -> mask
+mask -> epsilon.A
+epsilon -> output

@@ -32,19 +32,17 @@ class ProjectContext:
     engine_version: str = ""
     project_file: str = ""
     bridge_available: bool = True
+    bridge_contacted: bool = True
     schema: SchemaLock | None = None
     warnings: list[str] = field(default_factory=list)
 
     def info(self) -> dict[str, Any]:
-        return {
-            "root": str(self.root),
-            "project": self.project_name,
-            "project_dir": str(self.project),
-            "schema_key": self.schema_key,
-            "schema_available": bool(self.schema and self.schema.available),
-            "bridge_available": self.bridge_available,
-            "engine_version": self.engine_version,
-        }
+        result = dict(root=str(self.root), project=self.project_name, project_dir=str(self.project),
+                      schema_key=self.schema_key, schema_available=bool(self.schema and self.schema.available),
+                      bridge_contacted=self.bridge_contacted, engine_version=self.engine_version)
+        if self.bridge_contacted:
+            result["bridge_available"] = self.bridge_available
+        return result
 
 
 def now_iso() -> str:
@@ -115,6 +113,7 @@ def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: 
         engine_version=engine_version,
         project_file=project_file or str(stored.get("project_file", "")),
         bridge_available=bridge_available,
+        bridge_contacted=not offline,
         schema=schema,
         warnings=warnings,
     )

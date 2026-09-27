@@ -1,0 +1,15 @@
+nexus: 1
+asset: /Game/NexusIssues2/M_State
+class: Material
+
+[asset]
+ShadingModel = MSM_Unlit
+
+[graph]
+amount : ScalarParameter(ParameterName=Amount,DefaultValue=0.338) @ -600,0
+function : MaterialFunctionCall(MaterialFunction=/Game/NexusIssues2/MF_Precision.MF_Precision) @ -600,200
+choice : StaticSwitchParameter(ParameterName=UseHigh,DefaultValue=False) @ -300,0
+
+amount -> choice.True
+function -> choice.False
+choice -> out.EmissiveColor

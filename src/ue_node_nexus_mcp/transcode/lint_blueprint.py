@@ -5,6 +5,9 @@ from __future__ import annotations
 from .bp_call_host import call_spelling, host_name, required_host
 from .bp_signature import parse_signature
 from .bp_types import join_type_text, parse_type_text
+from .blueprint.classes import node_name
+from .blueprint.members import lint_members
+from .blueprint.pins import parent_class
 from .errors import DiagnosticSink
 from .lexer import LexError
 from .model import Decl, Document, Section
@@ -35,6 +38,7 @@ IMPLICIT_PINS = {"self", "ReturnValue"}
 
 
 def lint_blueprint(document: Document, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
+    lint_members(document, sink)
     variables = document.section("variables")
     components = document.section("components")
     variable_names = set(variables.decl_map()) if variables else set()
@@ -49,7 +53,7 @@ def lint_blueprint(document: Document, schema: SchemaLock | None, sink: Diagnost
             _lint_component(decl, component_names, schema, sink)
     for section in document.sections:
         if section.name in ("graph", "function", "macro"):
-            _lint_graph(section, variable_names | component_names, function_names, schema, sink)
+            _lint_graph(section, variable_names | component_names, function_names, schema, sink, parent_class(document))
 
 
 def parse_signature_or_none(args: str, line: int, sink: DiagnosticSink):
@@ -93,9 +97,11 @@ def _lint_component(decl: Decl, component_names: set[str], schema: SchemaLock | 
             sink.error("unknown_property", f"{class_name} has no editable property {key!r}", line=decl.line)
 
 
-def _lint_graph(section: Section, member_names: set[str], function_names: set[str], schema: SchemaLock | None, sink: DiagnosticSink) -> None:
+def _lint_graph(section: Section, member_names: set[str], function_names: set[str], schema: SchemaLock | None, sink: DiagnosticSink, parent: str = "") -> None:
     infos: dict[str, ClassInfo | None] = {}
     decls = section.decl_map()
+    if section.name == "function":
+        member_names = member_names | set(decl.id for decl in section.decls() if decl.modifier == "local")
     for decl in section.decls():
         if decl.modifier == "local":
             try:
@@ -103,7 +109,7 @@ def _lint_graph(section: Section, member_names: set[str], function_names: set[st
             except LexError as exc:
                 sink.error("invalid_type", f"local {decl.id}: {exc}", line=decl.line)
             continue
-        infos[decl.id] = _lint_node(decl, member_names, function_names, schema, sink)
+        infos[decl.id] = _lint_node(decl, member_names, function_names, schema, sink, parent)
     for link in section.links():
         for endpoint, pin in ((link.src, link.src_pin), (link.dst, link.dst_pin)):
             decl = decls.get(endpoint)
@@ -113,25 +119,25 @@ def _lint_graph(section: Section, member_names: set[str], function_names: set[st
             _lint_pin(decl, info, pin, link.line, schema, sink)
 
 
-def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], schema: SchemaLock | None, sink: DiagnosticSink) -> ClassInfo | None:
+def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], schema: SchemaLock | None, sink: DiagnosticSink, parent: str = "") -> ClassInfo | None:
     if decl.opaque:
         if any(key is not None for key, _ in decl.args):
             sink.error("opaque_param", "@opaque nodes cannot carry parameters", line=decl.line)
         return None
     positional = decl.positional()
-    spelled = call_spelling(decl.type_name)
-    if spelled != decl.type_name:
+    spelled = node_name(decl.type_name)
+    if call_spelling(decl.type_name) != decl.type_name:
         _lint_call_host(decl, schema, sink)
     required = POSITIONAL_REQUIRED.get(spelled)
     if required and not positional:
         sink.error("missing_positional", f"{decl.type_name} needs a positional argument: {required}", line=decl.line)
-    if decl.type_name in ("VariableGet", "VariableSet") and positional:
+    if spelled in ("VariableGet", "VariableSet") and positional:
         target = positional[0]
         if "." not in target and target not in member_names:
             sink.error("unknown_variable", f"{target!r} is not a declared variable or component", line=decl.line)
     if spelled == "CallFunction" and positional and positional[0].startswith("self."):
         name = positional[0][5:]
-        if name not in function_names:
+        if name not in function_names and not (schema and parent and schema.function(parent, name)):
             sink.warning("unknown_self_function", f"self.{name} is not declared in this file; it must exist on the parent class", line=decl.line)
     pins = decl.keyed().get("pins")
     if pins is not None and not pins.isdigit():
@@ -185,7 +191,7 @@ def _lint_pin(decl: Decl, info: ClassInfo | None, pin: str | None, line: int, sc
     if call_spelling(decl.type_name) in ("CallFunction", "CallParentFunction") and schema is not None and decl.positional():
         owner, _, name = decl.positional()[0].rpartition(".")
         record = schema.function(owner, name)
-        if record is not None:
+        if record is not None and "params" in record:
             params = {str(item.get("name", "")) for item in record.get("params") or []}
             if pin not in params:
                 sink.error("unknown_pin", f"{owner}.{name} has no parameter {pin!r}; parameters: {', '.join(sorted(params))}", line=line)

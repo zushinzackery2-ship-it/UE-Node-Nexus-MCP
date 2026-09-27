@@ -188,6 +188,11 @@ TSharedPtr<FJsonObject> HandleSchemaExport(const FString& Operation, const FStri
     }
     bool bDetailsOnly = false;
     Payload->TryGetBoolField(TEXT("details_only"), bDetailsOnly);
+    FString ClassError;
+    if (!bDetailsOnly && !LoadSchemaBlueprintClasses(ClassError))
+    {
+        return MakeOperationError(Operation, RequestId, TEXT("schema_class_unavailable"), ClassError);
+    }
     const FString Key = SchemaKey();
     TArray<TPair<FString, TSharedPtr<FJsonObject>>> Files;
     TSharedPtr<FJsonObject> KeyJson = MakeShared<FJsonObject>();

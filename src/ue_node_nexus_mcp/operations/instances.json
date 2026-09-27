@@ -28,7 +28,7 @@
       "hidden": false,
       "local": true,
       "default_response": "full",
-      "summary": "Acquire a shared editor for an exact .uproject; reuse_only and dry_run=true by default."
+      "summary": "Acquire a visible editor window for an exact .uproject; reuse_only and dry_run=true by default."
     },
     {
       "name": "bridge_instance_select",
@@ -58,7 +58,7 @@
       "hidden": false,
       "local": true,
       "default_response": "full",
-      "summary": "Preview or request guarded normal exit; other users, dirty packages and in-flight work block close."
+      "summary": "Preview or complete guarded normal exit; execution waits for confirmed process exit unless wait=false."
     },
     {
       "name": "bridge_instance_reap",
@@ -84,11 +84,11 @@
       "name": "bridge_instance_pin",
       "kind": "write",
       "group": "core",
-      "risk": "medium",
-      "hidden": false,
+      "risk": "low",
+      "hidden": true,
       "local": true,
       "default_response": "full",
-      "summary": "Keep a managed editor for a stated reason and a finite duration, at most 3600 seconds."
+      "summary": "Legacy idle hold for old background instances. Visible windows and active work are protected automatically; normal MCP work requires no pin."
     }
   ]
 }

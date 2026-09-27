@@ -1,0 +1,9 @@
+nexus: 1
+asset: /Game/NexusIssues2/BPC_Cold
+class: Blueprint
+
+[asset]
+ParentClass = /Script/Engine.ActorComponent
+
+[variables]
+Amount : float = 0.338

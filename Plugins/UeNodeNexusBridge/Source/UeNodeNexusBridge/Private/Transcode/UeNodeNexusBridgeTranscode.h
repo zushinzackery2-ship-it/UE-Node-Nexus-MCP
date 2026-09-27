@@ -23,7 +23,7 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionRaw(UMaterialFunction* Function);
 TSharedPtr<FJsonObject> BuildMaterialInstanceRaw(UMaterialInstanceConstant* Instance);
 TSharedPtr<FJsonObject> BuildBlueprintRaw(UBlueprint* Blueprint);
 TSharedPtr<FJsonObject> BuildGenericRaw(UObject* Asset);
-TSharedPtr<FJsonObject> BuildStubRaw(const FAssetData& AssetData);
+TSharedPtr<FJsonObject> BuildStubRaw(const FAssetData& AssetData, FString* OutError = nullptr);
 // Dispatch by kind; nullptr when the asset kind is not exportable here.
 TSharedPtr<FJsonObject> BuildRawForAsset(UObject* Asset, const FString& Kind);
 

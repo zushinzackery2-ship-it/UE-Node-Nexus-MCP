@@ -64,6 +64,12 @@ bool CheckAssetForKind(
         OutError = FString::Printf(TEXT("package already exists on disk: %s"), *OutPackageName);
         return false;
     }
+    UObject* Existing = FindObject<UObject>(nullptr, *(OutPackageName + TEXT(".") + OutAssetName));
+    if (Existing && !IsDiscardedAssetObject(Existing))
+    {
+        OutError = FString::Printf(TEXT("object path is occupied: %s"), *AssetPath);
+        return false;
+    }
     // The parent material of an instance is not a creation argument here: it
     // arrives as its own verb and is settled by EnsureMaterialParentReady.
     return CheckAssetCreate(Kind, FString(), CreationClass(Plan, Kind, AssetClass), PlanProp(Plan, TEXT("BlueprintType")), OutError);
@@ -83,6 +89,11 @@ UObject* CreateAssetForKind(
         return nullptr;
     }
     const FString Class = CreationClass(Plan, Kind, AssetClass);
+    if (!ReleaseDiscardedAssetObject(PackageName + TEXT(".") + AssetName))
+    {
+        OutError = FString::Printf(TEXT("discarded asset still occupies the target object path: %s"), *AssetPath);
+        return nullptr;
+    }
     UPackage* Package = CreatePackage(*PackageName);
     UObject* Asset = nullptr;
     if (Kind == TEXT("material"))

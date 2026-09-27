@@ -118,7 +118,7 @@ def test_blueprint_edits_produce_typed_verbs() -> None:
     assert by_op["bp_component_set_prop"][0] == {"op": "bp_component_set_prop", "name": "AimVFX", "prop": "bAutoActivate", "value": "False", "line": by_op["bp_component_set_prop"][0]["line"]}
     assert by_op["bp_default_set"][0]["name"] == "InitialLifeSpan" and by_op["bp_default_set"][0]["value"] == "5"
     creates = {op["id"]: op for op in by_op["create_node"]}
-    assert creates["seq"]["class"] == "Sequence" and creates["seq"]["params"] == {"pins": "3"} and creates["seq"]["graph"] == "EventGraph"
+    assert creates["seq"]["class"] == "/Script/BlueprintGraph.K2Node_ExecutionSequence" and creates["seq"]["params"] == dict(pins="3") and creates["seq"]["graph"] == "EventGraph"
     assert creates["clamp"]["positional"] == ["KismetMathLibrary.FClamp"] and creates["clamp"]["params"] == {"Min": "0", "Max": "100"} and creates["clamp"]["graph"] == "Heal"
     connects = [op for op in by_op["connect_pins"]]
     assert any(op["from"] == "print_string" and op["from_pin"] == "then" and op["to"] == "seq" and op["to_pin"] == "execute" for op in connects)

@@ -48,7 +48,9 @@ bool ApplyBlueprintMemberVerb(UBlueprint* Blueprint, const FString& Verb, const 
     const bool bFunction = Verb.StartsWith(TEXT("bp_function_")) || Verb == TEXT("bp_graph_add");
     const bool bLocal = Verb.StartsWith(TEXT("bp_local_variable_"));
     const bool bDefault = Verb == TEXT("bp_default_set");
-    if (!(bVariable || bComponent || bFunction || bLocal || bDefault))
+    const bool bInterface = Verb.StartsWith(TEXT("bp_interface_"));
+    const bool bDispatcher = Verb.StartsWith(TEXT("bp_dispatcher_"));
+    if (!(bVariable || bComponent || bFunction || bLocal || bDefault || bInterface || bDispatcher))
     {
         return false;
     }
@@ -74,6 +76,14 @@ bool ApplyBlueprintMemberVerb(UBlueprint* Blueprint, const FString& Verb, const 
     else if (bLocal)
     {
         bOk = ApplyLocalVerb(Blueprint, Verb, Op, Error);
+    }
+    else if (bInterface)
+    {
+        bOk = ApplyInterfaceVerb(Blueprint, Verb, Op, Error);
+    }
+    else if (bDispatcher)
+    {
+        bOk = ApplyDispatcherVerb(Blueprint, Verb, Op, Error);
     }
     else
     {
@@ -111,6 +121,52 @@ static void SettleGraphPinTypes(const TArray<UEdGraph*>& Graphs, FApplyContext& 
             Resolution.Remaining, *FString::Join(Resolution.Unresolved, TEXT(", "))));
 }
 
+static void ApplyAssetProp(UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Op, int32 Index, FApplyContext& Context)
+{
+    FString Error;
+    const FString Name = ReadOpString(Op, TEXT("name"));
+    if (Name == TEXT("ParentClass"))
+    {
+        const FString Wanted = ReadOpString(Op, TEXT("value"));
+        const UClass* Current = Blueprint->ParentClass;
+        const bool bSame = Current != nullptr
+            && (Current->GetPathName() == Wanted || Current->GetName() == Wanted || Current->GetName() == FPackageName::ObjectPathToObjectName(Wanted));
+        if (!bSame)
+        {
+            Context.Fail(Index, TEXT("unsupported_verb"), TEXT("ParentClass cannot be changed from text; reparent in the editor"));
+        }
+    }
+    else if (Name == TEXT("BlueprintType"))
+    {
+        // Carried by the mirror so a create knows what to build; on an
+        // existing Blueprint the type is fixed and only ever verified.
+        if (BlueprintTypeName(Blueprint) != ReadOpString(Op, TEXT("value")))
+        {
+            Context.Fail(Index, TEXT("unsupported_verb"), TEXT("BlueprintType is fixed at creation and cannot be changed from text"));
+        }
+    }
+    else if (!Context.bDryRun && !ImportPropertyValue(Blueprint, Name, ReadOpString(Op, TEXT("value")), Error))
+    {
+        Context.Fail(Index, TEXT("prop_failed"), Error);
+    }
+    else
+    {
+        Context.bChanged |= !Context.bDryRun;
+    }
+}
+
+// Verbs that change which members the skeleton class declares without regenerating
+// it. Call nodes resolve their function, and variable nodes their property, on the
+// skeleton class; a component is the member variable of its SCS node. Variable
+// verbs and component renames regenerate the skeleton inside the editor utility
+// they call, raw SCS node edits do not.
+static bool DeclaresMember(const FString& Verb)
+{
+    return Verb == TEXT("bp_function_add") || Verb == TEXT("bp_function_signature_set") || Verb == TEXT("bp_function_rename")
+        || Verb == TEXT("bp_component_add") || Verb == TEXT("bp_component_remove")
+        || Verb.StartsWith(TEXT("bp_interface_")) || Verb.StartsWith(TEXT("bp_dispatcher_"));
+}
+
 void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context)
 {
     if (Blueprint == nullptr)
@@ -118,7 +174,10 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
         Context.Fail(INDEX_NONE, TEXT("invalid_asset"), TEXT("asset is not a Blueprint"));
         return;
     }
-    TArray<UEdGraph*> Touched;
+    // Declarations run before any graph verb: a node may call a function or read a
+    // variable that the same plan declares later, including across graphs.
+    TArray<int32> GraphOps;
+    bool bMembersDeclared = false;
     for (int32 Index = 0; Index < Plan.Num(); ++Index)
     {
         const TSharedPtr<FJsonObject> Op = Plan[Index].IsValid() ? Plan[Index]->AsObject() : nullptr;
@@ -130,42 +189,24 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
         const FString Verb = ReadOpString(Op, TEXT("op"));
         if (Verb == TEXT("set_asset_prop"))
         {
-            FString Error;
-            const FString Name = ReadOpString(Op, TEXT("name"));
-            if (Name == TEXT("ParentClass"))
-            {
-                const FString Wanted = ReadOpString(Op, TEXT("value"));
-                const UClass* Current = Blueprint->ParentClass;
-                const bool bSame = Current != nullptr
-                    && (Current->GetPathName() == Wanted || Current->GetName() == Wanted || Current->GetName() == FPackageName::ObjectPathToObjectName(Wanted));
-                if (!bSame)
-                {
-                    Context.Fail(Index, TEXT("unsupported_verb"), TEXT("ParentClass cannot be changed from text; reparent in the editor"));
-                }
-            }
-            else if (Name == TEXT("BlueprintType"))
-            {
-                // Carried by the mirror so a create knows what to build; on an
-                // existing Blueprint the type is fixed and only ever verified.
-                if (BlueprintTypeName(Blueprint) != ReadOpString(Op, TEXT("value")))
-                {
-                    Context.Fail(Index, TEXT("unsupported_verb"), TEXT("BlueprintType is fixed at creation and cannot be changed from text"));
-                }
-            }
-            else if (!Context.bDryRun && !ImportPropertyValue(Blueprint, Name, ReadOpString(Op, TEXT("value")), Error))
-            {
-                Context.Fail(Index, TEXT("prop_failed"), Error);
-            }
-            else
-            {
-                Context.bChanged |= !Context.bDryRun;
-            }
+            ApplyAssetProp(Blueprint, Op, Index, Context);
             continue;
         }
         if (ApplyBlueprintMemberVerb(Blueprint, Verb, Op, Index, Context))
         {
+            bMembersDeclared |= DeclaresMember(Verb);
             continue;
         }
+        GraphOps.Add(Index);
+    }
+    if (bMembersDeclared && !Context.bDryRun)
+    {
+        FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+    }
+    TArray<UEdGraph*> Touched;
+    for (const int32 Index : GraphOps)
+    {
+        const TSharedPtr<FJsonObject> Op = Plan[Index]->AsObject();
         const FString GraphName = ReadOpString(Op, TEXT("graph"), TEXT("EventGraph"));
         UEdGraph* Graph = FindBlueprintGraph(Blueprint, GraphName);
         if (Graph == nullptr)

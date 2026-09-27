@@ -52,12 +52,13 @@ def refresh(bridge, context) -> SchemaLock:
 
 
 def query(lock: SchemaLock, category=None, text=None, limit=40, cursor=0, details=False) -> dict:
-    if category and category not in set(FAMILIES.values()):
-        raise SyncError("invalid_category", "category must be blueprint, material, niagara, scene, asset or common")
+    if category and category not in set(FAMILIES.values()) | set(FAMILIES):
+        raise SyncError("invalid_category", "category must name a domain or reflection family",
+                        dict(allowed=sorted(set(FAMILIES.values()) | set(FAMILIES))))
     manifest = lock.info()
     matches = []
     for family, entries in manifest.get("tables", dict()).items():
-        if category and FAMILIES[family] != category:
+        if category and category not in (family, FAMILIES[family]):
             continue
         for name, entry in entries.items():
             if text and not any(text.lower() in alias.lower() for alias in entry["aliases"]):
@@ -174,7 +175,7 @@ def historical(context, options: dict) -> dict:
         for reference in snapshot.get("schema_objects", []):
             records[reference] = store.objects.data(reference, "schema")
     rows = [dict(object_id=key, definition=record) for key, record in sorted(records.items())
-            if (not options.get("category") or record["category"] == options["category"])
+            if (not options.get("category") or options["category"] in (record["category"], record.get("family")))
             and (not options.get("query") or any(options["query"].lower() in value.lower() for value in record["aliases"]))]
     from ..collaboration.workspace.commands import paged
 

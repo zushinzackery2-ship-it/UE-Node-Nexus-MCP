@@ -19,7 +19,7 @@ def sources() -> list[Path]:
     result = []
     for name in ("src", "Plugins", "tests", "release"):
         result.extend(path for path in (ROOT / name).rglob("*") if path.is_file()
-                      and path.suffix in (".py", ".cpp", ".h", ".cs", ".json", ".uplugin")
+                      and path.suffix in (".py", ".cpp", ".h", ".inl", ".cs", ".json", ".uplugin")
                       and not set(path.parts) & EXCLUDED)
     return sorted(result)
 
@@ -68,6 +68,14 @@ def check_operations(records: list[dict], errors: list[str]) -> None:
     auto_index = set(name for name in re.findall(pattern, (CORE / "Private/Core/UeNodeNexusBridgeAutoIndexDispatch.cpp").read_text(encoding="utf-8"))
                      if name.startswith("auto_index_"))
     vfx = set(re.findall(r'\{\s*TEXT\("([a-z][a-z0-9_]*)"\)', (VFX / "Private/Module/UeNodeNexusVfxBridgeModule.cpp").read_text(encoding="utf-8")))
+    registries = dict(core=core_names, auto_index=auto_index, vfx=vfx)
+    for name, operations in registries.items():
+        if not operations:
+            errors.append(f"empty native operation registry: {name}")
+    for left, right in (("core", "auto_index"), ("core", "vfx"), ("auto_index", "vfx")):
+        overlap = registries[left] & registries[right]
+        if overlap:
+            errors.append(f"overlapping native registries {left}/{right}: {sorted(overlap)}")
     expected = set(row["name"] for row in records if not row.get("local"))
     if core_names != handlers:
         errors.append("core handlers differ from declared names: " + str(sorted(core_names ^ handlers)))
@@ -75,7 +83,8 @@ def check_operations(records: list[dict], errors: list[str]) -> None:
         errors.append("Python/C++ operation contract differs: " + str(sorted(expected ^ (core_names | auto_index | vfx))))
 
 
-def main() -> None:
+def inspect_sources() -> dict:
+    """Collect the same source and contract findings for pytest and the CLI."""
     files = sources()
     errors = []
     facade_names = []
@@ -108,14 +117,18 @@ def main() -> None:
         descriptor = json.loads((ROOT / "Plugins" / name / f"{name}.uplugin").read_text(encoding="utf-8"))
         if descriptor["VersionName"] != version:
             errors.append(f"version mismatch: {name}")
-    report = dict(static_only=True, runtime_tests_executed=False, files=len(files), python_files=python_count,
-                  operations=len(records), hidden_operations=sum(bool(row.get("hidden")) for row in records),
-                  facades=sorted(facade_names), version=version, errors=errors)
+    return dict(static_only=True, runtime_tests_executed=False, files=len(files), python_files=python_count,
+                operations=len(records), hidden_operations=sum(bool(row.get("hidden")) for row in records),
+                facades=sorted(facade_names), version=version, errors=errors)
+
+
+def main() -> None:
+    report = inspect_sources()
     output = ROOT / "build/validation/Logs/SourceCheck.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    if errors:
+    if report["errors"]:
         raise SystemExit(1)
 
 

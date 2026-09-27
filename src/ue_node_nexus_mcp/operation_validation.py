@@ -34,12 +34,18 @@ def unknown_field_error(operation: str, payload: dict[str, Any], code: str = "un
     unknown = unknown_payload_fields(operation, payload)
     if not unknown:
         return None
-    return {
-        "code": code,
-        "message": f"unsupported field(s) for {operation}: {', '.join(unknown)}",
-        "fields": unknown,
-        "accepted_fields": sorted(payload_schema_for(operation).get("properties", {})),
-    }
+    accepted = sorted(payload_schema_for(operation).get("properties", dict()))
+    aliases = dict(graph="graph_name") if "graph_name" in accepted else dict()
+    if operation == "graph_snapshot_get":
+        aliases.update(filters="node_class_filter (use the filters.node_class value)", node_class="node_class_filter")
+    elif operation == "graph_node_search":
+        aliases.update(node_class_filter="filters.node_class", node_class="filters.node_class")
+    hints = dict((field, aliases[field]) for field in unknown if field in aliases)
+    result = dict(code=code, message=f"unsupported field(s) for {operation}: {', '.join(unknown)}",
+                  fields=unknown, accepted_fields=accepted)
+    if hints:
+        result["field_mapping"] = hints
+    return result
 
 
 def validate_operation_call(

@@ -1,4 +1,5 @@
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
+#include "Material/Creation/NexusMaterialExpressionCreate.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -121,7 +122,7 @@ static bool ApplyFunctionCreateNode(UMaterialFunction* Function, const TSharedPt
     Item->SetStringField(TEXT("class_path"), ExpressionClass->GetPathName());
     if (!bDryRun)
     {
-        UMaterialExpression* NewExpression = UMaterialEditingLibrary::CreateMaterialExpressionInFunction(Function, ExpressionClass, X, Y);
+        UMaterialExpression* NewExpression = CreateNexusMaterialExpression(Function, ExpressionClass, X, Y);
         if (!NewExpression)
         {
             AddFunctionPatchDiagnostic(Diagnostics, TEXT("node_create_failed"), ClassPath, Function);

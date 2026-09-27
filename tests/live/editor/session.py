@@ -10,13 +10,14 @@ import time
 from ue_node_nexus_mcp import runtime
 from ue_node_nexus_mcp.bridge import BridgeConfig, UeBridgeClient
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
+from ue_node_nexus_mcp.instances.errors import InstanceError
 from ue_node_nexus_mcp.instances.session.binding import EditorSession as ManagedSession
 
 
 class EditorSession:
     def __init__(self, project: Path, engine: Path, name: str, rhi: str = "d3d12") -> None:
-        if rhi not in ("d3d12", "nullrhi"):
-            raise ValueError("validation RHI must be d3d12 or nullrhi")
+        if rhi not in ("d3d12", "d3d11"):
+            raise ValueError("visible validation RHI must be d3d12 or d3d11")
         self.project = project.resolve()
         self.project.relative_to((Path(__file__).resolve().parents[3] / "build").resolve())
         self.engine = engine.resolve()
@@ -33,7 +34,7 @@ class EditorSession:
         runtime.bridge = UeBridgeClient(BridgeConfig(timeout_seconds=180), instances=self.session)
         try:
             result = self.session.ensure(dict(mode="reuse_or_start", engine_path=str(self.engine),
-                                              launch_profile="offscreen", rhi=self.rhi, dry_run=False))
+                                              launch_profile="interactive", rhi=self.rhi, dry_run=False))
             self.report("launch", result)
             print(json.dumps(dict(phase="editor_start", instance_id=result["instance"]["instance_id"], project=str(self.project))), flush=True)
             self._ready()
@@ -43,9 +44,14 @@ class EditorSession:
         return self
 
     def _ready(self) -> None:
+        from .windows import acknowledge_test_disk_warning
+
         deadline = time.monotonic() + 240
         while time.monotonic() < deadline:
             status = self.session.status()
+            warnings = acknowledge_test_disk_warning(status["pid"], self.project) if status.get("pid") else []
+            if warnings:
+                self.report("startup-warnings", warnings)
             if status["state"] in ("EXITED", "UNRESPONSIVE"):
                 raise RuntimeError(f"validation editor unavailable: {status}")
             if status["state"] != "READY":
@@ -76,43 +82,63 @@ class EditorSession:
         (self.logs / f"{self.name}-{stage}.json").write_text(
             json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    def verify_builds(self) -> dict:
+    def verify_builds(self, plugin_root: Path | None = None) -> dict:
         capabilities = self.require("bridge_capabilities_get")
+        plugins = plugin_root if plugin_root is not None else self.project.parent / "Plugins"
         for name in ("UeNodeNexusBridge", "UeNodeNexusGuard", "UeNodeNexusVfxBridge"):
-            plugin = self.project.parent / "Plugins" / ("UeNodeNexusBridge" if name == "UeNodeNexusGuard" else name)
+            plugin = plugins / ("UeNodeNexusBridge" if name == "UeNodeNexusGuard" else name)
             expected = json.loads((plugin / "BuildIdentity.json").read_text(encoding="utf-8"))
             live = capabilities["build"][name]
             for field in ("version", "source_commit", "source_dirty", "source_fingerprint", "contract_version"):
                 assert live[field] == expected[field], (name, field, live, expected)
             binary = plugin / f"Binaries/Win64/UnrealEditor-{name}.dll"
-            assert Path(live["module_path"]).resolve() == binary.resolve(), live
+            # UE module filenames are absolute or relative to FPlatformProcess::BaseDir().
+            loaded_path = (self.engine / "Engine/Binaries/Win64" / live["module_path"]).resolve()
+            assert loaded_path == binary.resolve(), live
             assert live["loaded"] and live["build_id"], live
+            live["module_path_resolved"] = str(loaded_path)
             live["dll_sha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
         self.report("builds", capabilities)
         return capabilities
 
     def __exit__(self, exc_type, _exception, _traceback):
-        failure = None
+        failure, normal = None, False
+        state = self.session.current()
         try:
-            identifier = self.session.current().get("instance_id")
+            identifier = state.get("instance_id")
             if identifier:
                 self.session.release()
                 state = self.session.status()
                 if state["state"] in ("READY", "IDLE", "BLOCKED"):
-                    self.session.call("close", dict(instance_id=identifier, dry_run=False))
-                    state = self.session.status()
+                    from ue_node_nexus_mcp.instances.session.shutdown import close_instance
+
+                    result = close_instance(self.session, dict(instance_id=identifier, dry_run=False))
+                    state = result["instance"]
                 deadline = time.monotonic() + 75
                 while state["state"] not in ("EXITED", "BLOCKED", "UNRESPONSIVE") and time.monotonic() < deadline:
                     time.sleep(0.5)
                     state = self.session.status()
                 normal = state["state"] == "EXITED" and state.get("exit_code") == 0
-                self.report("exit", dict(normal=normal, instance=state))
                 if not normal:
                     failure = RuntimeError(f"validation editor did not exit normally: {state}")
+            else:
+                normal = True
+        except Exception as error:
+            failure = error
+            if isinstance(error, InstanceError):
+                state = error.details.get("instance", state)
         finally:
             if self.previous_bridge is not None:
                 runtime.bridge = self.previous_bridge
-            self.session.close()
+            try:
+                self.session.close()
+            except Exception as error:
+                failure = failure or error
+            detail = failure.envelope()["error"] if isinstance(failure, InstanceError) else (
+                dict(code=type(failure).__name__, message=str(failure)) if failure else None)
+            self.report("exit", dict(normal=normal and failure is None, instance=state, error=detail))
+        if failure is not None and exc_type:
+            print(f"Validation cleanup also failed: {failure}", flush=True)
         if failure is not None and not exc_type:
             raise failure
         return False

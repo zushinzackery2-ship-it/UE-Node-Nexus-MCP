@@ -70,6 +70,8 @@ def positional_args(class_short: str, config: dict[str, Any], pins: list[dict[st
     if kind == "variable":
         owner = str(config.get("variable_owner", ""))
         name = str(config.get("variable_name", ""))
+        if config.get("variable_scope"):
+            return [name]
         if owner and str(config.get("self_context", "true")).lower() != "true":
             return [f"{owner_label(owner)}.{name}"]
         return [name]

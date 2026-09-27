@@ -5,6 +5,23 @@
 
 namespace UeNodeNexusBridge::Collaboration
 {
+static bool IsRejectedUnpublishedResult(const FJson& Receipt)
+{
+    const FString ApplyId = Text(Receipt, TEXT("apply_id"));
+    const FString RecordFile = BoundRepository() / TEXT("transactions") / ApplyId / TEXT("apply.json");
+    FJson Record;
+    if (!ReadJournal(RecordFile, Record))
+    {
+        return false;
+    }
+    return Text(Record, TEXT("phase")) == TEXT("result_rejected")
+        && Text(Record, TEXT("id")) == ApplyId
+        && Text(Object(Record, TEXT("request")), TEXT("apply_id")) == ApplyId
+        && Text(Record, TEXT("asset")) == Text(Object(Receipt, TEXT("request")), TEXT("asset_path"))
+        && Record->HasTypedField<EJson::Object>(TEXT("verification_error"))
+        && !Record->HasField(TEXT("published"));
+}
+
 static bool SavedFilesMatch(const FJson& Receipt)
 {
     bool bSawSave = false;
@@ -87,9 +104,14 @@ FJson Recover(const FString& Operation, const FString& RequestId, const FJson& P
     }
     if (Flag(Payload, TEXT("restore")) && Phase != TEXT("rolled_back") && Phase != TEXT("rejected"))
     {
-        if (Phase == TEXT("ue_committed"))
+        if (Phase == TEXT("ue_committed") && !IsRejectedUnpublishedResult(Receipt))
         {
             return CommitError(Operation, RequestId, TEXT("published_history"), TEXT("recover the saved receipt or create a revert commit"), Receipt);
+        }
+        if (Phase == TEXT("ue_committed"))
+        {
+            Receipt->SetStringField(TEXT("recovery_resolution"), TEXT("readback_rejected"));
+            Receipt->SetStringField(TEXT("recovery_reason"), TEXT("publisher rejected the readback before updating history"));
         }
         if (!CheckRecoveryMemory(Receipt, Error) || !CheckRecoveryFiles(Receipt, Error))
         {

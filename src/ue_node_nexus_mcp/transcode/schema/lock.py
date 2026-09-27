@@ -60,6 +60,7 @@ class ClassInfo:
     outputs: list[str] = field(default_factory=list)
     pins: list[dict[str, Any]] = field(default_factory=list)
     dynamic_pins: bool = False
+    inheritance: str = ""
 
     def prop(self, name: str) -> dict[str, Any] | None:
         return self.props.get(name)
@@ -108,6 +109,7 @@ class SchemaLock:
                     outputs=[str(item) for item in record.get("outputs") or []],
                     pins=list(record.get("pins") or []),
                     dynamic_pins=bool(record.get("dynamic_pins", False)),
+                    inheritance=str(record.get("inheritance", "")),
                 )
             self._classes[family] = classes
         return self._classes[family]
@@ -126,7 +128,8 @@ class SchemaLock:
                 return None
             return ClassInfo(name=record["name"], path=record["path"], props=record.get("props", dict()),
                              inputs=record.get("inputs", []), outputs=record.get("outputs", []),
-                             pins=record.get("pins", []), dynamic_pins=record.get("dynamic_pins", False))
+                             pins=record.get("pins", []), dynamic_pins=record.get("dynamic_pins", False),
+                             inheritance=record.get("inheritance", ""))
         classes = self._family(family)
         if not classes:
             return None
@@ -184,10 +187,16 @@ class SchemaLock:
         return None, None, matches
 
     def function(self, owner: str, name: str) -> dict[str, Any] | None:
+        from .functions import resolve
+
+        return resolve(self, owner, name)
+
+    def direct_function(self, owner: str, name: str) -> dict[str, Any] | None:
         if self.info().get("format") == 2:
             from .catalog import lookup_record
 
-            return lookup_record(self, "functions", owner + "." + name)
+            key = owner + "." + name
+            return lookup_record(self, "functions", key) or lookup_record(self, "callable_functions", key)
         if self._functions is None:
             self._functions = self._table("functions", "functions.cache.json")
         for key, record in self._functions.items():

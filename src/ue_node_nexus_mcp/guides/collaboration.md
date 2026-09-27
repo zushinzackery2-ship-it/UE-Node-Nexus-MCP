@@ -40,6 +40,14 @@ another writer; `details.stale` names the asset, its role and both revisions.
 version and replays staged and unstaged changes separately. `status` reports
 both layers, branch movement, active conflicts, pending applies and file paths.
 
+Publication reports each change's `origin` (`ue` or `workspace`) and its
+`comparison.before` / `comparison.after` roles. `ue_drift_adopted` explains when
+UE changes enter the candidate; an empty plan means UE already has those values.
+To publish committed workspace values over UE drift, use `push` with
+`force="local"`. This still performs validation, revision checks and readback.
+It starts a fresh publication; abort an existing `merge_id` before using force.
+Explicit default values and omitted defaults have the same effective semantics.
+
 ## Resolve conflicts
 
 The merge uses persisted common ancestors. Compatible field edits merge;
@@ -70,8 +78,8 @@ with ready `abort` and `retry` calls; re-running the push re-reads everything.
 | Action | Inputs and behavior |
 |---|---|
 | `log` | `revision`, `limit`, `cursor`, `author`; commits retain real parent links |
-| `show` | `revision`, or `merge_id` / `apply_id`; page full version or conflict data |
-| `diff` | `left`, `right` using revisions, `HEAD`, `index`, `files`; filter paths/entity/field |
+| `show` | `revision`, or `merge_id` / `apply_id`; historical asset rows contain full `.nexus` text |
+| `diff` | `left`, `right` using revisions, `HEAD`, `index`, `files`; asset paths and current/historical workspace filenames are accepted |
 | `blame` | `asset`, `field_path`, optional `revision`; traces semantic field ancestry |
 | `branch` | List, or create with `name`, `revision`; removal requires `delete`, `expected` |
 | `switch` | `name`; protects dirty workspaces and uses ref CAS |
@@ -96,13 +104,14 @@ also requires explicit `delete=True`.
 Publication captures current UE memory, including unsaved edits, computes a
 merged candidate, and derives only its remaining delta. Native apply checks
 editor epoch, target revision and dependency read set before mutation. It
-records package checkpoints, save steps and a durable receipt under
-`<Project>/.nexus/collaboration/transactions/<apply_id>/`.
+records package checkpoints, save steps and a native receipt under
+`<Project>/Saved/Nexus/Collaboration/<apply_id>/`. The publisher record and
+exported result live in `<repository>/transactions/<apply_id>/`.
 
 ```python
-ue_sync("recover", options=dict(workspace_id="<id>", apply_id="<apply-id>"))
+ue_sync("recover", options=dict(workspace_id="<id>", apply_id="<apply-id>", resolution="inspect"))
 ue_sync("recover", options=dict(workspace_id="<id>", apply_id="<apply-id>",
-    restore=True, dry_run=False))
+    resolution="restore", dry_run=False))
 ```
 
 Query the recorded phase before deciding how to recover. A committed receipt
@@ -111,6 +120,23 @@ external edits return `recovery_conflict`. Multi-asset batches can partially
 complete; inspect `rows`, `errors` and the per-asset apply IDs. New file edits
 during publication return `workspace_rebase_required`; pull preserves and
 replays their layers.
+
+Before publication, requested writable fields and connections are checked
+against the native receipt. `apply_result_mismatch` includes the asset, file,
+line and differing fields. The unpublished result is restored automatically
+when its memory and disk guards still match; the local commit remains retryable.
+A failed create restores an absent-package checkpoint, including sidecar files.
+Existing packages reload at their original paths so material instances,
+Blueprint instances and active maps retain valid references. Restoration keeps
+pre-apply memory, original disk bytes and the prior dirty flag independently.
+UE's native reload resets editor undo history; the receipt records
+`restore_method=package_reload` and `undo_history_reset` when reload is required.
+Published receipts are immutable history and require a new revert publication.
+Failed restoration preserves dirty state and reports `recovery_conflict` or
+`recovery_required` with its durable evidence.
+
+`continue` with a publication's `merge_id` completes the resolved push and accepts
+its preview's `proposal_id`; a separate push is optional.
 
 ## Working at project scale
 
@@ -129,6 +155,11 @@ Read `index.md`, then a category index and the requested JSON. Categories are
 blueprint, material, niagara, scene, asset and common; contexts are separate
 records within the same schema. Records distinguish engine availability from
 bridge inspect/create/write/delete support and mark unresolved dynamic rules.
+Reflection family names such as `component` and `material_expression` also work.
+`schema_key` reports the current catalog used by the action;
+`workspace_schema_key` reports the workspace's bound historical version.
+Offline actions return `bridge_contacted=False` and leave bridge availability
+unmeasured. Schema availability is measured after first checkout exports it.
 
 ```python
 ue_sync("schema", options=dict(category="blueprint", query="CallFunction", details=True))

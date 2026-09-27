@@ -3,6 +3,7 @@
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 
 #include "Blueprint/CallHost/NexusCallHostClass.h"
+#include "Blueprint/Creation/NexusBlueprintNodeDefaults.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
@@ -93,26 +94,7 @@ bool ConfigureSpecialNode(UBlueprint* Blueprint, UEdGraphNode* Node, const TShar
     {
         return ImportPropertyValue(Node, TEXT("InputAction"), ReadOpString(Config, TEXT("input_action")), OutError);
     }
-    if (ConfigureCreatedBlueprintNode(Node, Blueprint, Config, OutError))
-    {
-        return true;
-    }
-    // A variable added earlier in the same plan may not be on the skeleton class yet.
-    if (UK2Node_Variable* Variable = Cast<UK2Node_Variable>(Node))
-    {
-        const FName VariableName(*ReadOpString(Config, TEXT("variable_name")));
-        for (const FBPVariableDescription& Description : Blueprint->NewVariables)
-        {
-            if (Description.VarName == VariableName)
-            {
-                FGuid Guid = Description.VarGuid;
-                Variable->VariableReference.SetSelfMember(VariableName, Guid);
-                OutError.Reset();
-                return true;
-            }
-        }
-    }
-    return false;
+    return ConfigureCreatedBlueprintNode(Node, Blueprint, Config, OutError);
 }
 
 // Actor templates ship disabled ghost events (BeginPlay/Tick/...). Declaring such an
@@ -222,6 +204,7 @@ void ApplyBlueprintCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TSha
         }
         Creator.Finalize();
     }
+    InitializeBlueprintNodeDefaults(Node);
     if (UK2Node_CustomEvent* Event = Cast<UK2Node_CustomEvent>(Node))
     {
         AddCustomEventParams(Event, Positional, Context, Index);

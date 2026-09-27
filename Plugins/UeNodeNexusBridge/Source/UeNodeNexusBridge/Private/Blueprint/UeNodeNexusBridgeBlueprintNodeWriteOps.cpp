@@ -1,6 +1,7 @@
 ﻿#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 
 #include "EdGraph/EdGraph.h"
+#include "Blueprint/Creation/NexusBlueprintNodeDefaults.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -31,6 +32,11 @@ UClass* ResolveBlueprintNodeClassForCreate(const FString& NodeClass)
     if (UClass* EngineClass = LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/Engine.%s"), *NodeClass)))
     {
         return EngineClass->IsChildOf(UEdGraphNode::StaticClass()) ? EngineClass : nullptr;
+    }
+    const FString EditorName = NodeClass == TEXT("Comment") ? TEXT("EdGraphNode_Comment") : NodeClass;
+    if (UClass* EditorClass = LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/UnrealEd.%s"), *EditorName)))
+    {
+        return EditorClass->IsChildOf(UEdGraphNode::StaticClass()) ? EditorClass : nullptr;
     }
     return nullptr;
 }
@@ -119,6 +125,7 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeCreate(const FString& Operation, cons
             return MakeBlueprintNodeError(Operation, RequestId, TEXT("node_config_failed"), ConfigError);
         }
         Creator.Finalize();
+        InitializeBlueprintNodeDefaults(NewNode);
         Graph->NotifyGraphChanged();
         FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
     }

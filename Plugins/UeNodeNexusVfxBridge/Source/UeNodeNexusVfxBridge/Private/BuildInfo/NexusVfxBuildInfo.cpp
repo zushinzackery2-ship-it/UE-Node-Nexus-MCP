@@ -1,5 +1,6 @@
 #include "NexusVfxBuildInfo.h"
 
+#include "NexusBuildIdentity.h"
 #include "UeNodeNexusBridgeBuildInfo.h"
 
 namespace UeNodeNexusBridge

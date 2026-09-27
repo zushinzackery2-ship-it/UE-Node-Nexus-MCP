@@ -134,6 +134,10 @@ TSharedPtr<FJsonObject> BuildModuleSignatures()
 
 static TSharedPtr<FJsonObject> BuildRaw(UObject* Asset)
 {
+    if (!IsValid(Asset) || !Asset->IsAsset())
+    {
+        return nullptr;
+    }
     if (UNiagaraSystem* System = Cast<UNiagaraSystem>(Asset))
     {
         return Collaboration::StampRaw(BuildNiagaraSystemRaw(System));
@@ -181,7 +185,7 @@ TSharedPtr<FJsonObject> HandleVfxTranscodeExport(const FString& Operation, const
             {
                 TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
                 Item->SetStringField(TEXT("asset_path"), AssetPath);
-                Item->SetStringField(TEXT("reason"), Asset ? TEXT("not_niagara") : TEXT("asset_not_found"));
+                Item->SetStringField(TEXT("reason"), IsValid(Asset) && Asset->IsAsset() ? TEXT("not_niagara") : TEXT("asset_not_found"));
                 Skipped.Add(MakeShared<FJsonValueObject>(Item));
                 continue;
             }

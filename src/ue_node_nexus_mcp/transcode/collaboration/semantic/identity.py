@@ -75,6 +75,7 @@ class Identities:
             raise SyncError("ambiguous_identity", f"duplicate entity identity {decl.id}")
         old = self.old_bindings.get(identifier, dict())
         metadata = dict(old.get("meta", dict()), **plain(decl.meta))
+        metadata.pop("semantic_id", None)
         binding = dict(physical=physical or old.get("physical", ""), scope=scope, alias=decl.id, meta=metadata)
         self.bindings[identifier] = binding
         return identifier, metadata

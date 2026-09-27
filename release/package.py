@@ -118,6 +118,16 @@ def verify_wheel(wheel: Path, version: str) -> None:
             raise RuntimeError("wheel contains private workspace records")
 
 
+def skill_files(local_build: bool) -> dict[str, Path]:
+    if local_build:
+        paths = [path for path in (ROOT / "skill").rglob("*") if path.is_file() and "__pycache__" not in path.parts]
+    else:
+        paths = [ROOT / name for name in git("ls-files", "-z", "--", "skill").split("\0") if name]
+    for path in paths:
+        path.resolve().relative_to((ROOT / "skill").resolve())
+    return dict((path.relative_to(ROOT).as_posix(), path) for path in paths)
+
+
 def package(build: Path, wheel_dir: Path, engine: Path, output: Path, local_build: bool = False) -> None:
     dirty = bool(git("status", "--porcelain"))
     if dirty and not local_build:
@@ -133,9 +143,7 @@ def package(build: Path, wheel_dir: Path, engine: Path, output: Path, local_buil
     files = dict()
     for plugin in PLUGINS:
         files.update(plugin_files(build, plugin, version, build_id, local_build))
-    for relative in git("ls-files", "-z", "--", "skill").split("\0"):
-        if relative:
-            files[relative] = ROOT / relative
+    files.update(skill_files(local_build))
     files["LICENSE"] = ROOT / "LICENSE"
     files["INSTALL.md"] = ROOT / "release/INSTALL.md"
     files["SCENES.md"] = ROOT / "src/ue_node_nexus_mcp/guides/scene_mirror.md"

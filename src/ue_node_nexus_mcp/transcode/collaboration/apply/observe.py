@@ -86,6 +86,31 @@ def scene_selector(asset: str, snapshot: dict | None, requested: dict | None = N
     return dict(map_path=map_path, name=name, actors=actors)
 
 
+def export_batch(bridge, directory, operation: str, paths: list[str]) -> tuple[dict, set]:
+    """An explicit missing export supersedes the earlier registry observation."""
+    data = call_ok(bridge, operation, dict(asset_paths=paths, out_dir=str(directory), include_stubs=True)).get("data") or dict()
+    selected, raw = set(paths), dict()
+    for row in data.get("assets", []):
+        path, file = (row["asset_path"], row["file"]) if isinstance(row, dict) else (row[0], row[2])
+        asset = object_path(path)
+        if asset not in selected:
+            raise SyncError("protocol_mismatch", "export returned an unrequested asset", dict(asset=asset, operation=operation))
+        raw[asset] = read_json(confined(directory, file))
+    absent = set()
+    for row in data.get("skipped", []):
+        if isinstance(row, dict) and row.get("reason") == "asset_not_found" and row.get("asset_path"):
+            asset = object_path(row["asset_path"])
+            if asset in selected:
+                absent.add(asset)
+    contradictory = absent & raw.keys()
+    if contradictory:
+        raise SyncError("protocol_mismatch", "export reports both present and absent assets", dict(assets=sorted(contradictory)))
+    missing = selected - raw.keys() - absent
+    if missing:
+        raise SyncError("observation_failed", "one or more selected assets were not exported", dict(assets=sorted(missing), skipped=data.get("skipped")))
+    return raw, absent
+
+
 def capture(bridge, context, store, assets: list[str] | None = None, *,
             reference: str | None = None, discover=False, selectors=None, persist=True, fresh=()) -> dict:
     """Record what UE holds for ``assets``; every asset in ``fresh`` is exported.
@@ -124,22 +149,17 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
             call_ok(bridge, "scene_export", dict(selector, out_file=str(file)))
             raw_by_asset[asset] = read_json(file)
         elif asset not in infos:
-            entries.pop(asset, None)
             absent.add(asset)
         elif asset not in fresh and asset in entries and carried(memory.get(asset), entries[asset], infos[asset]):
             revisions[asset] = memory[asset][1]
         else:
             groups.setdefault(export_operation(infos[asset].kind), []).append(asset)
     for operation, paths in groups.items():
-        out_dir = directory / operation
-        data = call_ok(bridge, operation, dict(asset_paths=paths, out_dir=str(out_dir), include_stubs=True)).get("data") or dict()
-        for row in data.get("assets", []):
-            path, file = (row["asset_path"], row["file"]) if isinstance(row, dict) else (row[0], row[2])
-            file = confined(out_dir, file)
-            raw_by_asset[object_path(path)] = read_json(file)
-        missing = set(paths) - raw_by_asset.keys()
-        if missing:
-            raise SyncError("observation_failed", "one or more selected assets were not exported", dict(assets=sorted(missing), skipped=data.get("skipped")))
+        exported, deleted = export_batch(bridge, directory / operation, operation, paths)
+        raw_by_asset.update(exported)
+        absent.update(deleted)
+    for asset in absent:
+        entries.pop(asset, None)
     # One transaction registers the whole export: a project-sized observation
     # otherwise pays a separate durable commit for every asset it recorded.
     with store.db.connection(write=True):
@@ -168,5 +188,5 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
         if previous != commit:
             store.move("refs/ue/observed", commit, previous, "UE", "fetch")
         remember(store, context, commit, binding["editor_epoch"], entries, revisions)
-    store.event("observation", observation_id=identifier, commit_id=commit, assets=len(selected), exports=len(raw_by_asset), persisted=persist)
+    store.event("observation", observation_id=identifier, commit_id=commit, assets=len(selected), exports=len(raw_by_asset), absent=len(absent), persisted=persist)
     return dict(record, raw=raw_by_asset)

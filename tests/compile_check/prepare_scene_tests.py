@@ -20,7 +20,7 @@ def prepare() -> None:
     prepare_host(host)
     plugin = host / "Plugins/UeNodeNexusBridge"
     source = ROOT / "tests/scene/native"
-    target = plugin / "Source/UeNodeNexusBridge/Private/Tests"
+    target = plugin / "Source/UeNodeNexusBridge/Private/Tests/Scene"
     target.resolve().relative_to(host.resolve())
     shutil.copytree(source, target)
     identity = write_identity(plugin, ROOT)

@@ -1,7 +1,9 @@
 #include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
+#include "Blueprint/Variables/NexusBlueprintLocalVariables.h"
 
 #include "Dom/JsonObject.h"
 #include "EdGraph/EdGraphNode.h"
+#include "EdGraph/EdGraph.h"
 #include "InputCoreTypes.h"
 #include "K2Node_CallFunction.h"
 #include "K2Node_CustomEvent.h"
@@ -26,6 +28,11 @@ static bool ConfigureVariableNode(UK2Node_Variable* Node, UBlueprint* Blueprint,
     }
 
     const FName VariableFName(*VariableName);
+    if (const FBPVariableDescription* Local = FindBlueprintLocalVariable(Node->GetGraph(), VariableFName))
+    {
+        Node->VariableReference.SetLocalMember(VariableFName, Node->GetGraph()->GetName(), Local->VarGuid);
+        return true;
+    }
     if (FProperty* Property = FindBlueprintProperty(Blueprint, VariableFName))
     {
         Node->SetFromProperty(Property, true, Property->GetOwnerClass());
@@ -38,7 +45,7 @@ static bool ConfigureVariableNode(UK2Node_Variable* Node, UBlueprint* Blueprint,
         return true;
     }
 
-    OutError = FString::Printf(TEXT("variable_name not found on Blueprint variables or components: %s"), *VariableName);
+    OutError = FString::Printf(TEXT("variable_name not found in this function or Blueprint: %s"), *VariableName);
     return false;
 }
 

@@ -18,6 +18,9 @@ from .model import Document, Prop, Section
 from .raw_common import header_from_raw, props_section, require_kind
 
 INSTANCE_SECTIONS = ("scalar", "vector", "texture", "switch", "component_mask", "runtime_virtual_texture", "sparse_volume_texture", "font")
+INSTANCE_TYPES = dict(scalar="float", vector="FLinearColor", texture="UTexture", switch="bool",
+                      component_mask="FStaticComponentMask", runtime_virtual_texture="URuntimeVirtualTexture",
+                      sparse_volume_texture="USparseVolumeTexture", font="FFontParameterValue")
 
 
 def material_instance_document(raw: dict[str, Any]) -> Document:

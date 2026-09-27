@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Blueprint/Members/NexusBlueprintSignaturePins.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"
@@ -12,50 +13,7 @@
 
 namespace UeNodeNexusBridge::Transcode
 {
-namespace
-{
-void SetUserPins(UK2Node_EditablePinBase* Node, const TArray<TSharedPtr<FJsonValue>>* Params, EEdGraphPinDirection Direction, FString& OutError)
-{
-    if (Node == nullptr)
-    {
-        return;
-    }
-    TArray<TSharedPtr<FUserPinInfo>> Existing = Node->UserDefinedPins;
-    for (const TSharedPtr<FUserPinInfo>& Pin : Existing)
-    {
-        if (Pin.IsValid())
-        {
-            Node->RemoveUserDefinedPinByName(Pin->PinName);
-        }
-    }
-    if (Params == nullptr)
-    {
-        return;
-    }
-    for (const TSharedPtr<FJsonValue>& Value : *Params)
-    {
-        const TSharedPtr<FJsonObject> Param = Value.IsValid() ? Value->AsObject() : nullptr;
-        if (!Param.IsValid())
-        {
-            continue;
-        }
-        FEdGraphPinType Type;
-        FString Error;
-        if (!ReadOpPinType(Param, Type, Error))
-        {
-            OutError = Error;
-            continue;
-        }
-        UEdGraphPin* Created = Node->CreateUserDefinedPin(FName(*ReadOpString(Param, TEXT("name"))), Type, Direction);
-        FString Default;
-        if (Created && Param->TryGetStringField(TEXT("default"), Default) && !Default.IsEmpty() && Node->UserDefinedPins.Num() > 0)
-        {
-            Node->ModifyUserDefinedPinDefaultValue(Node->UserDefinedPins.Last(), Default);
-        }
-    }
-}
-
-bool ApplySignature(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Signature, FString& OutError)
+bool ApplyBlueprintFunctionSignature(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Signature, FString& OutError)
 {
     TArray<UK2Node_FunctionEntry*> Entries;
     Graph->GetNodesOfClass(Entries);
@@ -69,13 +27,33 @@ bool ApplySignature(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Signature, F
     const TArray<TSharedPtr<FJsonValue>>* Outputs = nullptr;
     Signature->TryGetArrayField(TEXT("inputs"), Inputs);
     Signature->TryGetArrayField(TEXT("outputs"), Outputs);
-    SetUserPins(Entry, Inputs, EGPD_Output, OutError);
+    const bool bInherited = !Entry->IsEditable();
+    if (!SetSignaturePins(Entry, Inputs, EGPD_Output, bInherited, OutError))
+    {
+        return false;
+    }
     if (Outputs != nullptr && Outputs->Num() > 0)
     {
         UK2Node_FunctionResult* Result = FBlueprintEditorUtils::FindOrCreateFunctionResultNode(Entry);
-        SetUserPins(Result, Outputs, EGPD_Input, OutError);
+        if (!SetSignaturePins(Result, Outputs, EGPD_Input, bInherited, OutError))
+        {
+            return false;
+        }
+    }
+    else
+    {
+        TArray<UK2Node_FunctionResult*> Results;
+        Graph->GetNodesOfClass(Results);
+        for (UK2Node_FunctionResult* Result : Results)
+        {
+            if (!SetSignaturePins(Result, nullptr, EGPD_Input, bInherited, OutError))
+            {
+                return false;
+            }
+        }
     }
     int32 Flags = Entry->GetExtraFlags() & ~(FUNC_BlueprintPure | FUNC_Const | FUNC_Static | FUNC_Public | FUNC_Protected | FUNC_Private);
+    Entry->MetaData.bCallInEditor = false;
     for (const FString& Flag : ReadOpStrings(Signature, TEXT("flags")))
     {
         if (Flag == TEXT("Pure"))
@@ -115,7 +93,6 @@ bool ApplySignature(UEdGraph* Graph, const TSharedPtr<FJsonObject>& Signature, F
     }
     return OutError.IsEmpty();
 }
-}
 
 bool ApplyFunctionVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError)
 {
@@ -124,6 +101,19 @@ bool ApplyFunctionVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
     Op->TryGetObjectField(TEXT("signature"), Signature);
     if (Verb == TEXT("bp_function_add") || Verb == TEXT("bp_graph_add"))
     {
+        if (UEdGraph* Existing = FindBlueprintGraph(Blueprint, Name))
+        {
+            const bool bInterface = Blueprint->ImplementedInterfaces.ContainsByPredicate([Existing](const FBPInterfaceDescription& Interface)
+            {
+                return Interface.Graphs.Contains(Existing);
+            });
+            if (bInterface && Verb == TEXT("bp_function_add"))
+            {
+                return Signature == nullptr || ApplyBlueprintFunctionSignature(Existing, *Signature, OutError);
+            }
+            OutError = TEXT("graph already exists: ") + Name;
+            return false;
+        }
         UEdGraph* Graph = FBlueprintEditorUtils::CreateNewGraph(Blueprint, FName(*Name), UEdGraph::StaticClass(), UEdGraphSchema_K2::StaticClass());
         if (Verb == TEXT("bp_graph_add"))
         {
@@ -131,11 +121,15 @@ bool ApplyFunctionVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
             return true;
         }
         FBlueprintEditorUtils::AddFunctionGraph<UClass>(Blueprint, Graph, true, nullptr);
-        return Signature == nullptr || ApplySignature(Graph, *Signature, OutError);
+        return Signature == nullptr || ApplyBlueprintFunctionSignature(Graph, *Signature, OutError);
     }
     UEdGraph* Graph = FindBlueprintGraph(Blueprint, Name);
     if (Graph == nullptr)
     {
+        if (Verb == TEXT("bp_function_remove"))
+        {
+            return true;
+        }
         OutError = FString::Printf(TEXT("function not found: %s"), *Name);
         return false;
     }
@@ -146,7 +140,7 @@ bool ApplyFunctionVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
     }
     if (Verb == TEXT("bp_function_signature_set"))
     {
-        return Signature != nullptr && ApplySignature(Graph, *Signature, OutError);
+        return Signature != nullptr && ApplyBlueprintFunctionSignature(Graph, *Signature, OutError);
     }
     if (Verb == TEXT("bp_function_rename"))
     {
@@ -174,13 +168,19 @@ bool ApplyLocalVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr
     }
     UK2Node_FunctionEntry* Entry = Entries[0];
     const FName Name(*ReadOpString(Op, TEXT("name")));
-    FBPVariableDescription* Local = Entry->LocalVariables.FindByPredicate([Name](const FBPVariableDescription& Item) { return Item.VarName == Name; });
+    FBPVariableDescription* Local = Entry->LocalVariables.FindByPredicate([Name](const FBPVariableDescription& Item)
+    {
+        return Item.VarName == Name;
+    });
     if (Verb == TEXT("bp_local_variable_remove"))
     {
         if (Local != nullptr)
         {
             Entry->Modify();
-            Entry->LocalVariables.RemoveAll([Name](const FBPVariableDescription& Item) { return Item.VarName == Name; });
+            Entry->LocalVariables.RemoveAll([Name](const FBPVariableDescription& Item)
+            {
+                return Item.VarName == Name;
+            });
         }
         return true;
     }

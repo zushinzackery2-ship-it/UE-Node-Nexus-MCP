@@ -35,19 +35,9 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
 
     UObject* ExistingObject = FindObject<UObject>(nullptr, *ObjectPath);
     FString PackageFilename;
-    bool bPackageExists = FPackageName::DoesPackageExist(PackageName, &PackageFilename);
-    if (ExistingObject != nullptr && !bPackageExists && IsDiscardedAssetObject(ExistingObject))
-    {
-        const bool bReleasedObjectPath = ReleaseDiscardedAssetObject(ObjectPath);
-        ExistingObject = FindObject<UObject>(nullptr, *ObjectPath);
-        bPackageExists = FPackageName::DoesPackageExist(PackageName, &PackageFilename);
-        if (!bReleasedObjectPath && ExistingObject != nullptr && IsDiscardedAssetObject(ExistingObject))
-        {
-            ExistingObject = nullptr;
-        }
-    }
-
-    if (ExistingObject != nullptr || bPackageExists)
+    const bool bPackageExists = FPackageName::DoesPackageExist(PackageName, &PackageFilename);
+    const bool bDiscarded = !bPackageExists && IsDiscardedAssetObject(ExistingObject);
+    if ((ExistingObject != nullptr && !bDiscarded) || bPackageExists)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("asset_already_exists"), TEXT("Asset package already exists")));
@@ -82,6 +72,10 @@ TSharedPtr<FJsonObject> HandleAssetCreate(const FString& Operation, const FStrin
         return Response;
     }
 
+    if (bDiscarded && !ReleaseDiscardedAssetObject(ObjectPath))
+    {
+        return MakeOperationError(Operation, RequestId, TEXT("asset_create_failed"), TEXT("discarded asset still occupies the target object path"));
+    }
     UPackage* Package = CreatePackage(*PackageName);
     UObject* Asset = nullptr;
 

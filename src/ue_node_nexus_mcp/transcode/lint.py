@@ -30,13 +30,6 @@ ALLOWED_SECTIONS = {
 }
 GRAPH_SECTIONS = {"graph", "function", "macro"}
 BARE_SECTIONS = {"dispatchers", "interfaces"}
-MATERIAL_OUTPUT_PROPERTIES = (
-    "MaterialAttributes", "BaseColor", "Metallic", "Specular", "Roughness", "Anisotropy", "EmissiveColor", "Opacity",
-    "OpacityMask", "Normal", "Tangent", "SubsurfaceColor", "AmbientOcclusion", "Refraction", "CustomizedUVs_0",
-    "CustomizedUVs_1", "CustomizedUVs_2", "CustomizedUVs_3", "CustomizedUVs_4", "CustomizedUVs_5", "CustomizedUVs_6",
-    "CustomizedUVs_7", "PixelDepthOffset", "ShadingModel", "Displacement",
-    "WorldPositionOffset", "ClearCoat", "ClearCoatRoughness", "SurfaceThickness", "FrontMaterial",
-)
 
 
 def lint_document(document: Document, kind: str, schema: SchemaLock | None, file: str | None = None, current_key: str | None = None) -> DiagnosticSink:

@@ -1,4 +1,4 @@
-"""Kill only an owned read-only soak's MCP processes and verify autonomous cleanup."""
+"""Kill owned soak clients, retain the visible window, then confirm explicit exit."""
 
 import argparse
 import ctypes
@@ -13,6 +13,7 @@ from ue_node_nexus_mcp.instances.identity.paths import project_identity
 from ue_node_nexus_mcp.instances.identity.processes import inspect_process, is_alive
 from ue_node_nexus_mcp.instances.identity.windows import kernel
 from .host import ROOT
+from .protection import close_clean
 
 
 def terminate_owned(identity):
@@ -27,8 +28,12 @@ def terminate_owned(identity):
         created = str((times[0].dwHighDateTime << 32) | times[0].dwLowDateTime)
         assert created == identity["process_created"]
         api.TerminateProcess.argtypes = [w.HANDLE, w.UINT]
-        if not api.TerminateProcess(handle, 88) and api.WaitForSingleObject(handle, 0) != 0:
-            raise ctypes.WinError(ctypes.get_last_error())
+        terminated = api.TerminateProcess(handle, 88)
+        error = ctypes.get_last_error()
+        if api.WaitForSingleObject(handle, 5000) != 0:
+            if not terminated:
+                raise ctypes.WinError(error)
+            raise TimeoutError(f"owned process did not exit: {identity['pid']}")
     finally:
         api.CloseHandle(handle)
 
@@ -40,7 +45,7 @@ def run(name, resume=False):
     root = host / "Runtime"
     assert project.is_file() and (root / "manager.json").is_file()
     client = BrokerClient(root, str(host))
-    report = dict(project=str(project), purpose="abrupt MCP death and last-client cleanup")
+    report = dict(project=str(project), purpose="abrupt MCP death preserves the user window until explicit close")
     try:
         rows = client.call("list", dict(project_path=str(project), include_exited=resume))["instances"]
         assert len(rows) == 1 and rows[0]["ownership"] == "managed" and not rows[0].get("dirty_packages"), rows
@@ -69,16 +74,18 @@ def run(name, resume=False):
             if is_alive(item):
                 terminate_owned(item)
         started = time.monotonic()
-        while time.monotonic() - started < 210:
+        while time.monotonic() - started < 90:
             state = client.call("status", dict(instance_id=instance["instance_id"]))
-            assert state["state"] != "BLOCKED", state
-            if state["state"] == "EXITED":
+            assert state["protected"] and is_alive(instance), state
+            if state["use_count"] == state["scope_count"] == 0:
                 break
             time.sleep(2)
-        assert state["state"] == "EXITED" and state.get("exit_code") == 0, state
         assert state["use_count"] == state["scope_count"] == 0, state
-        report.update(ok=True, final=state, reclaimed_seconds=time.monotonic() - started)
-        print(json.dumps(dict(ok=True, reclaimed_seconds=report["reclaimed_seconds"], exit_code=0)), flush=True)
+        report["preserved_after_client_death"] = state
+        state = close_clean(client, instance["instance_id"])
+        assert state["state"] == "EXITED" and state.get("exit_code") == 0, state
+        report.update(ok=True, final=state, cleanup_seconds=time.monotonic() - started)
+        print(json.dumps(dict(ok=True, cleanup_seconds=report["cleanup_seconds"], exit_code=0)), flush=True)
     finally:
         client.close()
         (host / "client-crash-result.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -85,5 +85,5 @@ def test_a_publication_blocked_before_it_starts_still_explains_itself(project): 
     ue, env, workspace, store = project
     with pytest.raises(SyncError) as failure:
         call(project, "push", ["/Game/Nope.Nope"])
-    assert failure.value.code
-    assert str(failure.value)
+    assert failure.value.code == "path_not_found"
+    assert "/Game/Nope.Nope" in str(failure.value)

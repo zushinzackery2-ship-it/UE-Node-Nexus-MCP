@@ -52,6 +52,9 @@ def close(editors, client: dict | None, payload: dict) -> dict:
     automatic = bool(payload.get("automatic"))
     with service.lock:
         item = service.instance(payload["instance_id"])
+        if item["state"] == "EXITED":
+            return dict(instance_id=item["instance_id"], state="EXITED", exit_confirmed=True,
+                        exit_code=item.get("exit_code"), dry_run=payload.get("dry_run", True), instance=editors.row(item))
         require(item.get("guard_protocol") == 1, "instance_incompatible", "lifecycle guard is required for managed exit")
         token = proposal(item, payload, dict(manager_epoch=service.epoch,
             leases=sorted(lease["lease_id"] for lease in service.sessions.for_instance(item["instance_id"])),

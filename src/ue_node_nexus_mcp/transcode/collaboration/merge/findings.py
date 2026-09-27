@@ -61,5 +61,6 @@ def finding(layer: str, asset: str, snapshot: dict, snapshot_id: str, issue: dic
     return dict(conflict_id=digest(dict(layer=layer, snapshot=snapshot_id, issue=issue))[:24], asset=asset,
                 field_path=issue["path"], entity_path=issue["path"][:4], kind=snapshot["semantic"]["kind"],
                 conflict_type=issue["conflict_type"], reason=issue["reason"], layer=layer,
+                line=issue.get("line"), col=issue.get("col"),
                 base=value, ours=value, theirs=value,
                 snapshots=[snapshot_id] * 3, allowed_resolutions=["custom", "delete", "rename"])

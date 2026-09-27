@@ -74,6 +74,7 @@ bool CheckRecoveryMemory(const FJson& Receipt, FString& Error)
     const bool bSameEpoch = Text(Receipt, TEXT("editor_epoch")) == EditorEpoch();
     const FJson Before = Object(Receipt, TEXT("package_memory_before"));
     const FJson Applied = Object(Receipt, TEXT("package_memory_applied"));
+    const FJson Saved = Object(Receipt, TEXT("package_memory_saved"));
     const FJson Evidence = MakeShared<FJsonObject>();
     Receipt->SetObjectField(TEXT("recovery_memory"), Evidence);
     for (const FString& Name : RecoveryPackages(Receipt))
@@ -93,7 +94,7 @@ bool CheckRecoveryMemory(const FJson& Receipt, FString& Error)
         }
         const FString Current = MemoryDigest(Package);
         Row->SetStringField(TEXT("digest"), Current);
-        if (Current.IsEmpty() || (Current != Text(Before, *Name) && Current != Text(Applied, *Name)))
+        if (Current.IsEmpty() || (Current != Text(Before, *Name) && Current != Text(Applied, *Name) && Current != Text(Saved, *Name)))
         {
             Error = TEXT("unrecorded package memory must be preserved: ") + Name;
             return false;
@@ -103,9 +104,10 @@ bool CheckRecoveryMemory(const FJson& Receipt, FString& Error)
     if (Flag(Request, TEXT("expected_absent")))
     {
         const FJson Current = ResultSnapshot(Request, Object(Receipt, TEXT("response")));
+        const FString Revision = Text(Current, TEXT("content_revision"));
         if (!Current.IsValid() || (Flag(Current, TEXT("exists"), true)
-            && (Text(Current, TEXT("content_revision")).IsEmpty()
-                || Text(Current, TEXT("content_revision")) != Text(Object(Receipt, TEXT("applied")), TEXT("content_revision")))))
+            && (Revision.IsEmpty() || (Revision != Text(Object(Receipt, TEXT("applied")), TEXT("content_revision"))
+                && Revision != Text(Object(Receipt, TEXT("after")), TEXT("content_revision"))))))
         {
             Error = TEXT("new asset no longer matches the recorded creation");
             return false;

@@ -1,4 +1,5 @@
 #include "NexusLifecycle.h"
+#include "NexusBuildIdentity.h"
 #include "Identity.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"

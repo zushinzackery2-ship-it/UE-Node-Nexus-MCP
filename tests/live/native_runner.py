@@ -7,8 +7,6 @@ import os
 from pathlib import Path
 import subprocess
 
-from tests.live.editor.session import environment
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -22,10 +20,11 @@ def main() -> None:
         "-nullrhi", "-unattended", "-nosplash", "-nosound", "-NoSourceControl", "-nop4",
         "-stdout", "-FullStdOutLogOutput", "-ExecCmds=Automation RunTests Nexus.Instances",
         "-TestExit=Automation Test Queue Empty", "-ReportExportPath=" + str(output),
+        "-NexusRuntime=" + str(host / "Runtime"),
         "-abslog=" + str(host / "Logs/NativeAutomation.log"),
     ]
     with (host / "Logs/NativeAutomation-console.log").open("w", encoding="utf-8") as stream:
-        process = subprocess.run(command, env=environment(project), stdout=stream, stderr=subprocess.STDOUT,
+        process = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT,
                                  creationflags=subprocess.CREATE_NO_WINDOW, timeout=300, check=True)
     report = json.loads((output / "index.json").read_text(encoding="utf-8-sig"))
     expected = set(("RemoveSwapIdentity", "RemoveShiftIdentity", "InvalidRelocationRejected", "MetadataUndoRedo"))

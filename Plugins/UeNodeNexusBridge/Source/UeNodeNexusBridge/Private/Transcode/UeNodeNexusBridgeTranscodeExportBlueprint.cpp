@@ -4,6 +4,7 @@
 
 #include "Components/ActorComponent.h"
 #include "EdGraph/EdGraph.h"
+#include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/InheritableComponentHandler.h"
@@ -111,6 +112,7 @@ static TArray<TSharedPtr<FJsonValue>> DispatchersJson(UBlueprint* Blueprint)
         TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
         Json->SetStringField(TEXT("name"), Graph->GetName());
         Json->SetArrayField(TEXT("params"), UserPinsJson(Entries.Num() > 0 ? Entries[0] : nullptr));
+        Json->SetStringField(TEXT("category"), Entries.Num() > 0 ? Entries[0]->MetaData.Category.ToString() : FString());
         Dispatchers.Add(MakeShared<FJsonValueObject>(Json));
     }
     return Dispatchers;
@@ -136,7 +138,10 @@ TSharedPtr<FJsonObject> BuildBlueprintRaw(UBlueprint* Blueprint)
     TArray<TSharedPtr<FJsonValue>> Variables;
     for (const FBPVariableDescription& Variable : Blueprint->NewVariables)
     {
-        Variables.Add(MakeShared<FJsonValueObject>(VariableJson(Variable, Cdo)));
+        if (Variable.VarType.PinCategory != UEdGraphSchema_K2::PC_MCDelegate)
+        {
+            Variables.Add(MakeShared<FJsonValueObject>(VariableJson(Variable, Cdo)));
+        }
     }
     Data->SetArrayField(TEXT("variables"), Variables);
     Data->SetArrayField(TEXT("components"), ComponentsJson(Blueprint, GeneratedClass, Cdo));
@@ -165,6 +170,16 @@ TSharedPtr<FJsonObject> BuildBlueprintRaw(UBlueprint* Blueprint)
         if (Graph != nullptr)
         {
             Graphs.Add(MakeShared<FJsonValueObject>(GraphJson(Blueprint, Graph, TEXT("function"))));
+        }
+    }
+    for (const FBPInterfaceDescription& Interface : Blueprint->ImplementedInterfaces)
+    {
+        for (UEdGraph* Graph : Interface.Graphs)
+        {
+            if (Graph != nullptr && !Blueprint->FunctionGraphs.Contains(Graph))
+            {
+                Graphs.Add(MakeShared<FJsonValueObject>(GraphJson(Blueprint, Graph, TEXT("function"))));
+            }
         }
     }
     for (UEdGraph* Graph : Blueprint->MacroGraphs)

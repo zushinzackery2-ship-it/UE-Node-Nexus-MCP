@@ -14,21 +14,21 @@ cleanup cannot terminate a shared editor belonging to other workspaces.
    An explicit `project_path` in ensure takes precedence. cwd provides candidates;
    ambiguous candidates return `project_required`.
 2. Read `ue_context_get()` and the schema of `bridge_instance_ensure`.
-3. Preview ensure, then apply it with `dry_run=False`:
+3. When starting the project is authorized, ensure it with `dry_run=False`:
 
    ```python
    ue_execute("bridge_instance_ensure", dict(
        project_path="D:/UEProjects/Demo/Demo.uproject",
-       mode="reuse_or_start", launch_profile="offscreen", rhi="d3d12"))
-   ue_execute("bridge_instance_ensure", dict(
-       project_path="D:/UEProjects/Demo/Demo.uproject",
-       mode="reuse_or_start", launch_profile="offscreen", rhi="d3d12",
+       mode="reuse_or_start", launch_profile="interactive", rhi="d3d12",
        dry_run=False))
    ```
 
    The default mode is `reuse_only`. `reuse_or_start` authorizes starting this
    project when absent. Supply `engine_path` if EngineAssociation cannot resolve
-   an installed engine. A returned `proposal_id` can bind execution to the preview.
+   an installed engine. `dry_run=True` provides an optional preview and a
+   `proposal_id` that binds execution to it. Every new managed editor opens a
+   visible window for user interaction and preview; `interactive` is the default.
+   Visible starts use `d3d12` (default) or `d3d11`.
 4. For `action=starting` or state `STARTING`, poll `bridge_instance_status`.
    All callers share the same launch `operation_id` and instance identity.
 5. Read `project_context_get`, then use the normal asset and `ue_sync` workflow.
@@ -36,6 +36,8 @@ cleanup cannot terminate a shared editor belonging to other workspaces.
 6. Finish with `ue_execute("bridge_instance_release", dict())`.
    This releases this MCP session's leases; pending work keeps its scope until
    UE completion is verified. Normal MCP shutdown also ends its registration.
+   The editor window stays available to the user. Use explicit close when the
+   task includes closing the editor; normal work needs no manual pin or renewal.
 
 Do not launch another editor to resolve a timeout, busy state or repository
 conflict. Inspect the returned instance, blockers and operation first. A task
@@ -45,7 +47,7 @@ already submitted stays bound to its original instance even after selection chan
 
 | State or ownership | Behavior |
 |---|---|
-| `managed`, clean, no users/work | Normal exit after the idle grace period |
+| Legacy background `managed`, clean, no users/work | Normal exit after the idle grace period |
 | Existing `external` editor | Reused when compatible; retains user ownership |
 | Interactive managed editor | Protected from automatic reclamation |
 | `STARTING` | Join the existing launch; query status |
@@ -93,24 +95,33 @@ Discover exact payloads with `ue_capability_get(operation=..., detail="schema")`
 
 | Operation | Use |
 |---|---|
-| `bridge_instance_list/status` | Identity, ownership, users, work, resources, deadlines and logs |
+| `bridge_instance_list/status` | Identity, ownership, window visibility/titles, users, work, resources and logs |
 | `bridge_instance_select` | Select an exact `project_path` / `instance_id`; legacy PID/name must be unambiguous |
 | `bridge_instance_reap` | Preview eligible managed instances and each blocker; apply with `dry_run=False` |
-| `bridge_instance_close` | Preview normal close; specify only the package names explicitly intended for saving |
-| `bridge_instance_pin` | Protect a ready managed editor for a reason and 1–3600 seconds |
+| `bridge_instance_close` | `dry_run=False` waits for actual process exit; name any packages explicitly intended for saving |
 | `bridge_instance_adopt` | Transfer an external editor into management using exact instance/project/process creation identity |
 
-Ensure, close, reap, pin and adopt default to previews. Ensure does not adopt.
+Ensure, close, reap and adopt default to optional previews. Ensure does not adopt.
 Adoption remains protected by default; use an explicit `protected=False` only
 when that editor should become eligible for automatic cleanup. Other users and
 in-flight work always block explicit close. Save failure returns failed packages
-and keeps the editor running. Check status until `EXITED` after a close request.
+and keeps the editor running. A completed close returns `exit_confirmed=True`,
+`state=EXITED` and `exit_code`. `wait=False` submits an asynchronous close and
+returns `exit_confirmed=False`; poll status to confirm completion. A blocked close
+or shutdown timeout reports the live instance and its blockers.
+
+`bridge_instance_pin` is hidden from ordinary discovery. It remains callable for
+legacy background editors, with a reason and duration up to `max_pin_seconds`
+(default 14400). It applies immediately unless `dry_run=True`. Calling it for a
+windowed editor reports its existing protection and `requires_renewal=False`
+without changing the instance generation. Active work scopes protect themselves.
 
 The legacy `editor_request_exit` routes through the same manager checks.
 Its old `force` and blanket save behavior are rejected. Ordinary lifecycle
 operations cannot be nested in `batch_execute` or `task_submit`.
-To change offscreen to interactive, release work, close, wait for `EXITED`,
-then ensure with `launch_profile="interactive"`.
+To replace a legacy offscreen editor, select its exact instance, finish/release
+work, close with `dry_run=False`, then ensure the project. New offscreen launches
+are rejected with the supported profile in the error.
 
 ## Shared repository and offline work
 

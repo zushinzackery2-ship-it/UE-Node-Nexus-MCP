@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .blueprint.classes import create_class
 from .diff_common import decl_params, diff_params, same_class
 from .model import Decl, Link, Section
 from .plan import AssetPlan
@@ -55,6 +56,8 @@ def _create_node(decl: Decl, plan: AssetPlan, kind: str, extra: dict[str, Any]) 
     params = decl_params(decl)
     positional = decl.positional()
     args: dict[str, Any] = {"id": decl.id, "class": decl.type_name, "params": params}
+    if kind == "blueprint":
+        args["class"] = create_class(decl.type_name)
     if positional:
         args["positional"] = positional
     if decl.pos is not None:

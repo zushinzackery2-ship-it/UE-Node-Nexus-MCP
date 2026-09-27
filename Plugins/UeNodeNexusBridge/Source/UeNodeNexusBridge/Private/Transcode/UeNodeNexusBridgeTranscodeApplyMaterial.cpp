@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Material/Creation/NexusMaterialExpressionCreate.h"
 #include "UeNodeNexusBridgeTranscodeMaterialApply.h"
 
 #include "MaterialEditingLibrary.h"
@@ -91,15 +92,7 @@ bool ApplyCreate(UObject* Owner, const TSharedPtr<FJsonObject>& Op, int32 Index,
     int32 Y = 0;
     Op->TryGetNumberField(TEXT("x"), X);
     Op->TryGetNumberField(TEXT("y"), Y);
-    UMaterialExpression* Expression = nullptr;
-    if (UMaterial* Material = Cast<UMaterial>(Owner))
-    {
-        Expression = UMaterialEditingLibrary::CreateMaterialExpression(Material, Class, X, Y);
-    }
-    else if (UMaterialFunction* Function = Cast<UMaterialFunction>(Owner))
-    {
-        Expression = UMaterialEditingLibrary::CreateMaterialExpressionInFunction(Function, Class, X, Y);
-    }
+    UMaterialExpression* Expression = CreateNexusMaterialExpression(Owner, Class, X, Y);
     if (Expression == nullptr)
     {
         Context.Fail(Index, TEXT("create_failed"), FString::Printf(TEXT("could not create %s"), *Class->GetName()));

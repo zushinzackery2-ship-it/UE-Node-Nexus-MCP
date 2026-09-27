@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .bp_types import parse_type_text, type_text
-from .lexer import LexError, find_top_level, parse_kv_list, read_group, read_identifier, skip_ws, split_top_level
+from .lexer import LexError, find_top_level, parse_kv_list, read_group, read_identifier, read_quoted, read_type_name, skip_ws
 from .values import format_value, parse_value
 
 KNOWN_FLAGS = ("Pure", "Const", "Public", "Protected", "Private", "CallInEditor", "Static")
@@ -94,11 +94,29 @@ def parse_signature(text: str) -> FunctionSignature:
     return signature
 
 
+def _parameter_parts(body: str):
+    start, index = 0, 0
+    while index < len(body):
+        char = body[index]
+        if char == '"':
+            index = read_quoted(body, index)
+        elif char in "({[":
+            index = read_group(body, index)
+        elif char == "<":
+            index = read_type_name(body, index)
+        else:
+            if char == ",":
+                yield body[start:index]
+                start = index + 1
+            index += 1
+    yield body[start:]
+
+
 def _parse_params(body: str) -> list[SignatureParam]:
     params: list[SignatureParam] = []
     if not body.strip():
         return params
-    for part in split_top_level(body, ","):
+    for part in _parameter_parts(body):
         part = part.strip()
         if not part:
             continue

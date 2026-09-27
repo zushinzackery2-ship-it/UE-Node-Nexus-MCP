@@ -17,7 +17,9 @@ from ue_node_nexus_mcp.instances.identity.processes import inspect_process, is_a
 from ue_node_nexus_mcp.instances.identity.resources import sample
 from ue_node_nexus_mcp.bridge import UeBridgeClient
 import ue_node_nexus_mcp
+from tests.live.editor.windows import acknowledge_test_disk_warning
 from .host import prepare
+from .protection import close_clean
 
 
 def decoded(result) -> dict:
@@ -71,6 +73,8 @@ async def run(name: str, engine: str, seconds: float) -> None:
         session.ensure(dict(mode="reuse_or_start", engine_path=engine, dry_run=False))
         while True:
             state = session.status()
+            if state["state"] == "STARTING" and state.get("pid"):
+                acknowledge_test_disk_warning(state["pid"], project)
             if state["state"] == "READY":
                 break
             assert state["state"] not in ("EXITED", "UNRESPONSIVE"), state
@@ -94,13 +98,9 @@ async def run(name: str, engine: str, seconds: float) -> None:
         if monitor.done():
             await monitor
         assert len(samples) >= seconds / 20, "resource observation stopped during the soak"
-        deadline = time.monotonic() + 145
-        while time.monotonic() < deadline:
-            state = session.status()
-            if state["state"] == "EXITED":
-                break
-            assert state["state"] != "BLOCKED", state
-            await asyncio.sleep(2)
+        state = session.status()
+        assert state["protected"] and state["state"] != "EXITED", state
+        state = await asyncio.to_thread(close_clean, session, identifier)
         assert state["state"] == "EXITED", state
         assert state.get("exit_code") == 0, state
         assert state["use_count"] == state["scope_count"] == 0, state

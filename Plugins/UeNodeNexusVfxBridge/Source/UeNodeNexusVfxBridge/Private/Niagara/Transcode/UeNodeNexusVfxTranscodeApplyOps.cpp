@@ -36,7 +36,7 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     Payload->TryGetBoolField(TEXT("save"), bSave);
     Payload->TryGetStringField(TEXT("out_dir"), OutDir);
     UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *AssetPath);
-    if (System == nullptr)
+    if (!IsValid(System) || !System->IsAsset())
     {
         return MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), TEXT("Niagara system could not be loaded (emitter assets are read-only in this version)"));
     }

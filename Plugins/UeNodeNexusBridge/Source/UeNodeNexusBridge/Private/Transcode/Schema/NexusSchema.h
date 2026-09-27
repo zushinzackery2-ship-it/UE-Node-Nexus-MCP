@@ -12,4 +12,5 @@ void AddClassMetadata(UClass* Class, const TSharedPtr<FJsonObject>& Record);
 void AddPropertyMetadata(FProperty* Property, const TSharedPtr<FJsonObject>& Record);
 TSharedPtr<FJsonObject> CallableFunctionIndex();
 TSharedPtr<FJsonObject> CommonTypes();
+bool LoadSchemaBlueprintClasses(FString& Error);
 }

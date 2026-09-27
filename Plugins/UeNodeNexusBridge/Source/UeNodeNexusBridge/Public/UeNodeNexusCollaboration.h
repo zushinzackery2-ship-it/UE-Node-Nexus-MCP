@@ -3,10 +3,13 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 
+class UObject;
+
 namespace UeNodeNexusBridge::Collaboration
 {
 using FJson = TSharedPtr<FJsonObject>;
-using FObserver = TFunction<FJson(const FJson&)>;
+// Exports one live asset; Observe resolves the asset and answers for a missing one.
+using FObserver = TFunction<FJson(const FJson& Request, UObject* Asset)>;
 using FCommitBody = TFunction<FJson(const FJson&)>;
 
 UENODENEXUSBRIDGE_API FString EditorEpoch();

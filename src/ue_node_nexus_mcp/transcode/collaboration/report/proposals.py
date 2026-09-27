@@ -52,7 +52,7 @@ def create(workspace, action: str, paths, options: dict, preview: dict | None = 
     if action == "switch":
         record["refs"][options["name"]] = history.resolve(options["name"], state["head"])
     record["preview"] = preview or dict()
-    record["changes"] = diff(history, state["head"], candidate, selected if paths else None)
+    record["changes"] = preview["changes"] if action == "push" and preview and "changes" in preview else diff(history, state["head"], candidate, selected if paths else None)
     roots = [state["head"], state["index"], history.tree(working), candidate, *record.get("inputs", []), *record["refs"].values()]
     store.put_record("proposal", record["id"], record, roots, expected=0)
     file = store.root / "proposals" / (record["id"] + ".json")

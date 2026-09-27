@@ -141,6 +141,9 @@ FJson RunCommit(const FString& Operation, const FString& RequestId, const FJson&
         Data->SetStringField(TEXT("export_error"), Error);
     }
     Receipt->SetObjectField(TEXT("response"), Response);
+    // Saving and export may finalize reflected state (notably Blueprint pins).
+    // Preserve that exact state as well as the pre-save applied checkpoint.
+    CaptureRecoveryMemory(Receipt, TEXT("package_memory_saved"));
     if (!SaveReceipt(Receipt, TEXT("ue_committed"), Error))
     {
         return CommitError(Operation, RequestId, TEXT("recovery_required"), Error, Receipt);

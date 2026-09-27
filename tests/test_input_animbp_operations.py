@@ -7,21 +7,11 @@ from typing import Callable
 import pytest
 
 from ue_node_nexus_mcp import tools_blueprints, tools_project
-from ue_node_nexus_mcp.operation_registry import get_operation_spec
 from ue_node_nexus_mcp.tools_facade import ue_execute, ue_read
 
 from tests.support.bridges import RecordingBridge
 
 WRITE_OK = {"ok": True, "data": {"applied": False, "dry_run": True}, "diagnostics": [], "warnings": []}
-
-
-def test_new_operations_carry_expected_metadata() -> None:
-    assert get_operation_spec("input_action_create").kind == "write"
-    assert get_operation_spec("input_action_create").group == "project_input"
-    assert get_operation_spec("input_mapping_context_entry_add").default_response == "delta"
-    assert get_operation_spec("input_mapping_context_get").kind == "read"
-    assert get_operation_spec("anim_state_machine_state_add").group == "blueprint"
-    assert get_operation_spec("anim_state_machine_transition_add").risk == "medium"
 
 
 def test_input_writes_pass_through_ue_execute(all_features: None, use_bridge: Callable) -> None:

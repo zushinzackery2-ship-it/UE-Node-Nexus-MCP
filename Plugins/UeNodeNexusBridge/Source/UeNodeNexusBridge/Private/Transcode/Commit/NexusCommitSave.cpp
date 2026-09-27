@@ -1,6 +1,7 @@
 #include "NexusPackageFiles.h"
 
 #include "HAL/FileManager.h"
+#include "Misc/PackagePath.h"
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "UObject/Package.h"
@@ -58,6 +59,9 @@ bool SaveStagedPackage(UPackage* Package, const FJson& Receipt, const FJson& Row
             return false;
         }
     }
+    // Only a completed installation of the staged files becomes the live source.
+    Package->SetLoadedPath(FPackagePath::FromLocalPath(Text(Row, TEXT("file"))));
+    Package->ClearPackageFlags(PKG_NewlyCreated);
     Package->SetDirtyFlag(false);
     return true;
 }

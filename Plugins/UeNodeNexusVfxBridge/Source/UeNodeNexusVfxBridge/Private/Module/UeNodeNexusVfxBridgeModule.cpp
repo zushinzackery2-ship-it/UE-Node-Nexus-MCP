@@ -58,12 +58,9 @@ const TArray<FVfxOperation>& VfxOperations()
 void FUeNodeNexusVfxBridgeModule::StartupModule()
 {
     UeNodeNexusBridge::RegisterVfxBuildIdentity();
-    const auto Observer = [](const UeNodeNexusBridge::Collaboration::FJson& Request)
+    const auto Observer = [](const UeNodeNexusBridge::Collaboration::FJson& Request, UObject* Asset)
     {
         using namespace UeNodeNexusBridge;
-        FString Path;
-        Request->TryGetStringField(TEXT("asset_path"), Path);
-        UObject* Asset = LoadObject<UObject>(nullptr, *Path);
         if (UNiagaraSystem* System = Cast<UNiagaraSystem>(Asset))
         {
             return VfxTranscode::BuildNiagaraSystemRaw(System);
@@ -72,6 +69,8 @@ void FUeNodeNexusVfxBridgeModule::StartupModule()
         {
             return VfxTranscode::BuildNiagaraEmitterRaw(Emitter);
         }
+        FString Path;
+        Request->TryGetStringField(TEXT("asset_path"), Path);
         auto Missing = MakeShared<FJsonObject>();
         Missing->SetBoolField(TEXT("exists"), false);
         Missing->SetStringField(TEXT("asset_path"), Path);

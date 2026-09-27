@@ -1,4 +1,6 @@
 #include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
+#include "Blueprint/Variables/NexusBlueprintLocalVariables.h"
+#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 
 #include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "Dom/JsonObject.h"
@@ -26,7 +28,8 @@ bool ValidateBlueprintNodeCreateConfig(
             OutError = TEXT("variable_name is required for K2Node_VariableGet/K2Node_VariableSet");
             return false;
         }
-        if (!BlueprintVariableExists(Blueprint, VariableName))
+        UEdGraph* Graph = ResolveBlueprintNodeInterfaceGraph(Blueprint, Payload);
+        if (FindBlueprintLocalVariable(Graph, FName(*VariableName)) == nullptr && !BlueprintVariableExists(Blueprint, VariableName))
         {
             OutError = FString::Printf(
                 TEXT("variable_name not found on Blueprint variables or components: %s"),

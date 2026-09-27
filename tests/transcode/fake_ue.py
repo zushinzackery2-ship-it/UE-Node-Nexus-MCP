@@ -166,11 +166,23 @@ class FakeUe:
             for prop in raw["props"]:
                 if prop["name"] == verb["name"]:
                     prop["value"] = verb["value"]
+                    break
+            else:
+                raw["props"].append(dict(name=verb["name"], type="text", value=verb["value"], default=""))
+        elif op in ("mi_set_param", "mi_clear_param"):
+            section = raw.setdefault("instance", dict()).setdefault(verb["kind"], [])
+            section[:] = [row for row in section if row["name"] != verb["name"]]
+            if op == "mi_set_param":
+                section.append(dict(name=verb["name"], value=verb["value"]))
         elif op == "create_node":
             guid = f"G-NEW-{len(id_map) + 1}"
             id_map[verb["id"]] = guid
             props = [{"name": key, "type": "FString", "value": value, "default": ""} for key, value in (verb.get("params") or {}).items()]
-            graph["nodes"].append({"guid": guid, "class": f"/Script/Engine.MaterialExpression{verb['class']}", "class_short": verb["class"], "name": verb["id"], "x": verb.get("x", 0), "y": verb.get("y", 0), "props": props, "inputs": ["A", "B"], "outputs": [""]})
+            cls = verb["class"].rsplit(".", 1)[-1].removeprefix("MaterialExpression")
+            node = dict(guid=guid, class_short=cls, name=verb["id"], x=verb.get("x", 0), y=verb.get("y", 0),
+                        props=props, inputs=["A", "B"], outputs=[""] * (5 if cls == "TextureSample" else 1))
+            node["class"] = "/Script/Engine.MaterialExpression" + cls
+            graph["nodes"].append(node)
         elif op == "delete_node":
             guid = by_id[verb["id"]]
             graph["nodes"] = [node for node in graph["nodes"] if node["guid"] != guid]
@@ -189,12 +201,14 @@ class FakeUe:
             node["x"], node["y"] = verb["x"], verb["y"]
         elif op == "connect_pins":
             src = by_id[verb["from"]]
+            pin = str(verb.get("from_pin") or "0")
+            from_out = int(pin) if pin.isdigit() else dict(r=1, g=2, b=3, a=4).get(pin.lower(), 0)
             if verb["to"] == "out":
-                graph["outputs"].append({"from": src, "from_out": 0, "property": verb["to_pin"]})
+                graph["outputs"].append(dict(from_out=from_out, property=verb["to_pin"], **dict([("from", src)])))
             else:
                 dst = nodes[by_id[verb["to"]]]
                 to_in = dst["inputs"].index(verb["to_pin"]) if verb.get("to_pin") in dst["inputs"] else 0
-                graph["links"].append({"from": src, "from_out": 0, "to": dst["guid"], "to_in": to_in})
+                graph["links"].append(dict(from_out=from_out, to=dst["guid"], to_in=to_in, **dict([("from", src)])))
         elif op == "disconnect_pins":
             if verb["to"] == "out":
                 graph["outputs"] = [out for out in graph["outputs"] if out["property"] != verb["to_pin"]]

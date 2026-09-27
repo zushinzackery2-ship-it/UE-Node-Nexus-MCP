@@ -5,6 +5,7 @@
 #include "Dom/JsonValue.h"
 
 class FProperty;
+struct FAssetData;
 
 // Shared text-mirror (transcode) helpers exported for sibling plugins (Niagara bridge).
 namespace UeNodeNexusBridge::Transcode
@@ -51,6 +52,9 @@ UENODENEXUSBRIDGE_API bool ResolveRawFile(const FString& OutDir, const FString& 
 UENODENEXUSBRIDGE_API bool WriteJsonFile(const FString& File, const TSharedPtr<FJsonObject>& Json, FString& OutError);
 
 // --- classification / envelope --------------------------------------------
+// Registry rows can outlive ObjectTools deletion. Check loaded objects without
+// loading unloaded packages during project-wide status and stub enumeration.
+UENODENEXUSBRIDGE_API bool IsAssetDataCurrent(const FAssetData& AssetData);
 UENODENEXUSBRIDGE_API FString KindForClass(const UClass* Class);
 UENODENEXUSBRIDGE_API bool IsGenericAssetClass(const UClass* Class);
 UENODENEXUSBRIDGE_API FString ShortClassName(const UClass* Class);
@@ -63,6 +67,8 @@ UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeRawEnvelope(UObject* Asset, co
 // --- reflection props ------------------------------------------------------
 UENODENEXUSBRIDGE_API bool IsEditableProperty(const FProperty* Property);
 UENODENEXUSBRIDGE_API FString ExportPropertyValue(const UObject* Object, FProperty* Property);
+UENODENEXUSBRIDGE_API FString ExportFloat(float Value);
+UENODENEXUSBRIDGE_API FString ExportDouble(double Value);
 // [{name,type,value,default}] for every editable property; Defaults may be nullptr (class CDO is used).
 UENODENEXUSBRIDGE_API TArray<TSharedPtr<FJsonValue>> ExportEditableProps(UObject* Object, UObject* Defaults = nullptr);
 UENODENEXUSBRIDGE_API bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Value, FString& OutError, bool bNotify = true);

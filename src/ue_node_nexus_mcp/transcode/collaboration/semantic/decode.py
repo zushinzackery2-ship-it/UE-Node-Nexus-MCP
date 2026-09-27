@@ -12,9 +12,11 @@ def to_document(snapshot: dict) -> Document:
     document = Document(Header(nexus=head["nexus"], asset=head["asset"], cls=head["cls"], schema=snapshot.get("schema_key", ""), extra=dict(head.get("extra", dict()))))
     aliases = dict((identifier, entity["alias"]) for section in semantic["sections"].values() for identifier, entity in section["entities"].items())
     bindings = snapshot.get("bindings", dict())
+    locations = snapshot.get("locations", dict())
     for scope, item in semantic["sections"].items():
-        section = Section(item["name"], aliases.get(item.get("owner"), item["args"]))
-        section.entries.extend(Prop(key, text, type_name=field.get("type")) for key, field in item["props"].items() if (text := render_field(field, aliases)) is not None)
+        section = Section(item["name"], aliases.get(item.get("owner"), item["args"]), line=locations.get("@section:" + scope, 0))
+        section.entries.extend(Prop(key, text, type_name=field.get("type"), line=locations.get("@prop:" + scope + ":" + key, section.line))
+                               for key, field in item["props"].items() if (text := render_field(field, aliases)) is not None)
         entities = item["entities"]
         order = item.get("order", list(entities))
         ordered = set(order)
@@ -30,11 +32,15 @@ def to_document(snapshot: dict) -> Document:
                 meta["guid"] = binding["physical"]
             section.entries.append(Decl(id=entity["alias"], type_name=entity["type"], args=args,
                 default=render(entity["default"]), props=props, pos=tuple(entity["position"]) if entity["position"] else None,
-                flags=list(entity["flags"]), annotations=dict(entity["annotations"]), modifier=entity["modifier"], meta=meta))
+                flags=list(entity["flags"]), annotations=dict(entity["annotations"]), modifier=entity["modifier"], meta=meta, line=locations.get(identifier, section.line)))
         section.entries.extend(Link(aliases.get(link["src"], link["src"].removeprefix("@")), link["src_pin"],
-                                    aliases.get(link["dst"], link["dst"].removeprefix("@")), link["dst_pin"]) for link in item["links"].values())
+                                    aliases.get(link["dst"], link["dst"].removeprefix("@")), link["dst_pin"], line=section.line) for link in item["links"].values())
         section.entries.extend(Bare(text) for text in item["bare"].values())
         document.sections.append(section)
+    if not locations:
+        from .locations import stamp
+
+        stamp(document)
     return document
 
 

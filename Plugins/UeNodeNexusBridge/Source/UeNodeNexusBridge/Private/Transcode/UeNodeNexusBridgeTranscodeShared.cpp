@@ -1,12 +1,10 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Assets/NexusPackageState.h"
 
-#include "AssetRegistry/AssetRegistryModule.h"
-#include "AssetRegistry/AssetData.h"
 #include "Curves/CurveBase.h"
 #include "Engine/Blueprint.h"
 #include "Engine/DataAsset.h"
 #include "HAL/FileManager.h"
-#include "Interfaces/IPluginManager.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialFunctionMaterialLayer.h"
@@ -17,13 +15,11 @@
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
-#include "Misc/SecureHash.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "UObject/Package.h"
-#include "UObject/SavePackage.h"
 
 namespace UeNodeNexusBridge::Transcode
 {
@@ -202,26 +198,11 @@ FString EngineVersionString()
 
 FString PackageSavedHash(const FString& PackageName)
 {
-    // The on-disk stamp updates the moment SavePackage returns; the AssetRegistry's
-    // saved hash lags behind (async rescan), which would read as a phantom change.
     FString Filename;
-    if (FPackageName::TryConvertLongPackageNameToFilename(PackageName, Filename, FPackageName::GetAssetPackageExtension()))
+    FPackageFileState State;
+    if (FPackageName::DoesPackageExist(PackageName, &Filename) && ReadPackageFileState(Filename, State))
     {
-        const FDateTime Stamp = IFileManager::Get().GetTimeStamp(*Filename);
-        if (Stamp != FDateTime::MinValue())
-        {
-            return FString::Printf(TEXT("mtime:%s:%lld"), *Stamp.ToIso8601(), IFileManager::Get().FileSize(*Filename));
-        }
-    }
-    IAssetRegistry& Registry = FAssetRegistryModule::GetRegistry();
-    const TOptional<FAssetPackageData> Data = Registry.GetAssetPackageDataCopy(FName(*PackageName));
-    if (Data.IsSet())
-    {
-#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 5)
-        return LexToString(Data->GetPackageSavedHash());
-#else
-        return Data->PackageGuid.ToString(EGuidFormats::DigitsWithHyphens);
-#endif
+        return FString::Printf(TEXT("mtime:%llu:%lld"), State.Modified, State.Size);
     }
     return FString();
 }

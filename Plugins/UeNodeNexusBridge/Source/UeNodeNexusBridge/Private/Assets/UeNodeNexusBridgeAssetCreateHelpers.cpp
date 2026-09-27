@@ -4,7 +4,6 @@
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "Editor.h"
 #include "Engine/DataAsset.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Factories/DataAssetFactory.h"
@@ -186,31 +185,6 @@ UObject* CreateTextureRenderTarget2DAsset(UPackage* Package, FName AssetName)
     Factory->Width = 256;
     Factory->Height = 256;
     return Factory->FactoryCreateNew(UTextureRenderTarget2D::StaticClass(), Package, AssetName, RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn);
-}
-
-bool IsDiscardedAssetObject(UObject* Object)
-{
-    return Object != nullptr && !Object->HasAnyFlags(RF_Public | RF_Standalone);
-}
-
-bool ReleaseDiscardedAssetObject(const FString& ObjectPath)
-{
-    if (GEditor)
-    {
-        GEditor->ResetTransaction(NSLOCTEXT("UeNodeNexusBridge", "ReleaseDiscardedAssetObject", "UeNodeNexusBridge release discarded asset object"));
-    }
-    CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-
-    if (UObject* ExistingObject = FindObject<UObject>(nullptr, *ObjectPath))
-    {
-        if (IsDiscardedAssetObject(ExistingObject))
-        {
-            ExistingObject->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_ForceNoResetLoaders | REN_NonTransactional);
-            ExistingObject->MarkAsGarbage();
-            CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-        }
-    }
-    return FindObject<UObject>(nullptr, *ObjectPath) == nullptr;
 }
 
 TSharedPtr<FJsonObject> BuildAssetCreateConflictData(

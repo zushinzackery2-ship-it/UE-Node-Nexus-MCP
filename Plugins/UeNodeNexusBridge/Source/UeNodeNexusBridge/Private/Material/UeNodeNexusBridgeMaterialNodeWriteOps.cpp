@@ -1,4 +1,5 @@
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
+#include "Material/Creation/NexusMaterialExpressionCreate.h"
 
 #include "Dom/JsonValue.h"
 #include "MaterialEditingLibrary.h"
@@ -40,7 +41,7 @@ TSharedPtr<FJsonObject> HandleMaterialNodeCreate(const FString& Operation, const
     {
         FScopedTransaction Transaction(FText::FromString(TEXT("UE Node Nexus Material Node Create")));
         Material->Modify();
-        Expression = UMaterialEditingLibrary::CreateMaterialExpression(Material, ExpressionClass, X, Y);
+        Expression = CreateNexusMaterialExpression(Material, ExpressionClass, X, Y);
         const TSharedPtr<FJsonObject>* Params = nullptr;
         if (Payload->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)
         {

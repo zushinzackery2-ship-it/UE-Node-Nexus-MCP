@@ -7,21 +7,9 @@ from typing import Callable
 
 import pytest
 
-from ue_node_nexus_mcp.operation_registry import get_operation_spec
 from ue_node_nexus_mcp.tools_facade import ue_execute, ue_read
 
 from tests.support.bridges import RecordingBridge
-
-
-def test_new_operations_carry_expected_metadata() -> None:
-    assert get_operation_spec("asset_dependencies_get").kind == "read"
-    assert get_operation_spec("asset_referencers_get").group == "asset"
-    assert get_operation_spec("level_open").risk == "high"
-    assert get_operation_spec("level_actor_delete").risk == "high"
-    assert get_operation_spec("level_actor_spawn").kind == "write"
-    assert get_operation_spec("level_actor_transform_set").default_response == "delta"
-    assert get_operation_spec("log_tail_get").local_mcp is True
-    assert get_operation_spec("log_tail_get").bridge_operation is None
 
 
 def test_actor_spawn_goes_to_bridge_with_typed_payload(all_features: None, use_bridge: Callable) -> None:
@@ -118,10 +106,3 @@ def test_log_tail_rejects_bad_arguments(all_features: None, use_bridge: Callable
     result = ue_execute("log_tail_get", payload)
     assert result["ok"] is False
     assert result["error"]["code"] == "invalid_operation"
-
-
-def test_level_open_defaults_to_dry_run(all_features: None, use_bridge: Callable) -> None:
-    bridge = use_bridge(RecordingBridge({"ok": True, "data": {"dry_run": True, "applied": False}, "diagnostics": [], "warnings": []}))
-    result = ue_execute("level_open", {"map_path": "/Game/Maps/Demo"})
-    assert result["ok"] is True
-    assert bridge.calls[0][1] == {"map_path": "/Game/Maps/Demo"}

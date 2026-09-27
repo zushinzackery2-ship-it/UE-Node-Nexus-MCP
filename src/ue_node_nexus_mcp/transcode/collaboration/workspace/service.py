@@ -39,6 +39,7 @@ class Workspace:
 
     def info(self) -> dict:
         return dict(self.state, files_root=str(self.root), file_paths=dict((asset, str(confined(self.root, relative))) for asset, relative in self.state["files"].items()),
+                    workspace_schema_key=self.state.get("schema_key"), schema_key=self.schema.key if self.schema else "",
                     schema_path=str(self.schema.directory / "index.md") if self.schema else None)
 
     def status(self) -> dict:
@@ -65,7 +66,8 @@ class Workspace:
         return dict(workspace_id=state["id"], head=state["head"], index=state["index"], branch=state["branch"], generation=state["generation"],
                     staged=sorted(staged), unstaged=sorted(unstaged), local_deleted=deleted, errors=errors,
                     dirty=bool(staged or unstaged), branch_moved=branch_head != state["head"], ahead=ahead, behind=behind,
-                    sessions=sessions, applies=applies, schema_key=state.get("schema_key"), files_root=str(self.root),
+                    sessions=sessions, applies=applies, workspace_schema_key=state.get("schema_key"),
+                    schema_key=self.schema.key if self.schema else "", files_root=str(self.root),
                     schema_path=str(self.schema.directory / "index.md") if self.schema else None)
 
     def require_clean(self) -> None:
@@ -132,7 +134,8 @@ class Workspace:
             self.history.private(before["head"], before["id"])
             self.history.safety(before["id"], before["head"], "amend")
             parents = previous["parents"]
-        identifier = self.history.create(index, parents, message or previous["message"], before["agent_id"], "amend" if amend else "commit", schema_key=before.get("schema_key"))
+        identifier = self.history.create(index, parents, message or previous["message"], before["agent_id"], "amend" if amend else "commit",
+                                         schema_key=self.schema.key if self.schema else before.get("schema_key"))
         after = dict(before, head=identifier, index=index, files=files)
         with self.store.db.connection(write=True) as connection:
             move_ref(connection, before["branch"], identifier, before["head"], before["id"], "commit")

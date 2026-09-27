@@ -17,13 +17,16 @@ from ue_node_nexus_mcp.instances.identity.discovery import arguments
 from ue_node_nexus_mcp.instances.identity.paths import project_identity
 from ue_node_nexus_mcp.instances.identity.watch import ProcessWatch
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
+from tests.live.editor.windows import acknowledge_test_disk_warning
 from .host import ROOT, prepare
 
 
-def wait_state(session, expected, timeout=75):
+def wait_state(session, expected, timeout=75, identifier=None):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        state = session.status()
+        state = session.call("status", dict(instance_id=identifier)) if identifier else session.status()
+        if state["state"] == "STARTING" and state.get("pid"):
+            acknowledge_test_disk_warning(state["pid"], state["project_path"])
         if state["state"] in expected:
             return state
         time.sleep(0.5)
@@ -39,7 +42,7 @@ def close_clean(session, identifier):
         assert time.monotonic() < deadline, preview
         time.sleep(2)
     session.call("close", dict(instance_id=identifier, dry_run=False))
-    return wait_state(session, ("BLOCKED", "EXITED"))
+    return wait_state(session, ("BLOCKED", "EXITED"), identifier=identifier)
 
 
 def require(bridge, operation, **payload):
@@ -61,10 +64,11 @@ def save_asset(bridge, asset):
         time.sleep(1)
 
 
-def connect(session, process):
+def connect(session, process, project):
     deadline = time.monotonic() + 240
     while time.monotonic() < deadline:
         assert process.poll() is None, process.returncode
+        acknowledge_test_disk_warning(process.pid, project)
         try:
             result = session.ensure(dict(dry_run=False))
             if result["instance"]["state"] in ("READY", "IDLE"):
@@ -132,7 +136,7 @@ def run(name, engine, resume=False):
     executable = Path(engine) / "Engine/Binaries/Win64/UnrealEditor.exe"
     startup = subprocess.STARTUPINFO()
     startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    startup.wShowWindow = 0
+    startup.wShowWindow = 1
     output = (project.parent / "external-console.log").open("ab")
     watch = None
     if resume:
@@ -151,7 +155,7 @@ def run(name, engine, resume=False):
     session = EditorSession(BrokerClient(root, str(project.parent)), str(project))
     report = dict(prior) if resume else dict(project=str(project), external_pid=process.pid)
     try:
-        result = connect(session, process)
+        result = connect(session, process, project)
         external = result["instance"]
         assert external["pid"] == process.pid and external["launch_profile"] == "interactive", external
         if not report.get("external_preserved_seconds"):

@@ -92,34 +92,45 @@ bool CapturePackage(UPackage* Package, const FJson& Receipt, FString& Error)
     return SaveReceipt(Receipt, TEXT("prepared"), Error);
 }
 
-bool RestorePackageFiles(const FJson& Package, bool bMemory, FString& Error)
+static bool RestorePackageFile(const FJson& Item, bool bMemory, FString& Error)
 {
-    for (const auto& Value : Rows(Package, TEXT("files")))
+    const FString Path = Text(Item, TEXT("path"));
+    const FString Hash = Text(Item, bMemory ? TEXT("memory_hash") : TEXT("disk_hash"));
+    const FString Source = Text(Item, bMemory ? TEXT("memory") : TEXT("disk"));
+    if (Hash == TEXT("absent"))
     {
-        const FJson Item = Value->AsObject();
-        const FString Path = Text(Item, TEXT("path"));
-        const FString Hash = Text(Item, bMemory ? TEXT("memory_hash") : TEXT("disk_hash"));
-        const FString Source = Text(Item, bMemory ? TEXT("memory") : TEXT("disk"));
-        if (Hash == TEXT("absent"))
+        if (IFileManager::Get().FileExists(*Path) && !IFileManager::Get().Delete(*Path, false, false, true))
         {
-            if (IFileManager::Get().FileExists(*Path) && !IFileManager::Get().Delete(*Path, false, false, true))
-            {
-                Error = TEXT("cannot restore absent file: ") + Path;
-                return false;
-            }
-        }
-        else if (FileHash(Source) != Hash)
-        {
-            Error = TEXT("checkpoint is corrupt: ") + Source;
-            return false;
-        }
-        else if (!CopyFile(Source, Path, Error))
-        {
-            Error = TEXT("checkpoint cannot be restored: ") + Source + TEXT(" ") + Error;
+            Error = TEXT("cannot restore absent file: ") + Path;
             return false;
         }
     }
+    else if (FileHash(Source) != Hash)
+    {
+        Error = TEXT("checkpoint is corrupt: ") + Source;
+        return false;
+    }
+    else if (!CopyFile(Source, Path, Error))
+    {
+        Error = TEXT("checkpoint cannot be restored: ") + Source + TEXT(" ") + Error;
+        return false;
+    }
     return true;
+}
+
+bool RestorePackageFiles(const FJson& Package, bool bMemory, FString& Error)
+{
+    bool bRestored = true;
+    for (const auto& Value : Rows(Package, TEXT("files")))
+    {
+        FString FileError;
+        if (!RestorePackageFile(Value->AsObject(), bMemory, FileError))
+        {
+            Error += (Error.IsEmpty() ? TEXT("") : TEXT("; ")) + FileError;
+            bRestored = false;
+        }
+    }
+    return bRestored;
 }
 
 bool CheckRecoveryFiles(const FJson& Receipt, FString& Error)

@@ -11,6 +11,7 @@ from ...sync_deps import document_dependencies, order_assets
 from ...sync_project import SyncError
 from ..merge.trees import resolve_base
 from ..semantic.decode import physical_ids, to_document
+from ..semantic.normalization import normalize_snapshot
 from ..semantic.validation import validate
 from .observe import scene_selector
 
@@ -73,7 +74,7 @@ def guarded(batch: dict) -> set[str]:
     return result
 
 
-def merge(workspace, source: str, target: str, assets: list[str]) -> dict:
+def merge(workspace, source: str, target: str, assets: list[str], force_local=False) -> dict:
     """The fixed three-way inputs of a publication: ancestor, submitted state, UE.
 
     Merging them is the session's job, preview or not, so that a preview and the
@@ -83,7 +84,7 @@ def merge(workspace, source: str, target: str, assets: list[str]) -> dict:
     # The ancestor only has to agree about what this publication merges. Resolving
     # it project-wide is what dragged unrelated historical assets, and their stale
     # validation findings, into a single-asset push.
-    resolved = resolve_base(history, source, target, workspace.schema, store, assets)
+    resolved = dict(base=target, bases=[target], conflicts=[]) if force_local else resolve_base(history, source, target, workspace.schema, store, assets)
     if resolved["conflicts"]:
         return dict(base=resolved["base"], ancestors=resolved["bases"], ours=None, theirs=target, candidate=None,
                     conflicts=resolved["conflicts"], base_pair=resolved["pair"], base_inputs=resolved["inputs"])
@@ -92,20 +93,35 @@ def merge(workspace, source: str, target: str, assets: list[str]) -> dict:
     source_entries, target_entries = history.entries(source), history.entries(target)
     # A partial publication consumes only the submitted state of each asset.
     # Resolutions remain incorporated even when the source branch keeps editing.
+    selected = set(assets)
     for record in store.records("integration"):
-        if record["asset"] in assets and record["workspace_id"] == workspace.state["id"]:
-            if history.is_ancestor(record["source_commit"], source) and history.is_ancestor(record["published_commit"], target):
-                if record.get("source_snapshot"):
-                    baselines[record["asset"]] = record["source_snapshot"]
-                else:
-                    baselines.pop(record["asset"], None)
+        if record["asset"] not in selected or record["workspace_id"] != workspace.state["id"]:
+            continue
+        if force_local or history.is_ancestor(record["published_commit"], source):
+            # A canonical publication already in this branch is represented by
+            # the DAG ancestor. Its old author snapshot must not replace it.
+            continue
+        if history.is_ancestor(record["source_commit"], source) and history.is_ancestor(record["published_commit"], target):
+            if record.get("source_snapshot"):
+                baselines[record["asset"]] = record["source_snapshot"]
+            else:
+                baselines.pop(record["asset"], None)
     ours = dict(target_entries)
     for asset in assets:
+        if source_entries.get(asset) == baselines.get(asset) == target_entries.get(asset):
+            continue
+        reference = snapshot(workspace, target_entries.get(asset))
+        if asset in baselines:
+            if baselines[asset] != target_entries.get(asset):
+                base_snapshot = normalize_snapshot(snapshot(workspace, baselines[asset]), reference, workspace.schema)
+                baselines[asset] = store.objects.put("snapshot", base_snapshot)
         if asset in source_entries:
-            ours[asset] = source_entries[asset]
+            if source_entries[asset] != target_entries.get(asset):
+                normalized = normalize_snapshot(snapshot(workspace, source_entries[asset]), reference, workspace.schema)
+                ours[asset] = store.objects.put("snapshot", normalized)
         else:
             ours.pop(asset, None)
-    return dict(base=history.tree(baselines), ancestors=ancestors, ours=history.tree(ours), theirs=target)
+    return dict(base=history.tree(baselines), ancestors=ancestors, ours=history.tree(ours), theirs=history.tree(target_entries))
 
 
 def align_aliases(current: dict, candidate: dict) -> dict:
@@ -179,7 +195,7 @@ def settled(asset: str, raw: dict | None, candidate: dict, current: dict, ours: 
 
 
 def preflight(workspace, merged: dict, observation: dict, assets: list[str], options: dict) -> dict:
-    candidate, current = workspace.history.entries(merged["candidate"]), workspace.history.entries(observation["commit"])
+    candidate, current = workspace.history.entries(merged["candidate"]), workspace.history.entries(merged.get("theirs", observation["commit"]))
     ours = workspace.history.entries(merged["ours"]) if merged.get("ours") else dict()
     units, errors, documents = dict(), dict(), dict()
     conflicted = set(item["asset"] for item in merged["conflicts"])

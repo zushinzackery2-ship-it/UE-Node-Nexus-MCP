@@ -1,0 +1,56 @@
+nexus: 1
+asset: /Game/NexusIssues2/BP_Main
+class: Blueprint
+
+[asset]
+ParentClass = /Script/Engine.Actor
+
+[components]
+Mesh : StaticMeshComponent
+
+[interfaces]
+/Game/NexusIssues2/BPI_Query.BPI_Query_C
+
+[dispatchers]
+Changed(Value: float) {Category=Events}
+
+[graph EventGraph]
+start : Event(/Script/Engine.Actor.ReceiveBeginPlay) @ -800,0
+split : Branch(Condition=True) @ -600,0
+work : CallFunction(self.DoWork) @ -400,0
+steps : Sequence(pins=2) @ -200,0
+mesh_ref : VariableGet(Mesh) @ -200,250
+pass_mesh : Reroute @ 0,250
+hide : CallFunction(/Script/Engine.SceneComponent.SetVisibility,bNewVisibility=False) @ 100,0
+actor_self : Self @ -200,500
+destroy : CallFunction(self.K2_DestroyActor) @ 100,400
+note : Comment @ -800,-250
+
+start.then -> split.execute
+split.then -> work.execute
+split.else -> work.execute
+work.then -> steps.execute
+steps.then_0 -> hide.execute
+steps.then_1 -> destroy.execute
+mesh_ref -> pass_mesh
+pass_mesh -> hide.self
+actor_self -> destroy.self
+
+[function DoWork()]
+local cache : float = 0.338
+get_cache : VariableGet(cache) @ 0,150
+set_cache : VariableSet(cache) @ 200,0
+later : CallFunction(self.Later) @ 400,0
+
+entry.then -> set_cache.execute
+get_cache -> set_cache.cache
+set_cache.then -> later.execute
+
+[function Later()]
+
+[function Query() -> (Result: float)]
+local answer : float = 0.338
+read_answer : VariableGet(answer) @ 0,150
+
+entry.then -> result.execute
+read_answer -> result.Result

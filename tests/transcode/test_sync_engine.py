@@ -168,7 +168,7 @@ def test_offline_lint_and_status_without_bridge(mirror) -> None:
         return {"ok": False, "operation": operation, "error": {"code": "mcp_bridge_error", "message": "no pipe"}, "diagnostics": [], "warnings": []}
 
     status = run_sync(offline, "status", env=env)
-    assert status["bridge_available"] is False and status["ue_known"] is False
+    assert status["bridge_contacted"] is True and status["bridge_available"] is False and status["ue_known"] is False
     assert status["counts"] == {"unknown": 3}
     lint = run_sync(offline, "lint", env=env)
     assert lint["error_count"] == 0 and lint["ok_files"] == 3

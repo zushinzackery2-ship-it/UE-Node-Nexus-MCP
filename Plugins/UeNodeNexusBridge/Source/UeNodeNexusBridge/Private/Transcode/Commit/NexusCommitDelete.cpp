@@ -12,7 +12,7 @@ FJson DeleteAsset(const FString& Operation, const FString& RequestId, const FJso
         return CommitError(Operation, RequestId, TEXT("protocol_required"), TEXT("snapshot-backed deletion requires a collaboration apply"));
     }
     UObject* Asset = LoadObject<UObject>(nullptr, *Text(Payload, TEXT("asset_path")));
-    if (!Asset)
+    if (!IsValid(Asset) || !Asset->IsAsset())
     {
         return CommitError(Operation, RequestId, TEXT("asset_not_found"), TEXT("deletion target is unavailable"));
     }

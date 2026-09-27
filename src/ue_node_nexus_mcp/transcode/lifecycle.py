@@ -30,7 +30,7 @@ def requires_editor(action: str, options: dict, project: Path | None = None) -> 
         return False
     if action == "recover" and options.get("projection_id"):
         return False
-    if action == "status" and project and (project / ".nexus/collaboration/active.json").is_file():
+    if action == "status" and (options.get("workspace_id") or (project and (project / ".nexus/collaboration/active.json").is_file())):
         return bool(options.get("discover"))
     if action != "continue":
         return True

@@ -163,6 +163,7 @@ def test_missing_and_unselected_dependencies_are_reported_apart(tmp_path):
 def test_blueprint_class_method_dependency_survives_collaboration_preflight(tmp_path):
     def self_call_blueprint_raw():
         raw = blueprint_raw()
+        raw["blueprint"]["interfaces"] = []
         node = raw["blueprint"]["graphs"][0]["nodes"][2]
         node["config"] = {
             "function_owner": "/Game/Blueprints/BP_Door.BP_Door_C",

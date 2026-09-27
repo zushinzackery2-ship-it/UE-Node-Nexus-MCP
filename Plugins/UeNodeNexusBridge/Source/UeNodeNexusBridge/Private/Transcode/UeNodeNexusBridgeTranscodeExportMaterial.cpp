@@ -160,10 +160,23 @@ TSharedPtr<FJsonObject> BuildMaterialInstanceRaw(UMaterialInstanceConstant* Inst
     Raw->SetArrayField(TEXT("props"), ExportEditableProps(Instance));
 
     TSharedPtr<FJsonObject> Params = MakeShared<FJsonObject>();
-    Params->SetArrayField(TEXT("scalar"), ParameterRows<FScalarParameterValue>(Instance->ScalarParameterValues, TEXT("float"), [](const FScalarParameterValue& Value) { return FString::SanitizeFloat(Value.ParameterValue); }));
-    Params->SetArrayField(TEXT("vector"), ParameterRows<FVectorParameterValue>(Instance->VectorParameterValues, TEXT("FLinearColor"), [](const FVectorParameterValue& Value) { return Value.ParameterValue.ToString(); }));
-    Params->SetArrayField(TEXT("texture"), ParameterRows<FTextureParameterValue>(Instance->TextureParameterValues, TEXT("UTexture"), [](const FTextureParameterValue& Value) { return Value.ParameterValue ? Value.ParameterValue->GetPathName() : TEXT("None"); }));
-    Params->SetArrayField(TEXT("runtime_virtual_texture"), ParameterRows<FRuntimeVirtualTextureParameterValue>(Instance->RuntimeVirtualTextureParameterValues, TEXT("URuntimeVirtualTexture"), [](const FRuntimeVirtualTextureParameterValue& Value) { return Value.ParameterValue ? Value.ParameterValue->GetPathName() : TEXT("None"); }));
+    Params->SetArrayField(TEXT("scalar"), ParameterRows<FScalarParameterValue>(Instance->ScalarParameterValues, TEXT("float"), [](const FScalarParameterValue& Value)
+    {
+        return ExportFloat(Value.ParameterValue);
+    }));
+    Params->SetArrayField(TEXT("vector"), ParameterRows<FVectorParameterValue>(Instance->VectorParameterValues, TEXT("FLinearColor"), [](const FVectorParameterValue& Value)
+    {
+        const FLinearColor& Color = Value.ParameterValue;
+        return FString::Printf(TEXT("(R=%s,G=%s,B=%s,A=%s)"), *ExportFloat(Color.R), *ExportFloat(Color.G), *ExportFloat(Color.B), *ExportFloat(Color.A));
+    }));
+    Params->SetArrayField(TEXT("texture"), ParameterRows<FTextureParameterValue>(Instance->TextureParameterValues, TEXT("UTexture"), [](const FTextureParameterValue& Value)
+    {
+        return Value.ParameterValue ? Value.ParameterValue->GetPathName() : TEXT("None");
+    }));
+    Params->SetArrayField(TEXT("runtime_virtual_texture"), ParameterRows<FRuntimeVirtualTextureParameterValue>(Instance->RuntimeVirtualTextureParameterValues, TEXT("URuntimeVirtualTexture"), [](const FRuntimeVirtualTextureParameterValue& Value)
+    {
+        return Value.ParameterValue ? Value.ParameterValue->GetPathName() : TEXT("None");
+    }));
 
     TArray<TSharedPtr<FJsonValue>> Switches;
     TArray<TSharedPtr<FJsonValue>> Masks;

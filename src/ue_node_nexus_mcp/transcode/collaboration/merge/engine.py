@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from ..semantic.validation import validate
+from ..semantic.values import equivalent
 from ..store.io import canonical, digest
 from .order import merge_order
 
@@ -50,9 +51,9 @@ class Comparison:
     def __init__(self, asset: str) -> None:
         self.asset = asset
         self.conflicts = []
-        self.conflict_ids = set()
+        self.conflict_ids = dict()
 
-    def conflict(self, path, base, ours, theirs, code="value-conflict", reason="both sides changed the same field"):
+    def conflict(self, path, base, ours, theirs, code="value-conflict", reason="both sides changed the same field", *, location=None):
         values = dict(base=wire(base), ours=wire(ours), theirs=wire(theirs))
         identifier = digest(dict(asset=self.asset, path=path, code=code, **values))[:24]
         entry = dict(conflict_id=identifier, asset=self.asset, entity_path=list(path[:4]), field_path=list(path),
@@ -60,13 +61,15 @@ class Comparison:
                      **dict((side, shown(item)) for side, item in values.items()))
         if identifier not in self.conflict_ids:
             self.conflicts.append(entry)
-            self.conflict_ids.add(identifier)
+            self.conflict_ids[identifier] = entry
+        if location:
+            self.conflict_ids[identifier].update((key, item) for key, item in location.items() if item is not None)
         return ours
 
     def merge(self, base, ours, theirs, path=()):
-        if ours == theirs or theirs == base:
+        if equivalent(ours, theirs) or equivalent(theirs, base):
             return ours
-        if ours == base:
+        if equivalent(ours, base):
             return theirs
         if path and path[-1] == "order" and all(isinstance(item, list) for item in (base, ours, theirs)):
             order, error = merge_order(base, ours, theirs)
@@ -114,6 +117,7 @@ def merge_snapshots(base: dict | None, ours: dict | None, theirs: dict | None, s
         compare.conflict([], *inputs, "history_schema_conflict", "snapshots bind different schema environments")
     for item in validate(candidate, schema):
         path = item["path"]
-        compare.conflict(path, *(at(value, path) for value in inputs), item["conflict_type"], item["reason"])
+        compare.conflict(path, *(at(value, path) for value in inputs), item["conflict_type"], item["reason"],
+                         location=dict(line=item.get("line"), col=item.get("col")))
     candidate["semantic_hash"] = digest(candidate["semantic"])
     return MergeResult(candidate, compare.conflicts)

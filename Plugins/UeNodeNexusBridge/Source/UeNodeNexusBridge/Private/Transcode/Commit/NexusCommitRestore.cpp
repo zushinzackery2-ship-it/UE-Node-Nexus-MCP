@@ -1,111 +1,25 @@
-#include "NexusPackageFiles.h"
+#include "Restore/NexusRestore.h"
 
-#include "Editor.h"
-#include "FileHelpers.h"
+#include "Misc/ScopeExit.h"
 #include "ObjectTools.h"
-#include "PackageTools.h"
-#include "Subsystems/AssetEditorSubsystem.h"
-#include "UObject/Linker.h"
 #include "UObject/Package.h"
-#include "UObject/UObjectGlobals.h"
 
 namespace UeNodeNexusBridge::Collaboration
 {
-static void ClosePackageEditors(UPackage* Package)
+static bool RemoveCreatedAsset(const FJson& Request, FString& Error)
 {
-    if (GEditor == nullptr)
-    {
-        return;
-    }
-    UAssetEditorSubsystem* Editors = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
-    if (Editors == nullptr)
-    {
-        return;
-    }
-    TArray<UObject*> EditedAssets;
-    for (UObject* Asset : Editors->GetAllEditedAssets())
-    {
-        if (Asset != nullptr && Asset->GetOutermost() == Package)
-        {
-            EditedAssets.Add(Asset);
-        }
-    }
-    for (UObject* Asset : EditedAssets)
-    {
-        Editors->CloseAllEditorsForAsset(Asset);
-    }
-}
-
-static bool ReleaseLoadedPackages(const FJson& Receipt, FString& Error)
-{
-    TArray<UPackage*> Packages;
-    TArray<FString> Names;
-    for (const auto& Value : Rows(Receipt, TEXT("packages")))
-    {
-        const FJson Package = Value->AsObject();
-        if (Flag(Package, TEXT("map")))
-        {
-            continue;
-        }
-        const FString Name = Text(Package, TEXT("package"));
-        if (UPackage* Loaded = FindPackage(nullptr, *Name))
-        {
-            ClosePackageEditors(Loaded);
-            ResetLoaders(Loaded);
-            Loaded->SetDirtyFlag(false);
-            Packages.Add(Loaded);
-            Names.Add(Name);
-        }
-    }
-    if (Packages.IsEmpty())
+    if (!Flag(Request, TEXT("expected_absent")))
     {
         return true;
     }
-
-    UPackageTools::FUnloadPackageParams Params(Packages);
-    Params.bUnloadDirtyPackages = true;
-    Params.bResetTransBuffer = false;
-    if (!UPackageTools::UnloadPackages(Params))
+    UObject* Created = FindObject<UObject>(nullptr, *Text(Request, TEXT("asset_path")));
+    if (Created && Created->IsAsset())
     {
-        Error = TEXT("cannot unload packages before checkpoint restore: ") + Params.OutErrorMessage.ToString();
-        return false;
-    }
-    CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-    DeleteLoaders();
-    for (const FString& Name : Names)
-    {
-        if (FindPackage(nullptr, *Name) != nullptr)
+        TArray<UObject*> Objects;
+        Objects.Add(Created);
+        if (ObjectTools::DeleteObjectsUnchecked(Objects) != 1)
         {
-            Error = TEXT("package remains loaded during checkpoint restore: ") + Name;
-            return false;
-        }
-    }
-    return true;
-}
-
-static bool LoadRestoredPackages(const FJson& Receipt, FString& Error)
-{
-    for (const auto& Value : Rows(Receipt, TEXT("packages")))
-    {
-        const FJson Package = Value->AsObject();
-        if (!Flag(Package, TEXT("existed")) || Flag(Package, TEXT("map")))
-        {
-            continue;
-        }
-        FString Memory;
-        for (const auto& FileValue : Rows(Package, TEXT("files")))
-        {
-            const FJson File = FileValue->AsObject();
-            if (Text(File, TEXT("path")) == Text(Package, TEXT("file")))
-            {
-                Memory = Text(File, TEXT("memory"));
-                break;
-            }
-        }
-        const FString Name = Text(Package, TEXT("package"));
-        if (Memory.IsEmpty() || LoadPackage(nullptr, *Memory, LOAD_None) == nullptr)
-        {
-            Error = TEXT("cannot load restored checkpoint package: ") + Name;
+            Error = TEXT("cannot remove the newly created object during recovery");
             return false;
         }
     }
@@ -115,74 +29,48 @@ static bool LoadRestoredPackages(const FJson& Receipt, FString& Error)
 bool RestoreCheckpoint(const FJson& Receipt, FString& Error)
 {
     const FJson Request = Object(Receipt, TEXT("request"));
-    FString Ignored;
-    if (!SaveReceipt(Receipt, TEXT("restoring"), Error))
-    {
-        return false;
-    }
-    // An asset may have been created before its failing verb returned.
-    if (Flag(Request, TEXT("expected_absent")))
-    {
-        if (UObject* Created = FindObject<UObject>(nullptr, *Text(Request, TEXT("asset_path"))))
-        {
-            TArray<UObject*> Objects;
-            Objects.Add(Created);
-            if (ObjectTools::DeleteObjectsUnchecked(Objects) != 1)
-            {
-                Error = TEXT("cannot remove the newly created object during recovery");
-                return false;
-            }
-        }
-    }
-    if (!ReleaseLoadedPackages(Receipt, Error))
-    {
-        return false;
-    }
-    FString Map;
+    bool bComplete = false;
+    TMap<FString, bool> DirtyBefore;
     for (const auto& Value : Rows(Receipt, TEXT("packages")))
     {
         const FJson Package = Value->AsObject();
-        if (Flag(Package, TEXT("map")))
+        const FString Name = Text(Package, TEXT("package"));
+        const UPackage* Loaded = FindPackage(nullptr, *Name);
+        DirtyBefore.Add(Name, Flag(Package, TEXT("was_dirty")) || (Loaded && Loaded->IsDirty()));
+    }
+    ON_SCOPE_EXIT
+    {
+        if (!bComplete)
         {
-            for (const auto& FileValue : Rows(Package, TEXT("files")))
+            for (const auto& Pair : DirtyBefore)
             {
-                const FJson File = FileValue->AsObject();
-                if (Text(File, TEXT("path")) == Text(Package, TEXT("file")))
+                if (UPackage* Loaded = FindPackage(nullptr, *Pair.Key))
                 {
-                    Map = Text(File, TEXT("memory"));
-                    break;
+                    Loaded->SetDirtyFlag(Pair.Value);
                 }
             }
-            continue;
         }
-        if (!RestorePackageFiles(Package, false, Error))
-        {
-            return false;
-        }
-    }
-    if (!LoadRestoredPackages(Receipt, Error))
+    };
+    Receipt->SetStringField(TEXT("restore_method"), TEXT("package_reload"));
+    if (!SaveReceipt(Receipt, TEXT("restoring"), Error)
+        || !ValidateCheckpointFiles(Receipt, Error)
+        || !PrepareCheckpointPackages(Receipt, Error)
+        || !RemoveCreatedAsset(Request, Error))
     {
         return false;
     }
-    FText ReloadError;
-    bool bRestored = true;
-    if (!Map.IsEmpty())
+    const bool bMemoryRestored = RestoreCheckpointMemory(Receipt, Error);
+    FString DiskError;
+    // Even a partial reload must put back the original on-disk version. A failed
+    // restore retains its durable receipt and the applied dirty state for recovery.
+    const bool bDiskRestored = RestoreCheckpointDisk(Receipt, DiskError);
+    if (!bMemoryRestored || !bDiskRestored)
     {
-        bRestored = FEditorFileUtils::LoadMap(Map, false, false);
-    }
-    // Restore map files after loading the checkpoint from its private path;
-    // the editor therefore never has to replace an open target file.
-    for (const auto& Value : Rows(Receipt, TEXT("packages")))
-    {
-        const FJson Package = Value->AsObject();
-        if (!Flag(Package, TEXT("map")))
+        if (!DiskError.IsEmpty())
         {
-            continue;
+            Error += (Error.IsEmpty() ? TEXT("") : TEXT("; ")) + DiskError;
         }
-        if (!RestorePackageFiles(Package, false, Error))
-        {
-            return false;
-        }
+        return false;
     }
     for (const auto& Value : Rows(Receipt, TEXT("packages")))
     {
@@ -194,13 +82,14 @@ bool RestoreCheckpoint(const FJson& Receipt, FString& Error)
     }
     const FJson Current = Observe(Request);
     const FString Expected = Text(Object(Receipt, TEXT("before")), TEXT("content_revision"));
-    if (!bRestored || !Current.IsValid() || Expected != Text(Current, TEXT("content_revision")))
+    if (!Current.IsValid() || Expected.IsEmpty() || Expected != Text(Current, TEXT("content_revision")))
     {
-        Error = TEXT("checkpoint verification failed: ") + ReloadError.ToString();
+        Error = TEXT("checkpoint verification failed: content revision differs from the recorded before state");
         Receipt->SetObjectField(TEXT("recovery_observation"), Current.IsValid() ? Current : MakeShared<FJsonObject>());
         return false;
     }
     Receipt->SetObjectField(TEXT("recovered"), Current);
-    return SaveReceipt(Receipt, TEXT("rolled_back"), Error);
+    bComplete = SaveReceipt(Receipt, TEXT("rolled_back"), Error);
+    return bComplete;
 }
 }

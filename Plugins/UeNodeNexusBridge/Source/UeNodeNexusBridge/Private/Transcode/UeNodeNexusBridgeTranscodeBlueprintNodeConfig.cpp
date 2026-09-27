@@ -90,6 +90,10 @@ TSharedPtr<FJsonObject> NodeConfigJson(UBlueprint* Blueprint, UEdGraphNode* Node
         Config->SetStringField(TEXT("variable_name"), Variable->VariableReference.GetMemberName().ToString());
         Config->SetStringField(TEXT("self_context"), Variable->VariableReference.IsSelfContext() ? TEXT("true") : TEXT("false"));
         Config->SetStringField(TEXT("variable_owner"), Owner ? Owner->GetPathName() : FString());
+        if (Variable->VariableReference.IsLocalScope())
+        {
+            Config->SetStringField(TEXT("variable_scope"), Variable->VariableReference.GetMemberScopeName());
+        }
     }
     else if (UK2Node_MacroInstance* Macro = Cast<UK2Node_MacroInstance>(Node))
     {
