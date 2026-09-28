@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..sync_project import ProjectContext, SyncError
+from ..sync.project import ProjectContext
+from ..errors import SyncError
 from .backend import selector
 from .diff import build_plan
 from .files import read_base, read_document

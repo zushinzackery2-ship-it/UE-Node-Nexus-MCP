@@ -2,7 +2,6 @@
 
 import argparse
 import json
-from pathlib import Path
 import sys
 import time
 import uuid

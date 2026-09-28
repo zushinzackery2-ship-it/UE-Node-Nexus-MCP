@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ..history.query import diff
-from ..store.io import atomic_write, canonical
+from ...storage.io import atomic_write, canonical
 from ..workspace.files import capture_files, discover, hashes, select
 
 

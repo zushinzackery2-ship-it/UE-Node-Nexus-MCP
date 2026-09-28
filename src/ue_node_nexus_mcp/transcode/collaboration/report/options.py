@@ -1,6 +1,6 @@
 """Action-specific options keep mistakes from becoming silent mutations."""
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 
 READ_ACTIONS = set(("status", "workspaces", "diff", "log", "show", "blame", "reflog", "lint", "schema"))
 COMMON = set(("workspace_id", "project", "agent_id", "dry_run", "proposal_id"))

@@ -10,7 +10,8 @@ from .test_session import ready
 
 def test_log_polling_is_offline_before_use_and_after_reclamation(lifecycle, monkeypatch):
     service, platform, clock, project = lifecycle
-    session = EditorSession(LocalBroker(service, project.parent), str(project))
+    # The injected editor becomes ready on the fake manager clock, which a held call cannot advance.
+    session = EditorSession(LocalBroker(service, project.parent), str(project), startup_wait=0)
     logs = project.parent / "Saved/Nexus/Logs"
     logs.mkdir(parents=True)
     (logs / "instance.log").write_text("LogNexus: persisted evidence\n", encoding="utf-8")

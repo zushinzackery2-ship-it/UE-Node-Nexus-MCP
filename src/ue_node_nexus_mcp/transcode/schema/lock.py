@@ -1,18 +1,10 @@
-"""Schema lock: reflection snapshot exported by the UE plugin (``schema_export``).
+"""Schema lock: the reflection catalog one ``schema_export`` published.
 
-Files under ``<root>/.nexus/schema/<key>/``::
-
-    key.json                          {"key", "engine_version", "plugins_hash", "generated_at"}
-    classes.material_expression.json  {"<ClassName>": {"path", "props": {...}, "inputs": [...], "outputs": [...]}}
-    classes.k2node.json               {"<ClassName>": {"path", "props": {...}, "pins": [{"name","dir","type"}], "dynamic_pins": bool}}
-    classes.asset.json                {"<ClassName>": {"path", "props"}}
-    classes.component.json            {"<ClassName>": {"path", "props"}}
-    classes.niagara_renderer.json     {"<ClassName>": {"path", "props"}}
-    material_functions.json           {"<object path>": {"inputs": [{"name","type"}], "outputs": [{"name"}]}}
-    niagara_modules.json              {"<object path>": {"short", "inputs": [{"name","type","default"}]}}
-    functions.cache.json              {"<Owner>.<Func>": {"params": [{"name","type","dir","default"}], "pure": bool}}
-
-Each ``props`` entry: {"type", "kind", "default", "enum_values"?, "clamp_min"?, "clamp_max"?, "object_class"?}.
+Files under ``<root>/.nexus/schema/<key>/``: ``key.json`` is the format-2
+manifest naming every record file of every family, and ``index.md`` with the
+per-category indexes are its readable views. A directory that still holds the
+first release's per-family tables is converted in place on first read, so every
+reader resolves through one record layout.
 """
 
 from __future__ import annotations
@@ -22,33 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..paths import schema_dir
-
-CLASS_FILES = {
-    "material_expression": "classes.material_expression.json",
-    "k2node": "classes.k2node.json",
-    "asset": "classes.asset.json",
-    "component": "classes.component.json",
-    "niagara_renderer": "classes.niagara_renderer.json",
-}
-_PREFIXES = {
-    "material_expression": ("MaterialExpression",),
-    "k2node": ("K2Node_", "EdGraphNode_", "AnimGraphNode_"),
-    "asset": ("",),
-    "component": ("",),
-    "niagara_renderer": ("Niagara",),
-}
-_SUFFIXES = {"niagara_renderer": ("RendererProperties",)}
-# ``CallFunction`` names both ``K2Node_CallFunction`` and ``AnimGraphNode_CallFunction``
-# once the engine prefixes are stripped, so the plain spelling is pinned to the Blueprint
-# node; AnimGraph nodes keep their own ``AnimGraphNode_CallFunction`` spelling.
-K2_ALIASES = {
-    "Branch": "K2Node_IfThenElse",
-    "Sequence": "K2Node_ExecutionSequence",
-    "Comment": "EdGraphNode_Comment",
-    "Reroute": "K2Node_Knot",
-    "CallFunction": "K2Node_CallFunction",
-}
+from ..storage.paths import schema_dir
 
 
 @dataclass
@@ -70,14 +36,11 @@ class SchemaLock:
     def __init__(self, directory: Path, key: str) -> None:
         self.directory = directory
         self.key = key
-        self._classes: dict[str, dict[str, ClassInfo]] = {}
-        self._material_functions: dict[str, Any] | None = None
-        self._niagara_modules: dict[str, Any] | None = None
-        self._functions: dict[str, Any] | None = None
         self.used: dict[tuple[str, str], str] = dict()
         self.records: dict[str, dict] = dict()
         self._manifest: dict = dict()
         self._manifest_stamp = None
+        self._indexes: dict = dict()
 
     @property
     def available(self) -> bool:
@@ -90,101 +53,52 @@ class SchemaLock:
         stat = path.stat()
         stamp = (stat.st_mtime_ns, stat.st_size)
         if stamp != self._manifest_stamp:
-            self._manifest = _read_json(path) or dict()
-            self._manifest_stamp = stamp
-            self._classes.clear()
-            self._functions = self._material_functions = self._niagara_modules = None
+            manifest = _read_json(path) or dict()
+            if manifest.get("format") != 2:
+                from .catalog import ensure_format
+
+                manifest = ensure_format(self.directory, self.key)
+                stat = path.stat()
+                stamp = (stat.st_mtime_ns, stat.st_size)
+            self._manifest, self._manifest_stamp = manifest, stamp
+            self._indexes.clear()
         return self._manifest
 
-    def _family(self, family: str) -> dict[str, ClassInfo]:
-        if family not in self._classes:
-            data = self._table(family, CLASS_FILES[family])
-            classes: dict[str, ClassInfo] = {}
-            for name, record in data.items():
-                classes[name] = ClassInfo(
-                    name=name,
-                    path=str(record.get("path", "")),
-                    props=dict(record.get("props") or {}),
-                    inputs=[str(item) for item in record.get("inputs") or []],
-                    outputs=[str(item) for item in record.get("outputs") or []],
-                    pins=list(record.get("pins") or []),
-                    dynamic_pins=bool(record.get("dynamic_pins", False)),
-                    inheritance=str(record.get("inheritance", "")),
-                )
-            self._classes[family] = classes
-        return self._classes[family]
-
-    def has_family(self, family: str) -> bool:
-        return family in self.info().get("tables", dict()) or (self.directory / CLASS_FILES[family]).is_file()
-
-    def resolve_class(self, family: str, name: str) -> ClassInfo | None:
-        """Resolve a short name, prefixed name or ``/Script/Module.Class`` path."""
+    def index(self, family: str):
+        """Ranked spellings of one family, rebuilt only when the manifest moves."""
         manifest = self.info()
-        if manifest.get("format") == 2:
-            from .catalog import lookup_class
+        if family not in self._indexes:
+            from .names import NameIndex
 
-            record = lookup_class(self, family, name, manifest)
-            if record is None:
-                return None
-            return ClassInfo(name=record["name"], path=record["path"], props=record.get("props", dict()),
-                             inputs=record.get("inputs", []), outputs=record.get("outputs", []),
-                             pins=record.get("pins", []), dynamic_pins=record.get("dynamic_pins", False),
-                             inheritance=record.get("inheritance", ""))
-        classes = self._family(family)
-        if not classes:
+            self._indexes[family] = NameIndex(family, manifest.get("tables", dict()).get(family, dict()))
+        return self._indexes[family]
+
+    def resolve_class(self, family: str, name: str, *, aliases: bool = True) -> ClassInfo | None:
+        """Resolve a short name, prefixed name or ``/Script/Module.Class`` path.
+
+        ``aliases=False`` accepts only the path and the real class name, the only
+        spellings a reference written from a native class path can take.
+        """
+        from .catalog import lookup_class
+
+        record = lookup_class(self, family, name.strip(), aliases=aliases)
+        if record is None:
             return None
-        candidate = name.strip()
-        if family == "k2node":
-            candidate = K2_ALIASES.get(candidate, candidate)
-        if candidate in classes:
-            return classes[candidate]
-        if "." in candidate or "/" in candidate:
-            for info in classes.values():
-                if info.path == candidate:
-                    return info
-            candidate = candidate.rsplit(".", 1)[-1]
-            if candidate in classes:
-                return classes[candidate]
-        for prefix in _PREFIXES.get(family, ("",)):
-            for suffix in _SUFFIXES.get(family, ("",)):
-                full = f"{prefix}{candidate}{suffix}"
-                if full in classes:
-                    return classes[full]
-        return None
-
-    def class_names(self, family: str) -> list[str]:
-        if self.info().get("format") == 2:
-            return sorted(self.info().get("tables", dict()).get(family, dict()))
-        return sorted(self._family(family))
+        return ClassInfo(name=record["name"], path=record["path"], props=record.get("props", dict()),
+                         inputs=record.get("inputs", []), outputs=record.get("outputs", []),
+                         pins=record.get("pins", []), dynamic_pins=record.get("dynamic_pins", False),
+                         inheritance=record.get("inheritance", ""))
 
     def material_function(self, path: str) -> dict[str, Any] | None:
-        if self.info().get("format") == 2:
-            from .catalog import lookup_record
+        from .catalog import lookup_record
 
-            return lookup_record(self, "material_functions", path)
-        if self._material_functions is None:
-            self._material_functions = self._table("material_functions", "material_functions.json")
-        return _lookup_asset(self._material_functions, path)
+        return lookup_record(self, "material_functions", path)
 
-    def niagara_module(self, name: str) -> tuple[str | None, dict[str, Any] | None, list[str]]:
-        """Return (path, record, ambiguous candidates) for a short name or path."""
-        if self.info().get("format") == 2:
-            from .catalog import lookup_record
+    def niagara_module(self, name: str) -> dict[str, Any] | None:
+        """The module record a short name or path names; its ``name`` is the script path."""
+        from .catalog import lookup_record
 
-            record = lookup_record(self, "niagara_modules", name)
-            return (record["name"], record, []) if record else (None, None, [])
-        if self._niagara_modules is None:
-            self._niagara_modules = self._table("niagara_modules", "niagara_modules.json")
-        modules = self._niagara_modules
-        if not modules:
-            return None, None, []
-        record = _lookup_asset(modules, name)
-        if record is not None:
-            return _asset_key(modules, name), record, []
-        matches = [path for path, item in modules.items() if str(item.get("short", "")) == name or path.rsplit(".", 1)[-1] == name]
-        if len(matches) == 1:
-            return matches[0], modules[matches[0]], []
-        return None, None, matches
+        return lookup_record(self, "niagara_modules", name)
 
     def function(self, owner: str, name: str) -> dict[str, Any] | None:
         from .functions import resolve
@@ -192,62 +106,13 @@ class SchemaLock:
         return resolve(self, owner, name)
 
     def direct_function(self, owner: str, name: str) -> dict[str, Any] | None:
-        if self.info().get("format") == 2:
-            from .catalog import lookup_record
+        from .catalog import lookup_record
 
-            key = owner + "." + name
-            return lookup_record(self, "functions", key) or lookup_record(self, "callable_functions", key)
-        if self._functions is None:
-            self._functions = self._table("functions", "functions.cache.json")
-        for key, record in self._functions.items():
-            key_owner, _, key_name = key.rpartition(".")
-            if key_name == name and (key_owner == owner or key_owner.rsplit(".", 1)[-1] == owner):
-                return record
-        return None
-
-    def remember_functions(self, records: dict[str, Any]) -> None:
-        if self.info().get("format") == 2:
-            from .catalog import publish
-
-            publish(self.directory, self.key, dict(functions=records), environment=self.info().get("environment"), incremental=True)
-            self._functions = None
-            return
-        if self._functions is None:
-            self._functions = _read_json(self.directory / "functions.cache.json") or {}
-        self._functions.update(records)
-        self.directory.mkdir(parents=True, exist_ok=True)
-        (self.directory / "functions.cache.json").write_text(json.dumps(self._functions, indent=1, ensure_ascii=False), encoding="utf-8")
-
-    def _table(self, family: str, legacy: str) -> dict:
-        manifest = self.info()
-        if manifest.get("format") != 2:
-            return _read_json(self.directory / legacy) or dict()
-        from .catalog import read_entry
-
-        return dict((name, read_entry(self, family, name, entry)) for name, entry in manifest.get("tables", dict()).get(family, dict()).items())
+        key = owner + "." + name
+        return lookup_record(self, "functions", key) or lookup_record(self, "callable_functions", key)
 
     def binding(self) -> dict:
         return dict(schema_key=self.key, entries=[dict(family=family, name=name, hash=hash_value) for (family, name), hash_value in sorted(self.used.items())])
-
-
-def _lookup_asset(table: dict[str, Any], path: str) -> dict[str, Any] | None:
-    key = _asset_key(table, path)
-    return table.get(key) if key else None
-
-
-def _asset_key(table: dict[str, Any], path: str) -> str | None:
-    text = path.strip().strip("'")
-    if text in table:
-        return text
-    if "'" in path:
-        text = path.split("'")[1]
-        if text in table:
-            return text
-    if "." not in text.rsplit("/", 1)[-1]:
-        with_object = f"{text}.{text.rsplit('/', 1)[-1]}"
-        if with_object in table:
-            return with_object
-    return None
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:

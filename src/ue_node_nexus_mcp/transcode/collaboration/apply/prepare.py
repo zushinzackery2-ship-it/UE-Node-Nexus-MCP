@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ..merge.sessions import Sessions
 from . import planning
 from .observe import capture

@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 from uuid import uuid4
 
-from ...sync_project import SyncError
-from ..store.io import atomic_write, byte_hash, confined
+from ...errors import SyncError
+from ...storage.io import atomic_write, byte_hash, confined
 from ..store.refs import move_ref
 
 

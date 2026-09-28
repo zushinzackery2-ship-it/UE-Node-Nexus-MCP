@@ -1,7 +1,8 @@
 """One identity for the Blueprint class spellings accepted by the schema."""
 
-from ..bp_call_host import call_spelling, host_name
-from ..schema.lock import K2_ALIASES
+from .call_host import call_spelling, host_name
+from ..schema.names import K2_ALIASES
+from ..schema.catalog import reference
 
 
 def node_name(text: str) -> str:
@@ -9,6 +10,16 @@ def node_name(text: str) -> str:
     if name.startswith("EdGraphNode_"):
         name = name[len("EdGraphNode_"):]
     return call_spelling(name)
+
+
+def node_identity(text: str, schema=None) -> str:
+    if text.startswith("/Script/BlueprintGraph.K2Node_"):
+        spelling = call_spelling(text)
+        if spelling != text:
+            return spelling
+    if text.startswith("/"):
+        return reference(schema, "k2node", text, node_name(text)) if schema is not None else text
+    return node_name(text)
 
 
 def create_class(text: str) -> str:

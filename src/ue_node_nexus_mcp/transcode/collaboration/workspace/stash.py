@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ..merge.sessions import Sessions
-from ..store.io import confined
+from ...storage.io import confined
 from .files import capture_files
 from .projection import blob
 

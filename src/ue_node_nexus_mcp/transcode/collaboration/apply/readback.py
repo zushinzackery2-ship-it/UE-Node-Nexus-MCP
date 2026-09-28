@@ -1,9 +1,9 @@
 """Verify the values an apply was asked to write before publishing its receipt."""
 
-from ...paths import object_path
-from ...sync_project import SyncError
+from ...storage.paths import object_path
+from ...errors import SyncError
 from ..semantic.normalization import normalize_snapshot
-from ..semantic.values import equivalent, value
+from ...text.semantic import equivalent, value
 from ..workspace.files import filename
 
 

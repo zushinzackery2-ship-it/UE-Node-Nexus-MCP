@@ -5,13 +5,19 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..collaboration.store.io import atomic_write, canonical, digest, read_json, confined
-from ..sync_project import SyncError
-from .lock import CLASS_FILES, K2_ALIASES, _PREFIXES, _SUFFIXES
+from ..storage.io import atomic_write, canonical, digest, read_json, confined
+from ..errors import SyncError
+from .names import CLASS_TIERS, OWNER_TIERS, RECORD_TIERS, class_spellings
 from .records import FAMILIES, normalize
 
-LEGACY_FILES = dict(CLASS_FILES, material_functions="material_functions.json", niagara_modules="niagara_modules.json",
-                    functions="functions.cache.json", callable_functions="functions.index.json", types="types.json")
+# The first release wrote one table per family; ``migrate`` reads them.
+LEGACY_FILES = dict(material_expression="classes.material_expression.json", k2node="classes.k2node.json",
+                    asset="classes.asset.json", component="classes.component.json",
+                    niagara_renderer="classes.niagara_renderer.json", material_functions="material_functions.json",
+                    niagara_modules="niagara_modules.json", functions="functions.cache.json",
+                    callable_functions="functions.index.json", types="types.json")
+# Families whose records are classes: a short spelling is a class name, not a member.
+CLASS_FAMILIES = frozenset(("material_expression", "k2node", "asset", "component", "niagara_renderer"))
 
 
 def publish(directory: Path, key: str, tables: dict, environment: dict | None = None,
@@ -20,6 +26,25 @@ def publish(directory: Path, key: str, tables: dict, environment: dict | None = 
 
     with MirrorLock(directory, directory / "index.lock"):
         return _publish(directory, key, tables, environment, coverage, incremental)
+
+
+def ensure_format(directory: Path, key: str) -> dict:
+    """The format-2 manifest of ``directory``, converting first-release tables once.
+
+    Conversion rewrites only this catalog's own files, so an offline reader needs
+    no editor; the lock makes concurrent first readers convert exactly once.
+    """
+    from ..transaction.lock import MirrorLock
+
+    with MirrorLock(directory, directory / "index.lock"):
+        manifest = read_json(directory / "key.json")
+        if manifest.get("format") == 2:
+            return manifest
+        return _publish(directory, key, legacy_tables(directory), None, None, False)
+
+
+def legacy_tables(source: Path) -> dict:
+    return dict((family, read_json(source / name)) for family, name in LEGACY_FILES.items() if (source / name).is_file())
 
 
 def _publish(directory, key, tables, environment, coverage, incremental) -> dict:
@@ -61,13 +86,7 @@ def _publish(directory, key, tables, environment, coverage, incremental) -> dict
 
 
 def migrate(directory: Path, key: str, source: Path | None = None, environment=None, coverage=None) -> dict:
-    source = source or directory
-    tables = dict()
-    for family, filename in LEGACY_FILES.items():
-        file = source / filename
-        if file.is_file():
-            tables[family] = read_json(file)
-    return publish(directory, key, tables, environment, coverage)
+    return publish(directory, key, legacy_tables(source or directory), environment, coverage)
 
 
 def read_entry(lock, family: str, name: str, entry: dict) -> dict:
@@ -90,82 +109,46 @@ def read_entry(lock, family: str, name: str, entry: dict) -> dict:
     return record
 
 
-def _entry_names(entry: dict) -> set[str]:
-    """Names an index entry answers to, derived from the entry alone.
-
-    Catalog entries carry ``path``, so the real class name is available even when
-    a catalog published before ``records.class_aliases`` widened ``aliases``.
-    """
-    names = set(entry.get("aliases") or ())
-    path = str(entry.get("path") or "")
-    simple = path.rsplit(".", 1)[-1].rsplit("/", 1)[-1] if path else ""
-    if simple:
-        names.add(simple)
-    return names
-
-
-def _entry_path(entry: dict, key: str) -> str:
-    return str(entry.get("path") or key)
-
-
-def _current_only(matches: list[tuple[str, dict]]) -> list[tuple[str, dict]]:
-    """Keep the matches that are not superseded engine content.
-
-    Engine libraries ship a deprecated script (``V2``/``V3`` folder) beside the
-    current one under the same short name; only an unambiguous current record may
-    answer to that spelling.
-    """
-    current = [item for item in matches if not item[1].get("deprecated")]
-    return current if len(current) == 1 else matches
-
-
 def lookup_record(lock, family: str, name: str) -> dict | None:
-    entries = lock.info().get("tables", dict()).get(family, dict())
-    candidates = [name, name + "." + name.rsplit("/", 1)[-1]]
-    for key in candidates:
-        if key in entries:
-            return read_entry(lock, family, key, entries[key])
-    matches = [(key, entry) for key, entry in entries.items() if name in _entry_names(entry) or key.endswith("." + name)]
-    if len(matches) > 1:
-        matches = _current_only(matches)
-    if len(matches) > 1:
-        raise SyncError("schema_ambiguous", "use the full UE path", dict(candidates=[_entry_path(entry, key) for key, entry in matches]))
-    return read_entry(lock, family, *matches[0]) if matches else None
+    """The record ``name`` denotes: a key, a path, an owner-qualified member or a short name."""
+    if not name:
+        return None
+    index = lock.index(family)
+    key = index.find([name, name + "." + name.rsplit("/", 1)[-1]], RECORD_TIERS)
+    return read_entry(lock, family, key, index.entries[key]) if key else None
 
 
-def module_reference(lock, path: str, short: str) -> str:
-    """Shortest module reference that resolves back to ``path`` in this catalog.
+def reference(lock, family: str, path: str, short: str) -> str:
+    """The spelling the mirror writes for the record at ``path``: ``short`` while it resolves back to it.
 
-    Engine libraries ship a superseded module script beside the current one, so a
-    short name that several records answer to must stay out of the mirror: the same
-    spelling would mean one script to the validator and another to the editor.
+    A short name that several records answer to, or that names another record,
+    must stay out of the mirror: the same spelling would mean one record to the
+    validator and another to the editor. Class tables list every reflected class,
+    Blueprint-generated ones included, so a class they lack is newer than the
+    catalog and keeps its name; the module index lists only the scripts loaded at
+    export, so an unlisted script is written in full.
     """
-    entries = lock.info().get("tables", dict()).get("niagara_modules", dict())
-    if not path or not short or not entries:
+    if lock is None or not path or not short or not lock.info().get("tables", dict()).get(family):
         return short or path
-    matches = [(key, entry) for key, entry in entries.items() if short in _entry_names(entry) or key.endswith("." + short)]
-    if len(matches) > 1:
-        matches = _current_only(matches)
-    if len(matches) == 1 and _entry_path(matches[0][1], matches[0][0]) == path:
-        return short
-    return path
+    index = lock.index(family)
+    classes = family in CLASS_FAMILIES
+    try:
+        key = index.find(class_spellings(family, short) if classes else [short], CLASS_TIERS if classes else RECORD_TIERS)
+    except SyncError as exc:
+        if exc.code != "schema_ambiguous":
+            raise
+        return path
+    if key is None:
+        return short if classes else path
+    return short if str(index.entries[key].get("path") or key) == path else path
 
 
-def lookup_class(lock, family: str, name: str, manifest: dict) -> dict | None:
-    entries = manifest.get("tables", dict()).get(family, dict())
-    candidate = K2_ALIASES.get(name, name) if family == "k2node" else name
-    candidates = [candidate]
-    candidates.extend(f"{prefix}{candidate}{suffix}" for prefix in _PREFIXES.get(family, ("",)) for suffix in _SUFFIXES.get(family, ("",)))
-    for key in candidates:
-        if key in entries:
-            return read_entry(lock, family, key, entries[key])
-    names = set(candidates)
-    matches = [(key, entry) for key, entry in entries.items() if names.intersection(_entry_names(entry))]
-    if len(matches) == 1:
-        return read_entry(lock, family, *matches[0])
-    if len(matches) > 1:
-        raise SyncError("schema_ambiguous", "use the full UE type path", dict(candidates=[entry["path"] for _, entry in matches]))
-    return None
+def lookup_class(lock, family: str, name: str, *, aliases: bool = True) -> dict | None:
+    if not name:
+        return None
+    index = lock.index(family)
+    key = index.find(class_spellings(family, name), CLASS_TIERS if aliases else OWNER_TIERS)
+    return read_entry(lock, family, key, index.entries[key]) if key else None
 
 
 def markdown(directory: Path, manifest: dict) -> None:

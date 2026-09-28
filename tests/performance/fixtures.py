@@ -6,7 +6,7 @@ import copy
 import time
 from pathlib import Path
 
-from ue_node_nexus_mcp.transcode.sync import run_sync
+from ue_node_nexus_mcp.transcode.sync.service import run_sync
 from tests.collaboration.fake_bridge import ProtocolUe
 from tests.transcode.fake_ue import SCHEMA_KEY
 from tests.transcode.fixtures import material_raw, prop

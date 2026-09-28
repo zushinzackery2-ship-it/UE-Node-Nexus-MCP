@@ -3,6 +3,7 @@
 from ..errors import InstanceError, require
 from ..session import instance_manager
 from ..session.shutdown import close_instance
+from ..session.startup import warnings
 
 
 def execute(operation: str, payload: dict, session=instance_manager) -> dict:
@@ -26,9 +27,11 @@ def execute(operation: str, payload: dict, session=instance_manager) -> dict:
                 payload["instance_id"] = session.current().get("instance_id")
                 require(bool(payload["instance_id"]), "project_required", "select the instance to close")
             result = close_instance(session, payload) if action == "close" else session.call(action, payload)
-        return dict(ok=True, operation=operation, data=result, diagnostics=[], warnings=[])
+        notes = warnings(result["startup"]) if isinstance(result, dict) and result.get("startup") else []
+        return dict(ok=True, operation=operation, data=result, diagnostics=[], warnings=notes)
     except InstanceError as exc:
-        return dict(exc.envelope(), operation=operation, diagnostics=[], warnings=[])
+        startup = exc.details.get("startup")
+        return dict(exc.envelope(), operation=operation, diagnostics=[], warnings=warnings(startup) if startup else [])
 
 
 def legacy_exit(payload: dict, session=instance_manager) -> dict:

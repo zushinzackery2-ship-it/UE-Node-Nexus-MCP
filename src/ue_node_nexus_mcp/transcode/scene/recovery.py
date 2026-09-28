@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..sync_files import read_json, write_json
-from ..sync_project import ProjectContext, SyncError, now_iso
-from ..values import values_equal
+from ..sync.files import read_json, write_json
+from ..sync.project import ProjectContext, now_iso
+from ..errors import SyncError
+from ..text.values import values_equal
 from .paths import storage
 from .state import SceneRecord
 

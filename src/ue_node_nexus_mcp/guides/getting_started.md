@@ -8,8 +8,10 @@ you discover, inspect, and run through them.
 Configure `--project` or `UE_NEXUS_PROJECT_PATH` with the exact `.uproject`.
 Use `bridge_instance_ensure` to reuse it (`reuse_only` by default); explicitly
 choose `mode="reuse_or_start"` and `dry_run=False` when startup is intended.
-Poll `bridge_instance_status` for a STARTING instance. Read the `instances`
-workflow guide for ownership, cleanup, shared repositories and migration.
+The call is held while the editor starts and returns a `startup` report: `ready`,
+`waiting_for_user` with the prompt to show the user, or `starting` with the call
+to repeat. Read the `instances` workflow guide for startup prompts, ownership,
+cleanup, shared repositories and migration.
 
 1. `ue_context_get()` — enabled groups, bound editor instance, facade tools.
 2. `ue_capability_get(group="graph", detail="index")` — list operations in a group.
@@ -34,7 +36,9 @@ one-line text summary, not the data payload. To get real data:
 Responses larger than the inline limit come back as an artifact handle instead
 of raw data; fetch with `ue_read(target="artifact", query={"artifact_id": "..."})`.
 Pages default to 48 KiB; add `path` (e.g. `"data.conflicts"`) to page a list by
-whole items, and follow `next_read` / `page_lists_with`.
+whole items, and follow `next_read` / `page_lists_with`. A path through keys that
+contain dots, such as asset paths, is a list of keys: `["conflicts", "/Game/M.M"]`;
+the calls a page names already use that form.
 
 ## Writes are dry-run first
 

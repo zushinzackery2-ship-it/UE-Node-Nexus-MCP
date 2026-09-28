@@ -40,22 +40,7 @@ class _Win32:
                 ("hEvent", wintypes.HANDLE),
             ]
 
-        class WIN32_FIND_DATAW(ctypes.Structure):
-            _fields_ = [
-                ("dwFileAttributes", wintypes.DWORD),
-                ("ftCreationTime", wintypes.FILETIME),
-                ("ftLastAccessTime", wintypes.FILETIME),
-                ("ftLastWriteTime", wintypes.FILETIME),
-                ("nFileSizeHigh", wintypes.DWORD),
-                ("nFileSizeLow", wintypes.DWORD),
-                ("dwReserved0", wintypes.DWORD),
-                ("dwReserved1", wintypes.DWORD),
-                ("cFileName", wintypes.WCHAR * 260),
-                ("cAlternateFileName", wintypes.WCHAR * 14),
-            ]
-
         self.OVERLAPPED = OVERLAPPED
-        self.WIN32_FIND_DATAW = WIN32_FIND_DATAW
 
         self.CreateFileW = k.CreateFileW
         self.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
@@ -92,18 +77,6 @@ class _Win32:
         self.CloseHandle = k.CloseHandle
         self.CloseHandle.argtypes = [wintypes.HANDLE]
         self.CloseHandle.restype = wintypes.BOOL
-
-        self.FindFirstFileW = k.FindFirstFileW
-        self.FindFirstFileW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(WIN32_FIND_DATAW)]
-        self.FindFirstFileW.restype = wintypes.HANDLE
-
-        self.FindNextFileW = k.FindNextFileW
-        self.FindNextFileW.argtypes = [wintypes.HANDLE, ctypes.POINTER(WIN32_FIND_DATAW)]
-        self.FindNextFileW.restype = wintypes.BOOL
-
-        self.FindClose = k.FindClose
-        self.FindClose.argtypes = [wintypes.HANDLE]
-        self.FindClose.restype = wintypes.BOOL
 
 
 def _win() -> _Win32:

@@ -1,14 +1,14 @@
 import pytest
 
-from ue_node_nexus_mcp.transcode.emitter import emit
-from ue_node_nexus_mcp.transcode.model import Decl
+from ue_node_nexus_mcp.transcode.text.emitter import emit
+from ue_node_nexus_mcp.transcode.text.model import Decl
 from ue_node_nexus_mcp.transcode.scene.files import read_document
 from ue_node_nexus_mcp.transcode.scene.paths import storage
 from ue_node_nexus_mcp.transcode.scene.pull import pull_one
 from ue_node_nexus_mcp.transcode.scene.push import push_one
 from ue_node_nexus_mcp.transcode.scene.selection import new_record, select
 from ue_node_nexus_mcp.transcode.scene.status import inspect
-from ue_node_nexus_mcp.transcode.sync_project import SyncError
+from ue_node_nexus_mcp.transcode.errors import SyncError
 
 from .fixtures import ACTOR, MAP
 

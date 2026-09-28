@@ -17,7 +17,7 @@ from ue_node_nexus_mcp.instances.identity.discovery import arguments
 from ue_node_nexus_mcp.instances.identity.paths import project_identity
 from ue_node_nexus_mcp.instances.identity.watch import ProcessWatch
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
-from tests.live.editor.windows import acknowledge_test_disk_warning
+from tests.live.editor.windows import answer_dialog
 from .host import ROOT, prepare
 
 
@@ -25,8 +25,6 @@ def wait_state(session, expected, timeout=75, identifier=None):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         state = session.call("status", dict(instance_id=identifier)) if identifier else session.status()
-        if state["state"] == "STARTING" and state.get("pid"):
-            acknowledge_test_disk_warning(state["pid"], state["project_path"])
         if state["state"] in expected:
             return state
         time.sleep(0.5)
@@ -64,18 +62,24 @@ def save_asset(bridge, asset):
         time.sleep(1)
 
 
-def connect(session, process, project):
-    deadline = time.monotonic() + 240
+def connect(session, process, project, report):
+    """Hold on the external editor's start; a prompt it reports is answered as its user would."""
+    deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
         assert process.poll() is None, process.returncode
-        acknowledge_test_disk_warning(process.pid, project)
         try:
-            result = session.ensure(dict(dry_run=False))
-            if result["instance"]["state"] in ("READY", "IDLE"):
-                return result
+            result = session.ensure(dict(dry_run=False, wait_seconds=60))
         except InstanceError as error:
-            assert error.code in ("instance_unverified", "instance_missing", "instance_starting"), error.envelope()
-        time.sleep(1)
+            # Until the Guard publishes its record the process is not yet an editor instance.
+            assert error.code in ("instance_unverified", "instance_missing"), error.envelope()
+            time.sleep(1)
+            continue
+        startup = result["startup"]
+        if startup["outcome"] == "ready":
+            return result
+        if startup["outcome"] == "waiting_for_user":
+            report.setdefault("answered_dialogs", []).append(startup["blocking_dialog"])
+            answer_dialog(process.pid, project, startup["blocking_dialog"])
     raise AssertionError("external fixture did not become ready")
 
 
@@ -155,7 +159,7 @@ def run(name, engine, resume=False):
     session = EditorSession(BrokerClient(root, str(project.parent)), str(project))
     report = dict(prior) if resume else dict(project=str(project), external_pid=process.pid)
     try:
-        result = connect(session, process, project)
+        result = connect(session, process, project, report)
         external = result["instance"]
         assert external["pid"] == process.pid and external["launch_profile"] == "interactive", external
         if not report.get("external_preserved_seconds"):

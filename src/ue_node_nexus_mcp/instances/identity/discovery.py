@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes as w
 
-from .windows import kernel, process_info
+from .windows import kernel
 
 
 def process_ids(names: tuple[str, ...]) -> list[int]:

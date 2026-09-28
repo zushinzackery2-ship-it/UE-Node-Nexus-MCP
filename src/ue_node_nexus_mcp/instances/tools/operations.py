@@ -9,7 +9,9 @@ def bridge_instance_list(project_path: str | None = None, include_exited: bool =
     return execute("bridge_instance_list", locals())
 
 
-def bridge_instance_status(instance_id: str | None = None, project_path: str | None = None) -> dict:
+def bridge_instance_status(instance_id: str | None = None, project_path: str | None = None,
+                           wait_seconds: float | None = None) -> dict:
+    """``wait_seconds`` holds the call while the instance is still starting (0–900)."""
     return execute("bridge_instance_status", locals())
 
 
@@ -17,7 +19,12 @@ def bridge_instance_ensure(project_path: str | None = None, mode: Literal["reuse
                            launch_profile: Literal["interactive"] | None = None, engine_path: str | None = None,
                            rhi: Literal["d3d12", "d3d11"] | None = None, instance_id: str | None = None,
                            idempotency_key: str | None = None, mirror_root: str | None = None,
-                           dry_run: bool = True, proposal_id: str | None = None) -> dict:
+                           dry_run: bool = True, proposal_id: str | None = None, wait_seconds: float | None = None) -> dict:
+    """An executed ensure holds while the editor starts: ``wait_seconds`` (default 45, 0–900).
+
+    ``startup.outcome`` is ``ready``, ``waiting_for_user`` (``blocking_dialog`` names the
+    prompt) or ``starting`` (call again to keep holding); an exit or a stall is an error.
+    """
     return execute("bridge_instance_ensure", locals())
 
 

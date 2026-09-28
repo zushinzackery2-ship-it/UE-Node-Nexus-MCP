@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from .repository import Store
 
 DAY = 86400

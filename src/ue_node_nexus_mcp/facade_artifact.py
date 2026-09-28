@@ -48,10 +48,14 @@ def budget_of(query: dict[str, Any]) -> int | None:
 
 
 def locate(payload: Any, path: Any) -> tuple[Any, list, dict | None]:
-    """The value at a dotted path (``data.conflicts``) and the keys it took."""
+    """The value at ``path`` and the keys it took.
+
+    A path is a dotted string (``data.conflicts``) or a list of keys; keys that
+    contain dots themselves, such as full asset paths, only fit the list form.
+    """
     keys = path.split(".") if isinstance(path, str) else list(path) if isinstance(path, list) else None
     if not keys or not all(isinstance(key, (str, int)) and str(key) for key in keys):
-        return None, [], {"reason": "path must be a dotted string such as \"data.conflicts\""}
+        return None, [], {"reason": "path must be a dotted string such as \"data.conflicts\" or a list of keys"}
     value, walked = payload, []
     for key in keys:
         if isinstance(value, dict) and str(key) in value:
@@ -60,21 +64,31 @@ def locate(payload: Any, path: Any) -> tuple[Any, list, dict | None]:
             value = value[int(key)]
         else:
             available = sorted(value)[:50] if isinstance(value, dict) else f"0..{len(value) - 1}" if isinstance(value, list) else None
-            return None, walked, {"reason": f"no {key!r} under {'.'.join(map(str, walked)) or 'the payload'}", "available": available}
+            return None, walked, {"reason": f"no {key!r} under {label(walked) or 'the payload'}", "available": available}
         walked.append(key)
     return value, walked, None
 
 
-def lists_in(value: Any, prefix: str = "", depth: int = 0) -> dict[str, int]:
-    """Paths of the lists a caller would want to page item by item."""
-    found: dict[str, int] = {}
+def path_argument(keys) -> str | list:
+    """The ``path`` a follow-up read passes: dotted while that is unambiguous."""
+    keys = [str(key) for key in keys]
+    return keys if any("." in key for key in keys) else ".".join(keys)
+
+
+def label(keys) -> str:
+    return ".".join(map(str, keys))
+
+
+def lists_in(value: Any, prefix: tuple = (), depth: int = 0) -> dict[tuple, int]:
+    """Key paths of the lists a caller would want to page item by item."""
+    found: dict[tuple, int] = {}
     if isinstance(value, dict) and depth < 3:
         for key, item in value.items():
-            path = f"{prefix}{key}"
+            path = (*prefix, key)
             if isinstance(item, list) and len(item) >= LIST_HINT_MINIMUM:
                 found[path] = len(item)
             elif isinstance(item, dict):
-                found.update(lists_in(item, path + ".", depth + 1))
+                found.update(lists_in(item, path, depth + 1))
     return found
 
 
@@ -96,17 +110,16 @@ def read(artifact: StoredArtifact, query: dict[str, Any]) -> dict[str, Any]:
     value, walked, problem = locate(artifact.payload, query["path"])
     if problem is not None:
         return minimal_error("invalid_request", problem["reason"], {"artifact_id": artifact.artifact_id, **problem})
-    path = ".".join(map(str, walked))
     if isinstance(value, list):
-        return item_page(artifact, value, path, cursor, budget)
-    return text_page(artifact, value, encode(value), path, cursor, budget)
+        return item_page(artifact, value, tuple(walked), cursor, budget)
+    return text_page(artifact, value, encode(value), tuple(walked), cursor, budget)
 
 
-def follow(artifact_id: str, path: str | None = None, cursor: int = 0, budget: int | None = None) -> dict[str, Any]:
-    """The ``ue_read`` call that returns one page of an artifact."""
+def follow(artifact_id: str, path=None, cursor: int = 0, budget: int | None = None) -> dict[str, Any]:
+    """The ``ue_read`` call that returns one page of an artifact; ``path`` is a key sequence."""
     query: dict[str, Any] = {"artifact_id": artifact_id, "cursor": cursor}
     if path is not None:
-        query["path"] = path
+        query["path"] = path_argument(path)
     if budget is not None and budget != min(ARTIFACT_PAGE_DEFAULT_BYTES, ARTIFACT_PAGE_BYTE_BUDGET):
         query["limit_bytes"] = budget
     return {"tool": "ue_read", "args": {"target": "artifact", "query": query}}
@@ -114,14 +127,14 @@ def follow(artifact_id: str, path: str | None = None, cursor: int = 0, budget: i
 
 def list_reads(artifact_id: str, payload: Any) -> dict[str, dict[str, Any]]:
     """For a response stored whole: the call that pages each of its lists by item."""
-    return dict((path, follow(artifact_id, path)) for path in lists_in(payload))
+    return dict((label(path), follow(artifact_id, path)) for path in lists_in(payload))
 
 
-def item_page(artifact: StoredArtifact, items: list, path: str, cursor: int, budget: int) -> dict[str, Any]:
+def item_page(artifact: StoredArtifact, items: list, path: tuple, cursor: int, budget: int) -> dict[str, Any]:
     """Whole items from ``cursor`` while they fit; every page parses on its own."""
     if cursor > len(items):
         return minimal_error("invalid_request", "cursor is past the end of this list",
-                             {"artifact_id": artifact.artifact_id, "path": path, "cursor": cursor, "total": len(items)})
+                             {"artifact_id": artifact.artifact_id, "path": path_argument(path), "cursor": cursor, "total": len(items)})
     page, used = [], 2
     for item in items[cursor:]:
         size = len(encode(item)) + (1 if page else 0)
@@ -130,23 +143,24 @@ def item_page(artifact: StoredArtifact, items: list, path: str, cursor: int, bud
         page.append(item)
         used += size
     end = cursor + len(page)
-    data: dict[str, Any] = {"artifact_id": artifact.artifact_id, "kind": artifact.kind, "encoding": "items", "path": path,
+    data: dict[str, Any] = {"artifact_id": artifact.artifact_id, "kind": artifact.kind, "encoding": "items", "path": path_argument(path),
                             "items": page, "cursor": cursor, "next_cursor": end if end < len(items) else None,
                             "total": len(items), "page_bytes": used, "truncated": end < len(items)}
     if not page and cursor < len(items):
         # One item larger than the page: it is readable, as text, under its own path.
         data.update(oversized_item={"index": cursor, "bytes": len(encode(items[cursor]))},
-                    next_read=follow(artifact.artifact_id, f"{path}.{cursor}", 0, budget))
+                    next_read=follow(artifact.artifact_id, (*path, cursor), 0, budget))
     else:
         data["next_read"] = follow(artifact.artifact_id, path, end, budget) if end < len(items) else None
     return {"ok": True, "data": data}
 
 
-def text_page(artifact: StoredArtifact, value: Any, text: str, path: str | None, cursor: int, budget: int) -> dict[str, Any]:
+def text_page(artifact: StoredArtifact, value: Any, text: str, path: tuple | None, cursor: int, budget: int) -> dict[str, Any]:
     total = len(text)
     if cursor == 0 and total <= budget:
         return {"ok": True, "data": value} if path is None else {
-            "ok": True, "data": {"artifact_id": artifact.artifact_id, "kind": artifact.kind, "encoding": "value", "path": path, "value": value}}
+            "ok": True, "data": {"artifact_id": artifact.artifact_id, "kind": artifact.kind, "encoding": "value",
+                                 "path": path_argument(path), "value": value}}
     if cursor > total:
         return minimal_error("invalid_request", "cursor is past the end of this artifact",
                              {"artifact_id": artifact.artifact_id, "cursor": cursor, "total_bytes": total})
@@ -167,12 +181,11 @@ def text_page(artifact: StoredArtifact, value: Any, text: str, path: str | None,
         "next_read": None if end >= total else follow(artifact.artifact_id, path, end, budget),
     }
     if path is not None:
-        data["path"] = path
+        data["path"] = path_argument(path)
     if cursor == 0:
         # Reassembling text is the fallback; a list is better read item by item.
-        prefix = f"{path}." if path else ""
-        lists = {prefix + key: count for key, count in lists_in(value).items()}
+        lists = lists_in(value, path or ())
         if lists:
-            data["lists"] = lists
+            data["lists"] = dict((label(keys), count) for keys, count in lists.items())
             data["page_lists_with"] = follow(artifact.artifact_id, next(iter(lists)), 0, budget)
     return {"ok": True, "data": data}

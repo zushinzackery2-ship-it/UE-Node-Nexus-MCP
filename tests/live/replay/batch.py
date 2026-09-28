@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 import time
 
-from ue_node_nexus_mcp.transcode.emitter import emit
-from ue_node_nexus_mcp.transcode.model import Prop
-from ue_node_nexus_mcp.transcode.parser import parse
-from ue_node_nexus_mcp.transcode.paths import object_path
-from ue_node_nexus_mcp.transcode.state import SyncState
-from ue_node_nexus_mcp.transcode.sync import run_sync
+from ue_node_nexus_mcp.transcode.text.emitter import emit
+from ue_node_nexus_mcp.transcode.text.model import Prop
+from ue_node_nexus_mcp.transcode.text.parser import parse
+from ue_node_nexus_mcp.transcode.storage.paths import object_path
+from ue_node_nexus_mcp.transcode.sync.state import SyncState
+from ue_node_nexus_mcp.transcode.sync.service import run_sync
 
 
 def _property(document, section: str, key: str, value: str) -> None:

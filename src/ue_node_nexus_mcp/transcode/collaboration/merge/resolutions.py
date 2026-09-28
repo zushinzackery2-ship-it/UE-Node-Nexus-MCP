@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from ...sync_project import SyncError
-from ..store.io import digest
+from ...errors import SyncError
+from ...storage.io import digest
 from .engine import at, wire
 
 SIDES = ("base", "ours", "theirs")

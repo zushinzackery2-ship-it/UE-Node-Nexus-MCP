@@ -11,7 +11,7 @@ import ue_node_nexus_mcp
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.identity.processes import is_alive
 from ue_node_nexus_mcp.transcode.collaboration.store import Store
-from ue_node_nexus_mcp.transcode.paths import text_path
+from ue_node_nexus_mcp.transcode.storage.paths import text_path
 from .collaboration import edit, wait_state
 from .host import ROOT, prepare
 from .stdio import connect

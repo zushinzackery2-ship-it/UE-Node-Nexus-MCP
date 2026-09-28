@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ue_node_nexus_mcp.transcode.sync import run_sync
+from ue_node_nexus_mcp.transcode.sync.service import run_sync
 
 from .fake_ue import FakeUe
 from .fixtures import material_function_raw, material_raw

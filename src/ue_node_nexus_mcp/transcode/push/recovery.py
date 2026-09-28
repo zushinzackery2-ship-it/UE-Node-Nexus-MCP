@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..paths import asset_relative, display_path, pending_dir
-from ..sync_files import read_json, write_json
-from ..sync_project import ProjectContext, now_iso
+from ..storage.paths import asset_relative, display_path, pending_dir
+from ..sync.files import read_json, write_json
+from ..sync.project import ProjectContext, now_iso
 from .model import Prepared
 
 

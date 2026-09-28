@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..ids import sanitize_id
-from ..model import Decl, Document, Header, Prop, Section
-from ..values import quote
+from ..text.ids import sanitize_id
+from ..text.model import Decl, Document, Header, Prop, Section
+from ..text.values import quote
 
 RESERVED_FIELDS = set(("Label", "Folder", "Parent", "Level", "Transform", "CustomDataCount", "InstancesReadOnly"))
 

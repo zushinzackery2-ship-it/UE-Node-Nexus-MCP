@@ -6,8 +6,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from ..semantic.validation import validate
-from ..semantic.values import equivalent
-from ..store.io import canonical, digest
+from ...text.semantic import equivalent
+from ...storage.io import canonical, digest
 from .order import merge_order
 
 MISSING = object()

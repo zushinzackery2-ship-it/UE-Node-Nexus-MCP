@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ...material.interfaces import tree as interface_tree
 from ..semantic.validation import validate
 from .findings import finding
 from ..history import History
 from ..semantic.snapshot import rebind
-from ..store.io import digest
+from ...storage.io import digest
 from .engine import merge_snapshots
 
 
@@ -46,13 +46,16 @@ def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None
             else:
                 result.pop(asset, None)
             continue
-        snapshots, identifiers, unreadable = aligned(history, identifiers, schema)
-        merged = merge_snapshots(*snapshots, schema, validate_candidate=False)
-        if merged.candidate is None:
-            result.pop(asset, None)
-        else:
-            result[asset] = history.store.snapshot(merged.candidate, schema)
-            changed.append(asset)
+        try:
+            snapshots, identifiers, unreadable = aligned(history, identifiers, schema)
+            merged = merge_snapshots(*snapshots, schema, validate_candidate=False)
+            if merged.candidate is None:
+                result.pop(asset, None)
+            else:
+                result[asset] = history.store.snapshot(merged.candidate, schema)
+                changed.append(asset)
+        except SyncError as exc:
+            raise exc.attribute(asset=asset, stage="merge", layer=layer)
         for item in merged.conflicts:
             item.update(asset=asset, layer=layer, kind=(snapshots[1] or snapshots[2])["semantic"]["kind"], snapshots=identifiers)
             item["conflict_id"] = digest(dict(layer=layer, inputs=identifiers, id=item["conflict_id"]))[:24]
@@ -115,22 +118,3 @@ def common_base(history: History, ours: str, theirs: str, schema=None, store=Non
         raise SyncError("base-conflict", "multiple common ancestors require resolution",
                         dict(ancestors=resolved["bases"], conflicts=resolved["conflicts"], inputs=resolved["inputs"]))
     return resolved["base"], resolved["bases"]
-
-
-def adopt_base(workspace, session: dict) -> str:
-    """Record a resolved virtual ancestor so every later merge reuses it."""
-    from .sessions import Sessions
-
-    sessions = Sessions(workspace)
-    sessions.check(session)
-    if session["status"] != "ready":
-        raise SyncError("unresolved_conflicts", "resolve the ancestor conflicts before continuing", sessions.report(session))
-    commit = workspace.history.create(session["candidates"]["head"], [session["ours"], session["theirs"]],
-                                      "virtual merge base", session["original"]["agent_id"], "virtual_base")
-    key = session["metadata"]["base_pair"]
-    previous = workspace.store.record("virtual_base", key)
-    workspace.store.put_record("virtual_base", key, dict(commit=commit, inputs=[session["ours"], session["theirs"]]),
-                               [commit], previous["generation"] if previous else 0)
-    session.update(status="completed", result_commit=commit)
-    sessions.save(session)
-    return commit

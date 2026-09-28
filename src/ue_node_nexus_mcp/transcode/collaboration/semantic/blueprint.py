@@ -1,12 +1,13 @@
 """Blueprint reference spellings and effective input defaults used by the mirror."""
 
 from ...blueprint.classes import node_name
-from ...bp_signature import KNOWN_FLAGS, parse_signature
-from ...bp_types import is_zero_default, join_type_text, parse_type_text, type_text
-from ...lexer import LexError
-from ...raw_blueprint_nodes import owner_label
-from ...sync_project import SyncError
-from .values import normalize, value
+from ...blueprint.signature import KNOWN_FLAGS, parse_signature
+from ...blueprint.types import is_zero_default, join_type_text, parse_type_text, type_text
+from ...text.lexer import LexError
+from ...raw.nodes import owner_label
+from ...errors import SyncError
+from ...schema.functions import reference as function_reference
+from ...text.semantic import normalize, value
 
 FUNCTION_NODES = set(("CallFunction", "CallParentFunction", "Message", "Event"))
 
@@ -21,17 +22,18 @@ def declaration_default(decl, kind, section, class_name):
     return value(text, class_name)
 
 
-def positional_values(decl, family, metadata=None):
+def positional_values(decl, family, metadata=None, schema=None):
     positional = decl.positional()
     if family == "k2node" and node_name(decl.type_name) in FUNCTION_NODES and positional:
         owner, separator, name = positional[0].rpartition(".")
         if separator:
             config = (metadata if metadata is not None else decl.meta).get("config", dict())
-            native_owner = owner_label(str(config.get("function_owner", "")))
+            native_owner = str(config.get("function_owner", ""))
+            same_owner = owner == native_owner or (not owner.startswith("/") and owner == owner_label(native_owner))
             self_context = str(config.get("self_context", "")).lower() == "true"
-            if self_context and config.get("function_name") == name and owner_label(owner) == native_owner:
-                owner = "self"
-            positional[0] = owner_label(owner) + "." + name
+            if config.get("function_name") == name and same_owner:
+                owner = "self" if self_context else native_owner
+            positional[0] = function_reference(schema, owner, name)
     return positional
 
 

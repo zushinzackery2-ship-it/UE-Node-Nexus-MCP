@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..parser import parse
-from ..sync_deps import document_dependencies
-from ..sync_files import mirrored_assets, read_text
-from ..sync_project import BridgeCall, ProjectContext, SyncError, ensure_schema
-from ..sync_push import FAILED_ACTIONS
+from ..text.parser import parse
+from ..sync.dependencies import document_dependencies
+from ..sync.files import mirrored_assets, read_text
+from ..sync.project import BridgeCall, ProjectContext
+from ..sync.schema import ensure_schema
+from ..errors import SyncError
+from ..sync.push import FAILED_ACTIONS
 from .files import read_base, read_document
 from .lint import lint_scenes
 from .pull import pull_scenes

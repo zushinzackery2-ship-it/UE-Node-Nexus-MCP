@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..store.io import atomic_write, canonical
+from ...storage.io import atomic_write, canonical
 
-# Version 4 uses candidate interfaces and reflected value normalization.
-FORMAT = 4
+FORMAT = 5
 
 
 def location(workspace) -> Path:

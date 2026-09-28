@@ -20,8 +20,10 @@
    All workspaces for this project use the same physical project path.
 4. Query `ue_context_get`, then preview/apply `bridge_instance_ensure`.
    Default mode is `reuse_only`; explicitly choose `reuse_or_start` to start
-   an absent editor. Apply with `dry_run=False`, poll status until READY, and
-   finish tasks with `bridge_instance_release`.
+   an absent editor. Apply with `dry_run=False`: the call is held while the
+   editor starts and its `startup` report says `ready`, `waiting_for_user`
+   (answer the named prompt, then call again) or `starting` (call again).
+   Finish tasks with `bridge_instance_release`.
 5. Use ensure's shared `mirror_root` and create a separate `ue_sync("checkout")`
    for each agent. Existing UE repository bindings take precedence; conflicting
    explicit roots return `repository_mismatch` with the current location.

@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..sync_files import mirrored_assets
-from ..sync_project import ProjectContext, SyncError
+from ..sync.files import mirrored_assets
+from ..sync.project import ProjectContext
+from ..errors import SyncError
 from .files import read_base
 from .paths import identity, is_scene_file, scene_path, storage
 from .state import SceneRecord, SceneState

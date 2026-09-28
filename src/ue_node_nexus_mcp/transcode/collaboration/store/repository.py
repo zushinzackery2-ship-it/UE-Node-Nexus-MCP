@@ -10,10 +10,10 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ...transaction.lock import MirrorLock
 from .database import Database
-from .io import canonical
+from ...storage.io import canonical
 from .objects import Objects
 from .refs import get_ref, move_ref, reflog
 
@@ -45,7 +45,7 @@ class Store:
                           holder=dict(holder, action=name, project_id=self.project_id))
 
     def snapshot(self, snapshot: dict, schema=None) -> str:
-        from ...schema.binding import bind
+        from ..semantic.schema import bind
 
         snapshot = bind(self, snapshot, schema)
         return self.objects.put("snapshot", snapshot, snapshot.get("schema_objects", []))

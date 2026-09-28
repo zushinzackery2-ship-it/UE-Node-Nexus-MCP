@@ -5,8 +5,8 @@ from contextvars import ContextVar
 from hashlib import sha256
 import json
 
-from ..paths import object_path
-from ..sync_project import SyncError
+from ..storage.paths import object_path
+from ..errors import SyncError
 
 
 _interfaces = ContextVar("material_function_interfaces", default=None)

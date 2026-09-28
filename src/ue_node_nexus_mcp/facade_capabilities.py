@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .errors import BridgeError
 from .facade_response import minimal_error
 from .instances.session import instance_manager
 from .instances.errors import InstanceError

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..sync_files import read_json
-from ..sync_project import BridgeCall, ProjectContext, SyncError, call_ok, ensure_root_registered
+from ..sync.files import read_json
+from ..sync.project import BridgeCall, ProjectContext, call_ok, ensure_root_registered
+from ..errors import SyncError
 from .paths import identity, storage
 from .state import SceneRecord
 

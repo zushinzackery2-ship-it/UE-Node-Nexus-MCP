@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 from ..errors import Diagnostic
-from ..model import Document
-from ..plan import AssetPlan
-from ..sync_status import AssetStatus
+from ..text.model import Document
+from ..diff.plan import AssetPlan
+from ..sync.status import AssetStatus
 
 
 @dataclass

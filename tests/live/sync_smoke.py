@@ -14,8 +14,8 @@ sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO))
 
 from ue_node_nexus_mcp.runtime import call_bridge
-from ue_node_nexus_mcp.transcode.paths import base_path, text_path
-from ue_node_nexus_mcp.transcode.sync import run_sync
+from ue_node_nexus_mcp.transcode.storage.paths import base_path, text_path
+from ue_node_nexus_mcp.transcode.sync.service import run_sync
 from tests.live.editor.session import EditorSession
 
 

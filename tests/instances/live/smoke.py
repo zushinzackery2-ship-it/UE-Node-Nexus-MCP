@@ -2,7 +2,6 @@
 
 import argparse
 import json
-from pathlib import Path
 import time
 
 from ue_node_nexus_mcp.bridge import UeBridgeClient

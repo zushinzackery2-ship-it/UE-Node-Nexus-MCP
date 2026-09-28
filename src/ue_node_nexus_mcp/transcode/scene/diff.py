@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..sync_project import SyncError
-from ..values import values_equal
+from ..errors import SyncError
+from ..text.values import values_equal
 from .validation import hierarchy
 
 

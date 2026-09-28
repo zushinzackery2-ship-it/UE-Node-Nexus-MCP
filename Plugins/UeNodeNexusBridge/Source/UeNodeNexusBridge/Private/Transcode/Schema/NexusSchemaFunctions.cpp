@@ -7,7 +7,19 @@
 
 namespace UeNodeNexusBridge::Transcode
 {
-TSharedPtr<FJsonObject> CallableFunctionIndex()
+static TSharedPtr<FJsonObject> FunctionSupport(const FString& Entry, const TCHAR* Source)
+{
+    const auto Support = MakeShared<FJsonObject>();
+    Support->SetBoolField(TEXT("inspect"), true);
+    Support->SetStringField(TEXT("create"), TEXT("context_required"));
+    Support->SetStringField(TEXT("write"), TEXT("context_required"));
+    Support->SetStringField(TEXT("delete"), TEXT("call_node_only"));
+    Support->SetStringField(TEXT("entry"), Entry);
+    Support->SetStringField(TEXT("source"), Source);
+    return Support;
+}
+
+TSharedPtr<FJsonObject> FunctionIndex()
 {
     const auto Result = MakeShared<FJsonObject>();
     for (TObjectIterator<UClass> Class; Class; ++Class)
@@ -19,7 +31,13 @@ TSharedPtr<FJsonObject> CallableFunctionIndex()
         }
         for (TFieldIterator<UFunction> Function(*Class, EFieldIteratorFlags::ExcludeSuper); Function; ++Function)
         {
-            if (!Function->HasAnyFunctionFlags(FUNC_BlueprintCallable | FUNC_BlueprintPure))
+            // A graph calls BlueprintCallable/Pure functions; it implements or calls
+            // up to the parent of BlueprintEvent ones (ReceiveBeginPlay,
+            // UserConstructionScript), which is how Event and CallParentFunction
+            // nodes name them without either flag being callable.
+            const bool bCallable = Function->HasAnyFunctionFlags(FUNC_BlueprintCallable | FUNC_BlueprintPure);
+            const bool bEvent = Function->HasAnyFunctionFlags(FUNC_BlueprintEvent);
+            if (!bCallable && !bEvent)
             {
                 continue;
             }
@@ -31,21 +49,25 @@ TSharedPtr<FJsonObject> CallableFunctionIndex()
             Record->SetStringField(TEXT("coverage"), TEXT("index_only"));
             Record->SetStringField(TEXT("detail_query"), Name);
             Record->SetBoolField(TEXT("engine_available"), true);
+            Record->SetBoolField(TEXT("callable"), bCallable);
+            Record->SetBoolField(TEXT("event"), bEvent);
             Record->SetBoolField(TEXT("pure"), Function->HasAnyFunctionFlags(FUNC_BlueprintPure));
             Record->SetBoolField(TEXT("static"), Function->HasAnyFunctionFlags(FUNC_Static));
             Record->SetBoolField(TEXT("deprecated"), Function->HasMetaData(TEXT("DeprecatedFunction")));
-            // The class the editor spawns for this call; lint checks an explicit
-            // specialised spelling against it without a running editor.
-            const FString HostClass = CallHostClassFor(*Function)->GetName();
-            Record->SetStringField(TEXT("node_class"), HostClass);
-            const auto Support = MakeShared<FJsonObject>();
-            Support->SetBoolField(TEXT("inspect"), true);
-            Support->SetStringField(TEXT("create"), TEXT("context_required"));
-            Support->SetStringField(TEXT("write"), TEXT("context_required"));
-            Support->SetStringField(TEXT("delete"), TEXT("call_node_only"));
-            Support->SetStringField(TEXT("entry"), TEXT("transcode_apply/") + HostClass);
-            Support->SetStringField(TEXT("source"), TEXT("BlueprintCallable reflection; graph validation required"));
-            Record->SetObjectField(TEXT("bridge"), Support);
+            if (bCallable)
+            {
+                // The class the editor spawns for this call; lint checks an explicit
+                // specialised spelling against it without a running editor.
+                const FString HostClass = CallHostClassFor(*Function)->GetName();
+                Record->SetStringField(TEXT("node_class"), HostClass);
+                Record->SetObjectField(TEXT("bridge"), FunctionSupport(TEXT("transcode_apply/") + HostClass,
+                    TEXT("BlueprintCallable reflection; graph validation required")));
+            }
+            else
+            {
+                Record->SetObjectField(TEXT("bridge"), FunctionSupport(TEXT("transcode_apply/K2Node_Event"),
+                    TEXT("BlueprintEvent reflection; implemented by Event nodes, called by CallParentFunction")));
+            }
             Result->SetObjectField(Name, Record);
         }
     }

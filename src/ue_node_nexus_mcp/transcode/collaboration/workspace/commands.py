@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ..history import actions, integrate, query, rebase
 from ..merge.sessions import Sessions
 from ..semantic.snapshot import text_of

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..sync_files import canonical_hash, read_text
-from ..sync_project import BridgeCall, ProjectContext, SyncError
+from ..sync.files import canonical_hash, read_text
+from ..sync.project import BridgeCall, ProjectContext
+from ..errors import SyncError
 from .backend import export_scene, selector
 from .files import read_base, write_snapshot
 from .paths import storage

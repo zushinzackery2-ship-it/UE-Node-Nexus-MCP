@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ..merge.resolutions import set_path
 from ..semantic.validation import validate
-from ..store.io import digest
+from ...storage.io import digest
 from ..store.refs import move_ref
 from ..workspace.files import capture_files, filename, select
 

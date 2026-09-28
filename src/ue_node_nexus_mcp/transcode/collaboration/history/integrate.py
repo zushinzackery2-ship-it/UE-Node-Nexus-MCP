@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ..merge.sessions import Sessions
 from ..merge.trees import common_base
 

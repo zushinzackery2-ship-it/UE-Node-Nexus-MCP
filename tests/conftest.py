@@ -8,6 +8,11 @@ from ue_node_nexus_mcp import runtime
 from ue_node_nexus_mcp.contracts import FEATURE_GROUPS
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    if config.option.basetemp is None:
+        config.option.basetemp = str(config.rootpath / "build" / "pytest-temp")
+
+
 @pytest.fixture
 def all_features(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force every feature group enabled and skip CLI/env/probe resolution."""

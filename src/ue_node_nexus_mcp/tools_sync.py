@@ -7,10 +7,10 @@ from typing import Any, Literal
 from .facade_artifact import follow, list_reads
 from .facade_response import LARGE_RESPONSE_INLINE_BYTE_LIMIT, artifact_handle, minimal_error, response_payload_bytes
 from .runtime import call_bridge, thin_tool
-from .transcode.sync import ACTIONS, run_sync
-from .transcode.sync_project import SyncError
+from .transcode.sync.service import ACTIONS, run_sync
+from .transcode.errors import SyncError
 from .transcode.collaboration.report.options import COMMON, OPTIONS
-from .transcode.lifecycle import run_managed_sync
+from .transcode.sync.lifecycle import run_managed_sync
 from .instances.errors import InstanceError
 
 SyncAction = Literal["init", "checkout", "workspaces", "status", "fetch", "pull", "lint", "push", "schema",

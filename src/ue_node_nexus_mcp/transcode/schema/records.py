@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..ids import short_class_name
+from ..text.ids import short_class_name
 
 FAMILIES = dict(material_expression="material", material_functions="material", k2node="blueprint",
                 functions="blueprint", callable_functions="blueprint", component="scene", asset="asset",

@@ -49,21 +49,22 @@ def verify_visible(session):
         if status["state"] in ("EXITED", "UNRESPONSIVE") or time.monotonic() >= deadline:
             session.report("windows", dict(pid=status["pid"], windows=windows, instance=status))
             raise AssertionError(f"editor project window did not become visible: {status}")
-        acknowledge_test_disk_warning(status["pid"], session.project)
         time.sleep(0.5)
 
 
-def acknowledge_test_disk_warning(pid, project):
-    # The tested project/engine have free disk space; this machine's user drive
-    # may have less than UE's 1 GiB recommendation for its editor settings.
+def answer_dialog(pid, project, dialog):
+    """Close the prompt the product reported waiting, as the person at the editor would.
+
+    Only an isolated validation editor is answered, and only the dialog whose
+    title the Guard named; an OK-only advisory treats closing as its answer.
+    """
     project = Path(project).resolve(strict=True)
     project.relative_to(Path(__file__).resolve().parents[3] / "build")
-    warnings = [row for row in visible_windows(pid) if row["title"] in ("警告：驱动器空间不足", "Warning: Low Drive Space")]
-    for row in warnings:
+    rows = [row for row in visible_windows(pid) if row["title"] == dialog["title"]]
+    for row in rows:
         ctypes.windll.user32.PostMessageW(row["handle"], 0x0010, 0, 0)
-    if warnings:
-        print(json.dumps(dict(event="test_disk_warning_closed", pid=pid, project=str(project), count=len(warnings))), flush=True)
-    return warnings
+    print(json.dumps(dict(event="dialog_answered", pid=pid, title=dialog["title"], windows=len(rows)), ensure_ascii=False), flush=True)
+    return rows
 
 
 if __name__ == "__main__":

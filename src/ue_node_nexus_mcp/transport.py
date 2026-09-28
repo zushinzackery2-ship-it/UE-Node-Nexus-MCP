@@ -50,43 +50,7 @@ def make_pipe_name(pid: int) -> str:
     return f"{PIPE_ROOT}{PIPE_PREFIX}{pid}"
 
 
-def parse_pid_from_pipe_name(name: str) -> int | None:
-    """Extract the trailing pid from a bare pipe name or full path."""
-    short = name.rsplit("\\", 1)[-1]
-    if not short.startswith(PIPE_PREFIX):
-        return None
-    suffix = short[len(PIPE_PREFIX):]
-    return int(suffix) if suffix.isdigit() else None
-
-
-
-
 # --- Enumeration -----------------------------------------------------------
-
-def enumerate_pipe_names() -> list[tuple[int, str]]:
-    """Return [(pid, full_pipe_name)] for every live UeNodeNexusBridge pipe.
-
-    The pipe namespace IS the registry: a dead editor's pipe vanishes on process
-    exit, so there is no stale state to prune.
-    """
-    win = _win()
-    ctypes = win.ctypes
-    data = win.WIN32_FIND_DATAW()
-    handle = win.FindFirstFileW(f"{PIPE_ROOT}*", ctypes.byref(data))
-    if handle == ctypes.c_void_p(win.INVALID_HANDLE_VALUE).value or handle in (0, None):
-        return []
-
-    found: list[tuple[int, str]] = []
-    try:
-        while True:
-            pid = parse_pid_from_pipe_name(data.cFileName)
-            if pid is not None:
-                found.append((pid, f"{PIPE_ROOT}{data.cFileName}"))
-            if not win.FindNextFileW(handle, ctypes.byref(data)):
-                break
-    finally:
-        win.FindClose(handle)
-    return found
 
 
 # --- Client ----------------------------------------------------------------

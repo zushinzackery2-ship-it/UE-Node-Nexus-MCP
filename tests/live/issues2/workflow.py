@@ -5,8 +5,8 @@ from pathlib import Path
 from shutil import copy2
 from time import monotonic
 
-from ue_node_nexus_mcp.transcode.sync import run_sync
-from ue_node_nexus_mcp.transcode.sync_project import SyncError
+from ue_node_nexus_mcp.transcode.sync.service import run_sync
+from ue_node_nexus_mcp.transcode.errors import SyncError
 from tests.instances.live.protection import save_asset
 
 FIXTURES = Path(__file__).parent / "fixtures"

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from ...paths import object_path
-from ...sync_project import SyncError, call_ok
+from ...material.calls import CONSUMER_KINDS, changed_calls, refresh_ops, with_refresh
+from ...storage.paths import object_path
+from ...errors import SyncError
+from ...sync.project import call_ok
 from ..merge.trees import merge_trees
 from . import planning, transactions
 from .observe import capture
@@ -64,31 +66,51 @@ def settle(bridge, context, workspace, asset: str, source: str, candidate: str, 
         replan(workspace, asset, source, candidate, fixed, observation, batch, options, "publication_side_effect_conflict")
 
 
-def callers(bridge, context, workspace, function: str, source: str, candidate: str, fixed: dict,
-            observation: dict, batch: dict, options: dict) -> None:
-    """Refresh material consumers of a function whose interface changed, then remerge them."""
+def callers(bridge, context, workspace, function: str, source: str, observation: dict, batch: dict,
+            options: dict, ahead: set[str]) -> list[dict]:
+    """Refresh the material consumers of ``function`` this publication does not apply itself.
+
+    A unit still ``ahead`` whose own document calls ``function`` rebuilds those
+    nodes inside its own apply (``calls.with_refresh``). Every other consumer, a
+    settled unit included, is refreshed here; a failure is that consumer's,
+    returned with the function whose interface change caused it.
+    """
     data = call_ok(bridge, "asset_referencers_get", dict(asset_path=function, limit=10000)).get("data") or dict()
     rows = data.get("items") or data.get("rows") or []
     if data.get("truncated") or int(data.get("total", len(rows))) > len(rows):
-        raise SyncError("referencers_incomplete", "function refresh needs a complete referencer set")
+        raise SyncError("referencers_incomplete", "function refresh needs a complete referencer set", dict(function=function))
     assets = set(object_path(row[0]) for row in rows if isinstance(row, list) and row and (len(row) < 2 or row[1] == "hard"))
-    assets.update(asset for asset, item in batch["units"].items() if function in item["dependencies"] and item["kind"] in ("material", "material_function"))
-    assets.discard(function)
+    calling = set(asset for asset, item in batch["units"].items() if changed_calls(item["kind"], item["dependencies"], set((function,))))
+    assets.update(calling)
+    assets -= (calling & ahead) | set((function,))
     if not assets:
-        return
+        return []
     measure(bridge, context, workspace, assets, source, observation)
+    failures = []
     for asset in sorted(assets):
-        stale = set((asset, function)) - observation["current"]
-        if stale:
-            measure(bridge, context, workspace, stale, source, observation)
-        current = planning.snapshot(workspace, workspace.history.entries(observation["commit"]).get(asset))
-        if not current or current["semantic"]["kind"] not in ("material", "material_function"):
-            continue
-        item = dict(asset=asset, kind=current["semantic"]["kind"], dependencies=[function],
-                    payload=dict(asset_path=asset, kind=current["semantic"]["kind"], plan=[dict(op="refresh_function_calls", function=function)], ids=dict()))
-        record = transactions.request(workspace, item, source, observation["commit"], observation["commit"], observation, options, consume=False)
-        transactions.execute(bridge, workspace, record)
-        published = transactions.publish(workspace, record)
-        transactions.adopt(observation, record, published, workspace.history)
-        if asset in batch["units"]:
-            replan(workspace, asset, source, candidate, fixed, observation, batch, options, "caller_refresh_conflict")
+        try:
+            consumer(bridge, context, workspace, asset, set((function,)), source, observation, options)
+        except SyncError as exc:
+            failures.append(dict(asset=asset, function=function, code=exc.code, message=str(exc), details=exc.details))
+    return failures
+
+
+def consumer(bridge, context, workspace, asset: str, functions: set[str], source: str, observation: dict, options: dict) -> None:
+    """Rebuild ``asset``'s call nodes of ``functions`` as an apply of their own."""
+    stale = (set((asset,)) | functions) - observation["current"]
+    if stale:
+        measure(bridge, context, workspace, stale, source, observation)
+    current = planning.snapshot(workspace, workspace.history.entries(observation["commit"]).get(asset))
+    if not current or current["semantic"]["kind"] not in CONSUMER_KINDS:
+        return
+    kind = current["semantic"]["kind"]
+    item = dict(asset=asset, kind=kind, dependencies=sorted(functions),
+                payload=dict(asset_path=asset, kind=kind, plan=refresh_ops(functions), ids=dict()))
+    record = transactions.request(workspace, item, source, observation["commit"], observation["commit"], observation, options, consume=False)
+    transactions.execute(bridge, workspace, record)
+    published = transactions.publish(workspace, record)
+    transactions.adopt(observation, record, published, workspace.history)
+
+
+def with_calls(item: dict, functions: set[str]) -> dict:
+    return dict(item, payload=dict(item["payload"], plan=with_refresh(item["payload"]["plan"], functions)))

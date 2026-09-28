@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import raw_evidence
-from ue_node_nexus_mcp.transcode.collaboration.store.io import canonical, digest
+from ue_node_nexus_mcp.transcode.storage.io import canonical, digest
 from tests.transcode.fake_ue import FakeUe, SCHEMA_KEY
 from tests.transcode.fixtures import material_raw
 

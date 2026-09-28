@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ...material.interfaces import tree as interface_tree
 from ..history import History
 from ..semantic.snapshot import text_of
 from ..semantic.validation import validate
-from ..store.io import byte_hash, confined
+from ...storage.io import byte_hash, confined
 from ..store.refs import move_ref
 from . import cache
 from .files import capture_files, discover, filename, select

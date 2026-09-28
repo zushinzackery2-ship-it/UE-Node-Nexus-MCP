@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from ..errors import Diagnostic
-from ..paths import display_path, object_path, pending_dir, state_path
-from ..state import AssetState, SyncState, sha256_text
-from ..sync_files import backup_text, local_order_from_document, read_json, read_text, render_snapshot
-from ..sync_project import BridgeCall, ProjectContext, SyncError, apply_operation, now_iso
+from ..material.calls import with_refresh
+from ..storage.paths import display_path, object_path, pending_dir, state_path
+from ..sync.state import AssetState, SyncState, sha256_text
+from ..sync.files import backup_text, local_order_from_document, read_json, read_text, render_snapshot
+from ..sync.project import BridgeCall, ProjectContext, apply_operation, now_iso
+from ..errors import SyncError
 from .commit import commit_files
 from .diagnostics import apply_diagnostics
 from .model import Prepared, PushOptions, PushResult, row
@@ -61,9 +63,13 @@ def accept_unchanged(context: ProjectContext, state: SyncState, item: Prepared, 
     result.rows.append(row(item.status.asset_path, item.status.kind, item.status.state, "unchanged"))
 
 
-def apply_item(bridge: BridgeCall, context: ProjectContext, state: SyncState, item: Prepared, options: PushOptions, result: PushResult) -> bool:
+def apply_item(bridge: BridgeCall, context: ProjectContext, state: SyncState, item: Prepared, options: PushOptions, result: PushResult,
+               calls: set[str] = frozenset()) -> bool:
+    """Apply ``item``; ``calls`` names functions whose call nodes it rebuilds in the same apply."""
     ensure_source_unchanged(item)
     payload = item.plan.to_payload()
+    if calls:
+        payload["plan"] = with_refresh(payload["plan"], calls)
     payload.update(dry_run=False, compile=options.compile, save=options.save, out_dir=str(pending_dir(context.project)))
     label = display_path(context.project, item.file)
     LOGGER.info("sync apply asset=%s verbs=%d reconcile=%s", item.status.asset_path, len(item.plan.verbs), item.reconcile)

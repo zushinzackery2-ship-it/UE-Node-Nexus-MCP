@@ -3,9 +3,9 @@
 import json
 from pathlib import Path
 
-from ue_node_nexus_mcp.transcode.emitter import emit
-from ue_node_nexus_mcp.transcode.model import Decl, Link
-from ue_node_nexus_mcp.transcode.parser import parse
+from ue_node_nexus_mcp.transcode.text.emitter import emit
+from ue_node_nexus_mcp.transcode.text.model import Decl, Link
+from ue_node_nexus_mcp.transcode.text.parser import parse
 from .workflow import PREFIX
 
 

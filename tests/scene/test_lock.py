@@ -2,7 +2,7 @@ import multiprocessing
 
 import pytest
 
-from ue_node_nexus_mcp.transcode.sync_project import SyncError
+from ue_node_nexus_mcp.transcode.errors import SyncError
 from ue_node_nexus_mcp.transcode.transaction.lock import MirrorLock
 
 

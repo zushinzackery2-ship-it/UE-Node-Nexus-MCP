@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ue_node_nexus_mcp.transcode.model import Decl, Document, Header, Prop, Section
+from ue_node_nexus_mcp.transcode.text.model import Decl, Document, Header, Prop, Section
 
 
 def transform(x: float = 0, y: float = 0, z: float = 0) -> str:

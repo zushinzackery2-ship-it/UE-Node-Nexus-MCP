@@ -122,12 +122,6 @@ def response_mode() -> str:
     return str(_response_mode)
 
 
-def is_feature_enabled(feature: str) -> bool:
-    if feature not in FEATURE_GROUPS:
-        raise ValueError(f"unknown feature group: {feature}")
-    return feature in enabled_features()
-
-
 def _operation_feature(operation: str) -> str:
     try:
         return OPERATION_FEATURES[operation]

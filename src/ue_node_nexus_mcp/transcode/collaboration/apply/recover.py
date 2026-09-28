@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from ...sync_project import SyncError, call_ok
+from ...errors import SyncError
+from ...sync.project import call_ok
 from ..store.repository import PUBLICATION_WAIT_SECONDS
 from ..workspace.service import Workspace
 from . import transactions
@@ -128,10 +129,6 @@ def pending(bridge, context, workspace) -> None:
         if result["phase"] not in TERMINAL:
             raise SyncError("recovery_required", "finish the pending execution before publishing",
                             dict(apply_id=result["id"], phase=result["phase"], **outstanding([result])))
-
-
-def recovery_call(record: dict) -> dict:
-    return dict(action="recover", options=dict(apply_id=record["id"], dry_run=False))
 
 
 def outstanding(records: list[dict]) -> dict:

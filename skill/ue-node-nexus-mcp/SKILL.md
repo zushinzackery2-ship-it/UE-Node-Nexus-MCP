@@ -24,7 +24,10 @@ The default launch profile is `interactive`; all new instances open usable
 `UnrealEditor.exe` windows, using `d3d12` (default) or `d3d11`. Supply `engine_path` when EngineAssociation cannot
 resolve the installed engine. `mode="reuse_only"` and `dry_run=True` remain the
 API defaults; a preview is optional when the intended action is already clear.
-For `STARTING`, poll that instance's status. Callers share the existing launch.
+An executed ensure is held while the editor starts (`wait_seconds`, default 45)
+and returns `startup.outcome`: `ready`; `waiting_for_user` with `blocking_dialog`,
+which you show to the user and then call ensure again; or `starting`, which you
+repeat as `startup.next` says. Callers share the existing launch.
 
 Confirm the selected project with `project_context_get` and loaded modules with
 `bridge_capabilities_get`. Version 0.6.0 uses contract 4; engine BuildIds must
@@ -43,8 +46,9 @@ and returns `exit_confirmed=True`, `state=EXITED`, and `exit_code`.
 `wait=False` requests asynchronous close and reports `exit_confirmed=False`.
 Other users, work scopes, dirty packages, PIE, compilation, saving and pending
 recovery are reported as close blockers. Save only the named packages authorized
-by the task. List/status include `window_visible`, `window_titles`, freshness,
-resources and logs; use these to diagnose startup dialogs or stalled exit.
+by the task. List/status include `windows` (hidden ones too), `waiting_for_user`,
+`blocking_dialog`, `dialog_notices`, `startup_progress`, freshness, resources and
+logs; use these to tell a prompt, a long load and a stalled start or exit apart.
 
 For shared policy, adoption, legacy instance cleanup or upgrades, load
 `workflow_guide_get(category="instances")`. Exact instance selection remains
@@ -194,5 +198,8 @@ reported target/dependency and measured revisions. For
 Live material compilation submits missing shader work, then reports shader
 readiness and the target RHI update fence. Diagnostics reads inspect loaded
 objects. A compile result does not assert whole-frame GPU completion.
-Bridge save operations report read-only files directly. Window startup may show
-ordinary editor dialogs; use window titles and logs to identify the actual cause.
+Bridge save operations report read-only files directly. A start nobody can see
+(managed, hidden or offscreen) has UE's OK-only "Low Drive Space" advisory
+confirmed by the Guard and reported in `dialog_notices` with the locations and
+free space. Any other startup prompt waits for its user as `waiting_for_user`;
+requests meanwhile return `waiting_for_user` with the dialog in `details`.

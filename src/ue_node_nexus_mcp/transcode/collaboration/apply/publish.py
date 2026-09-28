@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from ...sync_project import SyncError, ensure_schema
+from ...errors import SyncError
+from ...sync.schema import ensure_schema
 from ..merge.sessions import Sessions
 from ..report.proposals import create
 from ..report.publication import describe
 from ..store.refs import move_ref
 from ..store.repository import PUBLICATION_WAIT_SECONDS
 from ..workspace.files import discover, hashes
-from . import planning, refresh, transactions
+from . import planning
 from .observe import remember
 from .prepare import prepare
+from .units import run_units
 
 
 def push(bridge, context, workspace, paths, options: dict, proposal=None) -> dict:
@@ -47,7 +49,7 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
     if options.get("merge_id"):
         ancestry = Sessions(workspace).get(options["merge_id"])
         if ancestry["metadata"].get("base_pair"):
-            from ..merge.trees import adopt_base
+            from ..merge.ancestors import adopt_base
 
             adopt_base(workspace, ancestry)
             options = dict(options)
@@ -77,36 +79,7 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
     if batch["errors"] and options.get("stop_on_error", True):
         return dict(action="push", status="blocked", errors=batch["errors"], error_count=len(batch["errors"]), applied=0, **explanation)
     candidate = history.create(merged["candidate"], [observation["commit"], source], "Fixed submitted candidate", original["agent_id"], "candidate")
-    rows, succeeded = [], set()
-    for asset in batch["order"]:
-        if asset in batch["errors"]:
-            continue
-        item = batch["units"][asset]
-        if set(item["dependencies"]) & batch["errors"].keys():
-            batch["errors"][asset] = dict(code="dependency_failed", message="a required asset failed")
-            continue
-        try:
-            if not item["empty"]:
-                refresh.settle(bridge, context, workspace, asset, source, candidate, merged, observation, batch, options)
-                item = batch["units"][asset]
-            if item["empty"]:
-                consume_unchanged(workspace, source, candidate, observation["commit"], asset)
-                rows.append(dict(asset=asset, action="unchanged"))
-            else:
-                record = transactions.request(workspace, item, source, batch.get("candidate", candidate), observation["commit"], observation, options)
-                transactions.execute(bridge, workspace, record)
-                published = publish_verified(bridge, context, workspace, record)
-                transactions.adopt(observation, record, published, history)
-                rows.append(dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published))
-                if item.get("interface_changed"):
-                    refresh.callers(bridge, context, workspace, asset, source, candidate, merged, observation, batch, options)
-            succeeded.add(asset)
-        except (SyncError, OSError) as exc:
-            detail = dict(code=exc.code if isinstance(exc, SyncError) else "publication_io_failed", message=str(exc), details=getattr(exc, "details", dict()))
-            batch["errors"][asset] = detail
-            rows.append(dict(asset=asset, action="failed", **detail))
-            if options.get("stop_on_error", True):
-                break
+    rows = run_units(bridge, context, workspace, source, candidate, merged, observation, batch, options)
     target = store.ref("refs/ue/observed") or observation["commit"]
     complete = full_source(workspace, source, target)
     if complete and not history.is_ancestor(source, target):
@@ -147,30 +120,6 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
                 source_integrated=complete, workspace_rebase_required=workspace_rebase, workspace_id=original["id"],
                 merge_id=conflict_report["merge_id"] if conflict_report else None,
                 conflicts=conflict_report["conflicts"] if conflict_report else [], **explanation)
-
-
-def publish_verified(bridge, context, workspace, record) -> str:
-    try:
-        return transactions.publish(workspace, record)
-    except SyncError as exc:
-        if record["phase"] == "result_rejected":
-            from .recover import reconcile
-
-            try:
-                reconcile(bridge, context, workspace, record, restore=True)
-            except SyncError as recovery:
-                exc.details["recovery_error"] = dict(code=recovery.code, message=str(recovery), details=recovery.details)
-            exc.details["phase"] = record["phase"]
-        raise
-
-
-def consume_unchanged(workspace, source: str, candidate: str, target: str, asset: str) -> None:
-    store = workspace.store
-    key = workspace.state["id"] + ":" + asset
-    previous = store.record("integration", key)
-    record = dict(workspace_id=workspace.state["id"], asset=asset, source_commit=source,
-                  source_snapshot=workspace.history.entries(source).get(asset), candidate_snapshot=workspace.history.entries(candidate).get(asset), published_commit=target)
-    store.put_record("integration", key, record, [source, candidate, target], previous["generation"] if previous else 0)
 
 
 def full_source(workspace, source: str, target: str) -> bool:

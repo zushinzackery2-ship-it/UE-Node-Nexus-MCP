@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ue_node_nexus_mcp.transcode.paths import asset_relative, object_path
+from ue_node_nexus_mcp.transcode.storage.paths import asset_relative, object_path
 
 SCHEMA_KEY = "5.5.4-abcd1234"
 FUNCTIONS = {
@@ -218,6 +218,25 @@ class FakeUe:
                 graph["links"] = [link for link in graph["links"] if not (link["to"] == dst["guid"] and link["to_in"] == to_in)]
         elif op == "refresh_function_calls":
             raw.setdefault("refreshed", []).append(verb["function"])
+            self._rebuild_calls(graph, verb["function"])
+
+    def _rebuild_calls(self, graph: dict[str, Any], function: str) -> None:
+        """Call nodes take the function's current inputs and outputs, as the editor's refresh does."""
+        source = self.assets.get(object_path(function))
+        if source is None:
+            return
+
+        def value(node: dict[str, Any], name: str, default: str) -> str:
+            return next((str(item["value"]) for item in node.get("props") or [] if item["name"] == name), default)
+
+        nodes = source.get("graph", dict()).get("nodes") or []
+        inputs = sorted((node for node in nodes if node["class_short"] == "FunctionInput"),
+                        key=lambda node: (float(value(node, "SortPriority", "32")), value(node, "InputName", "In")))
+        outputs = [value(node, "OutputName", "Result") for node in nodes if node["class_short"] == "FunctionOutput"]
+        for node in graph["nodes"]:
+            if node["class_short"] == "MaterialFunctionCall" and object_path(value(node, "MaterialFunction", "")) == object_path(function):
+                node["inputs"] = [value(item, "InputName", "In") for item in inputs]
+                node["outputs"] = outputs
 
     def op_asset_referencers_get(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {"items": [[package, "hard"] for package in self.referencers.get(object_path(payload["asset_path"]), [])]}

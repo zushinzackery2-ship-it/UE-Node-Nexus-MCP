@@ -10,7 +10,8 @@ from tests.instances.support.sdk import LocalBroker
 @pytest.fixture
 def session(lifecycle):
     service, _, _, project = lifecycle
-    result = EditorSession(LocalBroker(service, project.parent), str(project))
+    # The injected editor becomes ready on the fake manager clock, which a held call cannot advance.
+    result = EditorSession(LocalBroker(service, project.parent), str(project), startup_wait=0)
     result.ensure(dict(mode="reuse_or_start", dry_run=False))
     ready(result, service)
     yield result

@@ -1,0 +1,16 @@
+{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "0.6.0",
+    "FriendlyName": "Nexus Startup Acceptance Fixture",
+    "EnabledByDefault": true,
+    "CanContainContent": false,
+    "Modules":
+    [
+        {
+            "Name": "UeNexusStartupFixture",
+            "Type": "Editor",
+            "LoadingPhase": "PostDefault"
+        }
+    ]
+}

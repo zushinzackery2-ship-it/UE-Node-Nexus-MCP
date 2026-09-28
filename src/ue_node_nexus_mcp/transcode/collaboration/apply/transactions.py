@@ -6,10 +6,11 @@ from copy import deepcopy
 from uuid import uuid4
 
 from ...blueprint.node_ids import GRAPH_SECTIONS
-from ...paths import object_path
-from ...sync_project import SyncError, apply_operation
+from ...storage.paths import object_path
+from ...errors import SyncError
+from ...sync.project import apply_operation
 from ..semantic.snapshot import from_raw
-from ..store.io import atomic_write, canonical, digest
+from ...storage.io import atomic_write, canonical, digest
 from ..store.refs import move_ref
 from .receipt import verify_request
 
@@ -122,9 +123,16 @@ def execute(bridge, workspace, record: dict) -> dict:
         guarded = [record["asset"]] + [row["asset_path"] for row in record["request"].get("read_set", [])]
         forget(workspace.store, guarded)
         error = response.get("error") or dict()
+        origin = dict(asset=record["asset"])
+        plan = record["request"].get("plan", [])
+        if plan and all(verb.get("op") == "refresh_function_calls" for verb in plan):
+            functions = sorted(set(verb["function"] for verb in plan))
+            origin.update(stage="refresh_function_calls", functions=functions)
+            if len(functions) == 1:
+                origin["function"] = functions[0]
         raise SyncError(error.get("code", "recovery_required"), error.get("message", "execution did not produce a committed receipt"),
                         dict(apply_id=record["id"], phase=record["phase"], receipt=receipt,
-                             stale=(response.get("data") or dict()).get("stale"), diagnostics=diagnostics(response, receipt)))
+                             stale=(response.get("data") or dict()).get("stale"), diagnostics=diagnostics(response, receipt), **origin))
     return record
 
 

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from ...paths import object_path
-from ...sync_project import SyncError, call_ok, export_operation
-from ...sync_status import query_ue
+from ...storage.paths import object_path
+from ...errors import SyncError
+from ...sync.project import call_ok, export_operation
+from ...sync.status import query_ue
 from ..history import History
 from ..semantic.snapshot import from_raw
-from ..store.io import atomic_write, canonical, confined, digest, read_json
+from ...storage.io import atomic_write, canonical, confined, digest, read_json
 
 
 def bind(bridge, context, store) -> dict:
@@ -165,14 +166,17 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
     with store.db.connection(write=True):
         for asset, raw in raw_by_asset.items():
             if not raw.get("live_revision") or raw.get("editor_epoch") != binding["editor_epoch"]:
-                raise SyncError("protocol_mismatch", "export is missing an authoritative memory revision", dict(asset=asset))
+                raise SyncError("protocol_mismatch", "export is missing an authoritative memory revision", dict(asset=asset, stage="observe"))
             if raw.get("schema_key") != context.schema_key:
-                raise SyncError("schema_stale", "editor schema changed; refresh before recording an observation", dict(asset=asset))
+                raise SyncError("schema_stale", "editor schema changed; refresh before recording an observation", dict(asset=asset, stage="observe"))
             if raw.get("unavailable"):
-                raise SyncError("scene_unavailable", "scene has unloaded members", dict(asset=asset))
+                raise SyncError("scene_unavailable", "scene has unloaded members", dict(asset=asset, stage="observe"))
             prior = store.objects.data(identities[asset], "snapshot") if asset in identities else None
-            snapshot = from_raw(raw, prior, schema=context.schema)
-            entries[asset] = store.snapshot(snapshot, context.schema)
+            try:
+                snapshot = from_raw(raw, prior, schema=context.schema)
+                entries[asset] = store.snapshot(snapshot, context.schema)
+            except SyncError as exc:
+                raise exc.attribute(asset=asset, stage="observe")
             revisions[asset] = dict(revision=raw["live_revision"], editor_epoch=raw["editor_epoch"], dirty=raw.get("dirty", False),
                                     saved_hash=raw.get("saved_hash", ""), content_revision=raw.get("content_revision"))
     tree = history.tree(entries)

@@ -9,10 +9,9 @@ from .contracts import (
     require_non_empty_string,
 )
 from .diagnostics_logs import enrich_with_material_log_diagnostics, read_latest_project_log
-from .errors import BridgeError
 from .instances.errors import InstanceError
 from .instances.session import instance_manager
-from .instances.tools.operations import bridge_instance_list, bridge_instance_select
+from .instances.tools.operations import bridge_instance_list as bridge_instance_list, bridge_instance_select as bridge_instance_select
 from .runtime import call_bridge as _call
 from .runtime import default_tool, enabled_features, hidden_tool
 

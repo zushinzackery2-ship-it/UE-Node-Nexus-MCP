@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ...model import Bare, Decl, Document, Header, Link, Prop, Section
-from .values import render
+from ...text.model import Bare, Decl, Document, Header, Link, Prop, Section
+from ...text.semantic import render
 
 
 def to_document(snapshot: dict, *, include_defaults=False) -> Document:

@@ -5,13 +5,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ...parser import parse
+from ...text.parser import parse
 from ...material.interfaces import documents, fingerprint
-from ...paths import object_path, package_name, parse_text_path, text_path
+from ...storage.paths import object_path, package_name, parse_text_path, text_path
 from ...scene.model import scene_name
-from ...sync_project import SyncError
+from ...errors import SyncError
 from ..semantic.snapshot import capture
-from ..store.io import byte_hash, confined
+from ...storage.io import byte_hash, confined
 from . import cache
 
 

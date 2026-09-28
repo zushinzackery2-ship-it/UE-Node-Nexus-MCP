@@ -220,7 +220,10 @@ TSharedPtr<FJsonObject> HandleSchemaExport(const FString& Operation, const FStri
         return Class->GetName().StartsWith(TEXT("Niagara")) && Class->GetName().EndsWith(TEXT("RendererProperties"));
     }));
     Files.Emplace(TEXT("material_functions.json"), MaterialFunctionSignatures());
-    Files.Emplace(TEXT("functions.index.json"), CallableFunctionIndex());
+    Files.Emplace(TEXT("functions.index.json"), FunctionIndex());
+    // Readers validate Event / CallParentFunction references only against an
+    // index that states it holds BlueprintEvent functions too.
+    KeyJson->SetStringField(TEXT("function_index"), TEXT("callable_and_events"));
     Files.Emplace(TEXT("types.json"), CommonTypes());
     }
     const TSharedPtr<FJsonObject> Functions = RequestedFunctionSignatures(Payload);

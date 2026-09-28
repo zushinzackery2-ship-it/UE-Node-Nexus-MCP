@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ..model import Decl, Document, Prop
-from ..sync_project import SyncError
+from ..text.model import Decl, Document, Prop
+from ..errors import SyncError
 
 
 def unique(values: list[str], label: str) -> None:

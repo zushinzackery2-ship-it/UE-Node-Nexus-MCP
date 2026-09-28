@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..semantic.validation import validate
 from ...material.interfaces import tree as interface_tree
-from ..store.io import digest
+from ...storage.io import digest
 from .engine import at, shown, wire
 from .resolutions import resolve_tree
 

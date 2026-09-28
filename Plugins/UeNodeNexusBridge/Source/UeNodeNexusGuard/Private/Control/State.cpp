@@ -1,6 +1,7 @@
 #include "State.h"
 #include "Json.h"
 #include "../Identity/Identity.h"
+#include "../Startup/Monitor.h"
 
 #include "Misc/ScopeLock.h"
 
@@ -72,6 +73,7 @@ TSharedPtr<FJsonObject> StatusLocked()
     Result->SetNumberField(TEXT("context_epoch"), S.ContextEpoch);
     Result->SetNumberField(TEXT("close_revision"), S.Revision);
     Result->SetNumberField(TEXT("scope_count"), S.Grants.Num());
+    Startup::AppendStatus(Result);
     return Result;
 }
 
@@ -79,6 +81,12 @@ TSharedPtr<FJsonObject> Snapshot()
 {
     FScopeLock Lock(&State().Mutex);
     return StatusLocked();
+}
+
+TSharedPtr<FJsonObject> OpenDialog()
+{
+    FScopeLock Lock(&State().Mutex);
+    return Startup::OpenDialogLocked();
 }
 
 void Attach(FInspector Inspector)

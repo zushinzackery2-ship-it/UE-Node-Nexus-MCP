@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from ...lint import lint_document
+from ...lint.service import lint_document
 from ...scene.model import from_document as scene_model
-from ...sync_project import SyncError
+from ...errors import SyncError
 from .decode import physical_ids, to_document
 
 
-def problem(path: list, code: str, message: str) -> dict:
-    return dict(path=path, conflict_type=code, reason=message)
+def problem(path: list, code: str, message: str, details: dict | None = None) -> dict:
+    result = dict(path=path, conflict_type=code, reason=message)
+    if details:
+        result["details"] = details
+    return result
 
 
 def validate(snapshot: dict, schema=None) -> list[dict]:
@@ -58,7 +61,7 @@ def validate(snapshot: dict, schema=None) -> list[dict]:
             findings.extend(dict(problem([], item.code, item.message), file=item.file,
                                  line=item.line, col=item.col) for item in sink.errors())
     except SyncError as exc:
-        findings.append(problem([], exc.code, str(exc)))
+        findings.append(problem([], exc.code, str(exc), exc.details))
     return findings
 
 

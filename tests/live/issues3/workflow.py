@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ue_node_nexus_mcp.transcode.paths import text_path
+from ue_node_nexus_mcp.transcode.storage.paths import text_path
 from tests.live.collaboration.workflow import Workflow
 
 

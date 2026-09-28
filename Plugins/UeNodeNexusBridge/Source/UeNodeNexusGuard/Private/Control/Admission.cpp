@@ -1,6 +1,7 @@
 #include "State.h"
 #include "Json.h"
 #include "../Identity/Identity.h"
+#include "../Startup/Monitor.h"
 #include "Misc/ScopeLock.h"
 
 namespace NexusLifecycle
@@ -62,6 +63,13 @@ bool Admit(const TSharedPtr<FJsonObject>& Request, uint32 Peer, FString& Error)
     if (S.Requests.Num() - S.Finished.Num() >= 256)
     {
         Error = TEXT("admission_queue_full");
+        return false;
+    }
+    // A modal dialog holds the game thread; an admitted request would only wait
+    // behind it until the caller's timeout reports the editor unresponsive.
+    if (Startup::OpenDialogLocked().IsValid())
+    {
+        Error = TEXT("waiting_for_user");
         return false;
     }
     FRequest Entry;

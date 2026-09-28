@@ -7,9 +7,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..state import sha256_text
-from ..sync_files import write_text_atomic
-from ..sync_project import now_iso, SyncError
+from ..sync.state import sha256_text
+from ..sync.files import write_text_atomic
+from ..sync.project import now_iso
+from ..errors import SyncError
 from .paths import identity, state_path
 
 

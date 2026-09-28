@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...lint import lint_document
+from ...lint.service import lint_document
 from ...material.interfaces import snapshots
 from ...material.interfaces import documents
-from ...parser import parse
-from ...paths import display_path, iter_text_files, parse_text_path
-from ...sync_files import read_text
-from ...sync_project import SyncError
+from ...text.parser import parse
+from ...storage.paths import display_path, iter_text_files, parse_text_path
+from ...sync.files import read_text
+from ...errors import SyncError
 from ..semantic.decode import to_document
 from .files import capture_files
 
@@ -50,7 +50,7 @@ def lint_root(context, files_root: str, paths: list[str] | None = None) -> dict:
     if not root.is_dir():
         raise SyncError("invalid_option", "files_root must be an existing directory", dict(files_root=str(root)))
     wanted = set(paths or ())
-    diagnostics, rows, skipped = [], [], []
+    skipped = []
     candidates = []
     for file in iter_text_files(root):
         parsed = parse_text_path(root, file)

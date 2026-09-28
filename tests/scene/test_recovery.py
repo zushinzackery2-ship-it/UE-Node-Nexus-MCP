@@ -6,7 +6,7 @@ import pytest
 from ue_node_nexus_mcp.transcode.scene.files import read_document
 from ue_node_nexus_mcp.transcode.scene.paths import storage
 from ue_node_nexus_mcp.transcode.scene.push import push_one
-from ue_node_nexus_mcp.transcode.sync_project import SyncError
+from ue_node_nexus_mcp.transcode.errors import SyncError
 
 from .fixtures import ACTOR, snapshot
 from .test_sync import change_label
@@ -67,7 +67,7 @@ def test_state_replace_failure_restores_accepted_files(scene_workspace, monkeypa
 
 
 def test_actor_construction_precedes_component_overrides(scene_workspace):
-    from ue_node_nexus_mcp.transcode.emitter import emit
+    from ue_node_nexus_mcp.transcode.text.emitter import emit
 
     bridge, context, state, item = scene_workspace
     file = change_label(context, item)

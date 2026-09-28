@@ -2,9 +2,9 @@
 
 from copy import deepcopy
 
-from ...diff_common import same_class
-from ...model import Section
-from ..store.io import digest
+from ...diff.common import same_class
+from ...text.model import Section
+from ...storage.io import digest
 from .decode import to_document
 from .encode import encode, family_for
 from .identity import Identities
@@ -54,6 +54,10 @@ def normalize_snapshot(snapshot: dict | None, reference: dict | None = None, sch
             if binding.get("physical"):
                 decl.meta["guid"] = binding["physical"]
             decl.type_name = entity["type"]
+            # Omitted layout means retain the editor position; only an explicit
+            # position is a writable layout change (the diff uses the same rule).
+            if decl.pos is None and entity.get("position") is not None:
+                decl.pos = tuple(entity["position"])
     # The raw envelope always emits this property section, even when empty.
     if document.section("asset") is None and "asset:" in identities.sections:
         document.sections.insert(0, Section("asset", ""))

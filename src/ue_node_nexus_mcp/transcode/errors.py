@@ -4,6 +4,22 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+class SyncError(Exception):
+    """A synchronization failure with structured source and operation context."""
+
+    def __init__(self, code: str, message: str, details: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.details = details or dict()
+
+    def attribute(self, **context: Any) -> "SyncError":
+        """Keep the raiser's evidence when adding caller context."""
+        for key, value in context.items():
+            if value not in (None, ""):
+                self.details.setdefault(key, value)
+        return self
+
+
 @dataclass(frozen=True)
 class Diagnostic:
     """One ``file:line:col`` message produced by parse, lint, diff or push."""
@@ -44,14 +60,6 @@ def error(code: str, message: str, *, file: str | None = None, line: int | None 
 
 def warning(code: str, message: str, *, file: str | None = None, line: int | None = None, col: int | None = None) -> Diagnostic:
     return Diagnostic("warning", code, message, file, line, col)
-
-
-class TranscodeError(Exception):
-    """Raised for unrecoverable parse/codec failures; carries the diagnostic."""
-
-    def __init__(self, diagnostic: Diagnostic) -> None:
-        super().__init__(diagnostic.format())
-        self.diagnostic = diagnostic
 
 
 @dataclass

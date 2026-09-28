@@ -29,7 +29,12 @@ committed HEAD, or accepts `source`/`revision`. A changed preview input returns
 For work on a few assets, check out only those paths: the workspace answers
 `sparse: true` and holds them plus what they reference. A push merges and checks
 exactly its selection, and its dry run computes the same merge session the real
-push opens, so the previewed conflicts are the session's conflicts.
+push opens, so the previewed conflicts are the session's conflicts. Without
+`paths`, a sparse workspace publishes its projected files and every asset its
+branch carries beyond the editor's history (a merge or deletion included), never
+the inherited rest of the project. An asset the push does not change is taken as
+UE holds it and is not validated again. A failure names its `asset` and `stage`
+(`observe`, `merge`, encoding `section`/`entity`/`line`).
 
 Every revision a push asks UE to verify, the target and each referenced asset,
 is measured from the editor rather than taken from memory, and measured again

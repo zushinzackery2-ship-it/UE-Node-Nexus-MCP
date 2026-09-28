@@ -9,9 +9,22 @@ import time
 
 from ..errors import InstanceError, require
 from ..identity.paths import project_identity
+from ..lifecycle.prompts import exited
 from .discovery import accept as accept_discovery
 
 PIN_FIELDS = frozenset(("instance_id", "reason", "seconds", "dry_run", "proposal_id"))
+# What one observation of a live editor may change in its record.
+OBSERVED_FIELDS = frozenset((
+    "instance_id", "pid", "process_created", "executable", "project_key", "project_path", "project_name",
+    "guard_protocol", "contract_version", "engine_dir", "launch_profile", "rhi", "ready", "phase",
+    "repository", "collaboration_project_id", "working_set_bytes", "private_bytes", "context_epoch",
+    "pending", "inflight", "snapshot_at", "runtime_dir", "start_intent_id", "dirty_packages",
+    "recovery_pending", "state_sampled_at", "compiling", "saving", "pie", "collaboration_binding", "stopping", "vfx_available",
+    "private_working_set_bytes", "handle_count", "cpu_seconds", "resources_sampled_at", "control_available", "control_error",
+    "blockers", "failed_packages", "close_revision", "guard_build", "window_visible", "window_titles", "windows",
+    "startup_progress", "waiting_for_user", "blocking_dialog", "dialog_notices"))
+# A caller holding a startup polls this often; a sweep is only as fresh as sweep_seconds.
+FRESH_SECONDS = 1.0
 
 
 class Editors:
@@ -22,14 +35,15 @@ class Editors:
         self.seen = dict()
         self.refreshed_at = float("-inf")
 
-    def observe(self) -> None:
+    def observe(self, max_age: float | None = None) -> None:
         """Readiness a reader sees must be the readiness a writer would enforce.
 
         Nothing refreshed state on a read, so ``status`` could answer STARTING
         for an editor that ``pin`` and every write path already treated as ready,
         and kept answering it until some unrelated call happened to sweep.
         """
-        if self.service.clock() - self.refreshed_at < self.service.policy.sweep_seconds:
+        limit = self.service.policy.sweep_seconds if max_age is None else max_age
+        if self.service.clock() - self.refreshed_at < limit:
             return
         self.refresh()
 
@@ -50,18 +64,18 @@ class Editors:
                 if not alive:
                     if hasattr(service.platform, "exit_result"):
                         item.update(service.platform.exit_result(item))
-                    item.update(state="EXITED", ready=False, window_visible=False, window_titles=[],
-                                exited_at=service.clock(), generation=item.get("generation", 0) + 1)
+                    exited(item)
+                    item.update(state="EXITED", exited_at=service.clock(), generation=item.get("generation", 0) + 1)
                     service.save(item)
-                    service.event("exit_confirmed", instance_id=item["instance_id"], pid=item["pid"])
+                    service.event("exit_confirmed", instance_id=item["instance_id"], pid=item["pid"],
+                                  exited_while_waiting=bool(item.get("exited_while_waiting")))
                 elif (not item.get("pid") and item["instance_id"] not in self.jobs
                       and not getattr(service.platform, "discovery_errors", [])):
-                    item.update(state="EXITED", ready=False, window_visible=False, window_titles=[],
-                                error=dict(code="startup_interrupted", message="no process matches the durable launch intent"))
+                    exited(item)
+                    item.update(state="EXITED", error=dict(code="startup_interrupted", message="no process matches the durable launch intent"))
                     service.save(item)
-                elif item["state"] == "STARTING" and service.clock() - item["created_at"] > service.policy.startup_seconds:
-                    item.update(state="UNRESPONSIVE", error=dict(code="startup_timeout", message="process is still alive; inspect window_titles and the editor log"))
-                    service.save(item)
+                elif item["state"] == "STARTING":
+                    self.starting(item)
                 elif item["state"] == "STOPPING" and service.clock() - item["stopping_since"] > service.policy.shutdown_seconds:
                     item.update(state="UNRESPONSIVE", exit_committed=True,
                                 error=dict(code="shutdown_timeout", message="normal exit requested; OS process remains alive"))
@@ -70,17 +84,30 @@ class Editors:
                 if job.done():
                     self.jobs.pop(key)
 
+    def starting(self, item: dict) -> None:
+        """A start stalls once it runs past the start wait; time a prompt waits for its user is not part of it.
+
+        A prompt is a known reason, not a stall, and counting its time would report
+        the start unresponsive the moment a user who took a while answered it.
+        """
+        service, now = self.service, self.service.clock()
+        if item.get("waiting_for_user"):
+            if "prompt_since" not in item:
+                item["prompt_since"] = now
+                service.save(item)
+            return
+        if "prompt_since" in item:
+            item["prompt_seconds"] = item.get("prompt_seconds", 0) + now - item.pop("prompt_since")
+            service.save(item)
+        if now - item["created_at"] - item.get("prompt_seconds", 0) > service.policy.startup_seconds:
+            item.update(state="UNRESPONSIVE", error=dict(code="startup_timeout",
+                        message="process is still alive without a prompt; inspect startup_progress.last_log, windows and the editor log"))
+            service.save(item)
+
     def ingest(self, discovered: list[dict]) -> None:
         service = self.service
         for observed in discovered:
-            observed = dict((key, value) for key, value in observed.items() if key in (
-                "instance_id", "pid", "process_created", "executable", "project_key", "project_path", "project_name",
-                "guard_protocol", "contract_version", "engine_dir", "launch_profile", "rhi", "ready", "phase",
-                "repository", "collaboration_project_id", "working_set_bytes", "private_bytes", "context_epoch",
-                "pending", "inflight", "snapshot_at", "runtime_dir", "start_intent_id", "dirty_packages",
-                "recovery_pending", "state_sampled_at", "compiling", "saving", "pie", "collaboration_binding", "stopping", "vfx_available",
-                "private_working_set_bytes", "handle_count", "cpu_seconds", "resources_sampled_at", "control_available", "control_error",
-                "blockers", "failed_packages", "close_revision", "guard_build", "window_visible", "window_titles"))
+            observed = dict((key, value) for key, value in observed.items() if key in OBSERVED_FIELDS)
             if not accept_discovery(service, observed):
                 continue
             identifier = observed["instance_id"]
@@ -123,7 +150,7 @@ class Editors:
         scopes = service.scopes.for_instance(instance["instance_id"])
         result = dict(instance)
         if instance["state"] == "EXITED":
-            result.update(ready=False, window_visible=False, window_titles=[])
+            exited(result)
         result.pop("manager_secret", None)
         result["users"] = [dict(lease_id=item["lease_id"], client_session_id=item["client_session_id"],
                                 workspace=item["workspace"], last_use=item["last_use"], releasing=item.get("releasing", False),
@@ -164,7 +191,7 @@ class Editors:
 
     def status(self, client, payload: dict) -> dict:
         if payload.get("instance_id"):
-            self.observe()
+            self.observe(FRESH_SECONDS if payload.get("fresh") else None)
             with self.service.lock:
                 return self.row(self.service.instance(payload["instance_id"]))
         return self.list(client, payload)

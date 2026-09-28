@@ -1,9 +1,9 @@
 """Pin contracts for authored nodes before an export supplies physical bindings."""
 
-from ..bp_signature import parse_signature
-from ..bp_types import join_type_text, parse_type_text
-from ..lexer import LexError
-from ..raw_blueprint_nodes import single_visible_pin
+from .signature import parse_signature
+from .types import join_type_text, parse_type_text
+from ..text.lexer import LexError
+from ..raw.nodes import single_visible_pin
 from .classes import node_name
 
 

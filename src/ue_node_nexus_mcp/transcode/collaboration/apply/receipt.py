@@ -2,8 +2,8 @@
 
 import math
 
-from ...sync_project import SyncError
-from ..store.io import digest
+from ...errors import SyncError
+from ...storage.io import digest
 
 
 def same_json(left, right) -> bool:

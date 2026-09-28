@@ -6,7 +6,6 @@ import ctypes
 from ctypes import wintypes as w
 import importlib.metadata
 import json
-from pathlib import Path
 import sys
 import time
 

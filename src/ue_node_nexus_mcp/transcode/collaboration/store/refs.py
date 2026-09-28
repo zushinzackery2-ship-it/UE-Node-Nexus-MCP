@@ -6,7 +6,7 @@ import re
 import sqlite3
 import time
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 
 REF_NAME = re.compile(r"^refs/[A-Za-z0-9_./-]+$")
 

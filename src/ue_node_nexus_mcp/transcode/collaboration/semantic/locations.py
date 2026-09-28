@@ -1,8 +1,8 @@
 """Attach locations in rendered mirror text without discarding native metadata."""
 
-from ...emitter import emit
-from ...parser import parse
-from ...sync_project import SyncError
+from ...text.emitter import emit
+from ...text.parser import parse
+from ...errors import SyncError
 
 
 def stamp(document) -> None:

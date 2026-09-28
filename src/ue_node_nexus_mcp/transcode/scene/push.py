@@ -7,8 +7,9 @@ import uuid
 from collections import Counter
 from typing import Any
 
-from ..sync_files import read_json, read_text, write_json
-from ..sync_project import BridgeCall, ProjectContext, SyncError, ensure_root_registered
+from ..sync.files import read_json, read_text, write_json
+from ..sync.project import BridgeCall, ProjectContext, ensure_root_registered
+from ..errors import SyncError
 from . import recovery
 from .backend import export_scene, selector, validate_snapshot
 from .diff import build_plan

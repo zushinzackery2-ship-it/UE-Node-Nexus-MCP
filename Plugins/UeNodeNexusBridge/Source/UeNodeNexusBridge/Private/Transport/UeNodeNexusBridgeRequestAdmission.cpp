@@ -31,7 +31,20 @@ bool PrepareBridgeRequest(const FString& Body, TSharedPtr<FJsonObject>& Request,
         return true;
     }
     auto Response = MakeEnvelope(Operation, RequestId, false);
-    Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(Code, TEXT("Request was rejected before execution; obtain a current Broker work scope")));
+    if (Code == TEXT("waiting_for_user"))
+    {
+        auto Details = MakeShared<FJsonObject>();
+        if (const TSharedPtr<FJsonObject> Dialog = NexusLifecycle::OpenDialog())
+        {
+            Details->SetObjectField(TEXT("dialog"), Dialog);
+        }
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(Code,
+            TEXT("The editor is waiting for an answer to a modal dialog; nothing runs until it is answered"), Details));
+    }
+    else
+    {
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(Code, TEXT("Request was rejected before execution; obtain a current Broker work scope")));
+    }
     Error = SerializeJsonObjectToString(Response);
     return false;
 }

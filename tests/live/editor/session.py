@@ -14,6 +14,10 @@ from ue_node_nexus_mcp.instances.errors import InstanceError
 from ue_node_nexus_mcp.instances.session.binding import EditorSession as ManagedSession
 
 
+# A cold validation editor compiles shaders before it is ready; ensure holds for it.
+STARTUP_SECONDS = 600
+
+
 class EditorSession:
     def __init__(self, project: Path, engine: Path, name: str, rhi: str = "d3d12") -> None:
         if rhi not in ("d3d12", "d3d11"):
@@ -26,6 +30,7 @@ class EditorSession:
         self.logs = self.project.parent / "Logs"
         self.logs.mkdir(parents=True, exist_ok=True)
         self.session = ManagedSession(BrokerClient(self.project.parent / "Runtime", str(self.project.parent)), str(self.project))
+        self.startup = None
         self.previous_bridge = None
         self.requests = self.logs / f"{name}-requests.jsonl"
 
@@ -33,36 +38,26 @@ class EditorSession:
         self.previous_bridge = runtime.bridge
         runtime.bridge = UeBridgeClient(BridgeConfig(timeout_seconds=180), instances=self.session)
         try:
-            result = self.session.ensure(dict(mode="reuse_or_start", engine_path=str(self.engine),
-                                              launch_profile="interactive", rhi=self.rhi, dry_run=False))
+            result = self.session.ensure(dict(mode="reuse_or_start", engine_path=str(self.engine), launch_profile="interactive",
+                                              rhi=self.rhi, dry_run=False, wait_seconds=STARTUP_SECONDS))
             self.report("launch", result)
             print(json.dumps(dict(phase="editor_start", instance_id=result["instance"]["instance_id"], project=str(self.project))), flush=True)
-            self._ready()
+            self._ready(result["startup"])
         except BaseException:
             self.__exit__(True, None, None)
             raise
         return self
 
-    def _ready(self) -> None:
-        from .windows import acknowledge_test_disk_warning
-
-        deadline = time.monotonic() + 240
-        while time.monotonic() < deadline:
-            status = self.session.status()
-            warnings = acknowledge_test_disk_warning(status["pid"], self.project) if status.get("pid") else []
-            if warnings:
-                self.report("startup-warnings", warnings)
-            if status["state"] in ("EXITED", "UNRESPONSIVE"):
-                raise RuntimeError(f"validation editor unavailable: {status}")
-            if status["state"] != "READY":
-                time.sleep(0.5)
-                continue
-            response = self.call("project_context_get", dict())
-            if response.get("ok") and response.get("data", dict()).get("project_name") == self.project.stem:
-                self.report("context", response)
-                return
-            time.sleep(0.5)
-        raise TimeoutError(f"editor did not become ready; see {self.logs}")
+    def _ready(self, startup: dict) -> None:
+        """Ensure returns once the start ended; a managed editor answers its own advisories."""
+        self.startup = startup
+        self.report("startup", startup)
+        if startup["outcome"] != "ready":
+            raise RuntimeError(f"validation editor did not become ready: {startup}")
+        response = self.call("project_context_get", dict())
+        if not response.get("ok") or response.get("data", dict()).get("project_name") != self.project.stem:
+            raise RuntimeError(f"validation editor answers for another project: {response}")
+        self.report("context", response)
 
     def call(self, operation: str, payload: dict) -> dict:
         started = time.monotonic()

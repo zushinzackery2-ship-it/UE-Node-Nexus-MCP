@@ -17,7 +17,6 @@ from ue_node_nexus_mcp.instances.identity.processes import inspect_process, is_a
 from ue_node_nexus_mcp.instances.identity.resources import sample
 from ue_node_nexus_mcp.bridge import UeBridgeClient
 import ue_node_nexus_mcp
-from tests.live.editor.windows import acknowledge_test_disk_warning
 from .host import prepare
 from .protection import close_clean
 
@@ -70,16 +69,10 @@ async def run(name: str, engine: str, seconds: float) -> None:
     manager = None
     samples = []
     try:
-        session.ensure(dict(mode="reuse_or_start", engine_path=engine, dry_run=False))
-        while True:
-            state = session.status()
-            if state["state"] == "STARTING" and state.get("pid"):
-                acknowledge_test_disk_warning(state["pid"], project)
-            if state["state"] == "READY":
-                break
-            assert state["state"] not in ("EXITED", "UNRESPONSIVE"), state
-            assert time.monotonic() - started < 240, state
-            await asyncio.sleep(1)
+        started_editor = await asyncio.to_thread(session.ensure, dict(mode="reuse_or_start", engine_path=engine, dry_run=False, wait_seconds=600))
+        assert started_editor["startup"]["outcome"] == "ready", started_editor["startup"]
+        result["startup"] = started_editor["startup"]
+        state = started_editor["instance"]
         identifier = state["instance_id"]
         result["builds"] = UeBridgeClient(instances=session).call("bridge_capabilities_get", dict())["data"]["build"]
         result["plugin_identities"] = dict((name, json.loads(path.read_text())) for name, path in

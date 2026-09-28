@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..emitter import emit
-from ..parser import parse
+from ..text.emitter import emit
+from ..text.parser import parse
 from ..push.commit import commit_files
-from ..sync_files import backup_text, canonical_hash, read_json, read_text
-from ..sync_project import SyncError
+from ..sync.files import backup_text, canonical_hash, read_json, read_text
+from ..errors import SyncError
 from .codec import from_raw
 from .paths import identity, state_path
 from .state import SceneRecord, SceneState, record

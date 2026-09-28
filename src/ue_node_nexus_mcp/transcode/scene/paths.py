@@ -6,8 +6,8 @@ import hashlib
 import re
 from pathlib import Path
 
-from ..paths import package_name
-from ..sync_project import SyncError
+from ..storage.paths import package_name
+from ..errors import SyncError
 
 
 def identity(map_path: str, name: str) -> str:

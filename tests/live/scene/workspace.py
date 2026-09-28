@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import uuid
 
-from ue_node_nexus_mcp.transcode.emitter import emit
-from ue_node_nexus_mcp.transcode.parser import parse
+from ue_node_nexus_mcp.transcode.text.emitter import emit
+from ue_node_nexus_mcp.transcode.text.parser import parse
 from ue_node_nexus_mcp.transcode.scene.paths import identity, scene_path, storage
-from ue_node_nexus_mcp.transcode.sync import run_sync
+from ue_node_nexus_mcp.transcode.sync.service import run_sync
 
 
 class SceneWorkspace:

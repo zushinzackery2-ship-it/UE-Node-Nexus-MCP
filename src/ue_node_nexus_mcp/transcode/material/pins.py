@@ -3,8 +3,8 @@
 import re
 
 from ..errors import DiagnosticSink
-from ..model import Decl, Section
-from ..schema_lock import ClassInfo, SchemaLock
+from ..text.model import Decl, Section
+from ..schema.lock import ClassInfo, SchemaLock
 from .interfaces import lookup
 
 _CUSTOM_INPUT_NAME = re.compile(r'InputName\s*=\s*"([^\"]+)"')
@@ -32,6 +32,11 @@ def output_property(name):
 
 def expression_name(info: ClassInfo) -> str:
     return info.name.rsplit(".", 1)[-1].removeprefix("MaterialExpression")
+
+
+def is_function_call(decl: Decl) -> bool:
+    """A call's pins come from the function it names, not from its class."""
+    return decl.type_name.rsplit(".", 1)[-1].removeprefix("MaterialExpression") == "MaterialFunctionCall"
 
 
 def input_names(decl: Decl, info: ClassInfo) -> list[str]:
@@ -71,7 +76,7 @@ def canonical_pin(decl, name, direction, metadata, schema=None):
     info = schema.resolve_class("material_expression", decl.type_name) if schema and decl and not decl.opaque else None
     field = "outputs" if direction == "out" else "inputs"
     names = metadata.get(field, [])
-    is_function = decl is not None and decl.type_name.rsplit(".", 1)[-1].removeprefix("MaterialExpression") == "MaterialFunctionCall"
+    is_function = decl is not None and is_function_call(decl)
     if is_function:
         signature = function_pins(decl, schema)
         if signature is not None:

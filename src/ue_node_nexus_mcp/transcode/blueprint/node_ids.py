@@ -1,7 +1,7 @@
 """Validate the asset-wide namespace used by native Blueprint apply IDs."""
 
 from ..errors import DiagnosticSink
-from ..model import Document
+from ..text.model import Document
 
 
 GRAPH_SECTIONS = ("graph", "function", "macro")

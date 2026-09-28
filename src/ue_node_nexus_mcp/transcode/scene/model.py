@@ -6,10 +6,10 @@ import math
 import uuid
 from typing import Any
 
-from ..lexer import split_top_level
-from ..model import Decl, Document
-from ..sync_project import SyncError
-from ..values import unquote
+from ..text.lexer import split_top_level
+from ..text.model import Decl, Document
+from ..errors import SyncError
+from ..text.values import unquote
 from .codec import actor_key, component_key, instance_key
 from .paths import identity
 from .validation import hierarchy, validate_properties, validate_structure

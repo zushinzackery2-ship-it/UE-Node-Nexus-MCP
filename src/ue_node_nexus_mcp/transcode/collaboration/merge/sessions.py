@@ -5,8 +5,8 @@ from __future__ import annotations
 from fnmatch import fnmatchcase
 from uuid import uuid4
 
-from ...sync_project import SyncError
-from ..store.io import atomic_write, canonical
+from ...errors import SyncError
+from ...storage.io import atomic_write, canonical
 from ..workspace.files import capture_files, hashes
 from .findings import Findings
 from .resolutions import resolve_tree
@@ -98,7 +98,7 @@ class Sessions:
         return tree
 
     def _line(self, conflict: dict) -> int | None:
-        from ...parser import parse
+        from ...text.parser import parse
 
         path = conflict.get("file")
         if not path:

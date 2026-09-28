@@ -29,8 +29,15 @@ cleanup cannot terminate a shared editor belonging to other workspaces.
    `proposal_id` that binds execution to it. Every new managed editor opens a
    visible window for user interaction and preview; `interactive` is the default.
    Visible starts use `d3d12` (default) or `d3d11`.
-4. For `action=starting` or state `STARTING`, poll `bridge_instance_status`.
-   All callers share the same launch `operation_id` and instance identity.
+4. An executed ensure is held while the editor starts: it returns once the
+   editor is ready, a prompt waits for its user, the process exits, or
+   `wait_seconds` pass (default 45, at most 900). Its `startup` report names the
+   `outcome` (`ready`, `waiting_for_user`, `starting`, `exited`, `unresponsive`),
+   `waited_seconds`, the editor's `progress` (phase, launch window, latest log
+   line), `acknowledged_dialogs`, the `blocking_dialog` and the `next` call. A
+   first asset or `ue_sync` call on a starting editor is held the same way, and
+   `bridge_instance_status` accepts `wait_seconds`. All callers share the same
+   launch `operation_id` and instance identity.
 5. Read `project_context_get`, then use the normal asset and `ue_sync` workflow.
    Each agent checks out its own workspace in the returned shared `mirror_root`.
 6. Finish with `ue_execute("bridge_instance_release", dict())`.
@@ -43,6 +50,31 @@ Do not launch another editor to resolve a timeout, busy state or repository
 conflict. Inspect the returned instance, blockers and operation first. A task
 already submitted stays bound to its original instance even after selection changes.
 
+## Startup prompts
+
+The Guard records every UE message dialog from PostConfigInit on. A start that
+nobody can see — launched by Nexus, launched hidden (`Start-Process -WindowStyle
+Hidden`) or offscreen — has its OK-only advisories confirmed by the Guard:
+UE's "Low Drive Space" warning (engine and project directories under 5120 MB,
+user settings directory under 1024 MB) continues the start, and the confirmation
+is reported in `dialog_notices` and the ensure warnings with each location's
+path, free and recommended MB. Every other prompt, and every prompt of a visible
+external start, waits for its user:
+
+| Field | Meaning |
+|---|---|
+| `waiting_for_user` | A prompt holds the editor; the startup timeout does not apply |
+| `blocking_dialog` | `title`, `message`, `buttons`, `category`, `code`, `opened_at`; `source=window` for a native dialog outside UE's handler |
+| `windows` | Titled windows of the process, hidden ones included, with `visible`, `class_name` and dialog text |
+| `dialog_notices` | The last 16 prompts with `resolution` (`auto_acknowledged` or `answered`) and `result` |
+| `startup_progress` | Phase, launch window (`normal`, `hidden`, `offscreen`) and the latest log line with its time |
+
+Show the `blocking_dialog` to the user and call ensure again once it is answered;
+the same instance continues. While any modal dialog is open, bridge requests are
+refused with `waiting_for_user` and the dialog in `details`. An editor that exits
+while a prompt waits reports it as `exited_while_waiting`. A write that fails
+for lack of space is an error, never an advisory, and is not confirmed.
+
 ## Ownership and cleanup
 
 | State or ownership | Behavior |
@@ -50,7 +82,7 @@ already submitted stays bound to its original instance even after selection chan
 | Legacy background `managed`, clean, no users/work | Normal exit after the idle grace period |
 | Existing `external` editor | Reused when compatible; retains user ownership |
 | Interactive managed editor | Protected from automatic reclamation |
-| `STARTING` | Join the existing launch; query status |
+| `STARTING` | Join the existing launch; ensure and work calls are held until it settles |
 | `DRAINING` | Acquire cancels the uncommitted close before granting a lease |
 | `STOPPING` | Wait for actual OS process exit before starting again |
 | `UNRESPONSIVE` | Retains identity and capacity; investigate logs/status |
@@ -66,7 +98,8 @@ directly, including after editor reclamation. Defaults are:
 | Heartbeat / process reconciliation | 15 s / 10 s |
 | Lease idle expiry / exit grace | 300 s / 120 s |
 | Resource sampling | 30 s |
-| Start / close wait | 240 s / 60 s |
+| Start / close wait (a waiting prompt pauses the start wait) | 240 s / 60 s |
+| Call held on a start: default / maximum `wait_seconds` | 45 s / 900 s |
 | Recovery quarantine / idle manager exit | 60 s / 60 s |
 | Managed editors / simultaneous starts | 2 / 1 |
 | Required free physical memory | max(4 GiB, 15% of physical RAM) |
@@ -95,7 +128,7 @@ Discover exact payloads with `ue_capability_get(operation=..., detail="schema")`
 
 | Operation | Use |
 |---|---|
-| `bridge_instance_list/status` | Identity, ownership, window visibility/titles, users, work, resources and logs |
+| `bridge_instance_list/status` | Identity, ownership, windows, startup progress and prompts, users, work, resources and logs; status holds with `wait_seconds` |
 | `bridge_instance_select` | Select an exact `project_path` / `instance_id`; legacy PID/name must be unambiguous |
 | `bridge_instance_reap` | Preview eligible managed instances and each blocker; apply with `dry_run=False` |
 | `bridge_instance_close` | `dry_run=False` waits for actual process exit; name any packages explicitly intended for saving |
@@ -144,7 +177,10 @@ through observation, apply, saving and receipt convergence.
 |---|---|
 | `project_required`, `instance_ambiguous` | Choose an exact returned project/instance |
 | `instance_missing` | Use authorized `reuse_or_start`, or connect to an existing editor |
-| `instance_starting`, `instance_stopping` | Poll that instance; retain the project target |
+| `waiting_for_user` | Show `startup.blocking_dialog` / `details.dialog` to the user; call again once it is answered |
+| `startup_failed` | The editor exited before it was ready; read `exit_code`, `exited_while_waiting` and the editor log |
+| `startup_timeout` | Alive without a prompt past the start wait; read `startup_progress.last_log`, `windows` and the log |
+| `instance_starting`, `instance_stopping` | The hold ended while still loading or stopping; call again; retain the project target |
 | `stale_instance` | The explicitly selected process ended; make a new explicit selection |
 | `instance_unverified` | Inspect the identified process, permissions, startup and Guard installation |
 | `instance_incompatible`, `manager_version_mismatch` | Install matching builds and drain the old version |

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from ...codec import document_from_raw
-from ...emitter import emit
-from ...parser import parse
+from ...raw.codec import document_from_raw
+from ...text.emitter import emit
+from ...text.parser import parse
 from ...scene.codec import from_raw as scene_from_raw
-from ...sync_project import SyncError
-from ..store.io import digest
+from ...errors import SyncError
+from ...storage.io import digest
 from .decode import physical_ids, to_document
 from .encode import encode
 from .identity import plain, scene_metadata

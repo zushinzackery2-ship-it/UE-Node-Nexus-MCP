@@ -6,8 +6,8 @@ import re
 from datetime import datetime, timezone
 from functools import lru_cache
 
-from ...sync_project import SyncError
-from ..store.io import OBJECT_ID
+from ...errors import SyncError
+from ...storage.io import OBJECT_ID
 from ..store.repository import Store
 
 REVISION = re.compile(r"^(.*?)([~^])([0-9]*)$")

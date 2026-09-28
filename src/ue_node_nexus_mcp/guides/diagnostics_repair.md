@@ -28,7 +28,10 @@ an MCP-local read of the newest project log file.
 1. `ue_context_get()` — is an instance bound? Which groups are enabled?
 2. `ue_execute("bridge_instance_list", {})` — inspect ownership, users and state.
    Use `bridge_instance_ensure` with the exact `.uproject`; STARTING, busy and
-   unresponsive processes keep their identity. See the `instances` guide.
+   unresponsive processes keep their identity. A start that does not finish is
+   told apart by status: `waiting_for_user` names the prompt (`blocking_dialog`,
+   also for hidden windows), a moving `startup_progress.last_log` is a long load,
+   and a still one with no prompt is a stall. See the `instances` guide.
 3. `ue_execute("bridge_contract_check", {})` — Python contract vs. operations
    actually loaded in the UE bridge; catches a stale plugin or server build.
 4. `ue_execute("project_context_get", {}, response={"mode":"full"})` — project

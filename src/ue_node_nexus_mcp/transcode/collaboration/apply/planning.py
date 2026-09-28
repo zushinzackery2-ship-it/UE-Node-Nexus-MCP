@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from ...diff import build_plan
+from ...diff.service import build_plan
 from ...material.interfaces import tree as interface_tree
 from ...scene.diff import build_plan as scene_plan
 from ...scene.model import from_document as scene_model
-from ...sync_deps import document_dependencies, order_assets
-from ...sync_project import SyncError
+from ...sync.dependencies import document_dependencies, order_assets
+from ...errors import SyncError
 from ..merge.trees import resolve_base
 from ..semantic.decode import physical_ids, to_document
 from ..semantic.normalization import normalize_snapshot
@@ -22,18 +22,48 @@ def snapshot(workspace, identifier: str | None) -> dict | None:
 
 
 def selected_assets(workspace, source: str, paths) -> list[str]:
+    """What a publication covers: ``paths``, or everything this workspace answers for.
+
+    A sparse worktree holds its own selection; the rest of the tree is inherited
+    history it never had in hand. Publishing it by default is what let one
+    unrelated Blueprint elsewhere in the project block a single-material push.
+    What the branch carries beyond the editor's history is included wherever it
+    lies, so a merge or deletion it brings still reaches the editor.
+    """
     from ..workspace.files import filename, select
 
-    entries = workspace.history.entries(source)
-    entries.update(workspace.history.entries(workspace.state["base"]))
+    submitted, base = workspace.history.entries(source), workspace.history.entries(workspace.state["base"])
+    entries = {**submitted, **base}
     if not paths:
-        return sorted(entries)
+        if not workspace.state.get("sparse"):
+            return sorted(entries)
+        return sorted(set(workspace.state["files"]) | carried(workspace, source))
     # Only an asset with no projected file needs its name derived from state.
     files = dict(workspace.state["files"])
     for asset, value in entries.items():
         if asset not in files:
             files[asset] = filename(asset, snapshot(workspace, value))
     return select(workspace.root, files, paths)
+
+
+def carried(workspace, source: str) -> set[str]:
+    """Assets whose state in ``source`` differs from what it shares with the editor's history.
+
+    The workspace base cannot answer: completing a merge moves it to the result,
+    so a change merged in from another branch differs only from the common
+    ancestor with ``refs/ue/observed``. Criss-cross history has several; a state
+    differing from any of them is carried.
+    """
+    history = workspace.history
+    submitted = history.entries(source)
+    observed = workspace.store.ref("refs/ue/observed")
+    if not observed:
+        return set(submitted)
+    result = set()
+    for ancestor in history.merge_bases(source, observed) or [None]:
+        shared = history.entries(ancestor)
+        result.update(asset for asset in submitted.keys() | shared.keys() if submitted.get(asset) != shared.get(asset))
+    return result
 
 
 def dependencies(workspace, source: str, assets) -> set[str]:
@@ -109,19 +139,28 @@ def merge(workspace, source: str, target: str, assets: list[str], force_local=Fa
                 baselines.pop(record["asset"], None)
     ours = dict(target_entries)
     for asset in assets:
-        if source_entries.get(asset) == baselines.get(asset) == target_entries.get(asset):
+        submitted = source_entries.get(asset)
+        if submitted == baselines.get(asset):
+            # Ours equals the ancestor, so the merge takes UE's state: re-encoding
+            # text nobody changed could only fail or drift. The submission itself
+            # stays in place, so the publication still reports and integrates it.
+            if submitted is None:
+                ours.pop(asset, None)
+            else:
+                ours[asset] = submitted
             continue
-        reference = snapshot(workspace, target_entries.get(asset))
-        if asset in baselines:
-            if baselines[asset] != target_entries.get(asset):
+        try:
+            reference = snapshot(workspace, target_entries.get(asset))
+            if asset in baselines and baselines[asset] != target_entries.get(asset):
                 base_snapshot = normalize_snapshot(snapshot(workspace, baselines[asset]), reference, workspace.schema)
                 baselines[asset] = store.objects.put("snapshot", base_snapshot)
-        if asset in source_entries:
-            if source_entries[asset] != target_entries.get(asset):
-                normalized = normalize_snapshot(snapshot(workspace, source_entries[asset]), reference, workspace.schema)
+            if submitted is None:
+                ours.pop(asset, None)
+            elif submitted != target_entries.get(asset):
+                normalized = normalize_snapshot(snapshot(workspace, submitted), reference, workspace.schema)
                 ours[asset] = store.objects.put("snapshot", normalized)
-        else:
-            ours.pop(asset, None)
+        except SyncError as exc:
+            raise exc.attribute(asset=asset, stage="merge")
     return dict(base=history.tree(baselines), ancestors=ancestors, ours=history.tree(ours), theirs=history.tree(target_entries))
 
 
@@ -140,7 +179,10 @@ def align_aliases(current: dict, candidate: dict) -> dict:
 
 def unit(workspace, asset: str, candidate: dict | None, current: dict | None, raw: dict | None, options: dict) -> dict:
     kind = (candidate or current)["semantic"]["kind"]
-    findings = validate(candidate, workspace.schema) if candidate else []
+    # Validation guards what a merge would write. A candidate equal to what UE
+    # holds writes nothing, so UE's own state never blocks its publication.
+    same = candidate is not None and current is not None and candidate["semantic_hash"] == current["semantic_hash"]
+    findings = validate(candidate, workspace.schema) if candidate and not same else []
     if findings:
         raise SyncError("candidate_invalid", "merged candidate failed semantic validation", dict(asset=asset, diagnostics=findings))
     if kind == "stub" or kind == "niagara_emitter":

@@ -32,7 +32,7 @@ def commit(workspace, field: str, value: str):
 
 
 def values(workspace):
-    from ue_node_nexus_mcp.transcode.parser import parse
+    from ue_node_nexus_mcp.transcode.text.parser import parse
 
     file = workspace.root / workspace.state["files"][ASSET]
     document, _ = parse(file.read_text(encoding="utf-8"))

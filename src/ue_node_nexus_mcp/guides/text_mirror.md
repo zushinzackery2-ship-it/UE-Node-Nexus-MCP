@@ -71,6 +71,12 @@ tex.R -> out.Roughness         # materials: implicit `out` node = material outpu
   `then`; functions are `[function Name(A: double) -> (R: bool)]` with implicit `entry` /
   `result` nodes. `@renamed(Old)` renames a variable/component. Pin defaults equal to the
   function's own default are dropped on re-export.
+- Class names: a name resolves to its exact UE path first, then to a real class name,
+  then to a prefix-stripped alias, so `Actor` is `/Script/Engine.Actor` even though
+  `NiagaraActor` also strips to `Actor`; a function owner (`Actor.UserConstructionScript`)
+  takes only the path or the real name. Blueprint-generated classes can share a name
+  (`BP_Light_C` in two folders): the mirror then writes that component or asset class
+  as its full path, and lint reports a shared name on its own line with the candidates.
 - Niagara: `[emitter Name]`, `[stack Name/ParticleUpdate]` module lines
   `id : SpawnRate(SpawnRate=100, "Spawn Probability"=1) !disabled` list what the Stack
   panel shows (rapid-iteration values); `[renderers Name]` `sprite : Sprite { SubImageSize=(X=2,Y=2) }`
@@ -89,9 +95,13 @@ tex.R -> out.Roughness         # materials: implicit `out` node = material outpu
 - Ids are yours; GUIDs stay in the base. Renaming an id recreates the node.
 - New nodes referenced by links must name the pin unless the node has one pin.
 - `both-modified` is refused; pull (or push with `force="local"`) first.
-- A MaterialFunction interface change refreshes callers in UE. Callers with
-  local edits keep their text and accepted base; selected callers are replanned
-  against the refreshed graph before applying their changes.
+- A MaterialFunction interface change refreshes callers in UE. A caller pushed in the
+  same batch rebuilds its call nodes inside its own apply, after its old links are cut
+  and before its new ones are made, so a newly required input and its wiring compile
+  once. Every other caller is refreshed on its own; a failure is that caller's row and
+  names the function. Wiring a call node always rebuilds it on the function's current
+  interface first, so fixing such a caller's links is enough to publish it. Callers with
+  local edits keep their text and accepted base.
 - Stub files are read-only; `@opaque` nodes cannot be created or edited.
 - If `schema_stale` appears, run `ue_sync("schema")` (engine/plugin set changed).
 

@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 
 FORMAT_VERSION = 1
 DDL = """

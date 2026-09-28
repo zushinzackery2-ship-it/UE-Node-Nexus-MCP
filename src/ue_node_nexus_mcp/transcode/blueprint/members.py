@@ -1,7 +1,7 @@
 """Interface and dispatcher declarations, independent of graph layout."""
 
-from ..bp_signature import parse_signature
-from ..lexer import LexError
+from .signature import parse_signature
+from ..text.lexer import LexError
 
 
 def dispatchers(section, sink) -> dict:

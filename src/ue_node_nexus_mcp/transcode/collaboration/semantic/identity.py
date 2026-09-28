@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from uuid import NAMESPACE_URL, uuid5
 
-from ...model import Decl, Section
-from ...sync_project import SyncError
+from ...text.model import Decl, Section
+from ...errors import SyncError
 
 
 def stable_id(key: str) -> str:

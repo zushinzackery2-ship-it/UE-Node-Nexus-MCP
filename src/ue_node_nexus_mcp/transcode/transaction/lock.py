@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 from ...coordination.file_lock import FileLock, LockBusy
-from ..sync_project import SyncError
+from ..errors import SyncError
 
 LOG = logging.getLogger("ue_nexus.lock")
 

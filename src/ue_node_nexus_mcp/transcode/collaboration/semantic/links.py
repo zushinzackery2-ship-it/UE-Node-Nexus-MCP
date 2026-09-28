@@ -2,7 +2,7 @@
 
 from ...blueprint.pins import canonical_pin, node_pins, pin
 from ...material.pins import canonical_pin as material_pin, output_property
-from ...sync_project import SyncError
+from ...errors import SyncError
 
 
 def is_exec_pin(bindings: dict, node: str, name, direction: str) -> bool:

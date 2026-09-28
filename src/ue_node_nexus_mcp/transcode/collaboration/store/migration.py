@@ -4,17 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...paths import base_path, iter_text_files, package_name, parse_text_path, state_path
-from ...parser import parse
+from ...storage.paths import base_path, iter_text_files, package_name, parse_text_path, state_path
+from ...text.parser import parse
 from ...scene.model import scene_name
 from ...scene.state import SceneState
-from ...sync_project import SyncError, write_project_info
+from ...errors import SyncError
+from ...sync.project import write_project_info
 from ..history import History
 from ..semantic.snapshot import from_raw
 from ..workspace.files import filename
 from ..workspace.projection import blob, execute, prepare
 from ..workspace.service import Workspace, checkout
-from .io import confined, read_json
+from ...storage.io import confined, read_json
 
 
 def enabled(context) -> bool:

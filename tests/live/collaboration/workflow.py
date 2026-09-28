@@ -6,8 +6,8 @@ from pathlib import Path
 import stat
 from uuid import uuid4
 
-from ue_node_nexus_mcp.transcode.paths import text_path
-from ue_node_nexus_mcp.transcode.sync import run_sync
+from ue_node_nexus_mcp.transcode.storage.paths import text_path
+from ue_node_nexus_mcp.transcode.sync.service import run_sync
 from ue_node_nexus_mcp.transcode.collaboration.store.repository import Store
 
 

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 
-from ..sync_project import SyncError, ensure_schema, write_project_info
+from ..errors import SyncError
+from ..sync.schema import ensure_schema
+from ..sync.project import write_project_info
 from .apply.observe import capture
 from .history import History
 from .merge.sessions import Sessions
 from .report.options import mutates, validate
 from .report.proposals import check, create
-from .store.io import atomic_write, canonical
+from ..storage.io import atomic_write, canonical
 from .store.migration import enabled, migrate, survey
 from .store.repository import PUBLICATION_WAIT_SECONDS, Store
 from .workspace.commands import run as command
@@ -124,9 +126,9 @@ def create_workspace(bridge, context, store, paths, options: dict) -> dict:
 def checkout_paths(bridge, context, paths):
     if paths is None:
         return None
-    from ..sync_status import query_ue
+    from ..sync.status import query_ue
     from .workspace.files import select
-    from ..paths import text_path
+    from ..storage.paths import text_path
 
     infos, known = query_ue(bridge, context, [], discover=True, include_stubs=True)
     if not known:

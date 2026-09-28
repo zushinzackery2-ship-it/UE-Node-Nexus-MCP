@@ -12,15 +12,18 @@ import threading
 from ..broker.client import BrokerClient
 from ..errors import InstanceError, require
 from ...transport import make_pipe_name
+from . import startup
 from .config import resolve_project
 
 LOG = logging.getLogger(__name__)
 
 
 class EditorSession:
-    def __init__(self, broker=None, project: str | None = None) -> None:
+    def __init__(self, broker=None, project: str | None = None, startup_wait: float = startup.DEFAULT_WAIT_SECONDS) -> None:
         self.broker = broker or BrokerClient()
         self.configured_project = project
+        # How long a call is held while the editor it needs is starting.
+        self.startup_wait = startup.budget(startup_wait)
         self.binding = dict()
         self.lease = dict()
         self.options = dict(mode="reuse_only")
@@ -86,16 +89,27 @@ class EditorSession:
                 if previous != self.binding.get("vfx_available") and self.on_bind_changed:
                     self.on_bind_changed()
 
+    def poll(self, identifier: str) -> dict:
+        """A fresh observation of one instance, for a call held on its start."""
+        row = self.call("status", dict(instance_id=identifier, fresh=True))
+        self.observe(row)
+        return row
+
     def status(self, payload: dict | None = None) -> dict:
         payload = dict(payload or dict())
+        wait = payload.pop("wait_seconds", None)
         if not payload.get("instance_id") and not payload.get("project_path") and self.binding.get("instance_id"):
             payload["instance_id"] = self.binding["instance_id"]
         result = self.call("status", payload)
         self.observe(result)
-        return result
+        if wait is None or "instance_id" not in result:
+            return result
+        row, report = startup.hold(self.poll, result, startup.budget(wait))
+        return dict(row, startup=report)
 
     def ensure(self, payload: dict | None = None) -> dict:
         payload = dict(payload or dict())
+        wait = startup.budget(payload.pop("wait_seconds", None), self.startup_wait)
         project = resolve_project(payload.get("project_path"), self.configured_project, self.binding, Path(self.broker.workspace))
         payload.update(project_path=project["project_path"])
         if os.environ.get("UE_NEXUS_TRANSCODE_DIR"):
@@ -113,21 +127,25 @@ class EditorSession:
             self.explicit_instance = bool(payload.get("instance_id") or payload.get("pid"))
             if previous != self.binding["instance_id"] and self.on_bind_changed:
                 self.on_bind_changed()
-        return result
+        row, report = startup.hold(self.poll, result["instance"], wait)
+        startup.require(row, report, startup.ENDED)
+        return dict(result, instance=row, startup=report)
 
     def acquire(self) -> tuple[dict, dict]:
+        """The bound editor and lease for a call, holding the call while that editor starts."""
         with self.lock:
-            if self.lease and self.binding.get("state") not in ("EXITED", "STOPPING", "UNRESPONSIVE"):
-                require(self.binding.get("state") != "STARTING", "instance_starting",
-                        "the same editor is starting; poll bridge_instance_status", instance=dict(self.binding))
-                return dict(self.binding), dict(self.lease)
+            bound = self.lease and self.binding.get("state") not in ("EXITED", "STOPPING", "UNRESPONSIVE")
+            row, lease = dict(self.binding), dict(self.lease)
             payload = dict(self.options, dry_run=False)
             if self.explicit_instance and self.binding.get("instance_id"):
                 payload["instance_id"] = self.binding["instance_id"]
-        result = self.ensure(payload)
-        require(result["instance"]["state"] in ("READY", "IDLE", "BLOCKED"), "instance_starting",
-                "the same editor is starting; poll bridge_instance_status", instance=result["instance"])
-        return dict(result["instance"]), dict(result["lease"])
+        if bound:
+            row, report = startup.hold(self.poll, row, self.startup_wait)
+        else:
+            result = self.ensure(payload)
+            row, lease, report = result["instance"], result["lease"], result["startup"]
+        startup.require(row, report)
+        return dict(row), dict(lease)
 
     def select(self, pid: int | None = None, project: str | None = None, project_path: str | None = None,
                instance_id: str | None = None) -> dict:

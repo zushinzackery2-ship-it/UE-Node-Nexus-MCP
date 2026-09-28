@@ -5,7 +5,7 @@ import pytest
 from ue_node_nexus_mcp.transcode.scene.pull import pull_one
 from ue_node_nexus_mcp.transcode.scene.selection import new_record
 from ue_node_nexus_mcp.transcode.scene.state import SceneState
-from ue_node_nexus_mcp.transcode.sync_project import ProjectContext
+from ue_node_nexus_mcp.transcode.sync.project import ProjectContext
 
 from .fake_scene import FakeScene
 from .fixtures import ACTOR, MAP, SCHEMA

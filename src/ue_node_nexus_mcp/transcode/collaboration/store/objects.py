@@ -6,9 +6,9 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
-from ...sync_project import SyncError
+from ...errors import SyncError
 from .database import Database
-from .io import OBJECT_ID, atomic_write, byte_hash, canonical, read_json
+from ...storage.io import OBJECT_ID, atomic_write, byte_hash, canonical, read_json
 
 
 class Objects:

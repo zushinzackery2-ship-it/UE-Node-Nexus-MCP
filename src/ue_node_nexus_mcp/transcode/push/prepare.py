@@ -5,16 +5,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..codec import bookkeeping_from_base, document_from_raw, with_bookkeeping
-from ..diff import build_plan
+from ..raw.codec import bookkeeping_from_base, document_from_raw, with_bookkeeping
+from ..diff.service import build_plan
 from ..errors import Diagnostic
-from ..lint import lint_document
-from ..parser import parse
-from ..paths import display_path, object_path
-from ..sync_files import base_document, load_base, read_json, read_text
-from ..sync_project import BridgeCall, ProjectContext, SyncError, ensure_root_registered
-from ..sync_pull import export_raw
-from ..sync_status import AssetStatus
+from ..lint.service import lint_document
+from ..text.parser import parse
+from ..storage.paths import display_path, object_path
+from ..sync.files import base_document, load_base, read_json, read_text
+from ..sync.project import BridgeCall, ProjectContext, ensure_root_registered
+from ..errors import SyncError
+from ..sync.pull import export_raw
+from ..sync.status import AssetStatus
 from .model import Prepared, PushOptions, PushResult, row
 from .recovery import load_recovery
 
@@ -87,12 +88,3 @@ def live_base(bridge: BridgeCall, context: ProjectContext, status: AssetStatus, 
     _, ids, order = document_from_raw(raw, ids, order, context.schema)
     LOGGER.info("sync rebase asset=%s recovery=%s", status.asset_path, recovery is not None)
     return with_bookkeeping(raw, ids, order)
-
-
-def replan_refreshed(bridge: BridgeCall, context: ProjectContext, item: Prepared) -> None:
-    item.base = live_base(bridge, context, item.status, item.base)
-    ids = dict((identifier, guid) for guid, identifier in item.base.get("ids", dict()).items())
-    item.plan = build_plan(item.document, base_document(item.base, context.schema), item.status.kind, ids, context.schema)
-    if item.plan.has_errors:
-        raise SyncError("replan_failed", "; ".join(entry.format() for entry in item.plan.diagnostics))
-    item.reconcile = True

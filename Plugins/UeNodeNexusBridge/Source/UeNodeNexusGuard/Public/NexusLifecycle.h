@@ -13,6 +13,8 @@ UENODENEXUSGUARD_API void Attach(FInspector Inspector);
 UENODENEXUSGUARD_API void Detach();
 UENODENEXUSGUARD_API void Publish(const TSharedPtr<FJsonObject>& State);
 UENODENEXUSGUARD_API TSharedPtr<FJsonObject> Snapshot();
+// The modal dialog the editor is waiting on an answer for, or null.
+UENODENEXUSGUARD_API TSharedPtr<FJsonObject> OpenDialog();
 UENODENEXUSGUARD_API TSharedPtr<FJsonObject> BuildIdentity();
 UENODENEXUSGUARD_API bool Admit(const TSharedPtr<FJsonObject>& Request, uint32 Peer, FString& Error);
 UENODENEXUSGUARD_API void Executing(const FString& RequestId);

@@ -2,12 +2,12 @@ from copy import deepcopy
 
 import pytest
 
-from ue_node_nexus_mcp.transcode.emitter import emit
-from ue_node_nexus_mcp.transcode.parser import parse
+from ue_node_nexus_mcp.transcode.text.emitter import emit
+from ue_node_nexus_mcp.transcode.text.parser import parse
 from ue_node_nexus_mcp.transcode.scene.codec import from_raw
 from ue_node_nexus_mcp.transcode.scene.diff import build_plan
 from ue_node_nexus_mcp.transcode.scene.model import from_document
-from ue_node_nexus_mcp.transcode.sync_project import SyncError
+from ue_node_nexus_mcp.transcode.errors import SyncError
 
 from .fixtures import ACTOR, COMPONENT, INSTANCE_A, INSTANCE_B, actor, snapshot, transform
 

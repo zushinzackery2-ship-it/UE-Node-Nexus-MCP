@@ -71,17 +71,19 @@ class WindowsPlatform:
             return [dict(item) for item in self.catalog if not project_key or item["project_key"] == project_key]
 
     def _probe(self, record: dict) -> dict:
-        from ..identity.window_state import captions
+        from ..identity.window_state import windows
+        from .prompts import observe
 
-        titles = captions(record["pid"])
-        record.update(window_visible=bool(titles), window_titles=titles)
+        guard = None
         try:
             observed = self.control(record, "status", dict())
             if any(observed.get(key) != record.get(key) for key in ("pid", "process_created", "project_key")):
                 raise InstanceError("instance_unverified", "lifecycle identity differs from the observed process")
             record.update(observed, control_available=True)
+            guard = observed
         except InstanceError as exc:
             record.update(ready=False, control_available=False, control_error=exc.envelope()["error"])
+        observe(record, windows(record["pid"]), guard)
         from ..identity.resources import sample
         cached = self.resources.get(record["instance_id"], dict())
         if time.monotonic() - cached.get("at", 0) >= self.resource_seconds:
