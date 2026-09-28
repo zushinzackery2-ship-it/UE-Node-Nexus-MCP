@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from uuid import uuid4
 
+from ...blueprint.node_ids import GRAPH_SECTIONS
 from ...paths import object_path
 from ...sync_project import SyncError, apply_operation
 from ..semantic.snapshot import from_raw
@@ -173,6 +174,10 @@ def actual_snapshot(workspace, record: dict) -> dict | None:
     data = (receipt.get("response") or dict()).get("data") or receipt.get("response_data") or dict()
     if prior:
         for binding in prior.get("bindings", dict()).values():
+            if prior["semantic"]["kind"] == "blueprint":
+                section = prior["semantic"]["sections"].get(binding["scope"], dict())
+                if section.get("name") not in GRAPH_SECTIONS:
+                    continue
             physical = data.get("id_map", dict()).get(binding["alias"])
             if physical:
                 binding["physical"] = physical
@@ -195,7 +200,7 @@ def publish(workspace, record: dict, *, recovery_target: str | None = None) -> s
     try:
         actual = actual_snapshot(workspace, record)
     except SyncError as exc:
-        if exc.code in ("apply_result_mismatch", "receipt_invalid"):
+        if exc.code in ("apply_result_mismatch", "receipt_invalid", "ambiguous_identity"):
             record.update(phase="result_rejected", verification_error=dict(code=exc.code, message=str(exc), details=exc.details))
             save(workspace, record)
         raise

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...lint import lint_document
+from ...material.interfaces import snapshots
+from ...material.interfaces import documents
 from ...parser import parse
 from ...paths import display_path, iter_text_files, parse_text_path
 from ...sync_files import read_text
@@ -22,9 +24,14 @@ def report(rows: list[dict], diagnostics: list, **extra) -> dict:
 
 def lint(workspace, paths) -> dict:
     entries, files, selected = capture_files(workspace, paths)
+    candidates = [workspace.store.objects.data(entries[asset], "snapshot") for asset in selected]
+    with snapshots(candidates):
+        return lint_candidates(workspace, selected, files, candidates)
+
+
+def lint_candidates(workspace, selected, files, candidates):
     diagnostics, rows = [], []
-    for asset in selected:
-        snapshot = workspace.store.objects.data(entries[asset], "snapshot")
+    for asset, snapshot in zip(selected, candidates):
         sink = lint_document(to_document(snapshot), snapshot["semantic"]["kind"], workspace.schema,
                              file=files[asset], current_key=workspace.schema.key if workspace.schema else None)
         diagnostics.extend(sink.items)
@@ -44,6 +51,7 @@ def lint_root(context, files_root: str, paths: list[str] | None = None) -> dict:
         raise SyncError("invalid_option", "files_root must be an existing directory", dict(files_root=str(root)))
     wanted = set(paths or ())
     diagnostics, rows, skipped = [], [], []
+    candidates = []
     for file in iter_text_files(root):
         parsed = parse_text_path(root, file)
         label = display_path(root, file)
@@ -54,6 +62,14 @@ def lint_root(context, files_root: str, paths: list[str] | None = None) -> dict:
         if wanted and not (label in wanted or asset in wanted):
             continue
         document, sink = parse(read_text(file) or "", file=label)
+        candidates.append((asset, kind, label, document, sink))
+    with documents((kind, document) for _, kind, _, document, sink in candidates if not sink.has_errors):
+        return lint_root_candidates(context, root, candidates, skipped)
+
+
+def lint_root_candidates(context, root, candidates, skipped):
+    diagnostics, rows = [], []
+    for asset, kind, label, document, sink in candidates:
         if not sink.has_errors:
             sink.extend(lint_document(document, kind, context.schema, label, context.schema_key or None))
         diagnostics.extend(sink.items)

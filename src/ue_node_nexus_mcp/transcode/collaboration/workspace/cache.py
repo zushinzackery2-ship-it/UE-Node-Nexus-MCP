@@ -7,7 +7,8 @@ from pathlib import Path
 
 from ..store.io import atomic_write, canonical
 
-FORMAT = 1
+# Version 4 uses candidate interfaces and reflected value normalization.
+FORMAT = 4
 
 
 def location(workspace) -> Path:

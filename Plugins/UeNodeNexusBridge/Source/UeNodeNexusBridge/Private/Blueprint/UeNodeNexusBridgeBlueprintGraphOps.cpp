@@ -1,6 +1,7 @@
 ﻿#include "UeNodeNexusBridgeOperations.h"
 
 #include "EdGraph/EdGraph.h"
+#include "Blueprint/Graphs/NexusBlueprintGraphSelectors.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
@@ -14,24 +15,6 @@
 
 namespace UeNodeNexusBridge
 {
-static UEdGraph* ResolveBlueprintGraph(UBlueprint* Blueprint, const FString& GraphName)
-{
-    TArray<UEdGraph*> Graphs;
-    Blueprint->GetAllGraphs(Graphs);
-
-    UEdGraph* TargetGraph = Graphs.Num() > 0 ? Graphs[0] : nullptr;
-    for (UEdGraph* Graph : Graphs)
-    {
-        if (Graph != nullptr && (GraphName.IsEmpty() || Graph->GetName().Equals(GraphName, ESearchCase::IgnoreCase)))
-        {
-            TargetGraph = Graph;
-            break;
-        }
-    }
-
-    return TargetGraph;
-}
-
 static void AppendBlueprintCompactNode(FCompactGraphBuilder& Builder, UEdGraphNode* Node, bool bIncludeNodeParams, bool bIncludeLinks, const FBlueprintGraphFilterResult& FilterResult)
 {
     const FString NodeId = Node->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens);
@@ -73,7 +56,7 @@ static TSharedPtr<FJsonObject> BuildBlueprintCompactGraphSnapshot(const FString&
     FCompactGraphBuilder Builder;
     Builder.Data->SetStringField(TEXT("asset_path"), Blueprint->GetPathName());
     Builder.Data->SetStringField(TEXT("asset_class"), Blueprint->GetClass()->GetPathName());
-    Builder.Data->SetStringField(TEXT("graph_name"), TargetGraph->GetName());
+    Builder.Data->SetStringField(TEXT("graph_name"), BlueprintGraphSelector(TargetGraph));
     Builder.Data->SetStringField(TEXT("graph_kind"), TEXT("blueprint"));
 
     for (UEdGraphNode* Node : TargetGraph->Nodes)
@@ -141,7 +124,7 @@ static TSharedPtr<FJsonObject> BuildBlueprintWireGraphSnapshot(const FString& Op
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     const FString Text = bTiny ? Builder.BuildTinyText() : (bMin ? Builder.BuildMinText() : Builder.BuildText());
     const FString OutputFormat = bTiny ? TEXT("wires_tiny") : (bMin ? TEXT("wires_min") : TEXT("wires_text"));
-    TSharedPtr<FJsonObject> Data = MakeWireGraphData(Blueprint->GetPathName(), Blueprint->GetClass()->GetPathName(), TargetGraph->GetName(), TEXT("blueprint"), Text, OutputFormat);
+    TSharedPtr<FJsonObject> Data = MakeWireGraphData(Blueprint->GetPathName(), Blueprint->GetClass()->GetPathName(), BlueprintGraphSelector(TargetGraph), TEXT("blueprint"), Text, OutputFormat);
 
     if (!FilterResult.IncludesAll())
     {
@@ -154,7 +137,7 @@ static TSharedPtr<FJsonObject> BuildBlueprintWireGraphSnapshot(const FString& Op
 
 TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, const FString& RequestId, UBlueprint* Blueprint, const FString& GraphName, bool bIncludeNodeParams, bool bIncludeLinks, bool bCompact, bool bWire, bool bWireMin, bool bWireTiny, const FBlueprintGraphFilter& Filter)
 {
-    UEdGraph* TargetGraph = ResolveBlueprintGraph(Blueprint, GraphName);
+    UEdGraph* TargetGraph = FindBlueprintGraph(Blueprint, GraphName);
     if (TargetGraph == nullptr)
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
@@ -192,7 +175,7 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphSnapshot(const FString& Operation, co
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("asset_path"), Blueprint->GetPathName());
     Data->SetStringField(TEXT("asset_class"), Blueprint->GetClass()->GetPathName());
-    Data->SetStringField(TEXT("graph_name"), TargetGraph->GetName());
+    Data->SetStringField(TEXT("graph_name"), BlueprintGraphSelector(TargetGraph));
     Data->SetStringField(TEXT("graph_kind"), TEXT("blueprint"));
     Data->SetArrayField(TEXT("nodes"), Nodes);
     Data->SetArrayField(TEXT("links"), Links);

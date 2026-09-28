@@ -34,7 +34,7 @@ def normalize_snapshot(snapshot: dict | None, reference: dict | None = None, sch
     if snapshot is None:
         return None
     reference = reference or snapshot
-    document = to_document(snapshot)
+    document = to_document(snapshot, include_defaults=True)
     kind = snapshot["semantic"]["kind"]
     identities = Identities(reference, "normalize", document.header.asset)
     for section in document.sections:

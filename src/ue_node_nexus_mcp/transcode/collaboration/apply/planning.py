@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from ...diff import build_plan
+from ...material.interfaces import tree as interface_tree
 from ...scene.diff import build_plan as scene_plan
 from ...scene.model import from_document as scene_model
 from ...sync_deps import document_dependencies, order_assets
@@ -195,6 +196,11 @@ def settled(asset: str, raw: dict | None, candidate: dict, current: dict, ours: 
 
 
 def preflight(workspace, merged: dict, observation: dict, assets: list[str], options: dict) -> dict:
+    with interface_tree(workspace.store, workspace.history.entries(merged["candidate"])):
+        return preflight_candidates(workspace, merged, observation, assets, options)
+
+
+def preflight_candidates(workspace, merged, observation, assets, options):
     candidate, current = workspace.history.entries(merged["candidate"]), workspace.history.entries(merged.get("theirs", observation["commit"]))
     ours = workspace.history.entries(merged["ours"]) if merged.get("ours") else dict()
     units, errors, documents = dict(), dict(), dict()

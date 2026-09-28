@@ -3,29 +3,17 @@
 #include "EdGraph/EdGraphNode.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
+#include "K2Node_EnhancedInputAction.h"
 #include "K2Node_Variable.h"
+#include "K2Node_TransitionRuleGetter.h"
 #include "Materials/MaterialExpression.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "UeNodeNexusBridgeMaterialPropertySchema.h"
+#include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 
 namespace UeNodeNexusBridge
 {
-static UClass* ResolveBlueprintNodeClass(const FString& NodeClass)
-{
-    if (UClass* Direct = LoadClass<UEdGraphNode>(nullptr, *NodeClass))
-    {
-        return Direct->IsChildOf(UEdGraphNode::StaticClass()) ? Direct : nullptr;
-    }
-    const FString ShortName = NodeClass.StartsWith(TEXT("K2Node_")) ? NodeClass : TEXT("K2Node_") + NodeClass;
-    UClass* K2Class = LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/BlueprintGraph.%s"), *ShortName));
-    if (K2Class != nullptr)
-    {
-        return K2Class;
-    }
-    return LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/Engine.%s"), *NodeClass));
-}
-
 static bool IsEditableBlueprintTemplateProperty(FProperty* Property)
 {
     return Property != nullptr
@@ -70,6 +58,15 @@ static TArray<TSharedPtr<FJsonValue>> BuildBlueprintClassParams(UClass* Class)
         {
             Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintTemplateParam(Property, Index++)));
         }
+    }
+    if (Class->IsChildOf(UK2Node_TransitionRuleGetter::StaticClass()))
+    {
+        Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintCreateParam(Index++, TEXT("getter_type"),
+            TEXT("CurrentState_ElapsedTime | CurrentState_GetBlendWeight | CurrentTransitionDuration"), true)));
+    }
+    if (Class->IsChildOf(UK2Node_EnhancedInputAction::StaticClass()))
+    {
+        Params.Add(MakeShared<FJsonValueObject>(MakeBlueprintCreateParam(Index++, TEXT("input_action"), TEXT("InputAction asset path"), true)));
     }
     if (Class->IsChildOf(UK2Node_Variable::StaticClass()))
     {
@@ -123,7 +120,7 @@ TSharedPtr<FJsonObject> HandleNodeClassParamsGet(const FString& Operation, const
     }
     else if (GraphKind.Equals(TEXT("blueprint"), ESearchCase::IgnoreCase))
     {
-        Class = ResolveBlueprintNodeClass(NodeClass);
+        Class = ResolveBlueprintNodeClassForCreate(NodeClass);
     }
 
     if (Class == nullptr)

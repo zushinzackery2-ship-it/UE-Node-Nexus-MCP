@@ -10,6 +10,9 @@
 #include "Factories/MaterialFactoryNew.h"
 #include "Factories/MaterialFunctionFactoryNew.h"
 #include "Factories/MaterialInstanceConstantFactoryNew.h"
+#include "Factories/MaterialParameterCollectionFactoryNew.h"
+#include "Materials/MaterialParameterCollection.h"
+#include "Transcode/UeNodeNexusBridgeTranscodeBlueprintApply.h"
 #include "Factories/TextureRenderTargetFactoryNew.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
@@ -117,7 +120,12 @@ UObject* CreateDataAsset(UPackage* Package, FName AssetName, const FString& Pare
     UClass* DataAssetClass = UUeNodeNexusBridgeDataAsset::StaticClass();
     if (!ParentClassPath.IsEmpty())
     {
-        DataAssetClass = LoadObject<UClass>(nullptr, *ParentClassPath);
+        DataAssetClass = Transcode::ResolveClassByNameOrPath(ParentClassPath);
+    }
+    if (DataAssetClass == UMaterialParameterCollection::StaticClass())
+    {
+        auto* Factory = NewObject<UMaterialParameterCollectionFactoryNew>();
+        return Factory->FactoryCreateNew(DataAssetClass, Package, AssetName, RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn);
     }
     if (DataAssetClass == nullptr || !DataAssetClass->IsChildOf(UDataAsset::StaticClass()))
     {
@@ -154,13 +162,13 @@ bool CheckAssetCreate(
         {
             return true;
         }
-        const UClass* DataAssetClass = LoadObject<UClass>(nullptr, *ParentClassPath);
+        const UClass* DataAssetClass = Transcode::ResolveClassByNameOrPath(ParentClassPath);
         if (DataAssetClass == nullptr)
         {
             OutError = FString::Printf(TEXT("data asset class could not be loaded: %s"), *ParentClassPath);
             return false;
         }
-        if (!DataAssetClass->IsChildOf(UDataAsset::StaticClass()))
+        if (!DataAssetClass->IsChildOf(UDataAsset::StaticClass()) && DataAssetClass != UMaterialParameterCollection::StaticClass())
         {
             OutError = FString::Printf(TEXT("class '%s' does not derive from DataAsset"), *ParentClassPath);
             return false;

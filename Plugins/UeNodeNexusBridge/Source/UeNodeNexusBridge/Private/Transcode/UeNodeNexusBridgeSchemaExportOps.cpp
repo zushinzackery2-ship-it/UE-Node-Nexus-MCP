@@ -209,7 +209,7 @@ TSharedPtr<FJsonObject> HandleSchemaExport(const FString& Operation, const FStri
     {
         const FString Name = Class->GetName();
         return Class == UMaterial::StaticClass() || Class == UMaterialFunction::StaticClass() || Class == UMaterialInstanceConstant::StaticClass()
-            || Class == UBlueprint::StaticClass() || IsGenericAssetClass(Class) || Class->IsChildOf(AActor::StaticClass()) || Name == TEXT("NiagaraSystem") || Name == TEXT("NiagaraEmitter");
+            || KindForClass(Class) == TEXT("blueprint") || IsGenericAssetClass(Class) || Class->IsChildOf(AActor::StaticClass()) || Name == TEXT("NiagaraSystem") || Name == TEXT("NiagaraEmitter");
     }));
     Files.Emplace(TEXT("classes.component.json"), ClassFamily([](UClass* Class)
     {

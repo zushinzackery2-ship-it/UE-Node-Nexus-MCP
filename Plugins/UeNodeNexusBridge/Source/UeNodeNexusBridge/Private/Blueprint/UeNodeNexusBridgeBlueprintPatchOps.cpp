@@ -79,7 +79,7 @@ static bool ApplyCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TShare
     }
 
     FString ConfigError;
-    if (!ValidateBlueprintNodeCreateConfig(NodeClass, Blueprint, Op, ConfigError))
+    if (!ValidateBlueprintNodeCreateConfig(NodeClass, Blueprint, Graph, Op, ConfigError))
     {
         Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("node_config_required"), ConfigError, Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
         return false;

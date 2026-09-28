@@ -14,13 +14,26 @@ STRUCTS = set(("vector", "vector2d", "vector4", "rotator", "quat", "transform", 
                "vector3f", "vector2f", "vector4f", "quat4f", "staticcomponentmask"))
 
 
-def normalize(text: str, type_name: str) -> str:
+def normalize(text: str, type_name: str | dict) -> str:
+    if isinstance(type_name, dict):
+        from .reflected import normalize_reflected
+
+        return normalize_reflected(text, type_name)
     # Numbers reach the semantic state in the same form the mirror text shows them, so a
     # captured snapshot and the files rendered from it agree whatever the value's type is;
     # unknown struct types (BasePropertyOverrides, platform data) otherwise drifted.
     kind = type_name.removeprefix("F").lower()
+    if kind.startswith("struct(") and kind.endswith(")"):
+        kind = kind[7:-1].rsplit(".", 1)[-1].removeprefix("f")
     if kind in ("string", "str", "name") or type_name == "FText":
         return unquote(str(text))
+    if kind == "object" or kind.startswith(("object(", "softobject(", "tobjectptr<", "tsoftobjectptr<")) or type_name.endswith("*"):
+        reference = unquote(str(text)).strip()
+        if reference.lower() in ("", "none", "null"):
+            return "None"
+        if "'" in reference:
+            reference = reference.split("'", 2)[1]
+        return reference
     text = normalize_display(str(text))
     if kind in ("bool", "boolean", "boolproperty") and text.lower() in ("true", "false", "1", "0"):
         return "true" if text.lower() in ("true", "1") else "false"
@@ -36,14 +49,19 @@ def normalize(text: str, type_name: str) -> str:
             name, separator, value = item.partition("=")
             child = struct_member_type(kind, name.strip())
             values.append(name.strip() + separator + normalize(value.strip(), child) if separator else normalize(item.strip(), "double"))
+        if all("=" in item for item in values):
+            values.sort(key=lambda item: item.partition("=")[0])
         return "(" + ",".join(values) + ")"
     return text
 
 
 def value(text: str | None, type_name: str = "text", state: str = "explicit") -> dict:
+    contract = type_name
+    if isinstance(type_name, dict):
+        type_name = type_name.get("type", "text")
     if text is None:
         return dict(state="missing", type=type_name)
-    return dict(state=state, type=type_name, value=normalize(str(text), type_name))
+    return dict(state=state, type=type_name, value=normalize(str(text), contract))
 
 
 def render(item: dict) -> str | None:
@@ -56,7 +74,7 @@ def field_values(current: dict, types: dict, defaults: dict, previous: dict | No
     result = dict()
     before = previous or dict()
     for key in sorted(current.keys() | defaults.keys()):
-        type_name = str(types.get(key) or before.get(key, dict()).get("type") or "text")
+        type_name = types.get(key) or before.get(key, dict()).get("type") or "text"
         state = "explicit" if key in current else "default"
         text = current.get(key) if key in current else defaults[key]
         result[key] = value(text, type_name, state)

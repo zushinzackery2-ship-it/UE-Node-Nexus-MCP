@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 
 #include "Dom/JsonValue.h"
+#include "Blueprint/Graphs/NexusBlueprintGraphSelectors.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
@@ -14,16 +15,7 @@ namespace UeNodeNexusBridge
 {
 UEdGraph* FindBlueprintGraph(UBlueprint* Blueprint, const FString& GraphName)
 {
-    TArray<UEdGraph*> Graphs;
-    Blueprint->GetAllGraphs(Graphs);
-    for (UEdGraph* Graph : Graphs)
-    {
-        if (Graph != nullptr && (GraphName.IsEmpty() || Graph->GetName().Equals(GraphName, ESearchCase::IgnoreCase)))
-        {
-            return Graph;
-        }
-    }
-    return nullptr;
+    return ResolveBlueprintGraphSelector(Blueprint, GraphName);
 }
 
 UEdGraphNode* FindBlueprintNode(UEdGraph* Graph, const FString& NodeId)

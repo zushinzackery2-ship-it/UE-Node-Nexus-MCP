@@ -6,6 +6,7 @@
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
+#include "GameFramework/Actor.h"
 #include "K2Node_FunctionEntry.h"
 #include "K2Node_FunctionResult.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -107,7 +108,12 @@ bool ApplyFunctionVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
             {
                 return Interface.Graphs.Contains(Existing);
             });
-            if (bInterface && Verb == TEXT("bp_function_add"))
+            bool bReuseBuiltin = false;
+            Op->TryGetBoolField(TEXT("reuse_builtin"), bReuseBuiltin);
+            const bool bConstruction = bReuseBuiltin && Blueprint->ParentClass
+                && Blueprint->ParentClass->IsChildOf(AActor::StaticClass())
+                && Existing->GetFName() == UEdGraphSchema_K2::FN_UserConstructionScript;
+            if ((bInterface || bConstruction) && Verb == TEXT("bp_function_add"))
             {
                 return Signature == nullptr || ApplyBlueprintFunctionSignature(Existing, *Signature, OutError);
             }

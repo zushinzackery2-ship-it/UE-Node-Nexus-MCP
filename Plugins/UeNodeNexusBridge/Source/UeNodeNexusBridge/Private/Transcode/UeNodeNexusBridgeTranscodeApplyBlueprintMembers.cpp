@@ -3,6 +3,7 @@
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "Blueprint/NexusBlueprintPinTypes.h"
 #include "NexusBlueprintAssetType.h"
+#include "Blueprint/Graphs/NexusGraphSchedule.h"
 
 #include "EdGraph/EdGraph.h"
 #include "Engine/Blueprint.h"
@@ -177,6 +178,7 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
     // Declarations run before any graph verb: a node may call a function or read a
     // variable that the same plan declares later, including across graphs.
     TArray<int32> GraphOps;
+    TSet<FName> ChangedFunctions;
     bool bMembersDeclared = false;
     for (int32 Index = 0; Index < Plan.Num(); ++Index)
     {
@@ -187,6 +189,10 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
             continue;
         }
         const FString Verb = ReadOpString(Op, TEXT("op"));
+        if (Verb == TEXT("bp_function_signature_set"))
+        {
+            ChangedFunctions.Add(FName(*ReadOpString(Op, TEXT("name"))));
+        }
         if (Verb == TEXT("set_asset_prop"))
         {
             ApplyAssetProp(Blueprint, Op, Index, Context);
@@ -202,21 +208,10 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
     if (bMembersDeclared && !Context.bDryRun)
     {
         FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+        RefreshFunctionCalls(Blueprint, ChangedFunctions);
     }
     TArray<UEdGraph*> Touched;
-    for (const int32 Index : GraphOps)
-    {
-        const TSharedPtr<FJsonObject> Op = Plan[Index]->AsObject();
-        const FString GraphName = ReadOpString(Op, TEXT("graph"), TEXT("EventGraph"));
-        UEdGraph* Graph = FindBlueprintGraph(Blueprint, GraphName);
-        if (Graph == nullptr)
-        {
-            Context.Fail(Index, TEXT("graph_not_found"), FString::Printf(TEXT("graph not found: %s"), *GraphName));
-            continue;
-        }
-        Touched.AddUnique(Graph);
-        ApplyBlueprintGraphVerb(Blueprint, Graph, Op, Index, Context);
-    }
+    ApplyScheduledGraphOps(Blueprint, Plan, GraphOps, Context, Touched);
     if (Context.bChanged && !Context.bDryRun)
     {
         SettleGraphPinTypes(Touched, Context);

@@ -20,9 +20,13 @@ static TSharedPtr<FJsonObject> MakeBlueprintNodeError(const FString& Operation, 
 
 UClass* ResolveBlueprintNodeClassForCreate(const FString& NodeClass)
 {
-    if (UClass* Direct = LoadClass<UEdGraphNode>(nullptr, *NodeClass))
+    if (NodeClass == TEXT("EnhancedInputAction") || NodeClass == TEXT("K2Node_EnhancedInputAction"))
     {
-        return Direct->IsChildOf(UEdGraphNode::StaticClass()) ? Direct : nullptr;
+        return LoadClass<UEdGraphNode>(nullptr, TEXT("/Script/InputBlueprintNodes.K2Node_EnhancedInputAction"));
+    }
+    if (NodeClass.StartsWith(TEXT("/")))
+    {
+        return LoadClass<UEdGraphNode>(nullptr, *NodeClass);
     }
     const FString ShortName = NodeClass.StartsWith(TEXT("K2Node_")) ? NodeClass : TEXT("K2Node_") + NodeClass;
     if (UClass* K2Class = LoadClass<UEdGraphNode>(nullptr, *FString::Printf(TEXT("/Script/BlueprintGraph.%s"), *ShortName)))
@@ -97,7 +101,7 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeCreate(const FString& Operation, cons
         return MakeBlueprintNodeError(Operation, RequestId, TEXT("unknown_node_class"), FString::Printf(TEXT("Blueprint node class not found: %s"), *NodeClassName));
     }
     FString ConfigError;
-    if (!ValidateBlueprintNodeCreateConfig(NodeClass, Blueprint, Payload, ConfigError))
+    if (!ValidateBlueprintNodeCreateConfig(NodeClass, Blueprint, Graph, Payload, ConfigError))
     {
         return MakeBlueprintNodeError(Operation, RequestId, TEXT("node_config_required"), ConfigError);
     }

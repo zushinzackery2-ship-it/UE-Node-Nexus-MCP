@@ -24,12 +24,6 @@ const FProperty* ResolveStructJsonField(const UStruct* Struct, const FString& Na
     return Result;
 }
 
-static bool ValidateJsonPropertyValue(
-    const FProperty* Property,
-    const TSharedPtr<FJsonValue>& Value,
-    const FString& Path,
-    FString& OutError);
-
 static bool ValidateJsonArray(
     const FProperty* ElementProperty,
     const TSharedPtr<FJsonValue>& Value,
@@ -52,7 +46,7 @@ static bool ValidateJsonArray(
     return true;
 }
 
-static bool ValidateJsonPropertyValue(
+bool ValidateJsonPropertyValue(
     const FProperty* Property,
     const TSharedPtr<FJsonValue>& Value,
     const FString& Path,

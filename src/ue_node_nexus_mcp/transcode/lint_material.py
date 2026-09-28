@@ -8,7 +8,7 @@ from .errors import DiagnosticSink
 from .model import Decl, Document, Link
 from .schema_lock import ClassInfo, SchemaLock
 from .values import is_boolean, is_numeric, normalize_value
-from .material.pins import expression_name, input_names, lint_previews, output_names
+from .material.pins import expression_name, function_pins, input_names, lint_previews, output_names
 
 TEXTURE_ALIASES = {"RGB": 0, "RGBA": 0, "R": 1, "G": 2, "B": 3, "A": 4}
 SYNTHETIC_PARAMS = {"NamedRerouteUsage": {"DeclarationName"}}
@@ -107,22 +107,12 @@ def check_value(name: str, value: str, prop_info: dict[str, Any], line: int, sin
         sink.error("invalid_struct", f"{name}={value!r} must be a (Field=Value,...) struct literal", line=line)
 
 
-def _function_pins(decl: Decl, schema: SchemaLock | None) -> tuple[list[str], list[str]] | None:
-    path = decl.keyed().get("MaterialFunction")
-    if not path or schema is None:
-        return None
-    record = schema.material_function(path)
-    if record is None:
-        return None
-    return [str(item.get("name", "")) for item in record.get("inputs") or []], [str(item.get("name", "")) for item in record.get("outputs") or []]
-
-
 def _lint_input_pin(link: Link, decl: Decl, info: ClassInfo | None, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
     if decl.opaque:
         return
     inputs: list[str] | None = None
-    if info is not None and info.name.endswith("MaterialFunctionCall"):
-        pins = _function_pins(decl, schema)
+    if decl.type_name.rsplit(".", 1)[-1].removeprefix("MaterialExpression") == "MaterialFunctionCall":
+        pins = function_pins(decl, schema)
         inputs = pins[0] if pins else None
     elif info is not None:
         inputs = input_names(decl, info)
@@ -153,8 +143,8 @@ def _lint_output_pin(link: Link, decl: Decl, info: ClassInfo | None, schema: Sch
     if decl.opaque:
         return
     outputs: list[str] | None = None
-    if info is not None and info.name.endswith("MaterialFunctionCall"):
-        pins = _function_pins(decl, schema)
+    if decl.type_name.rsplit(".", 1)[-1].removeprefix("MaterialExpression") == "MaterialFunctionCall":
+        pins = function_pins(decl, schema)
         outputs = pins[1] if pins else None
     elif info is not None:
         outputs = output_names(decl, info)

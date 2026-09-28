@@ -1,5 +1,8 @@
 #include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 #include "Blueprint/Variables/NexusBlueprintLocalVariables.h"
+#include "Blueprint/Properties/NexusBlueprintNodeProperties.h"
+#include "Blueprint/Input/NexusEnhancedInputBinding.h"
+#include "Blueprint/Animation/NexusTransitionGetterBinding.h"
 
 #include "Dom/JsonObject.h"
 #include "EdGraph/EdGraphNode.h"
@@ -8,10 +11,12 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
+#include "K2Node_EnhancedInputAction.h"
 #include "K2Node_InputAction.h"
 #include "K2Node_InputAxisEvent.h"
 #include "K2Node_InputKey.h"
 #include "K2Node_Variable.h"
+#include "K2Node_TransitionRuleGetter.h"
 #include "Engine/Blueprint.h"
 #include "Engine/SCS_Node.h"
 #include "UeNodeNexusBridgeBlueprintNodeCreateFields.h"
@@ -207,6 +212,15 @@ static bool ConfigureCustomEventNode(UK2Node_CustomEvent* Node, const TSharedPtr
 
 bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
+    if (auto* Getter = Cast<UK2Node_TransitionRuleGetter>(Node))
+    {
+        return ConfigureTransitionGetter(Getter, Node->GetGraph(), Payload, false, OutError)
+            && ConfigureBlueprintNodeProperties(Node, Payload, false, OutError);
+    }
+    if (UK2Node_EnhancedInputAction* Input = Cast<UK2Node_EnhancedInputAction>(Node))
+    {
+        return ConfigureEnhancedInputAction(Input, Payload, false, OutError);
+    }
     if (UK2Node_Variable* VariableNode = Cast<UK2Node_Variable>(Node))
     {
         return ConfigureVariableNode(VariableNode, Blueprint, Payload, OutError);
@@ -235,6 +249,6 @@ bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, UBlueprint* Blueprint, co
     {
         return ConfigureGenericEventNode(EventNode, Payload, OutError);
     }
-    return true;
+    return ConfigureBlueprintNodeProperties(Node, Payload, false, OutError);
 }
 }

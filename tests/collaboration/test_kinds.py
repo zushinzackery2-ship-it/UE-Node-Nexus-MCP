@@ -178,6 +178,7 @@ def test_blueprint_class_method_dependency_survives_collaboration_preflight(tmp_
     asset = next(iter(snapshots))
     target = "/Game/Blueprints/BP_Door.BP_Door_C.TakeDamage"
     retext(workspace, asset, "self.TakeDamage", target)
+    retext(workspace, asset, "Health  : float = 100", "Health  : float = 55")
 
     candidate = candidate_of(workspace, asset)
     entries = workspace.history.entries(root)

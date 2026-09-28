@@ -128,3 +128,6 @@ EndministratorPBR/
 Issues.md
 tests/review/
 tests/compile_check/build_issues.bat
+tests/compile_check/build_local.bat
+tests/compile_check/sync_client.py
+tests/issues/receipt_differences.py

@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "Schema/NexusSchema.h"
 #include "Properties/NexusPropertyText.h"
+#include "Properties/NexusValueSchema.h"
 
 #include "UObject/Class.h"
 #include "UObject/TextProperty.h"
@@ -13,7 +14,8 @@ bool IsEditableProperty(const FProperty* Property)
 {
     return Property != nullptr
         && Property->HasAnyPropertyFlags(CPF_Edit)
-        && !Property->HasAnyPropertyFlags(CPF_EditConst | CPF_Deprecated);
+        && !Property->HasAnyPropertyFlags(CPF_EditConst | CPF_Deprecated)
+        && !Property->HasMetaData(TEXT("DeprecatedProperty"));
 }
 
 static UEnum* PropertyEnum(FProperty* Property)
@@ -120,6 +122,7 @@ TArray<TSharedPtr<FJsonValue>> ExportEditableProps(UObject* Object, UObject* Def
         TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
         Json->SetStringField(TEXT("name"), Property->GetName());
         Json->SetStringField(TEXT("type"), Property->GetCPPType());
+        Json->SetObjectField(TEXT("value_schema"), ValueSchema(Property));
         Json->SetStringField(TEXT("value"), ExportPropertyValue(Object, Property));
         if (Defaults != nullptr && Defaults->GetClass()->IsChildOf(Property->GetOwnerClass()))
         {
@@ -199,6 +202,7 @@ TSharedPtr<FJsonObject> PropertySchemaJson(FProperty* Property, UObject* Cdo)
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     Json->SetStringField(TEXT("type"), Property->GetCPPType());
+    Json->SetObjectField(TEXT("value_schema"), ValueSchema(Property));
     Json->SetStringField(TEXT("kind"), PropertyKind(Property));
     if (Cdo != nullptr && Cdo->GetClass()->IsChildOf(Property->GetOwnerClass()))
     {

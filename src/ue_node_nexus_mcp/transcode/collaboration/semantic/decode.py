@@ -6,7 +6,7 @@ from ...model import Bare, Decl, Document, Header, Link, Prop, Section
 from .values import render
 
 
-def to_document(snapshot: dict) -> Document:
+def to_document(snapshot: dict, *, include_defaults=False) -> Document:
     semantic = snapshot["semantic"]
     head = semantic["header"]
     document = Document(Header(nexus=head["nexus"], asset=head["asset"], cls=head["cls"], schema=snapshot.get("schema_key", ""), extra=dict(head.get("extra", dict()))))
@@ -16,7 +16,7 @@ def to_document(snapshot: dict) -> Document:
     for scope, item in semantic["sections"].items():
         section = Section(item["name"], aliases.get(item.get("owner"), item["args"]), line=locations.get("@section:" + scope, 0))
         section.entries.extend(Prop(key, text, type_name=field.get("type"), line=locations.get("@prop:" + scope + ":" + key, section.line))
-                               for key, field in item["props"].items() if (text := render_field(field, aliases)) is not None)
+                               for key, field in item["props"].items() if (text := render_field(field, aliases, include_defaults)) is not None)
         entities = item["entities"]
         order = item.get("order", list(entities))
         ordered = set(order)
@@ -24,8 +24,8 @@ def to_document(snapshot: dict) -> Document:
         for identifier in order:
             entity = entities[identifier]
             args = [(None, render_field(field, aliases)) for field in entity["positional"]]
-            args.extend((key, text) for key, field in entity["args"].items() if (text := render_field(field, aliases)) is not None)
-            props = [(key, render_field(field, aliases)) for key, field in entity["props"].items() if field.get("state") != "default"]
+            args.extend((key, text) for key, field in entity["args"].items() if (text := render_field(field, aliases, include_defaults)) is not None)
+            props = [(key, render_field(field, aliases, include_defaults)) for key, field in entity["props"].items() if include_defaults or field.get("state") != "default"]
             binding = bindings.get(identifier, dict())
             meta = dict(binding.get("meta", dict()), semantic_id=identifier)
             if binding.get("physical"):
@@ -44,7 +44,9 @@ def to_document(snapshot: dict) -> Document:
     return document
 
 
-def render_field(field: dict, aliases: dict) -> str | None:
+def render_field(field: dict, aliases: dict, include_defaults=False) -> str | None:
+    if include_defaults and field.get("state") == "default":
+        return field.get("value")
     return aliases.get(field["ref"], field["ref"]) if "ref" in field else render(field)
 
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from .bp_signature import FunctionSignature, parse_signature
 from .bp_types import join_type_text, parse_type_text
-from .blueprint.members import declarations_first, diff_members
+from .blueprint.component_order import ordered_components
+from .blueprint.members import declarations_first, diff_members, interface_changed
+from .blueprint.node_ids import existing_node_ids
 from .diff_common import diff_brace_props, diff_prop_section, match_renamed, same_class
 from .diff_graph import diff_graph_section
 from .lexer import LexError
@@ -15,6 +17,7 @@ from .values import values_equal
 
 
 def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, schema: SchemaLock | None = None) -> None:
+    plan.ids = existing_node_ids(base, plan.ids)
     diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
     _diff_variables(local.section("variables"), base.section("variables") if base else None, plan)
     _diff_components(local.section("components"), base.section("components") if base else None, plan, schema)
@@ -22,6 +25,7 @@ def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, sche
     diff_members(local, base, plan)
     _diff_graphs(local, base, plan, schema)
     declarations_first(plan)
+    plan.interface_changed = interface_changed(plan)
 
 
 def _variable_payload(decl: Decl) -> dict[str, object]:
@@ -87,7 +91,7 @@ def _diff_components(local: Section | None, base: Section | None, plan: AssetPla
                 plan.error("unsupported_edit", f"inherited component {name!r} cannot be removed from text", None)
             else:
                 plan.add("bp_component_remove", name=name)
-    for name, decl in local_decls.items():
+    for name, decl in ordered_components(local_decls, plan):
         before = base_decls.get(renames.get(name, name))
         keyed = decl.keyed()
         if before is None:
@@ -140,7 +144,10 @@ def _diff_graphs(local: Document, base: Document | None, plan: AssetPlan, schema
         local_names.add(signature.name)
         before = base_functions.get(signature.name)
         if before is None:
-            plan.add("bp_function_add", line=section.line, name=signature.name, signature=signature.to_raw())
+            if base is None and signature.name == "UserConstructionScript":
+                plan.add("bp_function_add", line=section.line, name=signature.name, signature=signature.to_raw(), reuse_builtin=True)
+            else:
+                plan.add("bp_function_add", line=section.line, name=signature.name, signature=signature.to_raw())
             _diff_locals(section, None, signature.name, plan)
             diff_graph_section(section, None, plan, "blueprint", graph=signature.name, schema=schema)
             continue

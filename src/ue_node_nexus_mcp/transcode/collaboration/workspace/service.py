@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from ...sync_project import SyncError
+from ...material.interfaces import tree as interface_tree
 from ..history import History
 from ..semantic.snapshot import text_of
 from ..semantic.validation import validate
@@ -94,6 +95,10 @@ class Workspace:
         return sorted(asset for asset in wanted if entries[asset] != indexed.get(asset) or (stale and entries[asset] != base.get(asset)))
 
     def accept(self, entries: dict, selected=None, code="candidate_invalid") -> None:
+        with interface_tree(self.store, entries):
+            self.accept_candidates(entries, selected, code)
+
+    def accept_candidates(self, entries, selected, code):
         for asset in self.introduced(entries, selected):
             findings = validate(self.store.objects.data(entries[asset], "snapshot"), self.schema)
             if findings:

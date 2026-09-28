@@ -2,6 +2,7 @@
 #include "Assets/NexusPackageState.h"
 
 #include "Curves/CurveBase.h"
+#include "Animation/AnimBlueprint.h"
 #include "Engine/Blueprint.h"
 #include "Engine/DataAsset.h"
 #include "HAL/FileManager.h"
@@ -171,7 +172,7 @@ FString KindForClass(const UClass* Class)
     {
         return TEXT("material_instance");
     }
-    if (Class == UBlueprint::StaticClass())
+    if (Class == UBlueprint::StaticClass() || Class == UAnimBlueprint::StaticClass())
     {
         return TEXT("blueprint");
     }

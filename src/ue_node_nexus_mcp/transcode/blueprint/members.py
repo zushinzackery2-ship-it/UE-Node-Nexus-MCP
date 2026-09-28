@@ -61,3 +61,13 @@ def declarations_first(plan) -> None:
     declarations = ("set_asset_prop", "bp_variable_", "bp_component_", "bp_default_", "bp_function_",
                     "bp_local_variable_", "bp_interface_", "bp_dispatcher_", "bp_graph_")
     plan.verbs.sort(key=lambda verb: not verb.op.startswith(declarations))
+
+
+def interface_changed(plan) -> bool:
+    structural = (
+        "bp_variable_add", "bp_variable_remove", "bp_variable_rename",
+        "bp_component_add", "bp_component_remove", "bp_component_rename",
+        "bp_function_add", "bp_function_remove", "bp_function_rename", "bp_function_signature_set",
+        "bp_graph_add")
+    return any(verb.op in structural or verb.op.startswith(("bp_interface_", "bp_dispatcher_"))
+               or (verb.op == "bp_variable_set" and "type" in verb.args) for verb in plan.verbs)

@@ -134,7 +134,7 @@ bool JsonValueToPropertyImportText(FProperty* Property, const TSharedPtr<FJsonVa
     }
 
     OutValueText = JsonValueToImportText(Value);
-    if (OutValueText.IsEmpty() && Json.IsValid())
+    if (OutValueText.IsEmpty() && (Json.IsValid() || Value->Type == EJson::Array))
     {
         OutError = TEXT("unsupported_json_object_value");
         return false;
@@ -144,6 +144,30 @@ bool JsonValueToPropertyImportText(FProperty* Property, const TSharedPtr<FJsonVa
 
 bool ConvertPropertyJsonValue(UObject* Object, FProperty* Property, void* Storage, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError)
 {
+    if (FArrayProperty* Array = CastField<FArrayProperty>(Property))
+    {
+        if (Value.IsValid() && Value->Type == EJson::Array)
+        {
+            if (!ValidateJsonPropertyValue(Property, Value, Property->GetName(), OutError))
+            {
+                return false;
+            }
+            const auto& Items = Value->AsArray();
+            FScriptArrayHelper Elements(Array, Storage);
+            Elements.EmptyAndAddValues(Items.Num());
+            for (int32 Index = 0; Index < Items.Num(); ++Index)
+            {
+                FString ElementText;
+                if (!ConvertPropertyJsonValue(Object, Array->Inner, Elements.GetRawPtr(Index), Items[Index], ElementText, OutError))
+                {
+                    OutError = FString::Printf(TEXT("%s[%d]: %s"), *Property->GetName(), Index, *OutError);
+                    return false;
+                }
+            }
+            Property->ExportTextItem_Direct(OutValueText, Storage, nullptr, Object, PPF_None);
+            return true;
+        }
+    }
     if (FStructProperty* StructProperty = CastField<FStructProperty>(Property))
     {
         const TSharedPtr<FJsonObject> Json = Value.IsValid() && Value->Type == EJson::Object

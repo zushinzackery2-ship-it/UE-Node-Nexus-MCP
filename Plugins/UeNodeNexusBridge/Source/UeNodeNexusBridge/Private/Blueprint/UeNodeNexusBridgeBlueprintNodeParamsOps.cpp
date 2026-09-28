@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeBlueprintPatchOps.h"
+#include "Blueprint/Properties/NexusBlueprintNodeProperties.h"
 
 #include "Dom/JsonValue.h"
 #include "EdGraph/EdGraph.h"
@@ -13,6 +14,8 @@
 #include "UeNodeNexusBridgeBlueprintPinDefaults.h"
 #include "UeNodeNexusBridgeGraphPatchShared.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeTranscode.h"
+#include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
 {
@@ -26,14 +29,14 @@ static TSharedPtr<FJsonObject> PinParamToJson(UEdGraphPin* Pin)
     return Param;
 }
 
-static TSharedPtr<FJsonObject> NodePropertyParamToJson(const FString& Name, const FString& Value)
+static TSharedPtr<FJsonObject> NodePropertyParamToJson(const FString& Name, const FString& Value, bool bEditable)
 {
     TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
     Param->SetStringField(TEXT("name"), Name);
     Param->SetStringField(TEXT("pin_id"), FString());
     Param->SetStringField(TEXT("default_value"), Value);
     Param->SetStringField(TEXT("source"), TEXT("node_property"));
-    Param->SetBoolField(TEXT("editable"), false);
+    Param->SetBoolField(TEXT("editable"), bEditable);
     return Param;
 }
 
@@ -47,13 +50,21 @@ TArray<TSharedPtr<FJsonValue>> BuildBlueprintNodeParams(UEdGraphNode* Node)
 
     if (UK2Node_InputAction* InputAction = Cast<UK2Node_InputAction>(Node))
     {
-        Params.Add(MakeShared<FJsonValueObject>(NodePropertyParamToJson(TEXT("InputActionName"), InputAction->InputActionName.ToString())));
+        Params.Add(MakeShared<FJsonValueObject>(NodePropertyParamToJson(TEXT("InputActionName"), InputAction->InputActionName.ToString(), false)));
     }
     for (UEdGraphPin* Pin : Node->Pins)
     {
         if (Pin != nullptr && Pin->Direction == EGPD_Input)
         {
             Params.Add(MakeShared<FJsonValueObject>(PinParamToJson(Pin)));
+        }
+    }
+    for (TFieldIterator<FProperty> It(Node->GetClass()); It; ++It)
+    {
+        if (Transcode::IsEditableProperty(*It) && !Node->FindPin(It->GetFName(), EGPD_Input))
+        {
+            Params.Add(MakeShared<FJsonValueObject>(NodePropertyParamToJson(
+                It->GetName(), Transcode::ExportPropertyValue(Node, *It), true)));
         }
     }
     return Params;
@@ -91,11 +102,23 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeParamsGet(const FString& Operation, c
     return Response;
 }
 
-static bool ApplyParamObject(UEdGraph* Graph, UEdGraphNode* Node, const FString& NodeId, const FString& Name, const TSharedPtr<FJsonValue>& Value, bool bDryRun, TSharedPtr<FJsonObject> Diff)
+static bool ApplyParamObject(UEdGraph* Graph, UEdGraphNode* Node, const FString& NodeId, const FString& Name, const TSharedPtr<FJsonValue>& Value, bool bDryRun, TSharedPtr<FJsonObject> Diff, FString& Error)
 {
     UEdGraphPin* Pin = Node->FindPin(FName(*Name), EGPD_Input);
-    if (Pin == nullptr || Pin->LinkedTo.Num() > 0)
+    if (Pin == nullptr)
     {
+        FString Before;
+        FString After;
+        if (!ApplyBlueprintNodeProperty(Node, Name, Value, bDryRun, true, Before, After, Error))
+        {
+            return false;
+        }
+        AddGraphParamChange(Diff, NodeId, Name, Before, After);
+        return true;
+    }
+    if (Pin->LinkedTo.Num() > 0)
+    {
+        Error = TEXT("input pin is connected");
         return false;
     }
 
@@ -104,6 +127,7 @@ static bool ApplyParamObject(UEdGraph* Graph, UEdGraphNode* Node, const FString&
     Wrapper->SetField(TEXT("value"), Value);
     if (!ReadJsonScalarAsString(Wrapper, TEXT("value"), ValueString))
     {
+        Error = TEXT("input pin requires a scalar value");
         return false;
     }
 
@@ -142,6 +166,15 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeParamsSet(const FString& Operation, c
     TSharedPtr<FJsonObject> Diff = MakeEmptyDiff();
     TArray<TSharedPtr<FJsonValue>> Diagnostics;
     bool bChanged = false;
+    for (const auto& Pair : (*Params)->Values)
+    {
+        FString Error;
+        if (!ApplyParamObject(Graph, Node, NodeId, Pair.Key, Pair.Value, true, Diff, Error))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("param_write_failed"), Pair.Key + TEXT(": ") + Error);
+        }
+    }
+    Diff = MakeEmptyDiff();
     TUniquePtr<FScopedTransaction> Transaction;
     if (!bDryRun)
     {
@@ -152,9 +185,10 @@ TSharedPtr<FJsonObject> HandleBlueprintNodeParamsSet(const FString& Operation, c
 
     for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Params)->Values)
     {
-        if (!ApplyParamObject(Graph, Node, NodeId, Pair.Key, Pair.Value, bDryRun, Diff))
+        FString Error;
+        if (!ApplyParamObject(Graph, Node, NodeId, Pair.Key, Pair.Value, bDryRun, Diff, Error))
         {
-            Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_write_failed"), FString::Printf(TEXT("Blueprint pin parameter failed: %s"), *Pair.Key), Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
+            Diagnostics.Add(MakeShared<FJsonValueObject>(MakeDiagnostic(TEXT("error"), TEXT("param_write_failed"), Pair.Key + TEXT(": ") + Error, Blueprint->GetPathName(), TEXT("UeNodeNexusBridge"))));
             continue;
         }
         bChanged = true;

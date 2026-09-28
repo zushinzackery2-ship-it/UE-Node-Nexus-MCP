@@ -14,7 +14,7 @@ KIND_CLASS = {
     "material": ("Material",),
     "material_function": ("MaterialFunction",),
     "material_instance": ("MaterialInstanceConstant",),
-    "blueprint": ("Blueprint",),
+    "blueprint": ("Blueprint", "AnimBlueprint"),
     "niagara_system": ("NiagaraSystem",),
     "niagara_emitter": ("NiagaraEmitter",),
 }

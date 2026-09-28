@@ -47,7 +47,7 @@ def entity_fields(operation, expected, actual):
     if verb == "set_node_enabled":
         return differences(expected["flags"], actual["flags"], ("flags",))
     fields = ["type", "positional", "args", "props"]
-    if expected["default"].get("state") != "missing":
+    if expected["default"].get("state") != "missing" or verb.startswith(("bp_variable_", "bp_local_variable_")):
         fields.append("default")
     if expected.get("position") is not None:
         fields.append("position")
@@ -61,14 +61,14 @@ def property_result(operation, actual):
         section = operation.get("section", operation.get("kind", ""))
     fields = actual["semantic"]["sections"].get(section + ":", dict()).get("props", dict())
     field = fields.get(name)
-    if field is None:
-        rows = actual.get("raw", dict()).get("props", []) if section == "asset" else []
-        if section == "defaults":
-            rows = actual.get("raw", dict()).get("blueprint", dict()).get("defaults", [])
-        native = next((row for row in rows if row.get("name") == name), None)
-        if native:
-            field = value(native.get("value"), native.get("type", "text"))
-    expected = value(operation.get("value"), (field or dict()).get("type", "text"))
+    rows = actual.get("raw", dict()).get("props", []) if section == "asset" else []
+    if section == "defaults":
+        rows = actual.get("raw", dict()).get("blueprint", dict()).get("defaults", [])
+    native = next((row for row in rows if row.get("name") == name), None)
+    contract = (native or dict()).get("value_schema") or (native or field or dict()).get("type", "text")
+    if native:
+        field = value(native.get("value"), contract)
+    expected = value(operation.get("value"), contract)
     return differences(expected, field, (section, name))
 
 

@@ -4,7 +4,8 @@ import re
 
 from ..errors import DiagnosticSink
 from ..model import Decl, Section
-from ..schema_lock import ClassInfo
+from ..schema_lock import ClassInfo, SchemaLock
+from .interfaces import lookup
 
 _CUSTOM_INPUT_NAME = re.compile(r'InputName\s*=\s*"([^\"]+)"')
 _CUSTOM_OUTPUT_NAME = re.compile(r'OutputName\s*=\s*"([^\"]+)"')
@@ -54,23 +55,40 @@ def output_names(decl: Decl, info: ClassInfo) -> list[str]:
     return info.outputs
 
 
+def function_pins(decl: Decl, schema: SchemaLock | None) -> tuple[list[str], list[str]] | None:
+    path = decl.keyed().get("MaterialFunction")
+    record = lookup(path) if path else None
+    if record is None:
+        record = schema.material_function(path) if path and schema else None
+    if record is None:
+        return None
+    return tuple([str(item.get("name", "")) for item in record.get(field) or []]
+                 for field in ("inputs", "outputs"))
+
+
 def canonical_pin(decl, name, direction, metadata, schema=None):
     """One semantic spelling for omitted pins, reflected names and indices."""
     info = schema.resolve_class("material_expression", decl.type_name) if schema and decl and not decl.opaque else None
     field = "outputs" if direction == "out" else "inputs"
     names = metadata.get(field, [])
-    if info:
+    is_function = decl is not None and decl.type_name.rsplit(".", 1)[-1].removeprefix("MaterialExpression") == "MaterialFunctionCall"
+    if is_function:
+        signature = function_pins(decl, schema)
+        if signature is not None:
+            names = signature[1 if direction == "out" else 0]
+    elif info:
         reflected = output_names(decl, info) if direction == "out" else input_names(decl, info)
-        # Function calls get their signature from the referenced asset, not CDO.
         names = reflected or names
     text = "0" if name is None else str(name).strip()
     lowered = text.lower()
     lowered_names = [str(item).lower() for item in names]
     index = int(text) if text.isdigit() else lowered_names.index(lowered) if lowered in lowered_names else None
+    if index is None and direction == "in" and len(names) == 1 and lowered in ("a", "in", "input"):
+        index = 0
     if index is None and direction == "out":
         if len(names) in (4, 5) and not any(names):
             index = _CHANNELS.get(lowered)
-        elif len(names) <= 1 and lowered in _SINGLE_OUTPUTS:
+        elif len(names) <= 1 and lowered in _SINGLE_OUTPUTS and (not is_function or names):
             index = 0
     if index is None:
         return text
@@ -90,5 +108,5 @@ def lint_previews(graph: Section, infos: dict[str, ClassInfo | None], sink: Diag
         metadata = info.prop("InputType") if info else None
         default = str((metadata or dict()).get("default", ""))
         kind = decl.keyed().get("InputType", default).rsplit("::", 1)[-1].removeprefix("FunctionInput_")
-        if kind in _TEXTURE_INPUTS and decl.id not in connected:
+        if kind in (_TEXTURE_INPUTS | {"StaticBool"}) and decl.id not in connected:
             sink.error("missing_preview_connection", f"{decl.id} ({kind}) requires a Preview connection", line=decl.line)

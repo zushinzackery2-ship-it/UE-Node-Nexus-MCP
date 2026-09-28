@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeOperations.h"
 
 #include "AnimGraphNode_StateMachineBase.h"
+#include "Blueprint/Graphs/NexusBlueprintGraphSelectors.h"
 #include "AnimGraphNode_TransitionResult.h"
 #include "AnimStateEntryNode.h"
 #include "AnimStateNodeBase.h"
@@ -83,7 +84,7 @@ TSharedPtr<FJsonValue> MakeStateRow(UAnimStateNodeBase* State)
 {
     TArray<TSharedPtr<FJsonValue>> Row;
     Row.Add(MakeShared<FJsonValueString>(StateName(State)));
-    Row.Add(MakeShared<FJsonValueString>(State->GetBoundGraph() ? State->GetBoundGraph()->GetName() : FString()));
+    Row.Add(MakeShared<FJsonValueString>(BlueprintGraphSelector(State->GetBoundGraph())));
     Row.Add(MakeShared<FJsonValueNumber>(State->NodePosX));
     Row.Add(MakeShared<FJsonValueNumber>(State->NodePosY));
     return MakeShared<FJsonValueArray>(Row);
@@ -95,7 +96,7 @@ TSharedPtr<FJsonObject> MakeStateObject(UAnimStateNodeBase* State)
     Json->SetStringField(TEXT("id"), State->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
     Json->SetStringField(TEXT("name"), StateName(State));
     Json->SetStringField(TEXT("class"), State->GetClass()->GetName());
-    Json->SetStringField(TEXT("bound_graph"), State->GetBoundGraph() ? State->GetBoundGraph()->GetName() : FString());
+    Json->SetStringField(TEXT("bound_graph"), BlueprintGraphSelector(State->GetBoundGraph()));
     Json->SetNumberField(TEXT("x"), State->NodePosX);
     Json->SetNumberField(TEXT("y"), State->NodePosY);
     return Json;
@@ -118,7 +119,7 @@ TSharedPtr<FJsonObject> MakeTransitionObject(UAnimStateTransitionNode* Transitio
     Json->SetStringField(TEXT("from"), StateName(Transition->GetPreviousState()));
     Json->SetStringField(TEXT("to"), StateName(Transition->GetNextState()));
     Json->SetStringField(TEXT("rule"), TransitionRuleSummary(Transition));
-    Json->SetStringField(TEXT("rule_graph"), Transition->GetBoundGraph() ? Transition->GetBoundGraph()->GetName() : FString());
+    Json->SetStringField(TEXT("rule_graph"), BlueprintGraphSelector(Transition->GetBoundGraph()));
     Json->SetStringField(TEXT("blend"), TransitionBlendSummary(Transition));
     return Json;
 }
@@ -137,7 +138,7 @@ TSharedPtr<FJsonObject> MakeStateMachineObject(UAnimGraphNode_StateMachineBase* 
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     UAnimationStateMachineGraph* Graph = MachineNode->EditorStateMachineGraph;
     Json->SetStringField(TEXT("name"), MachineNode->GetNodeTitle(ENodeTitleType::ListView).ToString());
-    Json->SetStringField(TEXT("graph"), Graph ? Graph->GetName() : FString());
+    Json->SetStringField(TEXT("graph"), BlueprintGraphSelector(Graph));
     Json->SetStringField(TEXT("entry_state"), EntryStateName(Graph));
 
     TArray<TSharedPtr<FJsonValue>> States;

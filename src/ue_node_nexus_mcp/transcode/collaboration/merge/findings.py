@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..semantic.validation import validate
+from ...material.interfaces import tree as interface_tree
 from ..store.io import digest
 from .engine import at, shown, wire
 from .resolutions import resolve_tree
@@ -13,6 +14,10 @@ class Findings:
         self.history, self.store, self.schema = history, history.store, schema
 
     def check_tree(self, session: dict, tree: str, layer: str, inputs: tuple, conflicts: list[dict], all_conflicts: list[dict]) -> str:
+        with interface_tree(self.store, self.history.entries(tree)):
+            return self.check_candidates(session, tree, layer, inputs, conflicts, all_conflicts)
+
+    def check_candidates(self, session, tree, layer, inputs, conflicts, all_conflicts):
         """Findings on the states this layer created, and on nothing else.
 
         A state that either input already recorded is history, not something this
@@ -52,7 +57,8 @@ class Findings:
         """Whether the decision left the finding it answered still standing."""
         updated_id = self.history.entries(tree).get(asset)
         updated = self.store.objects.data(updated_id, "snapshot") if updated_id else None
-        remaining = validate(updated, self.schema) if updated else []
+        with interface_tree(self.store, self.history.entries(tree)):
+            remaining = validate(updated, self.schema) if updated else []
         return any(issue["path"] == entry["path"] and issue["conflict_type"] == entry["conflict_type"] for entry in remaining)
 
 

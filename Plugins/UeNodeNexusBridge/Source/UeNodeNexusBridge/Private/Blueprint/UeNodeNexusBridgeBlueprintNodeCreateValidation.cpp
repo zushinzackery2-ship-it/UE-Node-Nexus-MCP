@@ -1,15 +1,20 @@
 #include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 #include "Blueprint/Variables/NexusBlueprintLocalVariables.h"
-#include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
+#include "Blueprint/Properties/NexusBlueprintNodeProperties.h"
+#include "Blueprint/Input/NexusEnhancedInputBinding.h"
+#include "Blueprint/Animation/NexusTransitionGetterBinding.h"
 
 #include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "Dom/JsonObject.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
+#include "K2Node_EnhancedInputAction.h"
 #include "K2Node_InputAction.h"
 #include "K2Node_InputAxisEvent.h"
 #include "K2Node_InputKey.h"
 #include "K2Node_Variable.h"
+#include "K2Node_TransitionRuleGetter.h"
 #include "UeNodeNexusBridgeBlueprintNodeCreateFields.h"
 
 namespace UeNodeNexusBridge
@@ -17,9 +22,21 @@ namespace UeNodeNexusBridge
 bool ValidateBlueprintNodeCreateConfig(
     UClass*& NodeClass,
     UBlueprint* Blueprint,
+    UEdGraph* Graph,
     const TSharedPtr<FJsonObject>& Payload,
     FString& OutError)
 {
+    if (NodeClass->IsChildOf(UK2Node_TransitionRuleGetter::StaticClass()))
+    {
+        auto* Getter = NodeClass->GetDefaultObject<UK2Node_TransitionRuleGetter>();
+        return ConfigureTransitionGetter(Getter, Graph,
+            Payload, true, OutError) && ConfigureBlueprintNodeProperties(Getter, Payload, true, OutError);
+    }
+    if (NodeClass->IsChildOf(UK2Node_EnhancedInputAction::StaticClass()))
+    {
+        return ConfigureEnhancedInputAction(NodeClass->GetDefaultObject<UK2Node_EnhancedInputAction>(),
+            Payload, true, OutError);
+    }
     if (NodeClass->IsChildOf(UK2Node_Variable::StaticClass()))
     {
         FString VariableName;
@@ -28,7 +45,6 @@ bool ValidateBlueprintNodeCreateConfig(
             OutError = TEXT("variable_name is required for K2Node_VariableGet/K2Node_VariableSet");
             return false;
         }
-        UEdGraph* Graph = ResolveBlueprintNodeInterfaceGraph(Blueprint, Payload);
         if (FindBlueprintLocalVariable(Graph, FName(*VariableName)) == nullptr && !BlueprintVariableExists(Blueprint, VariableName))
         {
             OutError = FString::Printf(
@@ -110,6 +126,14 @@ bool ValidateBlueprintNodeCreateConfig(
             return false;
         }
     }
-    return true;
+    const bool bSpecialized = NodeClass->IsChildOf(UK2Node_Variable::StaticClass())
+        || NodeClass->IsChildOf(UK2Node_CallFunction::StaticClass())
+        || NodeClass->IsChildOf(UK2Node_InputKey::StaticClass())
+        || NodeClass->IsChildOf(UK2Node_InputAction::StaticClass())
+        || NodeClass->IsChildOf(UK2Node_InputAxisEvent::StaticClass())
+        || NodeClass->IsChildOf(UK2Node_CustomEvent::StaticClass())
+        || NodeClass->IsChildOf(UK2Node_Event::StaticClass());
+    return bSpecialized || ConfigureBlueprintNodeProperties(
+        CastChecked<UEdGraphNode>(NodeClass->GetDefaultObject()), Payload, true, OutError);
 }
 }

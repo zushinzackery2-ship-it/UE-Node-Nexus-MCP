@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from ...sync_project import SyncError
+from ...material.interfaces import tree as interface_tree
+from ..semantic.validation import validate
+from .findings import finding
 from ..history import History
 from ..semantic.snapshot import rebind
 from ..store.io import digest
@@ -31,6 +34,7 @@ def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None
     trees = [history.entries(item) for item in (base, ours, theirs)]
     result = dict(trees[1])
     conflicts = []
+    changed = []
     assets = set(selected) if selected is not None else trees[0].keys() | trees[1].keys() | trees[2].keys()
     for asset in sorted(assets):
         identifiers = [tree.get(asset) for tree in trees]
@@ -43,17 +47,23 @@ def merge_trees(history: History, base: str, ours: str, theirs: str, schema=None
                 result.pop(asset, None)
             continue
         snapshots, identifiers, unreadable = aligned(history, identifiers, schema)
-        merged = merge_snapshots(*snapshots, schema)
+        merged = merge_snapshots(*snapshots, schema, validate_candidate=False)
         if merged.candidate is None:
             result.pop(asset, None)
         else:
             result[asset] = history.store.snapshot(merged.candidate, schema)
+            changed.append(asset)
         for item in merged.conflicts:
             item.update(asset=asset, layer=layer, kind=(snapshots[1] or snapshots[2])["semantic"]["kind"], snapshots=identifiers)
             item["conflict_id"] = digest(dict(layer=layer, inputs=identifiers, id=item["conflict_id"]))[:24]
             if unreadable and item["conflict_type"] == "history_schema_conflict":
                 item["reason"] += f"; re-reading under the current schema failed ({unreadable})"
             conflicts.append(item)
+    with interface_tree(history.store, result):
+        for asset in changed:
+            snapshot = history.store.objects.data(result[asset], "snapshot")
+            for issue in validate(snapshot, schema):
+                conflicts.append(finding(layer, asset, snapshot, result[asset], issue))
     return history.tree(result), conflicts
 
 

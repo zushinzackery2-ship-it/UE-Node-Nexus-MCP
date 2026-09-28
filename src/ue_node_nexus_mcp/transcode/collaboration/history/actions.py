@@ -100,10 +100,16 @@ def restore(workspace, revision: str, paths=None, destination="files", entity: s
             candidate["bindings"].update(desired["bindings"])
             candidate["semantic_hash"] = digest(candidate["semantic"])
             desired = candidate
-        findings = validate(desired, workspace.schema)
-        if findings:
-            raise SyncError("history_schema_conflict", "restored state fails current semantic constraints", dict(asset=asset, diagnostics=findings))
         current[asset] = workspace.snapshot(desired)
+    from ...material.interfaces import tree as interface_tree
+
+    with interface_tree(store, current):
+        for asset in selected:
+            if asset not in current:
+                continue
+            findings = validate(store.objects.data(current[asset], "snapshot"), workspace.schema)
+            if findings:
+                raise SyncError("history_schema_conflict", "restored state fails current semantic constraints", dict(asset=asset, diagnostics=findings))
     tree = history.tree(current)
     if destination == "index":
         workspace.persist(dict(workspace.state, index=tree, files=files))

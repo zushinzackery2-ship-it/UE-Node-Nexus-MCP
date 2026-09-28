@@ -80,6 +80,8 @@ def node_pins(decl, document, section, schema=None, metadata=None) -> list:
         return [pin("execute", "in"), *[pin(f"then_{index}", "out") for index in range(int(count) if count.isdigit() else 2)]]
     if name in ("Event", "CustomEvent", "FunctionEntry"):
         return [pin("then", "out")]
+    if name == "EnhancedInputAction":
+        return [pin(event, "out") for event in ("Started", "Ongoing", "Triggered", "Canceled", "Completed")]
     if name in ("FunctionResult", "VariableSet"):
         return [pin("execute", "in"), *([pin("then", "out")] if name == "VariableSet" else [])]
     if name in ("DynamicCast", "ClassDynamicCast"):

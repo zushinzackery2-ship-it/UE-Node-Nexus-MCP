@@ -2,8 +2,10 @@
 #include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "Blueprint/NexusBlueprintVariableType.h"
+#include "Blueprint/Components/NexusNativeComponentTemplates.h"
 
 #include "Components/ActorComponent.h"
+#include "Components/SceneComponent.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "Engine/SCS_Node.h"
@@ -92,7 +94,7 @@ USCS_Node* FindComponentNode(UBlueprint* Blueprint, const FString& Name)
     return Scs ? Scs->FindSCSNode(FName(*Name)) : nullptr;
 }
 
-bool AttachComponentNode(UBlueprint* Blueprint, USCS_Node* Node, const FString& Parent, const FString& Socket)
+bool AttachComponentNode(UBlueprint* Blueprint, USCS_Node* Node, const FString& Parent, const FString& Socket, FString& OutError)
 {
     USimpleConstructionScript* Scs = Blueprint->SimpleConstructionScript;
     if (USCS_Node* ParentNode = Scs->FindSCSNode(FName(*Parent)))
@@ -111,6 +113,11 @@ bool AttachComponentNode(UBlueprint* Blueprint, USCS_Node* Node, const FString& 
     }
     else
     {
+        if (Cast<USceneComponent>(FindNativeComponentTemplate(Blueprint, FName(*Parent))) == nullptr)
+        {
+            OutError = FString::Printf(TEXT("scene component parent not found: %s"), *Parent);
+            return false;
+        }
         Scs->AddNode(Node);
         Node->bIsParentComponentNative = true;
         Node->ParentComponentOrVariableName = FName(*Parent);
@@ -193,9 +200,16 @@ bool ApplyComponentVerb(UBlueprint* Blueprint, const FString& Verb, const TShare
             return false;
         }
         USCS_Node* Node = Scs->CreateNode(Class, FName(*Name));
-        return AttachComponentNode(Blueprint, Node, ReadOpString(Op, TEXT("parent")), ReadOpString(Op, TEXT("socket")));
+        return AttachComponentNode(Blueprint, Node, ReadOpString(Op, TEXT("parent")), ReadOpString(Op, TEXT("socket")), OutError);
     }
     USCS_Node* Node = FindComponentNode(Blueprint, Verb == TEXT("bp_component_rename") ? ReadOpString(Op, TEXT("old")) : Name);
+    if (Node == nullptr && Verb == TEXT("bp_component_set_prop"))
+    {
+        if (UActorComponent* Template = FindNativeComponentTemplate(Blueprint, FName(*Name)))
+        {
+            return ImportPropertyValue(Template, ReadOpString(Op, TEXT("prop")), ReadOpString(Op, TEXT("value")), OutError);
+        }
+    }
     if (Node == nullptr)
     {
         OutError = FString::Printf(TEXT("component not found in this Blueprint's construction script: %s (inherited components are read-only here)"), *Name);
@@ -226,7 +240,7 @@ bool ApplyComponentVerb(UBlueprint* Blueprint, const FString& Verb, const TShare
         {
             Scs->RemoveNode(Node, false);
         }
-        return AttachComponentNode(Blueprint, Node, ReadOpString(Op, TEXT("parent")), ReadOpString(Op, TEXT("socket")));
+        return AttachComponentNode(Blueprint, Node, ReadOpString(Op, TEXT("parent")), ReadOpString(Op, TEXT("socket")), OutError);
     }
     if (Verb == TEXT("bp_component_rename"))
     {

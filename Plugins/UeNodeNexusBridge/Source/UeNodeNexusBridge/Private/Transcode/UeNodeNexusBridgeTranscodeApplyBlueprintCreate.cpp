@@ -90,10 +90,6 @@ bool ConfigureSpecialNode(UBlueprint* Blueprint, UEdGraphNode* Node, const TShar
         Variable->VariableReference.SetExternalMember(FName(*ReadOpString(Config, TEXT("variable_name"))), Owner);
         return true;
     }
-    if (Node->GetClass()->GetName() == TEXT("K2Node_EnhancedInputAction"))
-    {
-        return ImportPropertyValue(Node, TEXT("InputAction"), ReadOpString(Config, TEXT("input_action")), OutError);
-    }
     return ConfigureCreatedBlueprintNode(Node, Blueprint, Config, OutError);
 }
 

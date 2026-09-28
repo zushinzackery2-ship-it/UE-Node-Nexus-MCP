@@ -6,7 +6,7 @@ from ...blueprint.classes import node_name
 from ...model import Document
 from ...raw_simple import INSTANCE_TYPES
 from ...sync_project import SyncError
-from .blueprint import input_metadata, positional_values, signature, signature_contracts
+from .blueprint import declaration_default, input_metadata, positional_values, signature, signature_contracts
 from .identity import Identities
 from .links import encode_links
 from .values import field_values, value
@@ -19,7 +19,7 @@ def property_metadata(metadata: dict, schema, family: str, class_name: str) -> t
         info = schema.resolve_class(family, class_name)
         if info:
             for name, item in info.props.items():
-                types.setdefault(name, item.get("type", "text"))
+                types.setdefault(name, item.get("value_schema") or item.get("type", "text"))
                 if "default" in item:
                     defaults.setdefault(name, item["default"])
     if family == "k2node":
@@ -37,9 +37,21 @@ def family_for(kind: str, section: str) -> str:
     return "niagara_renderer" if section == "renderers" else ""
 
 
+def section_types(section, document, schema, raw):
+    info = schema.resolve_class("asset", document.header.cls) if schema and section.name == "asset" else None
+    types = dict((name, item.get("value_schema") or item.get("type")) for name, item in info.props.items()) if info else dict()
+    rows = raw.get("props", []) if section.name == "asset" else []
+    if section.name == "defaults":
+        rows = raw.get("blueprint", dict()).get("defaults", [])
+    for item in rows:
+        types[item["name"]] = item.get("value_schema") or item.get("type", "text")
+    return types
+
+
 def encode(document: Document, kind: str, previous: dict | None, namespace: str, schema=None, *, raw=None) -> tuple[dict, dict, dict]:
     identities = Identities(previous, namespace, document.header.asset)
-    contracts = signature_contracts(raw if raw is not None else (previous or dict()).get("raw"))
+    evidence = raw if raw is not None else (previous or dict()).get("raw", dict())
+    contracts = signature_contracts(evidence)
     sections, locations, scopes = dict(), dict(), dict()
     for section in document.sections:
         scope = identities.scope(section)
@@ -57,7 +69,7 @@ def encode(document: Document, kind: str, previous: dict | None, namespace: str,
             identifier, metadata = identities.entity(scope, decl)
             aliases[decl.id] = identifier
             old = before.get("entities", dict()).get(identifier, dict())
-            family = family_for(kind, section.name)
+            family = "" if decl.modifier == "local" else family_for(kind, section.name)
             types, defaults = property_metadata(metadata, schema, family, decl.type_name)
             class_name = node_name(decl.type_name) if family == "k2node" else decl.type_name
             # A declaration's named arguments and property block are different
@@ -65,18 +77,17 @@ def encode(document: Document, kind: str, previous: dict | None, namespace: str,
             prop_style = section.name in ("components", "actors", "instances", "renderers")
             # Host spellings of one call are one state; the bridge picks the host.
             entities[identifier] = dict(alias=decl.id, type=class_name,
-                positional=[value(text) for text in positional_values(decl, family)],
+                positional=[value(text) for text in positional_values(decl, family, metadata)],
                 args=field_values(decl.keyed(), types, dict() if prop_style else defaults, old.get("args")),
                 props=field_values(decl.prop_map(), types, defaults if prop_style else dict(), old.get("props")),
-                default=value(decl.default, class_name), position=list(decl.pos) if decl.pos else None,
+                default=declaration_default(decl, kind, section.name, class_name), position=list(decl.pos) if decl.pos else None,
                 flags=dict.fromkeys(decl.flags, True), annotations=dict(decl.annotations), modifier=decl.modifier)
             if decl.opaque:
                 entities[identifier]["opaque"] = metadata.get("t3d", old.get("opaque", ""))
             locations[identifier] = decl.line
         section_type = INSTANCE_TYPES.get(section.name) if kind == "material_instance" else None
-        asset_info = schema.resolve_class("asset", document.header.cls) if schema and section.name == "asset" else None
-        asset_types = dict((name, item.get("type")) for name, item in asset_info.props.items()) if asset_info else dict()
-        props = dict((prop.key, value(prop.value, prop.type_name or section_type or
+        asset_types = section_types(section, document, schema, evidence)
+        props = dict((prop.key, value(prop.value, asset_types.get(prop.key) or prop.type_name or section_type or
                       before.get("props", dict()).get(prop.key, dict()).get("type") or
                       asset_types.get(prop.key) or "text")) for prop in section.props())
         if len(props) != len(section.props()):

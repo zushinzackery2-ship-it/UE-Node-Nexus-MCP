@@ -69,8 +69,9 @@ def non_default_params(props: list[dict[str, Any]] | None) -> list[tuple[str, st
     return params
 
 
-def prop_types(props: list[dict[str, Any]] | None) -> dict[str, str]:
-    return {str(item.get("name")): str(item.get("type", "")) for item in props or [] if item.get("name")}
+def prop_types(props: list[dict[str, Any]] | None) -> dict[str, str | dict]:
+    return dict((str(item["name"]), item.get("value_schema") or str(item.get("type", "")))
+                for item in props or [] if item.get("name"))
 
 
 def prop_defaults(props: list[dict[str, Any]] | None) -> dict[str, str]:

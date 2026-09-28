@@ -1,4 +1,5 @@
 #include "UeNodeNexusCollaboration.h"
+#include "NexusBlueprintRevision.h"
 
 #include "Level/Scene/NexusSceneWorld.h"
 #include "UeNodeNexusBridgeTranscode.h"
@@ -80,7 +81,7 @@ FJson StampRaw(const FJson& Raw)
     {
         return Raw;
     }
-    const FJson Stable = MakeShared<FJsonObject>(*Raw);
+    const FJson Stable = Raw->HasField(TEXT("blueprint")) ? BlueprintRevisionState(Raw) : MakeShared<FJsonObject>(*Raw);
     for (const TCHAR* Key : { TEXT("dirty"), TEXT("saved_hash"), TEXT("exported_at"), TEXT("generated_at"), TEXT("revision"), TEXT("live_revision"), TEXT("content_revision"), TEXT("editor_epoch"), TEXT("request_token"), TEXT("apply_id") })
     {
         Stable->RemoveField(Key);

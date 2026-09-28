@@ -98,7 +98,12 @@ class Comparison:
         return self.conflict(path, base, ours, theirs)
 
 
-def merge_snapshots(base: dict | None, ours: dict | None, theirs: dict | None, schema=None) -> MergeResult:
+def merge_snapshots(base: dict | None, ours: dict | None, theirs: dict | None, schema=None, *, validate_candidate=True) -> MergeResult:
+    from ..semantic.normalization import normalize_snapshot
+
+    if ours and theirs:
+        base = normalize_snapshot(base, theirs, schema)
+        ours = normalize_snapshot(ours, theirs, schema)
     asset = (ours or theirs or base)["semantic"]["header"]["asset"]
     compare = Comparison(asset)
     inputs = [snapshot["semantic"] if snapshot else MISSING for snapshot in (base, ours, theirs)]
@@ -115,7 +120,7 @@ def merge_snapshots(base: dict | None, ours: dict | None, theirs: dict | None, s
         # Reached only when the inputs could not be re-read under one environment
         # (no schema is available, or the text no longer encodes under it).
         compare.conflict([], *inputs, "history_schema_conflict", "snapshots bind different schema environments")
-    for item in validate(candidate, schema):
+    for item in validate(candidate, schema) if validate_candidate else ():
         path = item["path"]
         compare.conflict(path, *(at(value, path) for value in inputs), item["conflict_type"], item["reason"],
                          location=dict(line=item.get("line"), col=item.get("col")))

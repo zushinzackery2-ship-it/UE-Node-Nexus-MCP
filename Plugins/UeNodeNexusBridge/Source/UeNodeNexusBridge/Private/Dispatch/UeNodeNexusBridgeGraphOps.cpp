@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeOperations.h"
 
 #include "EdGraph/EdGraph.h"
+#include "Blueprint/Graphs/NexusBlueprintGraphSelectors.h"
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
@@ -25,7 +26,10 @@ static TArray<TSharedPtr<FJsonValue>> BuildAvailableGraphs(UBlueprint* Blueprint
             continue;
         }
         TSharedPtr<FJsonObject> Entry = MakeShared<FJsonObject>();
-        Entry->SetStringField(TEXT("name"), Graph->GetName());
+        Entry->SetStringField(TEXT("name"), BlueprintGraphSelector(Graph));
+        Entry->SetStringField(TEXT("display_name"), Graph->GetName());
+        Entry->SetStringField(TEXT("path"), Graph->GetPathName());
+        Entry->SetStringField(TEXT("guid"), Graph->GraphGuid.ToString(EGuidFormats::DigitsWithHyphens));
         Entry->SetNumberField(TEXT("nodes"), Graph->Nodes.Num());
         GraphList.Add(MakeShared<FJsonValueObject>(Entry));
     }

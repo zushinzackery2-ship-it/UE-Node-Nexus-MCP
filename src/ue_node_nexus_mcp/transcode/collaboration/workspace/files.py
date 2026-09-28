@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from ...parser import parse
+from ...material.interfaces import documents, fingerprint
 from ...paths import object_path, package_name, parse_text_path, text_path
 from ...scene.model import scene_name
 from ...sync_project import SyncError
@@ -91,12 +92,26 @@ def select_history(workspace, paths, *revisions) -> list[str] | None:
 
 
 def capture_files(workspace, paths: list[str] | None = None, delete: bool = False) -> tuple[dict, dict, dict]:
+    registered = discover(workspace.root, workspace.state["files"])
+    selected = select(workspace.root, registered, paths)
+    providers = []
+    for asset in selected:
+        path = confined(workspace.root, registered[asset])
+        if path.name.endswith(".mf.nexus") and path.is_file():
+            document, sink = parse(path.read_text(encoding="utf-8-sig"), file=str(path))
+            if sink.has_errors:
+                raise SyncError("invalid_document", "\n".join(item.format() for item in sink.errors()))
+            providers.append(("material_function", document))
+    with documents(providers):
+        return capture_candidates(workspace, paths, delete, registered, selected)
+
+
+def capture_candidates(workspace, paths, delete, registered, selected):
     state, history, store = workspace.state, workspace.history, workspace.store
     entries = history.entries(state["index"])
-    registered = discover(workspace.root, state["files"])
-    selected = select(workspace.root, registered, paths)
     memo, fresh, changed = cache.load(workspace), dict(), False
     captured_hashes = dict()
+    interface_stamp = fingerprint().encode()
     for asset in selected:
         path = confined(workspace.root, registered[asset])
         if not path.is_file():
@@ -107,13 +122,14 @@ def capture_files(workspace, paths: list[str] | None = None, delete: bool = Fals
             continue
         data = path.read_bytes()
         captured_hashes[asset] = byte_hash(data)
+        memo_hash = byte_hash(data + interface_stamp)
         previous_id = entries.get(asset)
         # Encoding is a pure function of these bytes and that base snapshot, so a
         # matching memo entry is the answer, not a guess about it.
         known = memo.get(asset)
         # An uncommitted result is reachable from nothing, so collection may have
         # taken it; the memo then has to earn its answer again.
-        if known and known[:2] == [captured_hashes[asset], previous_id] and store.objects.exists(known[2]):
+        if known and known[:2] == [memo_hash, previous_id] and store.objects.exists(known[2]):
             entries[asset] = known[2]
             fresh[asset] = known
             continue
@@ -127,7 +143,7 @@ def capture_files(workspace, paths: list[str] | None = None, delete: bool = Fals
             entries[asset] = previous_id
         else:
             entries[asset] = workspace.snapshot(snapshot)
-        fresh[asset], changed = [captured_hashes[asset], previous_id, entries[asset]], True
+        fresh[asset], changed = [memo_hash, previous_id, entries[asset]], True
     kept = dict((asset, value) for asset, value in memo.items() if asset in registered and asset not in fresh)
     fresh = (kept | fresh) if paths is not None else fresh
     if changed or len(fresh) != len(memo):

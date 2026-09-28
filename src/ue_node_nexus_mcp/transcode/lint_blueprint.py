@@ -7,6 +7,7 @@ from .bp_signature import parse_signature
 from .bp_types import join_type_text, parse_type_text
 from .blueprint.classes import node_name
 from .blueprint.members import lint_members
+from .blueprint.node_ids import lint_node_ids
 from .blueprint.pins import parent_class
 from .errors import DiagnosticSink
 from .lexer import LexError
@@ -39,6 +40,7 @@ IMPLICIT_PINS = {"self", "ReturnValue"}
 
 def lint_blueprint(document: Document, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
     lint_members(document, sink)
+    lint_node_ids(document, sink)
     variables = document.section("variables")
     components = document.section("components")
     variable_names = set(variables.decl_map()) if variables else set()
@@ -120,6 +122,10 @@ def _lint_graph(section: Section, member_names: set[str], function_names: set[st
 
 
 def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], schema: SchemaLock | None, sink: DiagnosticSink, parent: str = "") -> ClassInfo | None:
+    if decl.props:
+        sink.error("unsupported_node_properties",
+                   "graph node parameters belong inside parentheses, for example CallFunction(Owner.Function, B=10)",
+                   line=decl.line)
     if decl.opaque:
         if any(key is not None for key, _ in decl.args):
             sink.error("opaque_param", "@opaque nodes cannot carry parameters", line=decl.line)
@@ -144,6 +150,12 @@ def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], sch
         sink.error("invalid_pins", "pins=N must be a positive integer", line=decl.line)
     if schema is None:
         return None
+    if spelled in ("CallFunction", "CallParentFunction", "Message") and positional:
+        owner, separator, function = positional[0].rpartition(".")
+        complete = "callable_functions" in schema.info().get("tables", dict())
+        if separator and owner != "self" and not owner.startswith("/Game/") and complete:
+            if schema.function(owner, function) is None:
+                sink.error("unknown_function", f"{owner}.{function} is not a reflected Blueprint callable function", line=decl.line)
     info = schema.resolve_class("k2node", spelled)
     if info is None:
         sink.error("unknown_class", f"unknown Blueprint node class {decl.type_name!r}", line=decl.line)

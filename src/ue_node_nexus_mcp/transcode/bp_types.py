@@ -149,6 +149,8 @@ def _parse_base(text: str) -> dict[str, Any]:
 
 def is_zero_default(value: str, type_name: str) -> bool:
     """True when a pin default is just the type's zero value (not worth writing)."""
+    if type_name.lower() in ("string", "fstring", "text", "ftext", "name", "fname"):
+        return value == ""
     text = value.strip()
     if text == "":
         return True

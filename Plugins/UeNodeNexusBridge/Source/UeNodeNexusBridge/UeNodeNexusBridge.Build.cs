@@ -51,6 +51,7 @@ public class UeNodeNexusBridge : ModuleRules
             "EnhancedInput",
             "GraphEditor",
             "InputCore",
+            "InputBlueprintNodes",
             "JsonUtilities",
             "Landscape",
             "MaterialEditor",
