@@ -55,6 +55,9 @@ Marketplace copies to `.nexus-plugin-install/<id>/backup` outside plugin discove
 records a receipt, and restores the original directories if promotion fails.
 Close editors before running the installer. Project builds should retain enabled
 Nexus plugins; `-DisablePlugin` also persists disabled state in target receipts.
+After installation, `tests/compile_check/build_installed_project.bat` builds a
+complete C++ editor target against those engine plugins, exercising UHT's engine
+module rules as well as UBT rule discovery. Set `UE_NEXUS_ENGINE_DIR` first.
 
 The binaries target UE 5.5.4 Launcher on Windows x64, module BuildId `37670630`.
 They are editor Development binaries. Source is included for rebuilding against

@@ -9,6 +9,6 @@ class UNexusStubCacheFixture : public UDataAsset
     GENERATED_BODY()
 
 public:
-    UPROPERTY(EditAnywhere, AssetRegistrySearchable)
+    UPROPERTY(EditAnywhere, AssetRegistrySearchable, Category="Nexus Tests")
     int32 Marker = 0;
 };
