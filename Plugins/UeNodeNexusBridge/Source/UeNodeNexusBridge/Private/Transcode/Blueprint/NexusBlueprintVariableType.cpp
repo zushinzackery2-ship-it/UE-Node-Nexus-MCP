@@ -1,4 +1,5 @@
 #include "NexusBlueprintVariableType.h"
+#include "Graphs/NexusVariableTypeLinks.h"
 
 #include "EdGraph/EdGraphPin.h"
 #include "EdGraphSchema_K2.h"
@@ -114,6 +115,7 @@ bool ChangeVariableType(UBlueprint* Blueprint, const FName Name, const FEdGraphP
     {
         Nodes.Append(NodesForVariable(Child, Name));
     }
+    FVariableTypeLinks TypeLinks(Nodes);
     const bool bBecameBoolean = Variable->VarType.PinCategory != UEdGraphSchema_K2::PC_Boolean && NewType.PinCategory == UEdGraphSchema_K2::PC_Boolean;
     const bool bBecameNotBoolean = Variable->VarType.PinCategory == UEdGraphSchema_K2::PC_Boolean && NewType.PinCategory != UEdGraphSchema_K2::PC_Boolean;
     if (bBecameBoolean || bBecameNotBoolean)
@@ -142,7 +144,7 @@ bool ChangeVariableType(UBlueprint* Blueprint, const FName Name, const FEdGraphP
             Schema->ReconstructNode(*Node, true);
         }
     }
-    return true;
+    return TypeLinks.Restore(OutError);
 }
 
 bool VerifyVariableType(UBlueprint* Blueprint, const FName Name, const FEdGraphPinType& NewType, FString& OutError)

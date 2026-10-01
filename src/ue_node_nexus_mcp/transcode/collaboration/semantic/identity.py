@@ -7,7 +7,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from ...text.model import Decl, Section
 from ...errors import SyncError
-from ...diff.common import same_class
+from .contracts import same_contract
 
 
 def stable_id(key: str) -> str:
@@ -76,7 +76,8 @@ class Identities:
             raise SyncError("ambiguous_identity", f"duplicate entity identity {decl.id}")
         old = self.old_bindings.get(identifier, dict())
         previous = self.sections.get(scope, dict()).get("entities", dict()).get(identifier)
-        retained = old.get("meta", dict()) if not previous or same_class(schema, family, decl.type_name, previous["type"]) else dict()
+        old_metadata = old.get("meta", dict())
+        retained = old_metadata if same_contract(decl, previous, family, schema, old_metadata) else dict()
         # Identity survives replacement; reflected defaults and pin metadata
         # describe a class and must be rebuilt for the new declaration.
         metadata = dict(retained, **plain(decl.meta))

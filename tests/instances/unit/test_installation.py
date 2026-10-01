@@ -1,4 +1,5 @@
 import json
+import shutil
 
 import pytest
 
@@ -33,6 +34,24 @@ def installation(tmp_path):
 def test_matching_guard_and_core_installation_is_accepted(installation):
     project, engine, _ = installation
     verify(project, engine)
+
+
+def test_marketplace_engine_installation_is_accepted(installation):
+    project, engine, plugin = installation
+    target = engine / "Engine/Plugins/Marketplace" / plugin.name
+    target.parent.mkdir(parents=True)
+    shutil.move(str(plugin), target)
+    verify(project, engine)
+
+
+def test_duplicate_engine_installations_are_rejected(installation):
+    project, engine, plugin = installation
+    for group in ("Editor", "Marketplace"):
+        shutil.copytree(plugin, engine / "Engine/Plugins" / group / plugin.name)
+    shutil.rmtree(plugin)
+    with pytest.raises(InstanceError) as caught:
+        verify(project, engine)
+    assert caught.value.code == "instance_incompatible"
 
 
 @pytest.mark.parametrize("mutation", ["missing_guard", "wrong_guard", "wrong_engine", "old_contract", "disabled_plugin"])

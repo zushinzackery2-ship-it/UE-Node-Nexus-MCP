@@ -50,7 +50,7 @@ def main():
     result = dict(host=str(project.parent), short_of_space=sorted(launches.expected), ok=False)
     try:
         with EditorSession(project, engine, "Issues4") as session:
-            result["builds"] = session.verify_builds(engine / "Engine/Plugins/Editor" if args.engine_plugins else None)["build"]
+            result["builds"] = session.verify_builds(engine / "Engine/Plugins/Marketplace" if args.engine_plugins else None)["build"]
             result["managed"] = launches.managed(session)
             issues = Issues4(session)
             result["fixtures"] = issues.create()

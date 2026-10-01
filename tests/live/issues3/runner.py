@@ -24,7 +24,7 @@ def main():
     project.write_bytes((build / project.name).read_bytes())
     engine = Path("D:/Program Files/Epic Games/UE_5.5")
     with EditorSession(project, engine, "Issues3") as session:
-        session.verify_builds(engine / "Engine/Plugins/Editor" if args.engine_plugins else None)
+        session.verify_builds(engine / "Engine/Plugins/Marketplace" if args.engine_plugins else None)
         result = exercise(session)
         session.report("result", result)
     print(json.dumps(dict(ok=True, host=str(host))), flush=True)

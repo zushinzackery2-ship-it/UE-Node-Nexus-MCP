@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-from ...diff.common import same_class
+from .contracts import same_contract
 from ...text.model import Section
 from ...storage.io import digest
 from .decode import to_document
@@ -46,9 +46,9 @@ def normalize_snapshot(snapshot: dict | None, reference: dict | None = None, sch
                 prop.type_name = known.get("type", prop.type_name)
         for decl in section.decls():
             identifier, entity = matched_entity(identities, scope, decl)
-            if entity is None or not same_class(schema, family_for(kind, section.name), decl.type_name, entity["type"]):
-                continue
             binding = identities.old_bindings.get(identifier, dict())
+            if entity is None or not same_contract(decl, entity, family_for(kind, section.name), schema, binding.get("meta")):
+                continue
             decl.meta = dict(decl.meta, **deepcopy(binding.get("meta", dict())))
             decl.meta["semantic_id"] = identifier
             if binding.get("physical"):

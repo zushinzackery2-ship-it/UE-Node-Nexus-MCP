@@ -22,7 +22,7 @@ def main():
     root = Path(__file__).resolve().parents[3]
     build = root / "build/validation"
     engine = Path(os.environ["UE_NEXUS_ENGINE_DIR"])
-    plugin_root = engine / "Engine/Plugins/Editor" if args.engine_plugins else None
+    plugin_root = engine / "Engine/Plugins/Marketplace" if args.engine_plugins else None
     if args.project:
         project = args.project.resolve(strict=True)
         project.relative_to(root / "build/issues2-live")

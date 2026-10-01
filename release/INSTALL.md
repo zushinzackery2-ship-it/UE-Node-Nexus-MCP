@@ -45,6 +45,17 @@ https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP
 
 ## Compatibility
 
+For an engine-wide installation, place both plugin directories under
+`Engine/Plugins/Marketplace`. UE 5.5 Launcher builds compile this directory's
+rules in `MarketplaceRules.dll`; installing additional C++ modules under
+`Engine/Plugins/Editor` leaves them absent from the precompiled `UE5Rules.dll`.
+The repository's `tests/compile_check/install_engine.py` verifies and stages
+both plugins before replacing the installation. It moves older Editor and
+Marketplace copies to `.nexus-plugin-install/<id>/backup` outside plugin discovery,
+records a receipt, and restores the original directories if promotion fails.
+Close editors before running the installer. Project builds should retain enabled
+Nexus plugins; `-DisablePlugin` also persists disabled state in target receipts.
+
 The binaries target UE 5.5.4 Launcher on Windows x64, module BuildId `37670630`.
 They are editor Development binaries. Source is included for rebuilding against
 other engine builds; matching Python and plugin versions are required.

@@ -22,7 +22,11 @@ def verify(project: dict, engine: Path) -> None:
     descriptor = read(Path(project["project_path"]))
     require(not any(item.get("Name") == CORE_MODULE and item.get("Enabled") is False for item in descriptor.get("Plugins", [])),
             "plugin_disabled", "enable UeNodeNexusBridge in this project before starting")
-    roots = [Path(project["project_path"]).parent / "Plugins" / CORE_MODULE, engine / "Engine/Plugins/Editor" / CORE_MODULE]
+    engine_roots = [engine / "Engine/Plugins" / group / CORE_MODULE for group in ("Marketplace", "Editor")]
+    installed = [path for path in engine_roots if (path / (CORE_MODULE + ".uplugin")).is_file()]
+    require(len(installed) <= 1, "instance_incompatible", "multiple engine bridge installations; migrate to Marketplace",
+            paths=[str(path) for path in installed])
+    roots = [Path(project["project_path"]).parent / "Plugins" / CORE_MODULE, *installed]
     root = next((path for path in roots if (path / (CORE_MODULE + ".uplugin")).is_file()), None)
     require(root is not None, "plugin_missing", "install the matching UeNodeNexusBridge and Guard before starting")
     metadata = read(root / (CORE_MODULE + ".uplugin"))

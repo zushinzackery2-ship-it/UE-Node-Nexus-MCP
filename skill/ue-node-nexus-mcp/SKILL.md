@@ -34,6 +34,9 @@ Confirm the selected project with `project_context_get` and loaded modules with
 match, and Guard/Core must share a source fingerprint. A running process keeps
 the build it loaded until it restarts.
 
+Engine-wide installs use `Engine/Plugins/Marketplace` so Launcher UBT builds
+discover the added module rules; migrate older Editor copies with the verified installer.
+
 Tasks and publications automatically hold work scopes. Windowed instances are
 protected from automatic reclamation. Routine work requires no `pin` calls or
 renewals. The hidden legacy pin operation only supports old background editors;
@@ -76,6 +79,10 @@ Author supported asset content through `.nexus` files. Use graph operations for
 opaque graph sections, and typed operations for asset management and level work.
 The [operation reference](references/operations.md) covers narrow reads, graph
 patches, scene writes, response modes and batching.
+
+Internal viewport screenshots read rendered pixels and do not require an always-on-top window.
+Use `viewport_capture`; avoid helper scripts that call `SetForegroundWindow` or set `HWND_TOPMOST` unless the user requests window activation.
+Handle background refresh or minimized-viewport issues through capture scheduling and explicit diagnostics, rather than forcing the editor in front of the user's work.
 
 ## Author and publish assets
 

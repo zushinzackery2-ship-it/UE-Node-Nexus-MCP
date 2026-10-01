@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from ..semantic.validation import validate
+from ..semantic.contracts import entity_contract, merged_bindings
 from ...text.semantic import equivalent
 from ...storage.io import canonical, digest
 from .order import merge_order
@@ -87,6 +88,8 @@ class Comparison:
             if "type" in original and "alias" in original:
                 if (ours.get("type") != original["type"] or theirs.get("type") != original["type"]):
                     return self.conflict(path, base, ours, theirs, "type-conflict", "type replacement overlaps changes to the same declaration")
+                if entity_contract(ours) != entity_contract(original) or entity_contract(theirs) != entity_contract(original):
+                    return self.conflict(path, base, ours, theirs, "function-conflict", "function replacement overlaps changes to the same declaration")
                 if original.get("type") == "@opaque":
                     return self.conflict(path, base, ours, theirs, "opaque-conflict", "opaque objects require a whole-object choice")
             result = dict()
@@ -113,9 +116,7 @@ def merge_snapshots(base: dict | None, ours: dict | None, theirs: dict | None, s
     evidence = theirs or ours or base
     candidate = dict(evidence)
     candidate["semantic"] = deepcopy(semantic)
-    candidate["bindings"] = dict((base or dict()).get("bindings", dict()))
-    candidate["bindings"].update((ours or dict()).get("bindings", dict()))
-    candidate["bindings"].update((theirs or dict()).get("bindings", dict()))
+    candidate["bindings"] = merged_bindings(semantic, (base, ours, theirs))
     if ours and theirs and ours["schema_key"] != theirs["schema_key"]:
         # Reached only when the inputs could not be re-read under one environment
         # (no schema is available, or the text no longer encodes under it).

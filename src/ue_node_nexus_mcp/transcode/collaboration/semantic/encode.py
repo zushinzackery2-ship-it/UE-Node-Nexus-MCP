@@ -8,7 +8,7 @@ from ...blueprint.classes import node_identity
 from ...text.model import Document
 from ...raw.simple import INSTANCE_TYPES
 from ...errors import SyncError
-from ...diff.common import same_class
+from .contracts import same_contract
 from .blueprint import declaration_default, input_metadata, positional_values, signature, signature_contracts
 from .identity import Identities
 from .links import encode_links
@@ -126,7 +126,7 @@ def encode_section(section, scope: str, context: Encoding) -> dict:
 
 def entity_state(decl, section: str, metadata: dict, old: dict, context: Encoding) -> dict:
     family = "" if decl.modifier == "local" else family_for(context.kind, section)
-    previous = old if not old or same_class(context.schema, family, decl.type_name, old["type"]) else dict()
+    previous = old if same_contract(decl, old, family, context.schema, metadata) else dict()
     types, defaults = property_metadata(metadata, context.schema, family, decl.type_name)
     class_name = node_identity(decl.type_name, context.schema) if family == "k2node" else decl.type_name
     # A declaration's named arguments and property block are different

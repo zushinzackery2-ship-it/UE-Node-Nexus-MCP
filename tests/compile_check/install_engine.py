@@ -1,10 +1,4 @@
-"""Mirror the verified isolated host build into the engine plugin folders.
-
-UAT's ``BuildPlugin`` cannot resolve the ``UeNodeNexusGuard`` module rules of a plugin that
-lives inside an installed engine, and it rewrites the descriptor without
-``EnabledByDefault``. The isolated host build already produces exactly the binaries the
-release package verifies, so the engine install copies that result instead of rebuilding.
-"""
+"""Install verified plugins under Marketplace, where binary UBT builds discover their rules."""
 
 from __future__ import annotations
 
@@ -19,7 +13,8 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 
 from release.identity import CONTRACT_VERSION, fingerprint
-from tests.compile_check.prepare_host import PLUGINS, sync_directory
+from tests.compile_check.prepare_host import PLUGINS
+from tests.compile_check.installation.transaction import install_verified
 
 BLOCKING_IMAGES = ("UnrealEditor.exe", "UnrealEditor-Cmd.exe", "UnrealEditor-Win64-DebugGame.exe")
 
@@ -59,18 +54,12 @@ def install(host: Path, engine: Path) -> None:
     if not (engine / "Engine/Binaries/Win64/UnrealEditor.exe").is_file():
         raise RuntimeError(f"engine directory does not contain UnrealEditor.exe: {engine}")
     require_editor_closed()
-    editor = engine / "Engine/Plugins/Editor"
     for plugin in PLUGINS:
         source = ROOT / "Plugins" / plugin
         built = host / "Plugins" / plugin
         verify_plugin(source, built)
-        target = editor / plugin
-        for name in ("Binaries", "Source", "Config", "Resources"):
-            if (built / name).is_dir():
-                sync_directory(built / name, target / name, engine)
-        for name in (f"{plugin}.uplugin", "BuildIdentity.json"):
-            (target / name).write_bytes((built / name).read_bytes())
-        print(f"installed {plugin} into {target}")
+    receipt = install_verified(host, engine, PLUGINS, verify_plugin)
+    print(f"installed {', '.join(PLUGINS)} into {engine / 'Engine/Plugins/Marketplace'}; receipt: {receipt}")
 
 
 def main() -> None:

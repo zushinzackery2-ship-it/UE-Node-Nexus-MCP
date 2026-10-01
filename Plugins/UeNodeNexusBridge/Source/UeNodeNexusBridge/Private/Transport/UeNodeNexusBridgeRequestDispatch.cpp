@@ -7,6 +7,8 @@
 #include "UeNodeNexusBridgeOperations.h"
 #include "HAL/PlatformTime.h"
 #include "NexusLifecycle.h"
+#include "UObject/UObjectGlobals.h"
+#include "UObject/GarbageCollection.h"
 
 namespace UeNodeNexusBridge
 {
@@ -36,6 +38,27 @@ const FString& ActiveBridgeRequestId()
     return GRequestId;
 }
 
+static FString RequestBusyReason()
+{
+    if (GRequestActive)
+    {
+        return TEXT("request_active");
+    }
+    if (UE::IsSavingPackage())
+    {
+        return TEXT("package_save");
+    }
+    if (IsGarbageCollecting())
+    {
+        return TEXT("garbage_collection");
+    }
+    if (IsAssetStreamingSuspended())
+    {
+        return TEXT("streaming_suspended");
+    }
+    return FString();
+}
+
 FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
 {
     const FString Operation = RequestJson->GetStringField(TEXT("operation"));
@@ -50,13 +73,16 @@ FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
     // Slate viewport resize suspends streaming and pumps game-thread tasks in
     // FlushRenderingCommands. Reject before any mutation; the owning frame must
     // unwind before a bridge operation may compile or save render assets.
-    if (GRequestActive || IsAssetStreamingSuspended())
+    const FString BusyReason = RequestBusyReason();
+    if (!BusyReason.IsEmpty())
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        const FString Reason = GRequestActive
-            ? TEXT("another bridge request is still executing on the game thread; retry shortly")
-            : TEXT("engine owns an asset-streaming suspension; retry after the owning frame resumes");
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(FString(TEXT("bridge_busy")), Reason));
+        auto Error = UeNodeNexusBridge::MakeError(FString(TEXT("bridge_busy")),
+            TEXT("engine phase prevents bridge execution; retry after the owning frame resumes"));
+        Error->SetStringField(TEXT("busy_reason"), BusyReason);
+        Response->SetObjectField(TEXT("error"), Error);
+        UE_LOG(LogTemp, Display, TEXT("Nexus request=%s operation=%s phase=deferred reason=%s"),
+            *RequestId, *Operation, *BusyReason);
         NexusLifecycle::Complete(RequestId, false, TEXT("bridge_busy"), false);
         return SerializeJsonObjectToString(Response);
     }
