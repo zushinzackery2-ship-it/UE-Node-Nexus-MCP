@@ -39,7 +39,7 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 | **文本资产镜像** | Material、MaterialFunction、MaterialInstance、Blueprint、Niagara System 和属性型资产的导出、校验、差异计划与提交 |
 | **场景组镜像** | 当前世界已加载 Actor、蓝图 Actor、ISM/HISM 的稳定身份、文本编辑、批量实例操作、事务和外部包保存 |
 | **多 agent 协作** | 独立工作区、HEAD/index/files、三方语义合并、持久冲突会话、带 revision 条件的 UE 发布 |
-| **共享编辑器生命周期** | 同项目复用、启动防重、跨会话租约、自动闲置回收、脏包与任务退出保护、资源和日志限额 |
+| **共享编辑器生命周期** | 同项目复用、启动防重、跨会话租约、自动闲置回收、退出保护；总数量不限，启动并发与内存准入受控 |
 | **本地版本历史** | commit、log/show/diff/blame、branch/tag、restore/revert/reset、stash、cherry-pick/rebase/amend 和 reflog |
 | **统一参数目录** | 按蓝图、材质、Niagara、场景、资产及通用类型分类的 schema JSON、Markdown 索引、定向函数与上下文查询 |
 | **资产查询与管理** | 资产索引、元数据、依赖与引用关系，以及创建、复制、移动、重命名、删除和 redirector 修复 |
@@ -295,7 +295,7 @@ ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"], options=dict(work
 | **`startup_failed / startup_timeout`** | 启动中退出或无提示停滞：查看 `exit_code`、`exited_while_waiting`、`startup_progress.last_log` 与日志 |
 | **`instance_starting / instance_unresponsive`** | 查询既有实例状态和日志，保留同一项目绑定 |
 | **`ambiguous_class / ambiguous_function`** | 同名类或函数（如两个文件夹里的 `BP_Light_C`）：按诊断给出的候选写完整路径 |
-| **`capacity_exceeded`** | 查看受管实例占用、可用内存及回收状态 |
+| **`capacity_exceeded`** | 查看并发启动数及所需/可用内存；编辑器总数量不限 |
 | **`repository_mismatch`** | 接入返回的共享仓库，保留已有历史 |
 | **操作与 schema 对不上** | 同步更新 Python 服务与 UE 插件，重启编辑器并重连客户端 |
 

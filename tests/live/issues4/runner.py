@@ -33,8 +33,8 @@ def host_project(root: Path, engine_plugins: bool) -> Path:
     project.write_bytes((build / project.name).read_bytes())
     runtime = host / "Runtime"
     runtime.mkdir()
-    # This empty acceptance project has its own resource policy and process cap.
-    (runtime / "policy.json").write_text(json.dumps(dict(max_editors=1, min_free_gib=1, min_free_ratio=0.03)), encoding="utf-8")
+    # This empty acceptance project has its own resource policy.
+    (runtime / "policy.json").write_text(json.dumps(dict(min_free_gib=1, min_free_ratio=0.03)), encoding="utf-8")
     return project
 
 

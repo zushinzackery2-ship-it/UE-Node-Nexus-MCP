@@ -202,7 +202,8 @@ class FakeUe:
         elif op == "connect_pins":
             src = by_id[verb["from"]]
             pin = str(verb.get("from_pin") or "0")
-            from_out = int(pin) if pin.isdigit() else dict(r=1, g=2, b=3, a=4).get(pin.lower(), 0)
+            names = nodes[src]["outputs"]
+            from_out = names.index(pin) if pin in names else int(pin) if pin.isdigit() else dict(r=1, g=2, b=3, a=4).get(pin.lower(), 0)
             if verb["to"] == "out":
                 graph["outputs"].append(dict(from_out=from_out, property=verb["to_pin"], **dict([("from", src)])))
             else:
@@ -232,7 +233,9 @@ class FakeUe:
         nodes = source.get("graph", dict()).get("nodes") or []
         inputs = sorted((node for node in nodes if node["class_short"] == "FunctionInput"),
                         key=lambda node: (float(value(node, "SortPriority", "32")), value(node, "InputName", "In")))
-        outputs = [value(node, "OutputName", "Result") for node in nodes if node["class_short"] == "FunctionOutput"]
+        output_nodes = sorted((node for node in nodes if node["class_short"] == "FunctionOutput"),
+                              key=lambda node: (float(value(node, "SortPriority", "0")), value(node, "OutputName", "Result")))
+        outputs = [value(node, "OutputName", "Result") for node in output_nodes]
         for node in graph["nodes"]:
             if node["class_short"] == "MaterialFunctionCall" and object_path(value(node, "MaterialFunction", "")) == object_path(function):
                 node["inputs"] = [value(item, "InputName", "In") for item in inputs]

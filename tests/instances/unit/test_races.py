@@ -107,7 +107,7 @@ def test_preview_is_invalidated_by_other_user_or_pin(lifecycle):
     assert a.call("close", instance_id=identifier, dry_run=False, proposal_id=preview["proposal_id"])["error"]["code"] == "stale_plan"
 
 
-def test_stopping_process_keeps_capacity_and_cannot_be_acquired(lifecycle):
+def test_stopping_process_keeps_identity_and_cannot_be_acquired(lifecycle):
     service, platform, _, project = lifecycle
     client = Client(service)
     identifier = client.ready(project)["instance"]["instance_id"]

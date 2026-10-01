@@ -284,4 +284,4 @@ def preflight_candidates(workspace, merged, observation, assets, options):
             references = document_dependencies(to_document(state), state["semantic"]["kind"]) & deleted
             for target in references:
                 errors[target] = dict(code="referenced_asset", message="remaining candidate still references the deleted asset", consumer=asset)
-    return dict(units=units, order=ordered, errors=errors)
+    return dict(units=units, order=ordered, errors=errors, selected=list(assets))

@@ -85,7 +85,7 @@ for lack of space is an error, never an advisory, and is not confirmed.
 | `STARTING` | Join the existing launch; ensure and work calls are held until it settles |
 | `DRAINING` | Acquire cancels the uncommitted close before granting a lease |
 | `STOPPING` | Wait for actual OS process exit before starting again |
-| `UNRESPONSIVE` | Retains identity and capacity; investigate logs/status |
+| `UNRESPONSIVE` | Retains identity; investigate logs/status |
 | Dirty packages, PIE, compile/save or pending recovery | Blocks close and reports reasons |
 
 Heartbeats indicate client liveness. They do not renew editor usage. Context,
@@ -101,13 +101,15 @@ directly, including after editor reclamation. Defaults are:
 | Start / close wait (a waiting prompt pauses the start wait) | 240 s / 60 s |
 | Call held on a start: default / maximum `wait_seconds` | 45 s / 900 s |
 | Recovery quarantine / idle manager exit | 60 s / 60 s |
-| Managed editors / simultaneous starts | 2 / 1 |
+| Simultaneous starts | 1 |
 | Required free physical memory | max(4 GiB, 15% of physical RAM) |
 | Waiting scopes per client / project / total | 16 / 64 / 256 |
 
 Policy is shared through `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Runtime/policy.json`.
-Use field names returned in `bridge_instance_list.policy`, such as `max_editors`,
-`max_startups`, `idle_seconds`, `grace_seconds`, `min_free_gib` and `min_free_ratio`.
+Use field names returned in `bridge_instance_list.policy`, such as `max_startups`,
+`idle_seconds`, `grace_seconds`, `min_free_gib` and `min_free_ratio`.
+Editor count is unrestricted; startup concurrency and available memory govern
+new starts. A retired `max_editors` field is removed atomically at manager startup.
 All values must be positive; unknown fields are rejected. Changes take effect
 when an idle manager restarts. Different workspaces must use the same runtime.
 `UE_NEXUS_RUNTIME_DIR` exists for isolated installations and tests.
@@ -185,7 +187,7 @@ through observation, apply, saving and receipt convergence.
 | `instance_unverified` | Inspect the identified process, permissions, startup and Guard installation |
 | `instance_incompatible`, `manager_version_mismatch` | Install matching builds and drain the old version |
 | `instance_in_use`, `instance_dirty` | Inspect users, scopes and named packages |
-| `capacity_exceeded` | Inspect occupancy/free RAM; wait for eligible reclamation |
+| `capacity_exceeded` | Inspect concurrent starts and required/available RAM |
 | `operation_outcome_unknown` | Inspect state/receipts; a possibly executed write is not replayed |
 | `manager_response_unknown` | Query status; retry ensure with the same idempotency key |
 | `manager_launch_unavailable` | Check the signed-in user's desktop shell and process access; inspect the returned Win32 error |

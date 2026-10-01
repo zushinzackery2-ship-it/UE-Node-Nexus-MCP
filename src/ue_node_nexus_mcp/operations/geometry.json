@@ -1,0 +1,25 @@
+{
+  "operations":
+  [
+    {
+      "name": "mesh_geometry_get",
+      "kind": "read",
+      "group": "level",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "full",
+      "summary": "Read StaticMesh LOD0 quality, revision, recipe and optional lattice controls."
+    },
+    {
+      "name": "mesh_geometry_build",
+      "kind": "write",
+      "group": "level",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "full",
+      "summary": "Build a derivative mesh with FFD lattice, constrained remeshing and seeded noise; preserve source assets."
+    }
+  ]
+}

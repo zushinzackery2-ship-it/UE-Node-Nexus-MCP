@@ -2,6 +2,7 @@
 /Task-Status.md
 /*Issues.md
 /issues[0-9]*.md
+/issues-new.md
 /问题上报.md
 /AGENTS.md
 /CLAUDE.md
@@ -126,6 +127,10 @@ logs/
 *.dmp
 *.stackdump
 EndministratorPBR/
+RainCity/
+tests/refpics/
+tests/geometry_review/
+tests/material_pipeline/
 Issues.md
 tests/review/
 tests/compile_check/build_issues.bat

@@ -7,6 +7,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from ...text.model import Decl, Section
 from ...errors import SyncError
+from ...diff.common import same_class
 
 
 def stable_id(key: str) -> str:
@@ -55,7 +56,7 @@ class Identities:
         name = section_name(section)
         return self.section_aliases.get(name, name)
 
-    def entity(self, scope: str, decl: Decl) -> tuple[str, dict]:
+    def entity(self, scope: str, decl: Decl, family: str = "", schema=None) -> tuple[str, dict]:
         physical = str(decl.meta.get("physical") or decl.meta.get("guid") or "")
         owner = str(decl.meta.get("owner") or "")
         alias_match = self.by_alias.get((scope, decl.id))
@@ -74,7 +75,11 @@ class Identities:
         if identifier in self.bindings:
             raise SyncError("ambiguous_identity", f"duplicate entity identity {decl.id}")
         old = self.old_bindings.get(identifier, dict())
-        metadata = dict(old.get("meta", dict()), **plain(decl.meta))
+        previous = self.sections.get(scope, dict()).get("entities", dict()).get(identifier)
+        retained = old.get("meta", dict()) if not previous or same_class(schema, family, decl.type_name, previous["type"]) else dict()
+        # Identity survives replacement; reflected defaults and pin metadata
+        # describe a class and must be rebuilt for the new declaration.
+        metadata = dict(retained, **plain(decl.meta))
         metadata.pop("semantic_id", None)
         binding = dict(physical=physical or old.get("physical", ""), scope=scope, alias=decl.id, meta=metadata)
         self.bindings[identifier] = binding

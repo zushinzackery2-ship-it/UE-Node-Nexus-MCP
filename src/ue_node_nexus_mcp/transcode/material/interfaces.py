@@ -30,8 +30,7 @@ def priority(item):
         raise SyncError("invalid_sort_priority", f"MaterialFunction SortPriority must be an integer: {text}")
 
 
-@contextmanager
-def documents(items):
+def signatures(items):
     records = dict()
     for kind, document in items:
         if kind != "material_function":
@@ -44,11 +43,17 @@ def documents(items):
             if not field:
                 continue
             params = declaration.keyed()
-            label = params.get("InputName" if field == "inputs" else "OutputName", "")
+            label = params.get("InputName" if field == "inputs" else "OutputName", "In" if field == "inputs" else "Result")
             ports[field].append(dict(name=label, priority=params.get("SortPriority", "0")))
         for entries in ports.values():
             entries.sort(key=priority)
         records[object_path(document.header.asset)] = ports
+    return records
+
+
+@contextmanager
+def documents(items):
+    records = signatures(items)
     token = _interfaces.set(records)
     try:
         yield
@@ -60,7 +65,7 @@ def documents(items):
 def snapshots(items):
     from ..collaboration.semantic.decode import to_document
 
-    with documents((item["semantic"]["kind"], to_document(item)) for item in items
+    with documents((item["semantic"]["kind"], to_document(item, include_defaults=True)) for item in items
                    if item and item["semantic"]["kind"] == "material_function"):
         yield
 
@@ -69,3 +74,21 @@ def snapshots(items):
 def tree(store, entries):
     with snapshots(store.objects.data(identifier, "snapshot") for identifier in entries.values()):
         yield
+
+
+def publish_observed(schema, snapshot):
+    """A verified function receipt updates the dynamic catalog for later calls."""
+    if schema is None:
+        return
+    from ..collaboration.semantic.decode import to_document
+    from ..schema.catalog import publish
+
+    ports = signatures([(snapshot["semantic"]["kind"], to_document(snapshot, include_defaults=True))])
+    entries = schema.info().get("tables", dict()).get("material_functions", dict())
+    records = dict()
+    for path, value in ports.items():
+        keys = [key for key, entry in entries.items() if object_path(entry.get("path", "")) == path]
+        for key in keys or [path]:
+            records[key] = dict(value, path=path, source="verified_publication")
+    if records:
+        publish(schema.directory, schema.key, dict(material_functions=records), incremental=True)

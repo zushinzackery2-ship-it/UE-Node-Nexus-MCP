@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from contextlib import nullcontext
+from types import SimpleNamespace
 
 import pytest
 
@@ -39,12 +40,13 @@ def test_ue_sync_runs_against_fake_bridge(all_features, monkeypatch: pytest.Monk
     monkeypatch.setattr(runtime, "bridge", ue)
     monkeypatch.setattr(instance_manager, "repository", lambda: dict(mirror_root=str(tmp_path / "mirror"), mirror_project_name="Shadetest"))
     monkeypatch.setattr(instance_manager, "work_scope", lambda *args, **kwargs: nullcontext())
+    monkeypatch.setattr(instance_manager, "reserve", lambda *args, **kwargs: SimpleNamespace(activate=nullcontext, release=lambda: None))
     monkeypatch.setenv("UE_NEXUS_TRANSCODE_DIR", str(tmp_path / "mirror"))
     result = ue_sync("init")
     assert result["ok"] is True, result
     assert result["data"]["counts"] == {"pulled": 1}
     status = ue_sync("status")
-    assert status["ok"] is True and status["data"]["counts"] == {"clean": 1}
+    assert status["ok"] is True and status["data"]["counts"] == {"clean": 1}, status
     lint = ue_sync("lint")
     assert lint["ok"] is True and lint["data"]["ok_files"] == 1
     assert (tmp_path / "mirror" / "Shadetest" / "WaterStains" / "Functions" / "MF_WS_S.mf.nexus").is_file()

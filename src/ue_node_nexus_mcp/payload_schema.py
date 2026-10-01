@@ -17,6 +17,7 @@ from typing import Any, Literal, Union, get_args, get_origin
 
 from .contracts import ALL_OPERATIONS
 from .transcode.scene.schema import augment as augment_scene_schema
+from .geometry.schema import augment as augment_geometry_schema, examples as geometry_examples
 from .payload_schema_definitions import (
     GENERIC_OBJECT_SCHEMA,
     OPERATION_EXAMPLES,
@@ -131,6 +132,7 @@ def payload_schema_for(operation: str) -> dict[str, Any]:
     schema = dict(GENERIC_OBJECT_SCHEMA) if func is None else derive_schema(func)
     _apply_item_schema(operation, schema)
     augment_scene_schema(operation, schema)
+    augment_geometry_schema(operation, schema)
     _schema_cache[operation] = schema
     return schema
 
@@ -160,7 +162,7 @@ def _example_value(prop: dict[str, Any], field_name: str) -> Any:
 def example_payload_for(operation: str) -> dict[str, Any]:
     """Return a hand-written example if available, otherwise synthesize a minimal
     call example from the derived schema."""
-    manual = OPERATION_EXAMPLES.get(operation)
+    manual = geometry_examples().get(operation) or OPERATION_EXAMPLES.get(operation)
     if manual is not None:
         return dict(manual)
     schema = payload_schema_for(operation)

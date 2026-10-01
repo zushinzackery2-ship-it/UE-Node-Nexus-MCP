@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import logging
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
 from ...errors import SyncError
+from .records import DDL as RECORD_DDL, migration_sql
 
-FORMAT_VERSION = 1
+LOG = logging.getLogger(__name__)
+FORMAT_VERSION = 2
 DDL = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS objects
@@ -52,7 +56,15 @@ class Database:
             if version > FORMAT_VERSION:
                 raise SyncError("store_version", f"repository format {version} exceeds supported {FORMAT_VERSION}")
             connection.execute("PRAGMA journal_mode=WAL")
-            connection.executescript("BEGIN IMMEDIATE;\n" + DDL + f"\nPRAGMA user_version={FORMAT_VERSION};\nCOMMIT;")
+            started = time.monotonic()
+            migration = migration_sql() if version < 2 else ""
+            try:
+                connection.executescript("BEGIN IMMEDIATE;\n" + DDL + RECORD_DDL + migration + f"\nPRAGMA user_version={FORMAT_VERSION};\nCOMMIT;")
+            except sqlite3.DatabaseError:
+                connection.rollback()
+                raise
+            if version < FORMAT_VERSION:
+                LOG.info("repository_migrated path=%s from=%s to=%s elapsed_seconds=%.3f", path, version, FORMAT_VERSION, time.monotonic() - started)
 
     def handle(self) -> sqlite3.Connection:
         connection = getattr(self.local, "connection", None)

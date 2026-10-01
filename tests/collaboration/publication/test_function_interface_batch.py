@@ -16,6 +16,7 @@ from ue_node_nexus_mcp.transcode.collaboration.apply import refresh
 from ue_node_nexus_mcp.transcode.material.calls import REFRESH, with_refresh
 from ue_node_nexus_mcp.transcode.schema.catalog import publish
 from ue_node_nexus_mcp.transcode.sync.service import run_sync
+from ue_node_nexus_mcp.transcode.errors import SyncError
 from tests.collaboration.fake_bridge import ProtocolUe
 from tests.transcode.fake_ue import SCHEMA_KEY
 from tests.transcode.fixtures import material_function_raw, material_raw, prop
@@ -51,7 +52,10 @@ def project(tmp_path):
 
 def call(project, action, paths=None, **options):
     ue, env, workspace = project
-    return run_sync(ue, action, paths, dict(dry_run=False, workspace_id=workspace["id"], **options), env=env)
+    try:
+        return run_sync(ue, action, paths, dict(dry_run=False, workspace_id=workspace["id"], **options), env=env)
+    except SyncError as exc:
+        pytest.fail(f"{exc.code}: {exc.details}")
 
 
 def edit(project, asset, old, new):
@@ -73,7 +77,7 @@ def test_a_caller_in_the_same_batch_rebuilds_its_calls_inside_its_own_apply(proj
     edit(project, MATERIAL, "constant -> add.B\n", "constant -> add.B\nconstant -> fn_ws_s.Bee\n")
     call(project, "commit", all=True, message="new input and its wiring")
 
-    result = call(project, "push", [FUNCTION, MATERIAL])
+    result = call(project, "push", [FUNCTION, MATERIAL, SECOND])
 
     assert result["status"] == "published", result
     assert [payload["asset_path"] for payload in ue.applied] == [FUNCTION, SECOND, MATERIAL]
@@ -86,14 +90,14 @@ def test_a_caller_in_the_same_batch_rebuilds_its_calls_inside_its_own_apply(proj
     assert ue.assets[MATERIAL]["refreshed"] == [FUNCTION] and ue.assets[SECOND]["refreshed"] == [FUNCTION]
 
 
-def test_a_caller_outside_the_batch_that_fails_its_refresh_owns_the_failure(project):
+def test_a_selected_unchanged_caller_owns_its_refresh_failure(project):
     ue, env, workspace = project
     ue.referencers[FUNCTION] = [package(SECOND)]
     ue.fail_save = set((SECOND,))
     rename_input(project)
     call(project, "commit", all=True, message="new input")
 
-    result = call(project, "push", [FUNCTION])
+    result = call(project, "push", [FUNCTION, SECOND])
 
     assert result["status"] == "partial", result
     assert FUNCTION not in result["errors"]
@@ -111,7 +115,7 @@ def test_a_caller_left_on_the_old_interface_is_rebuilt_by_its_own_fix(project):
     ue.fail_save = set((MATERIAL,))
     rename_input(project)
     call(project, "commit", all=True, message="new input")
-    assert MATERIAL in call(project, "push", [FUNCTION])["errors"]
+    assert MATERIAL in call(project, "push", [FUNCTION, MATERIAL])["errors"]
     assert ue.assets[MATERIAL]["graph"]["nodes"][-1]["inputs"] == ["A", "B"]
 
     ue.fail_save = False
@@ -160,7 +164,7 @@ def test_only_a_unit_that_calls_the_function_itself_is_left_to_its_own_apply(mon
         assert operation == "asset_referencers_get" and payload["asset_path"] == FUNCTION
         return dict(ok=True, data=dict(items=registry))
 
-    batch = dict(errors=dict(), units={
+    batch = dict(errors=dict(), selected=[MATERIAL, SECOND], units={
         MATERIAL: dict(asset=MATERIAL, kind="material", empty=False, dependencies=[FUNCTION]),
         SECOND: dict(asset=SECOND, kind="", empty=True, dependencies=[]),
     })
@@ -168,3 +172,44 @@ def test_only_a_unit_that_calls_the_function_itself_is_left_to_its_own_apply(mon
     failures = refresh.callers(bridge, None, None, FUNCTION, "source", dict(), batch, dict(), set((MATERIAL, SECOND)))
 
     assert failures == [] and refreshed == [SECOND]
+
+
+def test_new_output_survives_replanning_against_a_stale_catalog(project):
+    ue, env, workspace = project
+    ue.referencers[FUNCTION] = [package(MATERIAL)]
+    catalog = Path(env["UE_NEXUS_TRANSCODE_DIR"]) / ".nexus/schema" / SCHEMA_KEY
+    publish(catalog, SCHEMA_KEY, dict(material_functions={
+        FUNCTION: dict(inputs=[dict(name="A"), dict(name="B")], outputs=[dict(name="Result")])
+    }, material_expression={"MaterialExpressionFunctionOutput": dict(
+        path="/Script/Engine.MaterialExpressionFunctionOutput", inputs=[""], outputs=[],
+        props=dict(OutputName=dict(type="name", default="Result"), SortPriority=dict(type="number", default="0")))
+    }), incremental=True)
+    file = Path(workspace["file_paths"][FUNCTION])
+    file.write_text(file.read_text(encoding="utf-8") + "\nout_skirt : FunctionOutput(OutputName=Skirt, SortPriority=7)\nin_a -> out_skirt\n", encoding="utf-8")
+    edit(project, MATERIAL, "constant -> add.B\n", "constant -> add.B\nfn_ws_s.Skirt -> out.Roughness\n")
+    call(project, "commit", all=True, message="new output and caller wiring")
+
+    def generated_caller_change():
+        next(row for row in ue.assets[MATERIAL]["props"] if row["name"] == "TwoSided")["value"] = "False"
+
+    ue.after_apply = generated_caller_change
+    result = call(project, "push", [FUNCTION, MATERIAL])
+    assert result["status"] == "published", result.get("errors", result)
+    assert not result["errors"]
+    caller = ue.assets[MATERIAL]["graph"]["nodes"][-1]
+    assert caller["outputs"] == ["Result", "Skirt"]
+
+
+def test_partial_function_push_does_not_save_unselected_callers(project):
+    ue, _, workspace = project
+    ue.referencers[FUNCTION] = [package(MATERIAL), package(SECOND)]
+    rename_input(project)
+    edit(project, MATERIAL, "constant -> add.B\n", "constant -> add.B\nconstant -> fn_ws_s.Bee\n")
+    call(project, "commit", all=True, message="interface and downstream intent")
+    result = call(project, "push", [FUNCTION])
+    assert result["status"] == "published", result
+    assert [payload["asset_path"] for payload in ue.applied] == [FUNCTION]
+    assert set(result["deferred_callers"]) == set((MATERIAL, SECOND))
+    result = call(project, "push", [MATERIAL])
+    assert result["status"] == "published", result
+    assert "Bee" in ue.assets[MATERIAL]["graph"]["nodes"][-1]["inputs"]

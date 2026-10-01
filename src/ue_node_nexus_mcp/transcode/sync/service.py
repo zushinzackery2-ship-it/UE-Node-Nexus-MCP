@@ -20,6 +20,7 @@ from .status import compute_status, query_ue, resolve_selection
 from ..scene.sync import SceneBatch
 from ..transaction.lock import MirrorLock
 from ..collaboration.report.options import ACTIONS as COLLABORATION_ACTIONS
+from ..collaboration.report.options import BACKGROUND_ACTIONS, TRANSPORT_KEYS
 from .lifecycle import requires_editor
 from ..storage.paths import resolve_root, project_dir
 
@@ -40,6 +41,12 @@ def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, op
     offline = not requires_editor(action, options, hinted)
     context = resolve_context(bridge, env=env, cwd=cwd, require_bridge=action == "init",
                               project_hint=options.get("project"), offline=offline)
+    if action in BACKGROUND_ACTIONS and set(options) & TRANSPORT_KEYS:
+        from .background import run
+
+        options.setdefault("project", context.project_name)
+        runner = lambda queued_action, queued_paths, queued_options: run_sync(bridge, queued_action, queued_paths, queued_options, env, cwd)
+        return run(action, paths, options, runner, context.root)
     if action == "schema":
         from .schema import run
         from ..collaboration.report.options import validate

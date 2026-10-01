@@ -12,7 +12,7 @@ def run_one(record) -> None:
     from .. import task_queue as owner
     try:
         with record.work_scope.activate() if record.work_scope else nullcontext():
-            response = execute_operation(record.operation, record.payload)
+            response = record.executor() if record.executor else execute_operation(record.operation, record.payload)
         with owner._lock:
             record.result = response
             record.status = "succeeded" if response.get("ok") else "failed"
@@ -25,6 +25,8 @@ def run_one(record) -> None:
     finally:
         if record.work_scope:
             record.work_scope.release()
+        if record.on_finish:
+            record.on_finish(record)
 
 
 def worker_loop() -> None:

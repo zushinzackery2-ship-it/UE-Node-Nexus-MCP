@@ -8,6 +8,7 @@ from ...blueprint.classes import node_identity
 from ...text.model import Document
 from ...raw.simple import INSTANCE_TYPES
 from ...errors import SyncError
+from ...diff.common import same_class
 from .blueprint import declaration_default, input_metadata, positional_values, signature, signature_contracts
 from .identity import Identities
 from .links import encode_links
@@ -94,7 +95,8 @@ def encode_section(section, scope: str, context: Encoding) -> dict:
     for decl in section.decls():
         if decl.id in aliases:
             raise SyncError("duplicate_id", decl.id, dict(entity=decl.id, line=decl.line))
-        identifier, metadata = identities.entity(scope, decl)
+        family = "" if decl.modifier == "local" else family_for(context.kind, section.name)
+        identifier, metadata = identities.entity(scope, decl, family, context.schema)
         aliases[decl.id] = identifier
         try:
             entities[identifier] = entity_state(decl, section.name, metadata, before.get("entities", dict()).get(identifier, dict()), context)
@@ -124,6 +126,7 @@ def encode_section(section, scope: str, context: Encoding) -> dict:
 
 def entity_state(decl, section: str, metadata: dict, old: dict, context: Encoding) -> dict:
     family = "" if decl.modifier == "local" else family_for(context.kind, section)
+    previous = old if not old or same_class(context.schema, family, decl.type_name, old["type"]) else dict()
     types, defaults = property_metadata(metadata, context.schema, family, decl.type_name)
     class_name = node_identity(decl.type_name, context.schema) if family == "k2node" else decl.type_name
     # A declaration's named arguments and property block are different
@@ -132,12 +135,13 @@ def entity_state(decl, section: str, metadata: dict, old: dict, context: Encodin
     # Host spellings of one call are one state; the bridge picks the host.
     entity = dict(alias=decl.id, type=class_name,
                   positional=[value(text) for text in positional_values(decl, family, metadata, context.schema)],
-                  args=field_values(decl.keyed(), types, dict() if prop_style else defaults, old.get("args")),
-                  props=field_values(decl.prop_map(), types, defaults if prop_style else dict(), old.get("props")),
-                  default=declaration_default(decl, context.kind, section, class_name), position=list(decl.pos) if decl.pos else None,
+                  args=field_values(decl.keyed(), types, dict() if prop_style else defaults, previous.get("args")),
+                  props=field_values(decl.prop_map(), types, defaults if prop_style else dict(), previous.get("props")),
+                  default=declaration_default(decl, context.kind, section, class_name),
+                  position=list(decl.pos) if decl.pos else old.get("position"),
                   flags=dict.fromkeys(decl.flags, True), annotations=dict(decl.annotations), modifier=decl.modifier)
     if decl.opaque:
-        entity["opaque"] = metadata.get("t3d", old.get("opaque", ""))
+        entity["opaque"] = metadata.get("t3d", previous.get("opaque", ""))
     return entity
 
 

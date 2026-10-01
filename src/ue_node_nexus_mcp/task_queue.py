@@ -52,6 +52,9 @@ class _TaskRecord:
     error: dict[str, Any] | None = None
     done: threading.Event = field(default_factory=threading.Event)
     work_scope: Any = None
+    executor: Any = None
+    on_cancel: Any = None
+    on_finish: Any = None
 
 
 _lock = threading.Lock()
@@ -211,6 +214,8 @@ def task_cancel(task_id: str) -> dict[str, Any]:
     record.done.set()
     if record.work_scope:
         record.work_scope.release()
+    if record.on_cancel:
+        record.on_cancel()
     return _envelope("task_cancel", True, {"task_id": task_id, "status": "cancelled"})
 
 
@@ -229,6 +234,24 @@ def reset_for_tests() -> None:
         global _closing
         _closing = False
         _tasks.clear()
+
+
+def submit_callable(operation, executor, work_scope=None, on_cancel=None, on_finish=None) -> str:
+    """Queue an internal workflow on the same worker as registry operations."""
+    global _next_task_number
+    with _lock:
+        if _closing:
+            raise InstanceError("session_closed", "the MCP task queue is closing")
+        active = sum(record.status in ("reserving", "queued", "running") for record in _tasks.values())
+        if active >= MAX_ACTIVE_TASKS:
+            raise InstanceError("task_queue_full", "the MCP task queue is full", dict(limit=MAX_ACTIVE_TASKS))
+        identifier = f"task-{_next_task_number}"
+        _next_task_number += 1
+        _tasks[identifier] = _TaskRecord(identifier, operation, dict(), submitted_at=time.time(), work_scope=work_scope,
+                                         executor=executor, on_cancel=on_cancel, on_finish=on_finish)
+        _queue.put(identifier)
+    _ensure_worker()
+    return identifier
 
 
 def shutdown() -> None:

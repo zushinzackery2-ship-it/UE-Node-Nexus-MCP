@@ -95,6 +95,14 @@ precedence. Each workspace gets an independent checkout and files directory.
 5. Inspect per-asset rows and diagnostics. Publication compiles, verifies readback
    and saves touched packages. Read the relevant result when checking behavior.
 
+Editor workflows wait up to 30 seconds by default, then return a durable `job_id`
+and `next` call. `background=True` returns immediately; `wait_seconds=0..60`
+controls the wait. Poll `job_status`, read `job_result`, or request `job_cancel`
+through `ue_sync`. Cancellation/deadlines take effect between atomic applies;
+completed results and native receipts remain in the repository. A queued push
+holds the source commit it accepted. `workspaces` returns lightweight metadata;
+use `status(workspace_id=...)` for file changes and pending-record summaries.
+
 New assets use the same grammar beneath `files_root`. Asset and entity deletion
 requires `allow_delete=True`; staging a missing file also requires `delete=True`.
 Ids identify authored entities; changing an id recreates that entity unless the

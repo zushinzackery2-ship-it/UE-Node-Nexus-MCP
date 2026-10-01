@@ -5,6 +5,8 @@ namespace UeNodeNexusBridge
 TArray<FString> GetCoreOperationNames()
 {
     return {
+        TEXT("mesh_geometry_get"),
+        TEXT("mesh_geometry_build"),
         TEXT("sound_cue_summary_get"),
         TEXT("texture_summary_get"),
         TEXT("asset_list"),

@@ -16,6 +16,7 @@ from .database import Database
 from ...storage.io import canonical
 from .objects import Objects
 from .refs import get_ref, move_ref, reflog
+from . import records as record_queries
 
 LOG = logging.getLogger("ue_nexus.collaboration")
 # Publication is the one serialized project-wide stage. A bounded wait lets two
@@ -78,10 +79,10 @@ class Store:
         result["generation"] = row[1]
         return result
 
-    def records(self, category: str) -> list[dict]:
+    def records(self, category: str, *, workspace_id=None, exclude_status=(), exclude_phase=(), summary=False) -> list[dict]:
         with self.db.connection() as connection:
-            rows = list(connection.execute("SELECT id, payload, generation FROM records WHERE category=? ORDER BY updated, id", (category,)))
-        return [dict(json.loads(row[1]), id=row[0], generation=row[2]) for row in rows]
+            return record_queries.query(connection, category, workspace_id=workspace_id, exclude_status=exclude_status,
+                                        exclude_phase=exclude_phase, summary=summary)
 
     def put_record(self, category: str, identifier: str, payload: dict, roots: Iterable[str] = (), expected: int | None = None, connection=None) -> int:
         targets = sorted(set(item for item in roots if item))
@@ -98,6 +99,7 @@ class Store:
         data.pop("generation", None)
         connection.execute("INSERT INTO records VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(category,id) DO UPDATE SET payload=excluded.payload, roots=excluded.roots, generation=excluded.generation, updated=excluded.updated",
                            (category, identifier, canonical(data).decode(), json.dumps(targets), actual + 1, time.time()))
+        record_queries.put(connection, category, identifier, data)
         return actual + 1
 
     def drop_record(self, category: str, identifier: str, expected: int) -> None:

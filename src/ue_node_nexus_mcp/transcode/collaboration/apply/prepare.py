@@ -8,6 +8,7 @@ from ...errors import SyncError
 from ..merge.sessions import Sessions
 from . import planning
 from .observe import capture
+from ..jobs.state import checkpoint
 
 
 @dataclass
@@ -41,6 +42,7 @@ def prepare(bridge, context, workspace, source: str, assets: list[str], paths, o
             return Prepared(answer=Sessions(workspace).report(session))
     dependencies, fresh = planning.scope(workspace, source, assets, explicit=paths is not None)
     while True:
+        checkpoint(stage="observe_and_plan")
         observation = capture(bridge, context, workspace.store, sorted(set(assets) | dependencies), reference=source,
                               persist=not options.get("dry_run", True), fresh=fresh)
         prepared = plan(workspace, source, assets, paths, options, original, observation, session)
@@ -92,9 +94,8 @@ def confirm(workspace, prepared: Prepared, proposal, source: str) -> None:
 
 def ancestors(workspace, merged: dict, source: str, options: dict, identity: dict, assets: list[str]) -> dict:
     """Independent ancestors disagree; resolve them once and reuse the result."""
-    open_session = next((item for item in workspace.store.records("session")
-                         if item["workspace_id"] == workspace.state["id"] and item["status"] not in ("completed", "aborted", "stale")
-                         and item["metadata"].get("base_pair") == merged["base_pair"]), None)
+    active = workspace.store.records("session", workspace_id=workspace.state["id"], exclude_status=("completed", "aborted", "stale"))
+    open_session = next((item for item in active if item["metadata"].get("base_pair") == merged["base_pair"]), None)
     if open_session and not options.get("dry_run", True):
         return Sessions(workspace).report(open_session)
     previous, left, right = merged["base_inputs"]

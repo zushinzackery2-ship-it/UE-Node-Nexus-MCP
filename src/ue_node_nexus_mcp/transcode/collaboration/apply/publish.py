@@ -118,6 +118,7 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
     return dict(action="push", source_commit=source, published_commit=target, status="partial" if batch["errors"] else "published",
                 error_count=len(batch["errors"]), errors=batch["errors"], rows=rows, applied=len([row for row in rows if row["action"] == "pushed"]),
                 source_integrated=complete, workspace_rebase_required=workspace_rebase, workspace_id=original["id"],
+                deferred_callers=batch.get("deferred_callers", dict()),
                 merge_id=conflict_report["merge_id"] if conflict_report else None,
                 conflicts=conflict_report["conflicts"] if conflict_report else [], **explanation)
 

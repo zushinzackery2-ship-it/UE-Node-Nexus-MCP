@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ...material.calls import CONSUMER_KINDS, changed_calls, refresh_ops, with_refresh
+from ...material.interfaces import tree as interface_tree
 from ...storage.paths import object_path
 from ...errors import SyncError
 from ...sync.project import call_ok
@@ -43,8 +44,9 @@ def replan(workspace, asset: str, source: str, candidate: str, fixed: dict, obse
     batch["candidate"] = history.create(history.tree(candidate_entries), [observation["commit"], source],
                                         "Candidate after an in-publication change", operation="candidate")
     current = planning.snapshot(workspace, history.entries(observation["commit"]).get(asset))
-    batch["units"][asset] = planning.unit(workspace, asset, planning.snapshot(workspace, desired_id), current,
-                                          observation["raw"].get(asset), options)
+    with interface_tree(workspace.store, candidate_entries):
+        batch["units"][asset] = planning.unit(workspace, asset, planning.snapshot(workspace, desired_id), current,
+                                             observation["raw"].get(asset), options)
 
 
 def settle(bridge, context, workspace, asset: str, source: str, candidate: str, fixed: dict,
@@ -83,6 +85,13 @@ def callers(bridge, context, workspace, function: str, source: str, observation:
     calling = set(asset for asset, item in batch["units"].items() if changed_calls(item["kind"], item["dependencies"], set((function,))))
     assets.update(calling)
     assets -= (calling & ahead) | set((function,))
+    unselected = assets - set(batch["selected"])
+    deferred = batch.setdefault("deferred_callers", dict())
+    for asset in sorted(unselected):
+        functions = deferred.setdefault(asset, [])
+        if function not in functions:
+            functions.append(function)
+    assets -= unselected
     if not assets:
         return []
     measure(bridge, context, workspace, assets, source, observation)

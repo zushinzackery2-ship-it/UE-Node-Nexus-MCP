@@ -2,10 +2,14 @@
 
 from dataclasses import asdict, dataclass, fields
 import json
+import logging
 import math
 from pathlib import Path
 
 from ..errors import InstanceError
+from ..broker.registry import atomic_json
+
+LOG = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = 1
 LIVE_STATES = frozenset(("STARTING", "READY", "IDLE", "DRAINING", "STOPPING", "UNRESPONSIVE", "BLOCKED"))
@@ -27,7 +31,6 @@ class Policy:
     # work it protects: reading engine source or chasing one compile error keeps
     # an editor busy far longer than it keeps the manager busy.
     max_pin_seconds: float = 14400
-    max_editors: int = 2
     max_startups: int = 1
     min_free_gib: float = 4
     min_free_ratio: float = 0.15
@@ -36,7 +39,7 @@ class Policy:
     max_queue: int = 256
 
     def __post_init__(self) -> None:
-        integers = ("max_editors", "max_startups", "per_client_queue", "per_project_queue", "max_queue")
+        integers = ("max_startups", "per_client_queue", "per_project_queue", "max_queue")
         for name, value in asdict(self).items():
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
                 raise InstanceError("invalid_policy", f"{name} must be positive")
@@ -49,7 +52,13 @@ class Policy:
     def read(cls, root: Path) -> "Policy":
         path = root / "policy.json"
         values = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else dict()
+        retired = "max_editors" in values
+        values.pop("max_editors", None)
         unknown = set(values) - set(item.name for item in fields(cls))
         if unknown:
             raise InstanceError("invalid_policy", "unknown policy options", dict(options=sorted(unknown)))
-        return cls(**values)
+        policy = cls(**values)
+        if retired:
+            atomic_json(path, values)
+            LOG.info("policy_option_retired option=max_editors path=%s", path)
+        return policy

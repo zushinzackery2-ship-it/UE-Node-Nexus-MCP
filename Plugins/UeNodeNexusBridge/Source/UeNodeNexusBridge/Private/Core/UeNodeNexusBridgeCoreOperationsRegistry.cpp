@@ -4,6 +4,7 @@
 #include "UeNodeNexusBridgeOperationRegistry.h"
 #include "UeNodeNexusBridgeOperations.h"
 #include "Level/Scene/NexusSceneOps.h"
+#include "Geometry/NexusGeometry.h"
 
 namespace UeNodeNexusBridge
 {
@@ -17,6 +18,8 @@ void RegisterCoreOp(const TCHAR* Operation, FBridgeOperationHandler Handler)
 
 void RegisterCoreOperations()
 {
+    RegisterCoreOp(TEXT("mesh_geometry_get"), HandleMeshGeometryGet);
+    RegisterCoreOp(TEXT("mesh_geometry_build"), HandleMeshGeometryBuild);
     RegisterCoreOp(TEXT("scene_export"), HandleSceneExport);
     RegisterCoreOp(TEXT("scene_status"), HandleSceneStatus);
     RegisterCoreOp(TEXT("scene_apply"), HandleSceneApply);

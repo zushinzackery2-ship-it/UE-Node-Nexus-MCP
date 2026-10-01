@@ -64,7 +64,7 @@ def abandon(workspace, record: dict, reason: str, error: str | None = None) -> d
 
 
 def pending_records(workspace) -> list[dict]:
-    return [record for record in workspace.store.records("apply") if record["phase"] not in TERMINAL]
+    return workspace.store.records("apply", exclude_phase=TERMINAL)
 
 
 def owner_of(store, context, record: dict, caller) -> Workspace:

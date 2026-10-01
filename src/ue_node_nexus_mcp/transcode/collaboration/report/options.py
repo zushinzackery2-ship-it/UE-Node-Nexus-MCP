@@ -1,6 +1,7 @@
 """Action-specific options keep mistakes from becoming silent mutations."""
 
 from ...errors import SyncError
+import math
 
 READ_ACTIONS = set(("status", "workspaces", "diff", "log", "show", "blame", "reflog", "lint", "schema"))
 COMMON = set(("workspace_id", "project", "agent_id", "dry_run", "proposal_id"))
@@ -30,8 +31,16 @@ OPTIONS = dict(
 )
 OPTIONS["cherry-pick"] = set(OPTIONS["revert"])
 OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error", "force"))
+BACKGROUND_ACTIONS = frozenset(("checkout", "fetch", "pull", "push", "continue", "recover", "status", "lint", "schema"))
+JOB_ACTIONS = frozenset(("job_status", "job_result", "job_cancel"))
+TRANSPORT_KEYS = frozenset(("background", "wait_seconds", "deadline_seconds", "idempotency_key"))
+for action in BACKGROUND_ACTIONS:
+    OPTIONS[action].update(TRANSPORT_KEYS)
+for action in JOB_ACTIONS:
+    OPTIONS[action] = set(("job_id",))
+READ_ACTIONS.update(("job_status", "job_result"))
 ACTIONS = tuple(OPTIONS)
-BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current"))
+BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current", "background"))
 STRING_LIST_KEYS = set(("conflict_ids",))
 
 
@@ -47,6 +56,16 @@ def validate(action: str, options: dict) -> None:
     for key in BOOL_KEYS & options.keys():
         if type(options[key]) is not bool:
             raise SyncError("invalid_option", f"{key} must be a boolean")
+    for key in ("wait_seconds", "deadline_seconds"):
+        if key in options and (type(options[key]) not in (int, float) or not math.isfinite(options[key]) or options[key] < 0):
+            raise SyncError("invalid_option", f"{key} must be a finite nonnegative number")
+    if options.get("wait_seconds", 0) > 60:
+        raise SyncError("invalid_option", "wait_seconds must be at most 60; poll job_status for longer work")
+    for key in ("idempotency_key", "job_id"):
+        if key in options and (not isinstance(options[key], str) or not 0 < len(options[key]) <= 128):
+            raise SyncError("invalid_option", f"{key} must contain 1–128 characters")
+    if action in JOB_ACTIONS and not options.get("job_id"):
+        raise SyncError("invalid_option", "job_id is required")
     for key in STRING_LIST_KEYS & options.keys():
         value = options[key]
         if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):

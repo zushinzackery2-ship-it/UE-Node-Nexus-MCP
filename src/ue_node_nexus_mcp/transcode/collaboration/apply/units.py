@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from ...material.calls import changed_calls
+from ...material.interfaces import publish_observed
 from ...errors import SyncError
 from . import refresh, transactions
+from ..jobs.state import checkpoint
 
 
 def run_units(bridge, context, workspace, source: str, candidate: str, fixed: dict, observation: dict,
@@ -20,8 +22,10 @@ def run_units(bridge, context, workspace, source: str, candidate: str, fixed: di
             continue
         # Units still to come: those calling a function this one changes rebuild the calls themselves.
         ahead = set(later for later in order[position + 1:] if later not in batch["errors"])
+        checkpoint(stage="apply", asset=asset)
         try:
             rows.extend(run_unit(bridge, context, workspace, asset, source, candidate, fixed, observation, batch, options, interfaces, ahead))
+            checkpoint(stage="asset_completed", asset=asset, completed=True)
         except (SyncError, OSError) as exc:
             detail = dict(code=exc.code if isinstance(exc, SyncError) else "publication_io_failed", message=str(exc), details=getattr(exc, "details", dict()))
             detail.update((key, detail["details"][key]) for key in ("function", "functions") if key in detail["details"])
@@ -54,6 +58,9 @@ def run_unit(bridge, context, workspace, asset: str, source: str, candidate: str
     transactions.adopt(observation, record, published, workspace.history)
     rows = [dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published, **refreshed)]
     if item.get("interface_changed"):
+        snapshot_id = workspace.history.entries(published).get(asset)
+        if snapshot_id:
+            publish_observed(workspace.schema, workspace.store.objects.data(snapshot_id, "snapshot"))
         interfaces.add(asset)
         for failure in refresh.callers(bridge, context, workspace, asset, source, observation, batch, options, ahead):
             batch["errors"][failure["asset"]] = failure

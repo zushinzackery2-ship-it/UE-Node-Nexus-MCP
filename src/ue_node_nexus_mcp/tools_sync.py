@@ -15,7 +15,8 @@ from .instances.errors import InstanceError
 
 SyncAction = Literal["init", "checkout", "workspaces", "status", "fetch", "pull", "lint", "push", "schema",
                      "stage", "unstage", "commit", "amend", "merge", "resolve", "continue", "abort", "recover", "close",
-                     "branch", "switch", "tag", "log", "show", "diff", "blame", "reflog", "stash", "restore", "revert", "reset", "cherry-pick", "rebase"]
+                     "branch", "switch", "tag", "log", "show", "diff", "blame", "reflog", "stash", "restore", "revert", "reset", "cherry-pick", "rebase",
+                     "job_status", "job_result", "job_cancel"]
 _OPTION_KEYS = {
     "init": {"pull_all", "include_stubs", "auto_export", "refresh_schema", "scene"},
     "status": {"discover", "include_stubs", "include_clean", "scene"},
@@ -29,7 +30,7 @@ for _action, _keys in OPTIONS.items():
     _OPTION_KEYS.setdefault(_action, set()).update(_keys | COMMON)
 
 
-@thin_tool()
+@thin_tool(offload=True)
 def ue_sync(
     action: SyncAction,
     paths: list[str] | None = None,
@@ -52,6 +53,10 @@ def ue_sync(
     Mutations default to dry_run=true; execute with dry_run=false and optionally
     a proposal_id. schema(category/query/details/target/context) queries the
     current classified parameter catalog, also used by lint and history.
+    Long editor workflows wait at most 30 seconds by default, then return a durable
+    job_id. job_status/job_result/job_cancel observe or stop that workflow.
+    background=true returns immediately; wait_seconds (0–60) changes the wait.
+    Cancellation and deadline_seconds stop between atomic asset operations.
     Legacy init/pull/push remain available until checkout enables collaboration;
     once it is enabled those actions require options.workspace_id, and init is
     refused with workspace_required - create a checkout and retry.
@@ -80,7 +85,7 @@ def _bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _finish(report: dict[str, Any]) -> dict[str, Any]:
-    result = {"ok": report.get("error_count", 0) == 0 and not report.get("stopped", False) and report.get("status") not in ("conflict", "stale", "recovery_required"), "data": report}
+    result = {"ok": report.get("error_count", 0) == 0 and not report.get("stopped", False) and report.get("status") not in ("conflict", "stale", "recovery_required", "failed", "cancelled", "interrupted"), "data": report}
     if response_payload_bytes(result) <= LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         return result
     artifact = artifact_handle("ue_sync_report", result)

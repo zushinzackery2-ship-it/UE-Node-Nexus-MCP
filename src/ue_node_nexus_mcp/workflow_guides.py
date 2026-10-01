@@ -18,6 +18,10 @@ _GUIDES_DIR = Path(__file__).with_name("guides")
 # category -> (title, keywords). Keywords drive query matching; keep them
 # lowercase. The markdown file name is "<category>.md".
 GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
+    "mesh_geometry": (
+        "Mesh lattice deformation, constrained remeshing and deterministic noise",
+        ("mesh", "geometry", "lattice", "remesh", "noise", "terrain", "晶格", "重网格", "噪波", "地形"),
+    ),
     "instances": (
         "Shared editor instances: acquire, reuse, release and guarded shutdown",
         ("instance", "editor", "uproject", "ensure", "release", "broker", "lifecycle", "memory", "实例", "回收", "启动"),

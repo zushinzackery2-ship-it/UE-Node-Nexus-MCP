@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeRequestDispatch.h"
+#include "RenderAssetUpdate.h"
 
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -46,10 +47,16 @@ FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
     // slow task, shader-compile wait), the task graph can start the next request *inside*
     // it; nested graph edits during a compile cancellation have crashed the editor.
     // Refuse instead of nesting; the client retries.
-    if (GRequestActive)
+    // Slate viewport resize suspends streaming and pumps game-thread tasks in
+    // FlushRenderingCommands. Reject before any mutation; the owning frame must
+    // unwind before a bridge operation may compile or save render assets.
+    if (GRequestActive || IsAssetStreamingSuspended())
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
-        Response->SetObjectField(TEXT("error"), MakeError(TEXT("bridge_busy"), TEXT("another bridge request is still executing on the game thread; retry shortly")));
+        const FString Reason = GRequestActive
+            ? TEXT("another bridge request is still executing on the game thread; retry shortly")
+            : TEXT("engine owns an asset-streaming suspension; retry after the owning frame resumes");
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(FString(TEXT("bridge_busy")), Reason));
         NexusLifecycle::Complete(RequestId, false, TEXT("bridge_busy"), false);
         return SerializeJsonObjectToString(Response);
     }

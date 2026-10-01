@@ -25,6 +25,10 @@
   ],
   "Plugins": [
     {
+      "Name": "GeometryProcessing",
+      "Enabled": true
+    },
+    {
       "Name": "EnhancedInput",
       "Enabled": true
     }

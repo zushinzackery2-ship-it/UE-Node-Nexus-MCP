@@ -209,7 +209,7 @@ def test_an_untouched_asset_is_not_planned_when_the_project_is_published(tmp_pat
     tree = history.commit(root)["tree"]
     observation = dict(commit=root, raw=dict((asset, value["raw"]) for asset, value in snapshots.items()), revisions=dict())
     batch = planning.preflight(workspace, dict(candidate=tree, ours=tree, conflicts=[]), observation, sorted(history.entries(root)), dict())
-    assert batch == dict(units=dict(), order=[], errors=dict())
+    assert batch == dict(units=dict(), order=[], errors=dict(), selected=sorted(history.entries(root)))
 
 
 @pytest.fixture
@@ -241,7 +241,7 @@ def test_a_function_interface_change_refreshes_its_callers(project):
     ue.referencers[FUNCTION] = [MATERIAL.split(".", 1)[0], SECOND.split(".", 1)[0]]
     edit(project, FUNCTION, "SortPriority=0", "SortPriority=5")
     call(project, "commit", all=True, message="interface")
-    result = call(project, "push", [FUNCTION])
+    result = call(project, "push", [FUNCTION, MATERIAL, SECOND])
     assert result["status"] == "published", result
     assert ue.assets[MATERIAL].get("refreshed") == [FUNCTION]
     assert ue.assets[SECOND].get("refreshed") == [FUNCTION]

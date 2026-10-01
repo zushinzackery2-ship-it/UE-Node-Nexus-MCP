@@ -16,7 +16,8 @@ async def client(project, root, index, begin, acquired):
     async with connect(project, root, root.parent / "Workspaces" / str(index)) as peer:
         await begin.wait()
         result = await peer.execute("bridge_instance_list", project_path=str(project))
-        assert result["instances"] == [] and result["policy"]["max_editors"] == 2, result
+        assert result["instances"] == [] and "max_editors" not in result["policy"], result
+        assert result["policy"]["max_startups"] == 1, result
         identity = json.loads((root / "manager.json").read_text())["identity"]
         await acquired.wait()
         assert is_alive(identity)

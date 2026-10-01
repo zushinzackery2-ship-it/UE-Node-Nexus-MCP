@@ -13,6 +13,7 @@ from ...storage.io import byte_hash, confined
 from ..store.refs import move_ref
 from . import cache
 from .files import capture_files, discover, filename, select
+from .queries import pending
 
 
 class Workspace:
@@ -60,10 +61,10 @@ class Workspace:
         staged = [asset for asset in head.keys() | index.keys() if head.get(asset) != index.get(asset)]
         branch_head = self.store.ref(state["branch"])
         observations = self.store.ref("refs/ue/observed")
-        sessions = [item for item in self.store.records("session") if item.get("workspace_id") == state["id"] and item["status"] not in ("completed", "aborted")]
-        applies = [item for item in self.store.records("apply") if item.get("workspace_id") == state["id"] and item["phase"] not in ("completed", "rejected", "rolled_back")]
-        ahead = len(self.history.ancestors(state["head"]) - self.history.ancestors(observations)) if observations else 0
-        behind = len(self.history.ancestors(observations) - self.history.ancestors(state["head"])) if observations else 0
+        sessions, applies = pending(self.store, state["id"])
+        ours = self.history.ancestors(state["head"]) if observations else set()
+        theirs = self.history.ancestors(observations) if observations else set()
+        ahead, behind = len(ours - theirs), len(theirs - ours)
         return dict(workspace_id=state["id"], head=state["head"], index=state["index"], branch=state["branch"], generation=state["generation"],
                     staged=sorted(staged), unstaged=sorted(unstaged), local_deleted=deleted, errors=errors,
                     dirty=bool(staged or unstaged), branch_moved=branch_head != state["head"], ahead=ahead, behind=behind,

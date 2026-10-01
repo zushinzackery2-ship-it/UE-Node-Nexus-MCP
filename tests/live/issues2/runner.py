@@ -38,7 +38,7 @@ def main():
         runtime = host / "Runtime"
         runtime.mkdir()
         # This empty acceptance project has its own resource policy and process cap.
-        (runtime / "policy.json").write_text(json.dumps(dict(max_editors=1, min_free_gib=1, min_free_ratio=0.03)), encoding="utf-8")
+        (runtime / "policy.json").write_text(json.dumps(dict(min_free_gib=1, min_free_ratio=0.03)), encoding="utf-8")
     with EditorSession(project, engine, "Issues2") as session:
         verify_visible(session)
         session.verify_builds(plugin_root)

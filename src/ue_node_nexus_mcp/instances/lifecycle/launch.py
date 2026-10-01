@@ -114,10 +114,8 @@ def candidates(service, key: str) -> list[dict]:
 
 def capacity(service, project_key: str) -> None:
     active = [item for item in service.instances.values() if item["ownership"] == "managed" and item["state"] in LIVE_STATES]
-    require(len(active) < service.policy.max_editors, "capacity_exceeded", "managed editor limit reached",
-            instances=[item["instance_id"] for item in active], limit=service.policy.max_editors)
     require(sum(item["state"] == "STARTING" for item in active) < service.policy.max_startups,
-            "capacity_exceeded", "another editor startup holds the launch slot")
+            "capacity_exceeded", "another editor startup holds the launch slot", limit=service.policy.max_startups)
     memory = service.platform.memory()
     threshold = max(service.policy.min_free_gib * 1024 ** 3, memory["total"] * service.policy.min_free_ratio)
     estimate = service.resources.estimate(project_key)

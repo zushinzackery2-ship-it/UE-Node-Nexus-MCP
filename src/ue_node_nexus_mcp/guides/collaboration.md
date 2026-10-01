@@ -44,6 +44,40 @@ another writer; `details.stale` names the asset, its role and both revisions.
 `fetch` observes UE without moving workspace layers. `pull` integrates that
 version and replays staged and unstaged changes separately. `status` reports
 both layers, branch movement, active conflicts, pending applies and file paths.
+`workspaces` reads metadata and pending-record summaries without scanning files.
+Inspect one workspace with `status`; use `show(merge_id=...)` or `show(apply_id=...)`
+for an individual record's complete evidence. Repository format 2 indexes record
+ownership and lifecycle state; existing repositories migrate once on first open.
+
+MaterialFunction interfaces are resolved from the complete candidate during
+planning and replanning. Verified function receipts update the dynamic catalog.
+Each selected caller rebuilds its call nodes before applying its final wiring.
+Unselected callers are listed in `deferred_callers` for a later publication and
+retain their unsaved state. A same-id node replacement keeps its identity,
+connections and position while taking properties/defaults from its new class.
+
+## Long workflows
+
+Editor workflows return within 30 seconds by default. If work is still running,
+the answer contains a durable `job_id` and an exact `next` call. Set
+`background=True` for immediate submission or `wait_seconds=0..60` to change the
+wait. A queued push fixes its source commit at submission; later commits remain
+available for a separate publication. `idempotency_key` binds retries to one job.
+
+```python
+ue_sync("push", options=dict(workspace_id="<id>", dry_run=False, background=True))
+ue_sync("job_status", options=dict(job_id="<job-id>"))
+ue_sync("job_result", options=dict(job_id="<job-id>"))
+ue_sync("job_cancel", options=dict(job_id="<job-id>"))
+```
+
+Status reports the current stage/asset and completed assets. Results live in the
+repository and can be read from another MCP session. Cancellation and optional
+`deadline_seconds` stop between atomic asset operations; committed receipts stay
+published. An exited worker owner reports `interrupted` with recovery instructions.
+Queued jobs are cancelled when their MCP session closes. Running writes retain
+their normal receipt and recovery protocol. Capability and polling queries remain
+available while the workflow runs.
 
 Publication reports each change's `origin` (`ue` or `workspace`) and its
 `comparison.before` / `comparison.after` roles. `ue_drift_adopted` explains when

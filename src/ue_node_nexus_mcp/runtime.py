@@ -141,13 +141,23 @@ def default_tool(feature: str | None = None):
     return decorator
 
 
-def thin_tool():
+def thin_tool(offload: bool = False):
     def decorator(func):
         # FastMCP 1.13 calls issubclass() directly on annotations and therefore
         # cannot consume the strings produced by ``from __future__ import
         # annotations``. Resolve them once before registration; MCP 2.x accepts
         # the resulting runtime types as well.
         func.__annotations__ = get_type_hints(func)
+        if offload:
+            from asyncio import to_thread
+            from functools import wraps
+
+            @wraps(func)
+            async def invoke(*args, **kwargs):
+                return await to_thread(func, *args, **kwargs)
+
+            mcp.tool()(invoke)
+            return func
         return mcp.tool()(func)
 
     return decorator

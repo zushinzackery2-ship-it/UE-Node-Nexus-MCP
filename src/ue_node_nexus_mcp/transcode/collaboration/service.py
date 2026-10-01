@@ -17,14 +17,22 @@ from .store.migration import enabled, migrate, survey
 from .store.repository import PUBLICATION_WAIT_SECONDS, Store
 from .workspace.commands import run as command
 from .workspace.service import Workspace, checkout
+from .jobs.state import checkpoint
+from .report.options import JOB_ACTIONS
 
 
 def run(bridge, context, action: str, paths, options: dict) -> dict:
     validate(action, options)
+    checkpoint(stage=action)
     store = Store(context.project / ".nexus" / "collaboration", context.project_file)
+    if action in JOB_ACTIONS:
+        from .jobs.service import observe
+
+        return observe(store, action, options)
     if action == "workspaces":
-        rows = [dict(item, status=Workspace(store, item["id"], context.schema).status() if not item.get("closed") else None) for item in store.records("workspace")]
-        return dict(workspaces=rows, project_id=store.project_id)
+        from .workspace.queries import workspaces
+
+        return workspaces(store, context.schema)
     if action == "checkout":
         return create_workspace(bridge, context, store, paths, options)
     identifier = options.get("workspace_id")
@@ -72,16 +80,15 @@ def ensure_idle(workspace, action: str) -> None:
     if action not in guarded:
         return
     identifier = workspace.state["id"]
-    owned = lambda category: [item for item in workspace.store.records(category) if item["workspace_id"] == identifier]
-    active = [item for item in owned("session") if item["status"] not in ("completed", "aborted", "stale")]
+    active = workspace.store.records("session", workspace_id=identifier, exclude_status=("completed", "aborted", "stale"), summary=True)
     if active:
         raise SyncError("unmerged_workspace", "resolve/continue or abort the current operation", dict(merge_ids=[item["id"] for item in active]))
-    running = [item for item in owned("rebase") if item["status"] not in ("completed", "aborted")]
+    running = workspace.store.records("rebase", workspace_id=identifier, exclude_status=("completed", "aborted"), summary=True)
     if running:
         raise SyncError("unmerged_workspace", "continue or abort the running rebase", dict(rebase_ids=[item["id"] for item in running]))
     # A half-applied projection left the worktree between two versions; capturing
     # those bytes as an edit would record a state neither side ever authored.
-    stuck = [item for item in owned("projection") if item["phase"] not in ("completed", "aborted")]
+    stuck = workspace.store.records("projection", workspace_id=identifier, exclude_phase=("completed", "aborted"), summary=True)
     if stuck:
         raise SyncError("projection_pending", "recover the interrupted file update first",
                         dict(projection_ids=[item["id"] for item in stuck], recover=dict(action="recover", options=dict(projection_id=stuck[0]["id"], dry_run=False))))
