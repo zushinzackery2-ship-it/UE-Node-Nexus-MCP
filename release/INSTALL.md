@@ -67,9 +67,9 @@ explicit `ue_sync("pull", options=...)` scene selector, then edit `.scene.nexus`
 files. Python logs rotate under `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Logs`, overridable
 with `UE_NEXUS_LOG_DIR`.
 
-Manager state lives in `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Runtime`. Defaults are
-two managed editors, one startup, 300 seconds unused lease expiry and 120 seconds
-idle grace. Heartbeats/status queries do not renew use. Other users, work,
+Manager state lives in `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Runtime`. Admission checks
+available memory and allows one concurrent startup. Unused leases expire after
+300 seconds, with 120 seconds of idle grace. Heartbeats/status queries do not renew use. Other users, work,
 dirty packages, interactive protection and recovery receipts block cleanup.
 Lifecycle logs are 10 MiB × 4 files. MCP logs are independent per session,
 with one 1 MiB active file and three backups. Each session reserves 5 MiB,
