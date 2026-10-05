@@ -10,6 +10,7 @@ import time
 from ..errors import InstanceError, require
 from ..identity.paths import project_identity
 from ..lifecycle.prompts import exited
+from ..lifecycle.crashes.observe import observe as observe_exit
 from .discovery import accept as accept_discovery
 
 PIN_FIELDS = frozenset(("instance_id", "reason", "seconds", "dry_run", "proposal_id"))
@@ -22,7 +23,7 @@ OBSERVED_FIELDS = frozenset((
     "recovery_pending", "state_sampled_at", "compiling", "saving", "pie", "collaboration_binding", "stopping", "vfx_available",
     "private_working_set_bytes", "handle_count", "cpu_seconds", "resources_sampled_at", "control_available", "control_error",
     "blockers", "failed_packages", "close_revision", "guard_build", "window_visible", "window_titles", "windows",
-    "startup_progress", "waiting_for_user", "blocking_dialog", "dialog_notices"))
+    "startup_progress", "waiting_for_user", "blocking_dialog", "dialog_notices", "runtime_diagnostics"))
 # A caller holding a startup polls this often; a sweep is only as fresh as sweep_seconds.
 FRESH_SECONDS = 1.0
 
@@ -55,6 +56,8 @@ class Editors:
             self.ingest(discovered)
             for item in service.instances.values():
                 if item["state"] == "EXITED":
+                    if observe_exit(item):
+                        service.save(item)
                     continue
                 try:
                     alive = not item.get("pid") or service.platform.alive(item)
@@ -66,6 +69,7 @@ class Editors:
                         item.update(service.platform.exit_result(item))
                     exited(item)
                     item.update(state="EXITED", exited_at=service.clock(), generation=item.get("generation", 0) + 1)
+                    observe_exit(item)
                     service.save(item)
                     service.event("exit_confirmed", instance_id=item["instance_id"], pid=item["pid"],
                                   exited_while_waiting=bool(item.get("exited_while_waiting")))
@@ -171,7 +175,7 @@ class Editors:
         """
         seen = self.seen.get(instance["instance_id"])
         if instance["state"] == "EXITED":
-            return dict(snapshot_age_seconds=None, stale=False)
+            return dict(snapshot_age_seconds=None, stale=True, live_state=False)
         if seen is None:
             return dict(snapshot_age_seconds=None, stale=True, ready=False)
         age = max(0.0, time.time() - seen)

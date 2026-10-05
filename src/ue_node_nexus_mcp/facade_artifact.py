@@ -93,6 +93,16 @@ def lists_in(value: Any, prefix: tuple = (), depth: int = 0) -> dict[tuple, int]
 
 
 def read(artifact: StoredArtifact, query: dict[str, Any]) -> dict[str, Any]:
+    from .diagnostics.contracts.response import attach, destination
+
+    result = _read(artifact, query)
+    if isinstance(result.get("data"), dict):
+        result["data"] = dict(result["data"])
+    attach(destination(result), artifact.payload, str(artifact.payload.get("operation") or "artifact_read"), recorded=True)
+    return result
+
+
+def _read(artifact: StoredArtifact, query: dict[str, Any]) -> dict[str, Any]:
     unknown = sorted(set(query) - set(QUERY_FIELDS))
     if unknown:
         return minimal_error("unknown_query_field", f"artifact reads do not accept {', '.join(unknown)}",

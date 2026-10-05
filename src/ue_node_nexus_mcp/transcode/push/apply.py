@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from ..errors import Diagnostic
-from ..material.calls import with_refresh
 from ..storage.paths import display_path, object_path, pending_dir, state_path
 from ..sync.state import AssetState, SyncState, sha256_text
 from ..sync.files import backup_text, local_order_from_document, read_json, read_text, render_snapshot
@@ -63,13 +62,16 @@ def accept_unchanged(context: ProjectContext, state: SyncState, item: Prepared, 
     result.rows.append(row(item.status.asset_path, item.status.kind, item.status.state, "unchanged"))
 
 
-def apply_item(bridge: BridgeCall, context: ProjectContext, state: SyncState, item: Prepared, options: PushOptions, result: PushResult,
-               calls: set[str] = frozenset()) -> bool:
-    """Apply ``item``; ``calls`` names functions whose call nodes it rebuilds in the same apply."""
+def apply_item(bridge: BridgeCall, context: ProjectContext, state: SyncState, item: Prepared, options: PushOptions, result: PushResult) -> bool:
+    """Apply an ordinary legacy change after checking its publication scope."""
     ensure_source_unchanged(item)
     payload = item.plan.to_payload()
-    if calls:
-        payload["plan"] = with_refresh(payload["plan"], calls)
+    from ...safety.publication.risk import node_classes, reasons
+    risks = reasons(dict(kind=item.status.kind, payload=payload, interface_changed=item.plan.interface_changed,
+                         node_classes=node_classes(item.document)))
+    if risks:
+        raise SyncError("safety_workspace_required", "high-risk publication requires a checkout workspace and its guarded transaction",
+                        dict(asset=item.status.asset_path, risks=risks, next=dict(action="checkout", paths=[item.status.asset_path])))
     payload.update(dry_run=False, compile=options.compile, save=options.save, out_dir=str(pending_dir(context.project)))
     label = display_path(context.project, item.file)
     LOGGER.info("sync apply asset=%s verbs=%d reconcile=%s", item.status.asset_path, len(item.plan.verbs), item.reconcile)

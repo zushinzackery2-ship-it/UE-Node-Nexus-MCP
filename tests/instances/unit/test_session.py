@@ -1,10 +1,9 @@
-import time
-
 import pytest
 
 from ue_node_nexus_mcp.instances.errors import InstanceError
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from tests.instances.support.sdk import LocalBroker
+from .conftest import session_ready as ready
 
 
 @pytest.fixture
@@ -16,16 +15,6 @@ def session(lifecycle):
     ready(result, service)
     yield result
     result.close()
-
-
-def ready(session, service):
-    deadline = time.monotonic() + 3
-    while time.monotonic() < deadline:
-        service.reconcile()
-        if session.status()["state"] == "READY":
-            return
-        time.sleep(0.005)
-    pytest.fail("injected editor did not become ready")
 
 
 def test_idle_reacquire_preserves_authorized_project_restart(session, lifecycle):

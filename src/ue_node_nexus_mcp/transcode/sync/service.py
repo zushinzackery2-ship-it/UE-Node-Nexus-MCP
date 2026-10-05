@@ -30,6 +30,18 @@ MAX_INLINE_DIAGNOSTICS = 60
 
 
 def run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, options: dict[str, Any] | None = None, env: dict[str, str] | None = None, cwd: Path | None = None) -> dict[str, Any]:
+    from ...diagnostics.contracts.observation import capture, record
+    from ...diagnostics.contracts.workflows import attach_report
+
+    with capture() as observed:
+        def observed_bridge(operation, payload):
+            return record(bridge(operation, payload))
+
+        report = _run_sync(observed_bridge, action, paths, options, env, cwd)
+        return attach_report(report, action, observed.last)
+
+
+def _run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, options: dict[str, Any] | None = None, env: dict[str, str] | None = None, cwd: Path | None = None) -> dict[str, Any]:
     options = dict(options or {})
     if action not in ACTIONS:
         raise SyncError("invalid_action", f"unknown action {action!r}; expected one of {', '.join(ACTIONS)}")

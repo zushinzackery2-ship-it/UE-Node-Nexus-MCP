@@ -20,5 +20,6 @@ FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& Request);
 // Dedicated local commandlet entry point; network requests use PrepareBridgeRequest.
 FString DispatchBodyToResponseString(const FString& BodyString);
 bool IsBridgeRequestActive();
+bool IsBridgeDispatchActive();
 const FString& ActiveBridgeRequestId();
 }

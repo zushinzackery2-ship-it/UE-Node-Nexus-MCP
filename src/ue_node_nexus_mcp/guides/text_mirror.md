@@ -4,6 +4,9 @@ For collaboration, load `workflow_guide_get(category="collaboration")`.
 Use one checkout per agent, edit its returned `files_root`, then stage/commit
 and push with `workspace_id`. The loop below describes legacy mirrors before
 checkout activation. Format essentials apply to both workflows.
+High-risk legacy publication requires checkout and commit: Niagara changes,
+material rendering contracts and MaterialFunction interfaces use the guarded
+workspace protocol with complete isolated validation.
 
 UE stays the compiler; `.nexus` text files are the source. Edit them with the
 normal file tools, then let `ue_sync` push the diff into the editor in one

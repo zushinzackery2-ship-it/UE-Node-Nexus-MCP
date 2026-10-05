@@ -84,6 +84,10 @@ TSharedPtr<FJsonObject> NodeConfigJson(UBlueprint* Blueprint, UEdGraphNode* Node
             Config->SetStringField(TEXT("dynamic_pins"), FString::FromInt(CountDataInputs(Node)));
         }
     }
+    else if (UK2Node_StructOperation* StructOperation = Cast<UK2Node_StructOperation>(Node))
+    {
+        Config->SetStringField(TEXT("struct_type"), StructOperation->StructType ? StructOperation->StructType->GetPathName() : FString());
+    }
     else if (UK2Node_Variable* Variable = Cast<UK2Node_Variable>(Node))
     {
         UClass* Owner = Variable->VariableReference.GetMemberParentClass(SelfClass);
@@ -105,10 +109,6 @@ TSharedPtr<FJsonObject> NodeConfigJson(UBlueprint* Blueprint, UEdGraphNode* Node
     else if (UK2Node_DynamicCast* DynamicCast = Cast<UK2Node_DynamicCast>(Node))
     {
         Config->SetStringField(TEXT("target_type"), DynamicCast->TargetType ? DynamicCast->TargetType->GetPathName() : FString());
-    }
-    else if (UK2Node_StructOperation* StructOperation = Cast<UK2Node_StructOperation>(Node))
-    {
-        Config->SetStringField(TEXT("struct_type"), StructOperation->StructType ? StructOperation->StructType->GetPathName() : FString());
     }
     else if (Cast<UK2Node_ExecutionSequence>(Node))
     {

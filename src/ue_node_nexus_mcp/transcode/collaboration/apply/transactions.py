@@ -13,6 +13,7 @@ from ..semantic.snapshot import from_raw
 from ...storage.io import atomic_write, canonical, digest
 from ..store.refs import move_ref
 from .receipt import verify_request
+from ....diagnostics.contracts.workflows import retain_record, stored_fields
 
 
 def save(workspace, record: dict) -> None:
@@ -92,6 +93,7 @@ def execute(bridge, workspace, record: dict) -> dict:
     except (OSError, SyncError) as exc:
         response = dict(ok=False, error=dict(code="transport_lost", message=str(exc)))
     record["response"] = response
+    retain_record(record, response)
     receipt = (response.get("data") or dict()).get("receipt")
     error_code = (response.get("error") or dict()).get("code")
     preflight_error = error_code in ("stale_target", "protocol_mismatch", "save_required", "idempotency_mismatch")
@@ -101,6 +103,8 @@ def execute(bridge, workspace, record: dict) -> dict:
         try:
             recovered = envelope(bridge("transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root))))
             receipt = (recovered.get("data") or dict()).get("receipt")
+            if not record.get("runtime_diagnostics"):
+                retain_record(record, recovered, origin="recovery_probe")
         except (OSError, SyncError):
             receipt = None
     record["receipt"] = verify(workspace, record, receipt)
@@ -132,7 +136,8 @@ def execute(bridge, workspace, record: dict) -> dict:
                 origin["function"] = functions[0]
         raise SyncError(error.get("code", "recovery_required"), error.get("message", "execution did not produce a committed receipt"),
                         dict(apply_id=record["id"], phase=record["phase"], receipt=receipt,
-                             stale=(response.get("data") or dict()).get("stale"), diagnostics=diagnostics(response, receipt), **origin))
+                             stale=(response.get("data") or dict()).get("stale"), diagnostics=diagnostics(response, receipt), **origin,
+                             **stored_fields(record)))
     return record
 
 
@@ -190,10 +195,12 @@ def actual_snapshot(workspace, record: dict) -> dict | None:
             if physical:
                 binding["physical"] = physical
                 binding["meta"]["guid"] = physical
-    actual = from_raw(raw, prior, schema=workspace.schema)
+    from .function_context import function_context
     from .readback import verify_result
 
-    verify_result(workspace, record, prior, actual)
+    with function_context(workspace, record, raw):
+        actual = from_raw(raw, prior, schema=workspace.schema)
+        verify_result(workspace, record, prior, actual)
     return actual
 
 

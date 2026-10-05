@@ -5,16 +5,26 @@ import threading
 import time
 
 from ..instances.errors import InstanceError
+from ..diagnostics.contracts.observation import capture
+from ..diagnostics.contracts.response import destination, finalize
+from ..diagnostics.contracts.workflows import stored_fields
 
 
 def run_one(record) -> None:
     from ..facade_execute import execute_operation
     from .. import task_queue as owner
+    with capture() as observed:
+        run_observed(record, owner, execute_operation, observed)
+
+
+def run_observed(record, owner, execute_operation, observed) -> None:
     try:
         with record.work_scope.activate() if record.work_scope else nullcontext():
             response = record.executor() if record.executor else execute_operation(record.operation, record.payload)
+        response = finalize(response, record.operation, observed.last)
         with owner._lock:
             record.result = response
+            record.diagnostic_snapshot = stored_fields(destination(response))
             record.status = "succeeded" if response.get("ok") else "failed"
             if record.status == "failed":
                 record.error = response.get("error") or dict(code="operation_failed", message="operation failed")
@@ -22,6 +32,8 @@ def run_one(record) -> None:
         with owner._lock:
             record.status = "failed"
             record.error = exc.envelope()["error"] if isinstance(exc, InstanceError) else dict(code="operation_failed", message=str(exc))
+            result = finalize(dict(ok=False, error=record.error), record.operation, observed.last)
+            record.diagnostic_snapshot = stored_fields(result)
     finally:
         if record.work_scope:
             record.work_scope.release()

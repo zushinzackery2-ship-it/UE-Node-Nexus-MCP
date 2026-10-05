@@ -18,6 +18,9 @@ def ensure(editors, client: dict, payload: dict) -> dict:
     payload = dict(payload, project_path=project["project_path"])
     mode = payload.get("mode", "reuse_only")
     require(mode in ("reuse_only", "reuse_or_start"), "invalid_request", "unknown launch mode")
+    allow_low_memory = payload.get("allow_low_memory", False)
+    require(isinstance(allow_low_memory, bool), "invalid_request", "allow_low_memory must be a boolean",
+            field="allow_low_memory", received=allow_low_memory)
     repository = resolve_repository(project, service.root, payload.get("mirror_root"))
     with service.lock:
         known = candidates(service, project["project_key"])
@@ -63,8 +66,10 @@ def ensure(editors, client: dict, payload: dict) -> dict:
             require(mode == "reuse_or_start", "instance_missing", "no editor is running for this project", **project)
             options = service.platform.launch_options(project, payload)
             try:
-                capacity(service, project["project_key"])
+                admission = capacity(service, project["project_key"], allow_low_memory)
             except InstanceError as exc:
+                service.event("launch_refused", project_key=project["project_key"], dry_run=payload.get("dry_run", True),
+                              error=exc.envelope()["error"])
                 if not payload.get("dry_run", True):
                     result = editors.reap(None, dict(dry_run=False, automatic=True))
                     exc.details["reclaiming"] = [row for row in result["items"] if row.get("state") == "DRAINING"]
@@ -72,16 +77,18 @@ def ensure(editors, client: dict, payload: dict) -> dict:
             token = preview(service, project, payload, repository, launch=options)
             require(not payload.get("proposal_id") or payload["proposal_id"] == token, "stale_plan", "ensure preconditions changed")
             if payload.get("dry_run", True):
-                return dict(dry_run=True, action="start", project=project, launch=options, repository=repository, proposal_id=token)
+                return dict(dry_run=True, action="start", project=project, launch=options, admission=admission,
+                            repository=repository, proposal_id=token)
             repository = resolve_repository(project, service.root, payload.get("mirror_root"), persist=True)
             identifier = uuid.uuid4().hex
             item = dict(project, instance_id=identifier, start_intent_id=uuid.uuid4().hex, operation_id=uuid.uuid4().hex,
                         state="STARTING", ownership="managed", protected=options["launch_profile"] == "interactive",
-                        generation=1, created_at=service.clock(), idle_since=None, launch=options, ready=False)
+                        generation=1, created_at=service.clock(), idle_since=None, launch=options, admission=admission,
+                        ready=False)
             service.instances[identifier] = item
             service.save(item)
             service.intents.record(client, payload, item)
-            service.event("launch_reserved", instance_id=identifier, project_key=project["project_key"])
+            service.event("launch_reserved", instance_id=identifier, project_key=project["project_key"], admission=admission)
             editors.jobs[identifier] = editors.workers.submit(spawn, editors, item)
             action = "created"
         item.update(repository)
@@ -112,15 +119,25 @@ def candidates(service, key: str) -> list[dict]:
             if service.instances[identifier]["state"] in LIVE_STATES]
 
 
-def capacity(service, project_key: str) -> None:
+def capacity(service, project_key: str, allow_low_memory: bool) -> dict:
+    """Admit one more managed start and return the memory facts it was judged on.
+
+    The startup slot always applies. ``allow_low_memory`` only admits a start
+    whose project needs more physical memory than is available now.
+    """
     active = [item for item in service.instances.values() if item["ownership"] == "managed" and item["state"] in LIVE_STATES]
     require(sum(item["state"] == "STARTING" for item in active) < service.policy.max_startups,
             "capacity_exceeded", "another editor startup holds the launch slot", limit=service.policy.max_startups)
     memory = service.platform.memory()
-    threshold = max(service.policy.min_free_gib * 1024 ** 3, memory["total"] * service.policy.min_free_ratio)
+    floor = int(max(service.policy.min_free_gib * 1024 ** 3, memory["total"] * service.policy.min_free_ratio))
     estimate = service.resources.estimate(project_key)
-    require(memory["available"] >= threshold + estimate, "capacity_exceeded", "insufficient available physical memory",
-            available_bytes=memory["available"], required_bytes=threshold + estimate, estimated_project_bytes=estimate)
+    measured = dict(available_bytes=memory["available"], required_bytes=floor + estimate, floor_bytes=floor,
+                    estimated_project_bytes=estimate)
+    short = memory["available"] < floor + estimate
+    require(not short or allow_low_memory, "capacity_exceeded",
+            "insufficient available physical memory; with the user's approval, call bridge_instance_ensure again "
+            "with allow_low_memory=true to start anyway", override="allow_low_memory", **measured)
+    return dict(measured, memory_override=short)
 
 
 def spawn(editors, item: dict) -> None:

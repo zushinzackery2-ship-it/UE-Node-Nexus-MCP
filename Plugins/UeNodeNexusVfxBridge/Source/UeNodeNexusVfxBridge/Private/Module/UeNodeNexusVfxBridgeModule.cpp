@@ -58,16 +58,16 @@ const TArray<FVfxOperation>& VfxOperations()
 void FUeNodeNexusVfxBridgeModule::StartupModule()
 {
     UeNodeNexusBridge::RegisterVfxBuildIdentity();
-    const auto Observer = [](const UeNodeNexusBridge::Collaboration::FJson& Request, UObject* Asset)
+    const auto Observer = [](const UeNodeNexusBridge::Collaboration::FJson& Request, UObject* Asset, FString& Error)
     {
         using namespace UeNodeNexusBridge;
         if (UNiagaraSystem* System = Cast<UNiagaraSystem>(Asset))
         {
-            return VfxTranscode::BuildNiagaraSystemRaw(System);
+            return VfxTranscode::BuildNiagaraSystemRaw(System, &Error);
         }
         if (UNiagaraEmitter* Emitter = Cast<UNiagaraEmitter>(Asset))
         {
-            return VfxTranscode::BuildNiagaraEmitterRaw(Emitter);
+            return VfxTranscode::BuildNiagaraEmitterRaw(Emitter, &Error);
         }
         FString Path;
         Request->TryGetStringField(TEXT("asset_path"), Path);

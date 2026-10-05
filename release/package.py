@@ -104,7 +104,7 @@ def verify_wheel(wheel: Path, version: str) -> None:
         operations = json.loads(archive.read("ue_node_nexus_mcp/operations.json"))
         if "operations/instances.json" not in operations["files"]:
             raise RuntimeError("wheel does not publish lifecycle operations")
-        for module in ("prepare", "apply", "commit", "diagnostics", "recovery", "refresh"):
+        for module in ("prepare", "apply", "commit", "diagnostics", "recovery"):
             if f"ue_node_nexus_mcp/transcode/push/{module}.py" not in members:
                 raise RuntimeError(f"wheel missing sync module: {module}")
         source_root = ROOT / "src/ue_node_nexus_mcp"

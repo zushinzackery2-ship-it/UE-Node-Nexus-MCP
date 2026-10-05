@@ -175,8 +175,11 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
         Context.Fail(INDEX_NONE, TEXT("invalid_asset"), TEXT("asset is not a Blueprint"));
         return;
     }
-    // Declarations run before any graph verb: a node may call a function or read a
-    // variable that the same plan declares later, including across graphs.
+    // Explicit deletions must precede member edits: removing a member can destroy
+    // its reader, writer or caller nodes inside the editor utility. Declarations
+    // still precede all remaining graph verbs so new nodes resolve new members.
+    TArray<UEdGraph*> Touched;
+    ApplyGraphDeletions(Blueprint, Plan, Context, Touched);
     TArray<int32> GraphOps;
     TSet<FName> ChangedFunctions;
     bool bMembersDeclared = false;
@@ -189,6 +192,10 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
             continue;
         }
         const FString Verb = ReadOpString(Op, TEXT("op"));
+        if (Verb == TEXT("delete_node"))
+        {
+            continue;
+        }
         if (Verb == TEXT("bp_function_signature_set"))
         {
             ChangedFunctions.Add(FName(*ReadOpString(Op, TEXT("name"))));
@@ -210,7 +217,6 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
         FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
         RefreshFunctionCalls(Blueprint, ChangedFunctions);
     }
-    TArray<UEdGraph*> Touched;
     ApplyScheduledGraphOps(Blueprint, Plan, GraphOps, Context, Touched);
     if (Context.bChanged && !Context.bDryRun)
     {

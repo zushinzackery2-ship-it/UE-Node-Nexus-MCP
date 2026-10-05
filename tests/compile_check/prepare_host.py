@@ -37,9 +37,9 @@ def sync_directory(source: Path, target: Path, host: Path) -> None:
             path.rmdir() if path.is_dir() else path.unlink()
 
 
-def prepare(host: Path) -> None:
+def prepare(host: Path, output_root: Path | None = None) -> None:
     host = host.resolve()
-    host.relative_to((ROOT / "build").resolve())
+    host.relative_to((output_root or ROOT / "build").resolve())
     host.mkdir(parents=True, exist_ok=True)
     for plugin in PLUGINS:
         source = ROOT / "Plugins" / plugin
@@ -57,4 +57,6 @@ def prepare(host: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, default=ROOT / "build/validation")
-    prepare(parser.parse_args().host)
+    parser.add_argument("--output-root", type=Path)
+    args = parser.parse_args()
+    prepare(args.host, args.output_root)

@@ -91,4 +91,8 @@ def apply_read_format_defaults(operation: str, read_format: str, query_payload: 
         elif operation == "project_input_mappings_get":
             query_payload.setdefault("format", "compact")
     elif read_format == "detail":
-        query_payload.setdefault("format", "full")
+        from .payload_schema import payload_schema_for
+
+        field = payload_schema_for(operation).get("properties", dict()).get("format")
+        if field is not None and "full" in field.get("enum", ["full"]):
+            query_payload.setdefault("format", "full")

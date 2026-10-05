@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+from pathlib import Path
 
 from .contracts import (
     BRIDGE_OPERATIONS,
@@ -8,7 +9,7 @@ from .contracts import (
     OPERATION_FEATURES,
     require_non_empty_string,
 )
-from .diagnostics_logs import enrich_with_material_log_diagnostics, read_latest_project_log
+from .diagnostics_logs import enrich_with_log_diagnostics, read_latest_project_log
 from .instances.errors import InstanceError
 from .instances.session import instance_manager
 from .instances.tools.operations import bridge_instance_list as bridge_instance_list, bridge_instance_select as bridge_instance_select
@@ -28,7 +29,7 @@ def log_tail_get(
     match: str | None = None,
     max_lines: int = 200,
 ) -> dict[str, Any]:
-    """MCP-local read of the newest UE project log tail, optionally filtered by substring."""
+    """Read the bound instance log offline, or the newest project history when unbound."""
     if not isinstance(tail_kb, int) or isinstance(tail_kb, bool) or not 1 <= tail_kb <= 1024:
         raise ValueError("tail_kb must be an integer between 1 and 1024")
     if not isinstance(max_lines, int) or isinstance(max_lines, bool) or not 1 <= max_lines <= 2000:
@@ -37,15 +38,21 @@ def log_tail_get(
         raise ValueError("match must be a non-empty string")
 
     try:
-        project_context = dict(data=dict(project_file_path=instance_manager.project()["project_path"]))
+        project = instance_manager.project()["project_path"]
+        state = instance_manager.current()
+        data = dict(project_file_path=project, command_line=state.get("command_line", ""))
+        if state.get("instance_id"):
+            data["log_file_path"] = str(Path(project).parent / "Saved/Nexus/Logs" / (state["instance_id"] + ".log"))
+        project_context = dict(data=data)
     except InstanceError as exc:
         return dict(exc.envelope(), operation="log_tail_get", diagnostics=[], warnings=[])
     log_text, log_path = read_latest_project_log(project_context, tail_bytes=tail_kb * 1024)
-    if log_path is None:
+    if log_path is None or not log_path.is_file():
         return {
             "ok": False,
             "operation": "log_tail_get",
-            "error": {"code": "log_not_found", "message": "No project log file could be located", "details": {}},
+            "error": {"code": "log_not_found", "message": "Selected editor log could not be located",
+                      "details": {"log_path": str(log_path) if log_path else None}},
             "diagnostics": [],
             "warnings": [],
         }
@@ -209,17 +216,19 @@ def execute_diagnostics_get(payload: dict[str, Any]) -> dict[str, Any]:
     """Facade entrypoint for diagnostics_get.
 
     Forwards the payload to the bridge unchanged, then enriches ok responses
-    with recent material compile entries parsed from the UE project log
+    with historical compile, PIE, script and RHI entries parsed from the selected editor log
     (``data.related_log_items``).
     """
     response = _call("diagnostics_get", payload)
     if response.get("ok") is not True:
         return response
 
+    if payload.get("include_history") is False:
+        return response
     project_context = _call("project_context_get", {})
     asset_path = payload.get("asset_path")
     severity = payload.get("severity", "all")
-    return enrich_with_material_log_diagnostics(
+    return enrich_with_log_diagnostics(
         response,
         project_context,
         asset_path=asset_path if isinstance(asset_path, str) else None,
@@ -231,11 +240,21 @@ def execute_diagnostics_get(payload: dict[str, Any]) -> dict[str, Any]:
 def diagnostics_get(
     asset_path: str | None = None,
     severity: Literal["info", "warning", "error", "all"] = "all",
+    include_assets: bool = True,
+    include_history: bool = True,
+    session_id: str | None = None,
+    cursor: int = 0,
+    limit: int = 200,
 ) -> dict[str, Any]:
     """Return UE message-log and asset compile diagnostics, optionally filtered by asset and severity."""
     return execute_diagnostics_get(
         {
             "asset_path": asset_path,
             "severity": severity,
+            "include_assets": include_assets,
+            "include_history": include_history,
+            "session_id": session_id,
+            "cursor": cursor,
+            "limit": limit,
         }
     )

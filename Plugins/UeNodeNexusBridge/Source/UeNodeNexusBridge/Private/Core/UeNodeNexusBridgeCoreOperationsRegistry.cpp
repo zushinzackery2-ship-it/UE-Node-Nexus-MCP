@@ -5,6 +5,8 @@
 #include "UeNodeNexusBridgeOperations.h"
 #include "Level/Scene/NexusSceneOps.h"
 #include "Geometry/NexusGeometry.h"
+#include "Diagnostics/Runtime/Validation/NexusRuntimeSmoke.h"
+#include "Safety/Isolation/NexusSafetyBaseline.h"
 
 namespace UeNodeNexusBridge
 {
@@ -19,6 +21,9 @@ void RegisterCoreOp(const TCHAR* Operation, FBridgeOperationHandler Handler)
 void RegisterCoreOperations()
 {
     RegisterCoreOp(TEXT("mesh_geometry_get"), HandleMeshGeometryGet);
+    RegisterCoreOp(TEXT("runtime_smoke_start"), RuntimeSmoke::Start);
+    RegisterCoreOp(TEXT("runtime_smoke_status"), RuntimeSmoke::Status);
+    RegisterCoreOp(TEXT("safety_baseline_export"), Safety::ExportBaseline);
     RegisterCoreOp(TEXT("mesh_geometry_build"), HandleMeshGeometryBuild);
     RegisterCoreOp(TEXT("scene_export"), HandleSceneExport);
     RegisterCoreOp(TEXT("scene_status"), HandleSceneStatus);

@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Material/ControlFlow/NexusMaterialControlFlow.h"
 #include "Schema/NexusSchema.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -67,6 +68,7 @@ static TSharedPtr<FJsonObject> MaterialExpressionClasses()
             {
                 Outputs.Add(MakeShared<FJsonValueString>(Output.OutputName.IsNone() ? FString() : Output.OutputName.ToString()));
             }
+            AppendMaterialControlFlowPins(Cdo, Inputs, Outputs);
         }
         Record->SetArrayField(TEXT("inputs"), Inputs);
         Record->SetArrayField(TEXT("outputs"), Outputs);

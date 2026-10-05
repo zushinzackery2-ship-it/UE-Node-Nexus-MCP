@@ -28,6 +28,10 @@ An executed ensure is held while the editor starts (`wait_seconds`, default 45)
 and returns `startup.outcome`: `ready`; `waiting_for_user` with `blocking_dialog`,
 which you show to the user and then call ensure again; or `starting`, which you
 repeat as `startup.next` says. Callers share the existing launch.
+A start refused for memory returns `capacity_exceeded` naming `allow_low_memory`.
+Show the available and required bytes to the user, and add `allow_low_memory=True`
+only after the user accepts starting below the requirement. It covers that one
+start; the startup slot still applies.
 
 Confirm the selected project with `project_context_get` and loaded modules with
 `bridge_capabilities_get`. Version 0.6.0 uses contract 4; engine BuildIds must
@@ -83,6 +87,9 @@ patches, scene writes, response modes and batching.
 Internal viewport screenshots read rendered pixels and do not require an always-on-top window.
 Use `viewport_capture`; avoid helper scripts that call `SetForegroundWindow` or set `HWND_TOPMOST` unless the user requests window activation.
 Handle background refresh or minimized-viewport issues through capture scheduling and explicit diagnostics, rather than forcing the editor in front of the user's work.
+Capture acceptance is asynchronous: poll `viewport_capture_status(file_path=..., capture_id=...)` until `state=completed`, `done=true`, `ok=true`. A file without its matching receipt is not completion evidence.
+Checkout publication automatically isolates high-risk Niagara, material rendering and function-interface changes. Inspect the result row's `safety_validation`: exact candidate/dependency binding, `baseline=live_memory`, engine/plugins/configuration, actual RHI, compile/save/exported readback and worker exit code 0. Dirty flags and original disk bytes survive baseline serialization. Explicit `safety_validate` uses `baseline=saved_disk`; transcode operations execute complete worker-owned publication. Legacy high-risk push requires checkout. Normal material values use the publishing transaction directly. Resource admission stays enabled; after explicit user authorization, `safety_allow_low_memory=true` on one push/continue or `allow_low_memory=true` on explicit validation permits that invocation's private workers to start below the memory threshold.
+Inspect validation receipt `copied_bytes` and `timings` for project-specific copy/startup/execution/exit cost. Niagara storage failures include the parameter name, type and category/range reason; preserve those details when reporting failed export or publication.
 
 ## Author and publish assets
 
@@ -213,6 +220,34 @@ reported target/dependency and measured revisions. For
 Live material compilation submits missing shader work, then reports shader
 readiness and the target RHI update fence. Diagnostics reads inspect loaded
 objects. A compile result does not assert whole-frame GPU completion.
+
+Read `ue_read(target="diagnostics", format="detail")` for PIE/MessageLog, script,
+RHI and loaded Blueprint/AnimBlueprint/material diagnostics. Default reads retain
+the latest PIE after it ends; `session_id` selects retained history and `cursor`
+pages updated aggregates. Total counts survive cursor reads; returned counts
+describe this page. Inspect coverage, unloaded/unsupported assets, `cursor_gap`,
+`dropped_count` and `asset_counts_complete` before accepting a filtered zero.
+Historical `related_log_items` stay separate; `include_history=false` skips them.
+Every online result retains scoped `operation_diagnostics` and
+`runtime_diagnostics`, including auto/artifact reads, failed operations, sync and
+task/job polling. Runtime samples prioritize severe errors; cumulative session
+counts remain visible on empty cursor pages. Asset totals use
+`matched_error_count`. Stored evidence reports `live_state=false`; offline actions
+report `runtime_observed=false`. Publication's runtime verification is `not_run`.
+For project test acceptance, capture the active PIE session and editor instance,
+end PIE and call `runtime_verification_get(session_id=..., instance_id=...,
+functional_passed=...)`. Errors fail; identity/coverage/loss gaps are inconclusive.
+Inspect `sources_complete` as well as asset coverage before accepting zero.
+UE Python callbacks can capture and verify directly through
+`unreal.NexusRuntimeDiagnosticsLibrary.runtime_diagnostics_json("")` and
+`runtime_verification_json(session_id, instance_id, functional_passed)`.
+Bound `log_tail_get` reads the exact instance log offline. EXITED status returns
+`exit_evidence` and `last_editor_snapshot` with `stale=true`, `live_state=false`.
+Use `safety_validate` operations `level_open` and `runtime_smoke_start` to validate
+actual PIE/DX12 or DX11, structured runtime events, a verified PNG and exit code 0.
+Smoke requires the copied worker; its durable receipt is read by `runtime_smoke_status`.
+Transport requests run one per editor frame before world ticking; loading a map
+or pumping the TaskGraph cannot interleave another queued mutation.
 Bridge save operations report read-only files directly. A start nobody can see
 (managed, hidden or offscreen) has UE's OK-only "Low Drive Space" advisory
 confirmed by the Guard and reported in `dialog_notices` with the locations and

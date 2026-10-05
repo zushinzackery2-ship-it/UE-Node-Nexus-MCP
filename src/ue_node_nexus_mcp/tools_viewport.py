@@ -1,16 +1,7 @@
-"""Editor viewport screenshot operations.
-
-The bridge draws the requested viewport synchronously and reports whether the
-PNG landed (``data.exists``); ``file_path`` is absolute. When a viewport client
-defers the request to its own tick the file appears after the next redraw, and
-because the UE editor and this MCP server share one machine (named-pipe
-transport) that completion is observed with a local file check instead of a
-second bridge roundtrip.
-"""
+"""Admit editor screenshot jobs and inspect their verified completion receipts."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Literal
 
 from .contracts import require_non_empty_string
@@ -24,6 +15,7 @@ def viewport_capture(
     target: Literal["level", "active"] = "level",
     show_ui: bool = False,
     dry_run: bool = False,
+    timeout_seconds: float = 30,
 ) -> dict[str, Any]:
     """Screenshot the level editor viewport (or the Slate-active one); returns the absolute PNG path.
 
@@ -33,6 +25,8 @@ def viewport_capture(
     """
     if filename is not None:
         require_non_empty_string(filename, "filename")
+    if not isinstance(timeout_seconds, (int, float)) or isinstance(timeout_seconds, bool) or not 1 <= timeout_seconds <= 120:
+        raise ValueError("timeout_seconds must be 1..120")
     return _call(
         "viewport_capture",
         {
@@ -40,6 +34,7 @@ def viewport_capture(
             "target": target,
             "show_ui": show_ui,
             "dry_run": dry_run,
+            "timeout_seconds": timeout_seconds,
         },
     )
 
@@ -76,20 +71,8 @@ def viewport_camera_set(
 
 
 @default_tool()
-def viewport_capture_status(file_path: str) -> dict[str, Any]:
-    """MCP-local check whether a previously requested screenshot file exists on disk yet."""
+def viewport_capture_status(file_path: str, capture_id: str | None = None) -> dict[str, Any]:
+    """Read a durable screenshot receipt and verify this request's PNG and dimensions."""
     require_non_empty_string(file_path, "file_path")
-    path = Path(file_path)
-    exists = path.is_file()
-    data: dict[str, Any] = {"file_path": file_path, "exists": exists}
-    if exists:
-        stat = path.stat()
-        data["size_bytes"] = stat.st_size
-        data["modified_at"] = stat.st_mtime
-    return {
-        "ok": True,
-        "operation": "viewport_capture_status",
-        "data": data,
-        "diagnostics": [],
-        "warnings": [],
-    }
+    from .safety.capture.status import status
+    return status(file_path, capture_id)

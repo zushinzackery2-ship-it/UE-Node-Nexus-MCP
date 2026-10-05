@@ -77,6 +77,13 @@ bool ConfigureFromPositional(UBlueprint* Blueprint, UClass* NodeClass, const TAr
         Config->SetStringField(TEXT("function_name"), Function);
         return true;
     }
+    // Struct operation nodes inherit UK2Node_Variable; configure the derived
+    // family first so its struct path cannot be mistaken for a variable member.
+    if (NodeClass->IsChildOf(UK2Node_StructOperation::StaticClass()))
+    {
+        Config->SetStringField(TEXT("struct_type"), First);
+        return true;
+    }
     if (NodeClass->IsChildOf(UK2Node_Variable::StaticClass()))
     {
         const int32 Dot = First.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
@@ -95,11 +102,6 @@ bool ConfigureFromPositional(UBlueprint* Blueprint, UClass* NodeClass, const TAr
     if (NodeClass->IsChildOf(UK2Node_DynamicCast::StaticClass()))
     {
         Config->SetStringField(TEXT("target_type"), First);
-        return true;
-    }
-    if (NodeClass->IsChildOf(UK2Node_StructOperation::StaticClass()))
-    {
-        Config->SetStringField(TEXT("struct_type"), First);
         return true;
     }
     return true;

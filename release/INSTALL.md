@@ -82,7 +82,10 @@ files. Python logs rotate under `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Logs`, overrid
 with `UE_NEXUS_LOG_DIR`.
 
 Manager state lives in `%LOCALAPPDATA%/UE-Node-Nexus-MCP/Runtime`. Admission checks
-available memory and allows one concurrent startup. Unused leases expire after
+available memory and allows one concurrent startup; an ensure with explicit
+`allow_low_memory=true` admits that one start below the memory requirement.
+A manager running from before this option reports `manager_outdated` until it
+exits and restarts on the installed version. Unused leases expire after
 300 seconds, with 120 seconds of idle grace. Heartbeats/status queries do not renew use. Other users, work,
 dirty packages, interactive protection and recovery receipts block cleanup.
 Lifecycle logs are 10 MiB × 4 files. MCP logs are independent per session,
@@ -98,3 +101,27 @@ The manifest also records the source commit and checksums for packaged files.
 Local build manifests use `mode=local-build` and record `source_dirty`; they
 do not imply a Git tag or a published release. Validation logs and the local
 delivery report distinguish compilation/static checks from runtime testing.
+
+After restart, `diagnostics_get` includes retained PIE/script/RHI errors and
+loaded Blueprint/AnimBlueprint/material compile state. Detail reads preserve
+coverage and counters through paged artifacts. Historical logs remain separate;
+bound log reads use the exact instance log. EXITED status carries correlated
+fatal/ensure evidence, dump/log paths and a historical editor snapshot.
+For execution acceptance, include `level_open` and `runtime_smoke_start` in a
+`safety_validate` copy: success requires an independently verified rendered PNG,
+zero runtime errors/lost events and a confirmed worker exit with code 0.
+
+High-risk checkout publication now requires isolation contract 1. It validates
+Niagara changes, material rendering contracts and function interfaces through
+complete worker apply/compile/save/export before the main transaction. Results
+bind the live-memory baseline, candidate/dependencies, engine/plugins and RHI.
+Use matching Python and all three plugin modules. Legacy high-risk push requires
+checkout. Low-memory startup remains a user-authorized per-invocation override:
+`safety_allow_low_memory` for push/continue or `allow_low_memory` for explicit
+`safety_validate`. Install after the active editors finish and exit normally.
+
+Niagara storage reads and existing-value writes share category, size/range and
+object-slot validation. Engine byte copies handle packed vector/quaternion
+values and LWC conversion. Storage failures retain the parameter name/type and
+reason through export and publication. Isolation receipts include copied bytes
+and per-phase timings for measuring project-specific validation cost.

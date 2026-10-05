@@ -14,7 +14,7 @@ OPTIONS = dict(
     merge=set(("revision", "source", "message")), pull=set(("message", "discover")),
     resolve=set(("merge_id", "conflict_id", "conflict_ids", "choice", "value", "name", "asset", "conflict_type", "layer", "all")),
     abort=set(("merge_id", "rebase_id", "apply_id")),
-    push=set(("revision", "source", "merge_id", "compile", "save", "allow_delete", "stop_on_error", "replace", "force")),
+    push=set(("revision", "source", "merge_id", "compile", "save", "allow_delete", "stop_on_error", "replace", "force", "safety_allow_low_memory")),
     recover=set(("apply_id", "projection_id", "restore", "preserve_current", "resolution")), close=set(),
     branch=set(("name", "revision", "delete", "expected")), switch=set(("name",)),
     tag=set(("name", "revision", "message", "expected")),
@@ -30,7 +30,7 @@ OPTIONS = dict(
     schema=set(("refresh", "category", "query", "details", "function", "target", "context", "limit", "cursor", "revision")),
 )
 OPTIONS["cherry-pick"] = set(OPTIONS["revert"])
-OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error", "force"))
+OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error", "force", "safety_allow_low_memory"))
 BACKGROUND_ACTIONS = frozenset(("checkout", "fetch", "pull", "push", "continue", "recover", "status", "lint", "schema"))
 JOB_ACTIONS = frozenset(("job_status", "job_result", "job_cancel"))
 TRANSPORT_KEYS = frozenset(("background", "wait_seconds", "deadline_seconds", "idempotency_key"))
@@ -40,7 +40,7 @@ for action in JOB_ACTIONS:
     OPTIONS[action] = set(("job_id",))
 READ_ACTIONS.update(("job_status", "job_result"))
 ACTIONS = tuple(OPTIONS)
-BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current", "background"))
+BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current", "background", "safety_allow_low_memory"))
 STRING_LIST_KEYS = set(("conflict_ids",))
 
 

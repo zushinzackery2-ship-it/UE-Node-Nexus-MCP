@@ -12,12 +12,15 @@ def broken_cleanup(monkeypatch):
     def close(*args):
         raise InstanceError("close_blocked", "dirty package", dict(instance=dict(state="BLOCKED")))
 
-    monkeypatch.setattr("ue_node_nexus_mcp.instances.session.shutdown.close_instance", close)
+    monkeypatch.setattr("tests.live.editor.close.close_instance", close)
     records, closed = [], []
     session = EditorSession.__new__(EditorSession)
     session.session = SimpleNamespace(current=lambda: dict(instance_id="test"), release=lambda: None,
-                                      status=lambda: dict(state="READY"), close=lambda: closed.append(True))
+                                      status=lambda *args: dict(state="READY"), close=lambda: closed.append(True),
+                                      broker=SimpleNamespace(policy=dict(recovery_seconds=1, sweep_seconds=1)),
+                                      call=lambda *args: dict(blockers=[]))
     session.previous_bridge = None
+    session.saved_packages = set()
     session.report = lambda stage, record: records.append((stage, record))
     return session, records, closed
 

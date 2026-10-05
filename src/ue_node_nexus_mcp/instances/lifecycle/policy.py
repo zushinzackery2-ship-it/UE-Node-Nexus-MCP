@@ -12,6 +12,9 @@ from ..broker.registry import atomic_json
 LOG = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = 1
+# Optional request fields added within this protocol. A manager ignores fields it
+# does not know, so a client sends one only to a manager that announces it.
+FEATURES = frozenset(("allow_low_memory",))
 LIVE_STATES = frozenset(("STARTING", "READY", "IDLE", "DRAINING", "STOPPING", "UNRESPONSIVE", "BLOCKED"))
 
 
@@ -49,16 +52,20 @@ class Policy:
             raise InstanceError("invalid_policy", "min_free_ratio must be between zero and one")
 
     @classmethod
+    def parse(cls, values: dict) -> tuple["Policy", dict]:
+        """Validate stored options without touching the file; also returns them without retired fields."""
+        current = dict((key, value) for key, value in values.items() if key != "max_editors")
+        unknown = set(current) - set(item.name for item in fields(cls))
+        if unknown:
+            raise InstanceError("invalid_policy", "unknown policy options", dict(options=sorted(unknown)))
+        return cls(**current), current
+
+    @classmethod
     def read(cls, root: Path) -> "Policy":
         path = root / "policy.json"
         values = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else dict()
-        retired = "max_editors" in values
-        values.pop("max_editors", None)
-        unknown = set(values) - set(item.name for item in fields(cls))
-        if unknown:
-            raise InstanceError("invalid_policy", "unknown policy options", dict(options=sorted(unknown)))
-        policy = cls(**values)
-        if retired:
-            atomic_json(path, values)
+        policy, current = cls.parse(values)
+        if current != values:
+            atomic_json(path, current)
             LOG.info("policy_option_retired option=max_editors path=%s", path)
         return policy

@@ -44,6 +44,12 @@ def _client_side_handler(operation: str) -> Callable[[dict[str, Any]], dict[str,
 
 def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Dispatch session-local control-plane ops handled inside the MCP server."""
+    if operation == "runtime_verification_get":
+        from .safety.runtime.tools import runtime_verification_get
+        return runtime_verification_get(**payload)
+    if operation == "safety_validate":
+        from .safety.tools import safety_validate
+        return safety_validate(**payload)
     if operation == "batch_execute":
         from .batch_execute import batch_execute
 
@@ -78,7 +84,7 @@ def execute_local_operation(operation: str, payload: dict[str, Any]) -> dict[str
         file_path = payload.get("file_path")
         if not isinstance(file_path, str) or not file_path.strip():
             raise ValueError("file_path must be a non-empty string")
-        return viewport_capture_status(file_path)
+        return viewport_capture_status(file_path, payload.get("capture_id"))
     if operation == "workflow_guide_get":
         from .workflow_guides import workflow_guide_get
 

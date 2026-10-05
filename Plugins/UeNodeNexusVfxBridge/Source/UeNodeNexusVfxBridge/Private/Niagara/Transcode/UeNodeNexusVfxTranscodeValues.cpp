@@ -2,9 +2,12 @@
 
 #include "Materials/MaterialInterface.h"
 #include "NiagaraParameterStore.h"
+#include "NiagaraDataInterface.h"
 #include "NiagaraTypes.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
+#include "Values/NexusNiagaraValue.h"
+#include "Values/Storage/NexusNiagaraStorage.h"
 
 namespace UeNodeNexusBridge::VfxTranscode
 {
@@ -115,132 +118,99 @@ FNiagaraTypeDefinition TypeFromName(const FString& Name)
     return FNiagaraTypeDefinition();
 }
 
-FString ParameterValueText(const FNiagaraParameterStore& Store, const FNiagaraVariable& Variable)
+bool SetParameterValueText(FNiagaraParameterStore& Store, const FNiagaraVariable& Variable, const FString& Text, bool bAddIfMissing, FString* OutError)
 {
+    if (OutError)
+    {
+        OutError->Reset();
+    }
     const FNiagaraTypeDefinition& Type = Variable.GetType();
+    FString Error;
+    FParsedValue Value;
+    if (Variable.GetName().IsNone() || !Type.IsValid()
+        || (!bAddIfMissing && Store.IndexOf(Variable) == INDEX_NONE)
+        || !ParseParameterValue(Type, Text, Value, Error))
+    {
+        if (OutError)
+        {
+            *OutError = Error.IsEmpty() ? TEXT("invalid or missing Niagara parameter") : Error;
+        }
+        return false;
+    }
+    if (Store.IndexOf(Variable) != INDEX_NONE)
+    {
+        UObject* Existing = nullptr;
+        const bool bStorageValid = Type.GetClass() != nullptr
+            ? Storage::ReadObject(Store, Variable, Existing, Error)
+            : Storage::ValidateBytes(Store, Variable, Variable.GetSizeInBytes(), Error);
+        if (!bStorageValid)
+        {
+            if (OutError != nullptr)
+            {
+                *OutError = Error;
+            }
+            return false;
+        }
+    }
+    const double* Components = Value.Components;
+    if (Type == FNiagaraTypeDefinition::GetQuatDef())
+    {
+        return Store.SetParameterValue<FQuat4f>(FQuat4f(float(Components[0]), float(Components[1]),
+            float(Components[2]), float(Components[3])), Variable, bAddIfMissing);
+    }
     if (Type == FNiagaraTypeDefinition::GetFloatDef())
     {
-        return Transcode::ExportFloat(Store.GetParameterValue<float>(Variable));
+        return Store.SetParameterValue<float>(float(Components[0]), Variable, bAddIfMissing);
     }
     if (Type == FNiagaraTypeDefinition::GetIntDef())
     {
-        return FString::FromInt(Store.GetParameterValue<int32>(Variable));
+        return Store.SetParameterValue<int32>(Value.Integer, Variable, bAddIfMissing);
     }
     if (Type == FNiagaraTypeDefinition::GetBoolDef())
     {
-        return Store.GetParameterValue<FNiagaraBool>(Variable).GetValue() ? TEXT("True") : TEXT("False");
+        return Store.SetParameterValue<FNiagaraBool>(FNiagaraBool(Value.Boolean), Variable, bAddIfMissing);
     }
     if (Type == FNiagaraTypeDefinition::GetVec2Def())
     {
-        const FVector2f Value = Store.GetParameterValue<FVector2f>(Variable);
-        return FString::Printf(TEXT("(X=%s,Y=%s)"), *Transcode::ExportFloat(Value.X), *Transcode::ExportFloat(Value.Y));
-    }
-    if (Type == FNiagaraTypeDefinition::GetVec3Def() || Type == FNiagaraTypeDefinition::GetPositionDef())
-    {
-        const FVector3f Value = Store.GetParameterValue<FVector3f>(Variable);
-        return FString::Printf(TEXT("(X=%s,Y=%s,Z=%s)"), *Transcode::ExportFloat(Value.X), *Transcode::ExportFloat(Value.Y), *Transcode::ExportFloat(Value.Z));
-    }
-    if (Type == FNiagaraTypeDefinition::GetVec4Def())
-    {
-        const FVector4f Value = Store.GetParameterValue<FVector4f>(Variable);
-        return FString::Printf(TEXT("(X=%s,Y=%s,Z=%s,W=%s)"), *Transcode::ExportFloat(Value.X), *Transcode::ExportFloat(Value.Y), *Transcode::ExportFloat(Value.Z), *Transcode::ExportFloat(Value.W));
-    }
-    if (Type == FNiagaraTypeDefinition::GetColorDef())
-    {
-        const FLinearColor Value = Store.GetParameterValue<FLinearColor>(Variable);
-        return FString::Printf(TEXT("(R=%s,G=%s,B=%s,A=%s)"), *Transcode::ExportFloat(Value.R), *Transcode::ExportFloat(Value.G), *Transcode::ExportFloat(Value.B), *Transcode::ExportFloat(Value.A));
-    }
-    if (Type.GetClass() != nullptr)
-    {
-        UObject* Object = Store.GetUObject(Variable);
-        return Object ? Object->GetPathName() : TEXT("None");
-    }
-    return FString();
-}
-
-// Accepts both "(X=1,Y=2,Z=3)" (export text) and Niagara's pin form "1.000,2.000,3.000".
-static bool ParseComponents(const FString& Text, const TCHAR* const* Keys, int32 Count, float* Out)
-{
-    if (!Text.Contains(TEXT("=")))
-    {
-        TArray<FString> Parts;
-        Text.TrimStartAndEnd().TrimChar('(').TrimChar(')').ParseIntoArray(Parts, TEXT(","), true);
-        if (Parts.Num() < Count)
-        {
-            return false;
-        }
-        for (int32 Index = 0; Index < Count; ++Index)
-        {
-            Out[Index] = FCString::Atof(*Parts[Index].TrimStartAndEnd());
-        }
-        return true;
-    }
-    for (int32 Index = 0; Index < Count; ++Index)
-    {
-        FString Value;
-        if (!FParse::Value(*Text, Keys[Index], Value))
-        {
-            return false;
-        }
-        Out[Index] = FCString::Atof(*Value);
-    }
-    return true;
-}
-
-bool SetParameterValueText(FNiagaraParameterStore& Store, const FNiagaraVariable& Variable, const FString& Text, bool bAddIfMissing)
-{
-    const FNiagaraTypeDefinition& Type = Variable.GetType();
-    float Components[4] = { 0.f, 0.f, 0.f, 1.f };
-    static const TCHAR* const XYZW[] = { TEXT("X="), TEXT("Y="), TEXT("Z="), TEXT("W=") };
-    static const TCHAR* const RGBA[] = { TEXT("R="), TEXT("G="), TEXT("B="), TEXT("A=") };
-    if (Type == FNiagaraTypeDefinition::GetFloatDef())
-    {
-        return Store.SetParameterValue<float>(FCString::Atof(*Text), Variable, bAddIfMissing);
-    }
-    if (Type == FNiagaraTypeDefinition::GetIntDef())
-    {
-        return Store.SetParameterValue<int32>(FCString::Atoi(*Text), Variable, bAddIfMissing);
-    }
-    if (Type == FNiagaraTypeDefinition::GetBoolDef())
-    {
-        return Store.SetParameterValue<FNiagaraBool>(FNiagaraBool(Text.TrimStartAndEnd().StartsWith(TEXT("T"), ESearchCase::IgnoreCase) || Text.TrimStartAndEnd() == TEXT("1")), Variable, bAddIfMissing);
-    }
-    if (Type == FNiagaraTypeDefinition::GetVec2Def())
-    {
-        return ParseComponents(Text, XYZW, 2, Components) && Store.SetParameterValue<FVector2f>(FVector2f(Components[0], Components[1]), Variable, bAddIfMissing);
+        return Store.SetParameterValue<FVector2f>(FVector2f(float(Components[0]), float(Components[1])), Variable, bAddIfMissing);
     }
     if (Type == FNiagaraTypeDefinition::GetVec3Def())
     {
-        return ParseComponents(Text, XYZW, 3, Components) && Store.SetParameterValue<FVector3f>(FVector3f(Components[0], Components[1], Components[2]), Variable, bAddIfMissing);
+        return Store.SetParameterValue<FVector3f>(FVector3f(float(Components[0]), float(Components[1]), float(Components[2])), Variable, bAddIfMissing);
     }
     if (Type == FNiagaraTypeDefinition::GetPositionDef())
     {
-        return ParseComponents(Text, XYZW, 3, Components) && Store.SetPositionParameterValue(FVector(Components[0], Components[1], Components[2]), Variable.GetName(), bAddIfMissing);
+        return Store.SetPositionParameterValue(FVector(Components[0], Components[1], Components[2]), Variable.GetName(), bAddIfMissing);
     }
     if (Type == FNiagaraTypeDefinition::GetVec4Def())
     {
-        return ParseComponents(Text, XYZW, 4, Components) && Store.SetParameterValue<FVector4f>(FVector4f(Components[0], Components[1], Components[2], Components[3]), Variable, bAddIfMissing);
+        return Store.SetParameterValue<FVector4f>(FVector4f(float(Components[0]), float(Components[1]), float(Components[2]), float(Components[3])), Variable, bAddIfMissing);
     }
     if (Type == FNiagaraTypeDefinition::GetColorDef())
     {
-        return ParseComponents(Text, RGBA, 4, Components) && Store.SetParameterValue<FLinearColor>(FLinearColor(Components[0], Components[1], Components[2], Components[3]), Variable, bAddIfMissing);
+        return Store.SetParameterValue<FLinearColor>(FLinearColor(float(Components[0]), float(Components[1]), float(Components[2]), float(Components[3])), Variable, bAddIfMissing);
     }
     if (Type.GetClass() != nullptr)
     {
-        UObject* Object = Text.IsEmpty() || Text == TEXT("None") ? nullptr : ResolveObjectByPath(Text);
-        if (Object != nullptr && !Object->IsA(Type.GetClass()))
-        {
-            return false;
-        }
+        UObject* Object = Value.Object;
         if (Store.IndexOf(Variable) == INDEX_NONE)
         {
             if (!bAddIfMissing)
             {
                 return false;
             }
-            Store.AddParameter(Variable);
+            // The explicit value below owns initialization, including an intentional null.
+            // Creating a default interface here wastes an object and requires a store owner.
+            Store.AddParameter(Variable, false);
         }
-        Store.SetUObject(Object, Variable);
+        if (Type.IsDataInterface())
+        {
+            Store.SetDataInterface(Cast<UNiagaraDataInterface>(Object), Variable);
+        }
+        else
+        {
+            Store.SetUObject(Object, Variable);
+        }
         return true;
     }
     return false;

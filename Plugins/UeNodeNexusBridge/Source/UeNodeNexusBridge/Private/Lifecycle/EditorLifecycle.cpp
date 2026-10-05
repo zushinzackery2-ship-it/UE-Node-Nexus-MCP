@@ -1,4 +1,6 @@
 #include "EditorLifecycle.h"
+#include "Transport/Safety/NexusAsyncWork.h"
+#include "Diagnostics/Runtime/NexusRuntimeDiagnostics.h"
 
 #include "NexusLifecycle.h"
 #include "Containers/Ticker.h"
@@ -42,7 +44,8 @@ static TSharedPtr<FJsonObject> Inspect(const TArray<FString>& SavePackages, bool
     const bool bPie = GEditor && (GEditor->PlayWorld || GEditor->bIsSimulatingInEditor);
     const bool bCompiling = FAssetCompilingManager::Get().GetNumRemainingAssets() > 0
         || (GShaderCompilingManager && GShaderCompilingManager->IsCompiling());
-    const bool bBusy = bPie || bCompiling || GIsSavingPackage || IsAsyncLoading();
+    const bool bBusy = bPie || bCompiling || GIsSavingPackage || IsAsyncLoading()
+        || !Safety::AsyncBusyReason().IsEmpty();
     if (!bBusy)
     {
         for (const FString& Name : SavePackages)
@@ -92,6 +95,8 @@ static TSharedPtr<FJsonObject> Inspect(const TArray<FString>& SavePackages, bool
     Result->SetArrayField(TEXT("failed_packages"), Failures);
     Result->SetArrayField(TEXT("recovery_pending"), Recovery);
     Result->SetArrayField(TEXT("blockers"), Blockers);
+    Result->SetObjectField(TEXT("async_work"), Safety::AsyncSnapshot());
+    Result->SetObjectField(TEXT("runtime_diagnostics"), RuntimeDiagnostics::Snapshot());
     Result->SetBoolField(TEXT("pie"), bPie);
     Result->SetBoolField(TEXT("compiling"), bCompiling);
     Result->SetBoolField(TEXT("saving"), GIsSavingPackage);

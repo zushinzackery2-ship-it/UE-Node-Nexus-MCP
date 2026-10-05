@@ -1,6 +1,56 @@
 {
   "operations": [
     {
+      "name": "safety_baseline_export",
+      "kind": "read",
+      "group": "core",
+      "risk": "medium",
+      "hidden": true,
+      "local": false,
+      "default_response": "full",
+      "summary": "Serialize guarded in-memory packages into private validation inputs while preserving source disk and dirty state."
+    },
+    {
+      "name": "runtime_verification_get",
+      "kind": "read",
+      "group": "core",
+      "risk": "low",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Evaluate functional checks and complete diagnostics from one explicit instance and completed PIE session."
+    },
+    {
+      "name": "runtime_smoke_start",
+      "kind": "write",
+      "group": "core",
+      "risk": "medium",
+      "hidden": false,
+      "local": false,
+      "default_response": "full",
+      "summary": "Validate a bounded PIE session and actual rendered frame inside a safety_validate worker."
+    },
+    {
+      "name": "runtime_smoke_status",
+      "kind": "read",
+      "group": "core",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "full",
+      "summary": "Read durable PIE diagnostics, rendered-frame receipt and completion for one smoke run."
+    },
+    {
+      "name": "safety_validate",
+      "kind": "write",
+      "group": "core",
+      "risk": "low",
+      "hidden": false,
+      "local": true,
+      "default_response": "full",
+      "summary": "Validate asset or PIE/render operations in a copied project, preserving runtime/crash evidence and requiring normal worker exit."
+    },
+    {
       "name": "bridge_capabilities_get",
       "kind": "read",
       "group": "core",
@@ -68,7 +118,7 @@
       "hidden": false,
       "local": false,
       "default_response": "full",
-      "summary": "Screenshot the level (or active) editor viewport to a PNG in the project ScreenShotDir; drawn synchronously."
+      "summary": "Admit a guarded screenshot job with a unique capture id and durable completion receipt."
     },
     {
       "name": "viewport_camera_get",
@@ -98,7 +148,7 @@
       "hidden": false,
       "local": true,
       "default_response": "full",
-      "summary": "Check whether a requested screenshot file exists on disk yet."
+      "summary": "Read screenshot completion, producer lifetime and verified PNG identity/dimensions locally."
     },
     {
       "name": "bridge_contract_check",

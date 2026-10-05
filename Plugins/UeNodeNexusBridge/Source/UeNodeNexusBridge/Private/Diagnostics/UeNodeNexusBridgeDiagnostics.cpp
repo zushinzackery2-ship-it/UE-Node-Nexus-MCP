@@ -3,10 +3,11 @@
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/Blueprint.h"
-#include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
 #include "Materials/MaterialFunction.h"
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "Runtime/NexusRuntimeDiagnostics.h"
 
 namespace UeNodeNexusBridge
 {
@@ -110,10 +111,10 @@ FString NormalizeAssetObjectPath(const FString& AssetPath)
 
 bool IsSupportedDiagnosticAssetClass(const FAssetData& AssetData)
 {
-    const FTopLevelAssetPath ClassPath = AssetData.AssetClassPath;
-    return ClassPath == UBlueprint::StaticClass()->GetClassPathName()
-        || ClassPath == UMaterial::StaticClass()->GetClassPathName()
-        || ClassPath == UMaterialFunction::StaticClass()->GetClassPathName();
+    const UClass* Class = FindObject<UClass>(nullptr, *AssetData.AssetClassPath.ToString());
+    return Class && (Class->IsChildOf(UBlueprint::StaticClass())
+        || Class->IsChildOf(UMaterialInterface::StaticClass())
+        || Class->IsChildOf(UMaterialFunction::StaticClass()));
 }
 
 bool TryAddTargetAssetData(const FString& AssetPath, TArray<FAssetData>& OutAssets)
@@ -125,20 +126,10 @@ bool TryAddTargetAssetData(const FString& AssetPath, TArray<FAssetData>& OutAsse
         return false;
     }
 
-    const FString PackagePath = FPackageName::GetLongPackagePath(PackageName);
-    if (PackagePath.StartsWith(TEXT("/")) && !PackagePath.Contains(TEXT(".")))
-    {
-        FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({ PackagePath }, true);
-    }
-
     FAssetData AssetData = FAssetRegistryModule::GetRegistry().GetAssetByObjectPath(FSoftObjectPath(NormalizedAssetPath));
     if (!AssetData.IsValid())
     {
         UObject* LoadedAsset = FindObject<UObject>(nullptr, *NormalizedAssetPath);
-        if (LoadedAsset == nullptr)
-        {
-            LoadedAsset = LoadObject<UObject>(nullptr, *NormalizedAssetPath);
-        }
         if (LoadedAsset != nullptr)
         {
             AssetData = FAssetData(LoadedAsset);
@@ -161,13 +152,12 @@ void CollectDiagnosticAssetData(const FDiagnosticsRequest& Request, TArray<FAsse
         return;
     }
 
-    FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({ TEXT("/Game") }, true);
-
     FARFilter Filter;
     Filter.PackagePaths.Add(TEXT("/Game"));
     Filter.bRecursivePaths = true;
+    Filter.bRecursiveClasses = true;
     Filter.ClassPaths.Add(UBlueprint::StaticClass()->GetClassPathName());
-    Filter.ClassPaths.Add(UMaterial::StaticClass()->GetClassPathName());
+    Filter.ClassPaths.Add(UMaterialInterface::StaticClass()->GetClassPathName());
     Filter.ClassPaths.Add(UMaterialFunction::StaticClass()->GetClassPathName());
     FAssetRegistryModule::GetRegistry().GetAssets(Filter, OutAssets);
 }
@@ -231,11 +221,30 @@ void CollectAssetDiagnostics(const FDiagnosticsRequest& Request, FBridgeDiagnost
 
 FBridgeDiagnosticsResult CollectBridgeDiagnostics(const TSharedPtr<FJsonObject>& Payload)
 {
-    const FDiagnosticsRequest Request = ReadDiagnosticsRequest(Payload);
+    FDiagnosticsRequest Request = ReadDiagnosticsRequest(Payload);
+    Request.AssetPath = NormalizeAssetObjectPath(Request.AssetPath);
 
     FBridgeDiagnosticsResult Result;
     Result.Scope = Request.AssetPath.IsEmpty() ? TEXT("project") : Request.AssetPath;
-    CollectAssetDiagnostics(Request, Result);
+    Payload->TryGetBoolField(TEXT("include_assets"), Result.bInspectAssets);
+    if (Result.bInspectAssets)
+    {
+        CollectAssetDiagnostics(Request, Result);
+    }
+    auto RuntimePayload = MakeShared<FJsonObject>(*Payload);
+    RuntimePayload->SetStringField(TEXT("asset_path"), Request.AssetPath);
+    Result.Runtime = RuntimeDiagnostics::Read(RuntimePayload);
+    for (const auto& Value : Result.Runtime->GetArrayField(TEXT("items")))
+    {
+        Result.Diagnostics.Add(Value);
+    }
+    Result.Runtime->RemoveField(TEXT("items"));
+    if (Payload->HasField(TEXT("session_id")) && !Result.Runtime->GetBoolField(TEXT("available")))
+    {
+        Result.bOk = false;
+        Result.ErrorCode = TEXT("runtime_session_not_found");
+        Result.ErrorMessage = TEXT("Runtime diagnostic session is outside retained history");
+    }
     return Result;
 }
 }

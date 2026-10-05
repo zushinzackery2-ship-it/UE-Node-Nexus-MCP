@@ -137,3 +137,16 @@ tests/review/
 tests/compile_check/build_issues.bat
 tests/compile_check/build_local.bat
 tests/compile_check/sync_client.py
+
+# Machine-specific acceptance runners and captured-project probes
+tests/compile_check/build_control_flow.bat
+tests/compile_check/build_member_removal.bat
+tests/compile_check/build_safety_boundaries.bat
+tests/diagnostics/live.py
+tests/diagnostics/replay_crashes.py
+tests/diagnostics/contracts/live/
+tests/diagnostics/fixtures/BP_NullMotion.bp.nexus
+tests/safety/cleanup.py
+tests/safety/live.py
+tests/safety/native.py
+tests/safety/boundaries/

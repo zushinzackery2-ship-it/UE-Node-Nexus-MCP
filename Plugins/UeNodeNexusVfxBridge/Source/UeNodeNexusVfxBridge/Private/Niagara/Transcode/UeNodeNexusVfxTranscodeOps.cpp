@@ -132,7 +132,7 @@ TSharedPtr<FJsonObject> BuildModuleSignatures()
 }
 }
 
-static TSharedPtr<FJsonObject> BuildRaw(UObject* Asset)
+static TSharedPtr<FJsonObject> BuildRaw(UObject* Asset, FString& Error)
 {
     if (!IsValid(Asset) || !Asset->IsAsset())
     {
@@ -140,11 +140,11 @@ static TSharedPtr<FJsonObject> BuildRaw(UObject* Asset)
     }
     if (UNiagaraSystem* System = Cast<UNiagaraSystem>(Asset))
     {
-        return Collaboration::StampRaw(BuildNiagaraSystemRaw(System));
+        return Collaboration::StampRaw(BuildNiagaraSystemRaw(System, &Error));
     }
     if (UNiagaraEmitter* Emitter = Cast<UNiagaraEmitter>(Asset))
     {
-        return Collaboration::StampRaw(BuildNiagaraEmitterRaw(Emitter));
+        return Collaboration::StampRaw(BuildNiagaraEmitterRaw(Emitter, &Error));
     }
     return nullptr;
 }
@@ -180,7 +180,12 @@ TSharedPtr<FJsonObject> HandleVfxTranscodeExport(const FString& Operation, const
                 continue;
             }
             UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
-            TSharedPtr<FJsonObject> Raw = BuildRaw(Asset);
+            FString ReadError;
+            TSharedPtr<FJsonObject> Raw = BuildRaw(Asset, ReadError);
+            if (!ReadError.IsEmpty())
+            {
+                return MakeOperationError(Operation, RequestId, TEXT("niagara_storage_invalid"), ReadError);
+            }
             if (!Raw.IsValid())
             {
                 TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();

@@ -218,8 +218,10 @@ def unit(workspace, asset: str, candidate: dict | None, current: dict | None, ra
         raise SyncError("plan_invalid", "candidate cannot be expressed by this bridge", dict(asset=asset, diagnostics=[item.format() for item in plan.diagnostics]))
     if plan.risky() and not options.get("allow_delete"):
         raise SyncError("delete_not_allowed", "candidate removes entities; allow_delete=true is required", dict(asset=asset, plan=plan.summary()))
+    from ....safety.publication.risk import node_classes
     return dict(asset=asset, kind=kind, empty=plan.empty and not (raw or dict()).get("dirty"), payload=plan.to_payload(),
-                dependencies=dependencies, interface_changed=plan.interface_changed, summary=plan.summary(), risky=bool(plan.risky()))
+                dependencies=dependencies, interface_changed=plan.interface_changed, summary=plan.summary(), risky=bool(plan.risky()),
+                node_classes=node_classes(to_document(aligned) if aligned else None, document) if kind in ("material", "material_function") else dict())
 
 
 def settled(asset: str, raw: dict | None, candidate: dict, current: dict, ours: dict) -> dict | None:

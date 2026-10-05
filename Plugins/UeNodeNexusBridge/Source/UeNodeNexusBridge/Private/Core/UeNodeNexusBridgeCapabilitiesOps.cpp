@@ -3,11 +3,13 @@
 
 #include "Algo/Sort.h"
 #include "Misc/App.h"
+#include "DynamicRHI.h"
 #include "Modules/ModuleManager.h"
 #include "Interfaces/IPluginManager.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeOperationRegistry.h"
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Safety/Isolation/NexusSafetyEnvironment.h"
 
 namespace UeNodeNexusBridge
 {
@@ -166,6 +168,9 @@ TSharedPtr<FJsonObject> HandleBridgeCapabilitiesGet(const FString& Operation, co
     Data->SetObjectField(TEXT("counts"), Counts);
     Data->SetObjectField(TEXT("modules"), Modules);
     Data->SetObjectField(TEXT("build"), BridgeBuildIdentities());
+    Data->SetNumberField(TEXT("safety_contract"), 1);
+    Data->SetObjectField(TEXT("safety_environment"), Safety::Environment());
+    Data->SetStringField(TEXT("rhi"), GDynamicRHI != nullptr ? GDynamicRHI->GetName() : TEXT("unavailable"));
     Data->SetNumberField(TEXT("contract_version"), NEXUS_CONTRACT_VERSION);
     Data->SetStringField(TEXT("schema_key"), Transcode::SchemaKey());
     Data->SetStringField(TEXT("engine_version"), Transcode::EngineVersionString());

@@ -13,14 +13,23 @@ from ...coordination.file_lock import FileLock
 from .registry import atomic_json
 
 
+def sources(package: Path) -> list[Path]:
+    return sorted(path for path in package.rglob("*.py") if "__pycache__" not in path.parts)
+
+
+def digest(package: Path) -> str:
+    """The archive name a package's sources install under; equal sources share one archive."""
+    value = hashlib.sha256()
+    for path in sources(package):
+        value.update(path.relative_to(package).as_posix().encode())
+        value.update(path.read_bytes())
+    return value.hexdigest()
+
+
 def install(root: Path) -> list[str]:
     source = Path(__file__).resolve().parents[2]
-    files = sorted(path for path in source.rglob("*.py") if "__pycache__" not in path.parts)
-    digest = hashlib.sha256()
-    for path in files:
-        digest.update(path.relative_to(source).as_posix().encode())
-        digest.update(path.read_bytes())
-    archive = root / "Packages" / (digest.hexdigest() + ".pyz")
+    files = sources(source)
+    archive = root / "Packages" / (digest(source) + ".pyz")
     with FileLock(root / "install.lock", timeout=15):
         launcher = root / "launcher.json"
         previous = json.loads(launcher.read_text(encoding="utf-8")) if launcher.is_file() else dict()

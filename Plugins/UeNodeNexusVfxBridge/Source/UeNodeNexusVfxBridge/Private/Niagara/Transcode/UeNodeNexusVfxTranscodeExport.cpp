@@ -61,12 +61,12 @@ static bool IsBindingProperty(const TSharedPtr<FJsonValue>& Prop)
     return Type.Contains(TEXT("Binding")) || Value.Contains(TEXT("TypeDefHandle"));
 }
 
-static void AppendStacks(FNiagaraEmitterHandle* Handle, TArray<TSharedPtr<FJsonValue>>& Stacks, TArray<TSharedPtr<FJsonValue>>& Opaque)
+static bool AppendStacks(FNiagaraEmitterHandle* Handle, TArray<TSharedPtr<FJsonValue>>& Stacks, TArray<TSharedPtr<FJsonValue>>& Opaque, FString& Error)
 {
     UNiagaraGraph* Graph = NiagaraModuleStack::ResolveEmitterGraph(Handle);
     if (Graph == nullptr)
     {
-        return;
+        return true;
     }
     TArray<UNiagaraNodeOutput*> Outputs;
     Graph->GetNodesOfClass(Outputs);
@@ -87,7 +87,12 @@ static void AppendStacks(FNiagaraEmitterHandle* Handle, TArray<TSharedPtr<FJsonV
             TArray<TSharedPtr<FJsonValue>> Rows;
             for (UNiagaraNodeFunctionCall* Module : Modules)
             {
-                Rows.Add(MakeShared<FJsonValueObject>(ModuleJson(Handle, Output, Module)));
+                const auto Json = ModuleJson(Handle, Output, Module, Error);
+                if (!Json.IsValid())
+                {
+                    return false;
+                }
+                Rows.Add(MakeShared<FJsonValueObject>(Json));
             }
             Stack->SetArrayField(TEXT("modules"), Rows);
             Stacks.Add(MakeShared<FJsonValueObject>(Stack));
@@ -110,9 +115,10 @@ static void AppendStacks(FNiagaraEmitterHandle* Handle, TArray<TSharedPtr<FJsonV
         Item->SetStringField(TEXT("t3d"), Text);
         Opaque.Add(MakeShared<FJsonValueObject>(Item));
     }
+    return true;
 }
 
-TSharedPtr<FJsonObject> EmitterJson(FNiagaraEmitterHandle* Handle, UNiagaraEmitter* Emitter, const FGuid& Version)
+TSharedPtr<FJsonObject> EmitterJson(FNiagaraEmitterHandle* Handle, UNiagaraEmitter* Emitter, const FGuid& Version, FString* OutError)
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     FVersionedNiagaraEmitterData* Data = Emitter ? Emitter->GetEmitterData(Version) : nullptr;
@@ -131,7 +137,15 @@ TSharedPtr<FJsonObject> EmitterJson(FNiagaraEmitterHandle* Handle, UNiagaraEmitt
     TArray<TSharedPtr<FJsonValue>> Opaque;
     if (Handle != nullptr)
     {
-        AppendStacks(Handle, Stacks, Opaque);
+        FString Error;
+        if (!AppendStacks(Handle, Stacks, Opaque, Error))
+        {
+            if (OutError != nullptr)
+            {
+                *OutError = Error;
+            }
+            return nullptr;
+        }
     }
     Json->SetArrayField(TEXT("stacks"), Stacks);
     Json->SetArrayField(TEXT("opaque_stacks"), Opaque);
@@ -156,8 +170,9 @@ TSharedPtr<FJsonObject> EmitterJson(FNiagaraEmitterHandle* Handle, UNiagaraEmitt
     return Json;
 }
 
-TSharedPtr<FJsonObject> BuildNiagaraSystemRaw(UNiagaraSystem* System)
+TSharedPtr<FJsonObject> BuildNiagaraSystemRaw(UNiagaraSystem* System, FString* OutError)
 {
+    FString Error;
     TSharedPtr<FJsonObject> Raw = MakeRawEnvelope(System, TEXT("niagara_system"));
     Raw->SetArrayField(TEXT("props"), ExportEditableProps(System));
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -172,7 +187,15 @@ TSharedPtr<FJsonObject> BuildNiagaraSystemRaw(UNiagaraSystem* System)
         Name.RemoveFromStart(TEXT("User."));
         Item->SetStringField(TEXT("name"), Name);
         Item->SetStringField(TEXT("type"), FriendlyTypeName(Variable.GetType()));
-        Item->SetStringField(TEXT("value"), ParameterValueText(Store, Variable));
+        Item->SetStringField(TEXT("value"), ParameterValueText(Store, Variable, &Error));
+        if (!Error.IsEmpty())
+        {
+            if (OutError != nullptr)
+            {
+                *OutError = System->GetPathName() + TEXT(": ") + Error;
+            }
+            return nullptr;
+        }
         UserParams.Add(MakeShared<FJsonValueObject>(Item));
     }
     Data->SetArrayField(TEXT("user_params"), UserParams);
@@ -180,21 +203,35 @@ TSharedPtr<FJsonObject> BuildNiagaraSystemRaw(UNiagaraSystem* System)
     for (FNiagaraEmitterHandle& Handle : System->GetEmitterHandles())
     {
         const FVersionedNiagaraEmitter Instance = Handle.GetInstance();
-        Emitters.Add(MakeShared<FJsonValueObject>(EmitterJson(&Handle, Instance.Emitter, Instance.Version)));
+        const auto Json = EmitterJson(&Handle, Instance.Emitter, Instance.Version, &Error);
+        if (!Json.IsValid())
+        {
+            if (OutError != nullptr)
+            {
+                *OutError = Error;
+            }
+            return nullptr;
+        }
+        Emitters.Add(MakeShared<FJsonValueObject>(Json));
     }
     Data->SetArrayField(TEXT("emitters"), Emitters);
     Raw->SetObjectField(TEXT("niagara"), Data);
     return Raw;
 }
 
-TSharedPtr<FJsonObject> BuildNiagaraEmitterRaw(UNiagaraEmitter* Emitter)
+TSharedPtr<FJsonObject> BuildNiagaraEmitterRaw(UNiagaraEmitter* Emitter, FString* OutError)
 {
     TSharedPtr<FJsonObject> Raw = MakeRawEnvelope(Emitter, TEXT("niagara_emitter"));
     Raw->SetArrayField(TEXT("props"), ExportEditableProps(Emitter));
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetArrayField(TEXT("user_params"), TArray<TSharedPtr<FJsonValue>>());
     TArray<TSharedPtr<FJsonValue>> Emitters;
-    Emitters.Add(MakeShared<FJsonValueObject>(EmitterJson(nullptr, Emitter, Emitter->GetExposedVersion().VersionGuid)));
+    const auto Json = EmitterJson(nullptr, Emitter, Emitter->GetExposedVersion().VersionGuid, OutError);
+    if (!Json.IsValid())
+    {
+        return nullptr;
+    }
+    Emitters.Add(MakeShared<FJsonValueObject>(Json));
     Data->SetArrayField(TEXT("emitters"), Emitters);
     Raw->SetObjectField(TEXT("niagara"), Data);
     return Raw;

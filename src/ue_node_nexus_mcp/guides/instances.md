@@ -116,6 +116,16 @@ when an idle manager restarts. Different workspaces must use the same runtime.
 For a previously observed project, admission also reserves its recorded peak
 private working set above that free-memory floor. Up to 256 project estimates
 are retained. Unknown projects use the floor and the serialized startup slot.
+A start refused for memory returns `capacity_exceeded` with `available_bytes`,
+`required_bytes`, `floor_bytes`, `estimated_project_bytes` and
+`override=allow_low_memory`. With the user's approval, ensure again with
+`allow_low_memory=True`: that one start is admitted below its memory requirement,
+and the startup slot still applies. Every start records `admission` (including
+`memory_override`) in its preview, instance record and `launch_reserved` event;
+an overridden start also adds an ensure warning. The session does not keep the
+override, so a later automatic start is checked again. A manager that predates
+the option returns `manager_outdated`; it restarts on the installed version after
+its managed editors exit and no session uses it.
 The manager limits blocking work to two requests and keeps control queries and
 release available. `manager_busy` means the operation was not submitted; the SDK
 retries this specific pre-admission response within a bounded five-second window.
@@ -185,9 +195,9 @@ through observation, apply, saving and receipt convergence.
 | `instance_starting`, `instance_stopping` | The hold ended while still loading or stopping; call again; retain the project target |
 | `stale_instance` | The explicitly selected process ended; make a new explicit selection |
 | `instance_unverified` | Inspect the identified process, permissions, startup and Guard installation |
-| `instance_incompatible`, `manager_version_mismatch` | Install matching builds and drain the old version |
+| `instance_incompatible`, `manager_version_mismatch`, `manager_outdated` | Install matching builds and drain the old version |
 | `instance_in_use`, `instance_dirty` | Inspect users, scopes and named packages |
-| `capacity_exceeded` | Inspect concurrent starts and required/available RAM |
+| `capacity_exceeded` | Inspect concurrent starts and required/available RAM; for memory, retry with `allow_low_memory=True` only with the user's approval |
 | `operation_outcome_unknown` | Inspect state/receipts; a possibly executed write is not replayed |
 | `manager_response_unknown` | Query status; retry ensure with the same idempotency key |
 | `manager_launch_unavailable` | Check the signed-in user's desktop shell and process access; inspect the returned Win32 error |
@@ -209,6 +219,18 @@ or seven days; live processes and unresolved work are retained.
 
 Status records expose working set, private commit and private working set
 separately. Summing working sets is not a measure of unique physical memory.
+
+Exited records expose `exit_evidence` with `state=pending/complete`, `exit_kind`,
+`exit_code`, separate fatal/ensure reports, CrashContext/dump/log paths, bounded
+crashed/RenderThread stacks and Fatal/PSO log lines. Correlation checks project,
+PID, process creation time and Nexus instance identity; delayed artifacts are
+retried every two seconds for 30 seconds. `editor_crashed` includes the fatal
+message and report paths. Exit code 0 without a fatal report completes as normal.
+
+`last_editor_snapshot` preserves the final historical observation. An EXITED
+status reports `stale=true`, `live_state=false`, `compiling/pie/saving=false`,
+empty active blockers and cleared transient control errors. Runtime diagnostic
+session notices are preserved in that historical snapshot.
 
 ## Upgrade
 

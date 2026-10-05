@@ -24,7 +24,15 @@ def test_listing_categories_through_ue_execute(all_features: None) -> None:
         guide = ue_execute("workflow_guide_get", dict(category=category))
         assert guide["ok"] is True, category
         assert guide["data"]["category"] == category
-        assert guide["data"]["body"].strip(), category
+        data = guide["data"]
+        if data.get("stored_as_artifact"):
+            from ue_node_nexus_mcp.server import ue_read
+
+            page = ue_read("artifact", query=dict(artifact_id=data["artifact"]["id"], path="data.body"))
+            assert page["ok"]
+            assert page["data"]["value"].strip(), category
+        else:
+            assert data["body"].strip(), category
 
 
 def test_keyword_query_routes_to_the_right_guide(all_features: None) -> None:

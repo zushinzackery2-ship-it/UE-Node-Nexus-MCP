@@ -40,8 +40,8 @@ def test_an_online_action_restores_a_stale_recorded_catalog_key(sync_workspace):
     assert json.loads((project / "project.json").read_text(encoding="utf-8"))["schema_key"] == SCHEMA_KEY
 
 
-def test_a_failed_caller_refresh_is_the_callers_outcome_and_names_the_function(sync_workspace):
-    """The function published; the consumer that no longer compiles is the one that failed."""
+def test_legacy_rejection_happens_before_function_and_caller_apply(sync_workspace):
+    """A legacy interface edit must enter the guarded workspace protocol first."""
     ue, env, project = sync_workspace
     ue.referencers[MF] = [MAT]
     _edit_interface(project)
@@ -57,14 +57,15 @@ def test_a_failed_caller_refresh_is_the_callers_outcome_and_names_the_function(s
 
     assert report["error_count"] > 0
     rows = dict((row["asset"], row) for row in report["rows"])
-    assert rows[MF]["action"] == "pushed", report["rows"]
-    assert rows[MAT]["action"] == "failed" and rows[MAT]["functions"] == [MF], report["rows"]
+    assert rows[MF]["action"] == "failed", report["rows"]
+    assert any("safety_workspace_required" in item for item in report["diagnostics"])
+    assert not ue.applied and MAT not in rows
     assert base_path(project, MAT).read_bytes() == base
-    assert list((project / ".nexus/pending").rglob("M_Glass.push.json"))
+    assert not list((project / ".nexus/pending").rglob("M_Glass.push.json"))
 
 
-def test_a_selected_caller_rebuilds_its_function_calls_inside_its_own_apply(sync_workspace):
-    """Refreshing it alone first would compile a graph without the batch's own edits."""
+def test_legacy_interface_rejection_preserves_selected_caller_intent(sync_workspace):
+    """Dependency ordering rejects the unguarded interface before either asset applies."""
     ue, env, project = sync_workspace
     ue.assets[MAT]["graph"]["nodes"].append(dict(
         guid="G-CALL", name="Call", class_short="MaterialFunctionCall",
@@ -90,9 +91,8 @@ def test_a_selected_caller_rebuilds_its_function_calls_inside_its_own_apply(sync
 
     report = run_sync(ue, "push", [MF, MAT], dict(dry_run=False), env)
 
-    assert report["error_count"] == 0, report["diagnostics"]
-    assert [payload["asset_path"] for payload in ue.applied] == [MF, MAT]
-    ops = [(verb["op"], verb.get("name") or verb.get("function")) for verb in ue.applied[1]["plan"]]
-    assert ops == [("set_asset_prop", "BlendMode"), ("refresh_function_calls", MF)], ops
+    assert report["error_count"] == 1, report["diagnostics"]
+    assert any("safety_workspace_required" in item for item in report["diagnostics"])
+    assert not ue.applied
     assert "BLEND_Translucent" not in file.read_text(encoding="utf-8")
-    assert run_sync(ue, "status", [MF, MAT], env=env)["counts"] == dict(clean=2)
+    assert run_sync(ue, "status", [MF, MAT], env=env)["counts"] == dict(**{"local-modified": 2})

@@ -28,6 +28,7 @@ class PushResult:
     normalized: list[str] = field(default_factory=list)
     refreshed: list[str] = field(default_factory=list)
     stopped: bool = False
+    runtime_diagnostics: dict[str, Any] | None = None
 
 
 @dataclass

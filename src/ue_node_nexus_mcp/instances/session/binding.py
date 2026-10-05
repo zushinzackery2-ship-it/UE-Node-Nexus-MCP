@@ -114,6 +114,12 @@ class EditorSession:
         payload.update(project_path=project["project_path"])
         if os.environ.get("UE_NEXUS_TRANSCODE_DIR"):
             payload.setdefault("mirror_root", os.environ["UE_NEXUS_TRANSCODE_DIR"])
+        if payload.get("allow_low_memory"):
+            self.start()
+            require(self.broker.supports("allow_low_memory"), "manager_outdated",
+                    "the running lifecycle manager predates allow_low_memory; it restarts on the installed version "
+                    "after its managed editors exit and no MCP session uses it",
+                    feature="allow_low_memory", manager_epoch=self.broker.epoch)
         result = self.call("ensure", payload)
         if payload.get("dry_run", True):
             return result
@@ -121,6 +127,7 @@ class EditorSession:
             previous = self.binding.get("instance_id")
             self.binding = dict(result["instance"])
             self.lease = dict(result["lease"])
+            # A memory override authorizes only the start it was given for; later automatic starts are admitted normally.
             self.options = dict((key, value) for key, value in payload.items()
                                 if key in ("mode", "engine_path", "launch_profile", "rhi", "project_path", "mirror_root"))
             self.options.setdefault("mode", "reuse_only")
@@ -128,6 +135,8 @@ class EditorSession:
             if previous != self.binding["instance_id"] and self.on_bind_changed:
                 self.on_bind_changed()
         row, report = startup.hold(self.poll, result["instance"], wait)
+        if result["action"] == "created" and row.get("admission"):
+            report["admission"] = row["admission"]
         startup.require(row, report, startup.ENDED)
         return dict(result, instance=row, startup=report)
 

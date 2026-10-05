@@ -35,6 +35,8 @@ struct FBridgeDiagnosticsResult
     int32 AssetsUnsupported = 0;
     int32 AssetsFailedToLoad = 0;
     int32 AssetsNotLoaded = 0;
+    TSharedPtr<FJsonObject> Runtime;
+    bool bInspectAssets = true;
     TArray<TSharedPtr<FJsonValue>> Diagnostics;
 };
 

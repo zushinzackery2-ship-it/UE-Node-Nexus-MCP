@@ -27,4 +27,12 @@ def exited(item: dict) -> None:
     """An exit ends every prompt; the one still open says what the process was waiting on."""
     if item.get("blocking_dialog"):
         item["exited_while_waiting"] = item["blocking_dialog"]
+    if "last_editor_snapshot" not in item:
+        fields = ("compiling", "pie", "saving", "blockers", "state_sampled_at", "dirty_packages", "failed_packages",
+                  "recovery_pending", "runtime_diagnostics", "control_error", "error")
+        item["last_editor_snapshot"] = dict((field, item[field]) for field in fields if field in item)
+    item.update(compiling=False, pie=False, saving=False, blockers=[], control_available=False)
+    item.pop("control_error", None)
+    if item.get("error", dict()).get("code") in ("instance_unverified", "instance_unresponsive", "snapshot_stale"):
+        item.pop("error", None)
     item.update(ready=False, window_visible=False, window_titles=[], windows=[], waiting_for_user=False, blocking_dialog=None)

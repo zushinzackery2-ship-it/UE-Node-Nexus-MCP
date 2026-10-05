@@ -2,6 +2,7 @@
 
 from ...blueprint.pins import canonical_pin, node_pins, pin
 from ...material.pins import canonical_pin as material_pin, output_property
+from ...material.control_flow import is_execution_pin
 from ...errors import SyncError
 
 
@@ -55,6 +56,9 @@ def encode_links(section, aliases, bindings, document=None, schema=None, kind="b
             target = canonical_pin(link.dst_pin, "in", dst_pins)
         record = dict(src=src, dst=dst, src_pin=source, dst_pin=target)
         execution = is_exec_pin(known, src, source, "out") or is_exec_pin(known, dst, target, "in")
+        if kind in ("material", "material_function"):
+            execution = (is_execution_pin(decls.get(link.src), source, "out")
+                         or is_execution_pin(decls.get(link.dst), target, "in"))
         slot = f"out:{src}:{source or ''}" if execution else f"in:{dst}:{target or ''}"
         if slot in result and result[slot] != record:
             endpoint = (link.src, source) if execution else (link.dst, target)

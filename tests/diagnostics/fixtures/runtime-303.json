@@ -1,0 +1,173 @@
+{
+    "operation": "diagnostics_get",
+    "ok": true,
+    "diagnostics":
+    [],
+    "warnings":
+    [],
+    "runtime_diagnostics":
+    {
+        "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c",
+        "pie": true,
+        "active": false,
+        "error_count": 303,
+        "warning_count": 22,
+        "dropped_count": 0,
+        "next_cursor": 328,
+        "unattributed_error_count": 0,
+        "asset_counts_complete": true,
+        "instance_id": "8a370aff4cd74087bb99346333db149a",
+        "pid": 36124,
+        "current_session_id": "8545ca87-412c-41d8-cf5d-ac88784ed581",
+        "editor_error_count": 0
+    },
+    "data":
+    {
+        "error_count": 303,
+        "warning_count": 22,
+        "returned_error_count": 303,
+        "returned_warning_count": 22,
+        "item_count": 10,
+        "scope": "project",
+        "coverage": "partial",
+        "inspection_mode": "loaded_objects_and_runtime_events",
+        "items":
+        [
+            {
+                "severity": "warning",
+                "source": "LogScript",
+                "message": "“无访问”正在尝试读取属性 MotionState\r\n\tABP_CharacterPure_C /Game/CharacterPure/Demo/UEDPIE_0_L_CharacterPure.L_CharacterPure:PersistentLevel.BP_CP_Character_C_3.CharacterMesh0.ABP_CharacterPure_C_0\r\n\tFunction /Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure_C:ExecuteUbergraph_ABP_CharacterPure:001F",
+                "occurrence_count": 1,
+                "sequence": 4,
+                "first_at": "2026-10-04T02:24:29.472Z",
+                "last_at": "2026-10-04T02:24:29.472Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "warning",
+                "source": "LogScript",
+                "message": "“无访问”正在尝试读取属性 MotionState\r\n\tABP_CharacterPure_C /Game/CharacterPure/Demo/UEDPIE_0_L_CharacterPure.L_CharacterPure:PersistentLevel.BP_CP_Character_C_3.CharacterMesh0.ABP_CharacterPure_C_0\r\n\tFunction /Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure_C:ExecuteUbergraph_ABP_CharacterPure:0052",
+                "occurrence_count": 1,
+                "sequence": 6,
+                "first_at": "2026-10-04T02:24:29.474Z",
+                "last_at": "2026-10-04T02:24:29.474Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "warning",
+                "source": "LogScript",
+                "message": "“无访问”正在尝试读取属性 MotionState\r\n\tABP_CharacterPure_C /Game/CharacterPure/Demo/UEDPIE_0_L_CharacterPure.L_CharacterPure:PersistentLevel.BP_CP_Character_C_3.CharacterMesh0.ABP_CharacterPure_C_0\r\n\tFunction /Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure_C:ExecuteUbergraph_ABP_CharacterPure:0071",
+                "occurrence_count": 1,
+                "sequence": 8,
+                "first_at": "2026-10-04T02:24:29.474Z",
+                "last_at": "2026-10-04T02:24:29.474Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "warning",
+                "source": "LogScript",
+                "message": "“无访问”正在尝试读取属性 MotionState\r\n\tABP_CharacterPure_C /Game/CharacterPure/Demo/UEDPIE_0_L_CharacterPure.L_CharacterPure:PersistentLevel.BP_CP_Character_C_0.CharacterMesh0.ABP_CharacterPure_C_0\r\n\tFunction /Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure_C:ExecuteUbergraph_ABP_CharacterPure:001F",
+                "occurrence_count": 1,
+                "sequence": 10,
+                "first_at": "2026-10-04T02:24:29.484Z",
+                "last_at": "2026-10-04T02:24:29.484Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "error",
+                "source": "PIE",
+                "message": "蓝图运行时错误：\"“无访问”正在尝试读取属性 MotionState\"。 节点：  Set StartActive 图表：  EventGraph 函数：  Execute Ubergraph ABP Character Pure 蓝图：  ABP_CharacterPure",
+                "asset_path": "/Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure",
+                "node": "Set StartActive",
+                "node_guid": "56D7A8AA4D3918FE9F324EB6C046B459",
+                "graph": "EventGraph",
+                "function": "ExecuteUbergraph_ABP_CharacterPure",
+                "occurrence_count": 2,
+                "sequence": 11,
+                "first_at": "2026-10-04T02:24:29.474Z",
+                "last_at": "2026-10-04T02:24:29.484Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "warning",
+                "source": "LogScript",
+                "message": "“无访问”正在尝试读取属性 MotionState\r\n\tABP_CharacterPure_C /Game/CharacterPure/Demo/UEDPIE_0_L_CharacterPure.L_CharacterPure:PersistentLevel.BP_CP_Character_C_0.CharacterMesh0.ABP_CharacterPure_C_0\r\n\tFunction /Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure_C:ExecuteUbergraph_ABP_CharacterPure:0052",
+                "occurrence_count": 1,
+                "sequence": 12,
+                "first_at": "2026-10-04T02:24:29.484Z",
+                "last_at": "2026-10-04T02:24:29.484Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "warning",
+                "source": "LogScript",
+                "message": "“无访问”正在尝试读取属性 MotionState\r\n\tABP_CharacterPure_C /Game/CharacterPure/Demo/UEDPIE_0_L_CharacterPure.L_CharacterPure:PersistentLevel.BP_CP_Character_C_0.CharacterMesh0.ABP_CharacterPure_C_0\r\n\tFunction /Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure_C:ExecuteUbergraph_ABP_CharacterPure:0071",
+                "occurrence_count": 1,
+                "sequence": 14,
+                "first_at": "2026-10-04T02:24:29.484Z",
+                "last_at": "2026-10-04T02:24:29.484Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "error",
+                "source": "PIE",
+                "message": "蓝图运行时错误：\"“无访问”正在尝试读取属性 MotionState\"。 节点：  Set Turning 图表：  EventGraph 函数：  Execute Ubergraph ABP Character Pure 蓝图：  ABP_CharacterPure",
+                "asset_path": "/Game/CharacterPure/Runtime/Animation/ABP_CharacterPure.ABP_CharacterPure",
+                "node": "Set Turning",
+                "node_guid": "A4AB30C043583908F6AEEE83E2FAA05D",
+                "graph": "EventGraph",
+                "function": "ExecuteUbergraph_ABP_CharacterPure",
+                "occurrence_count": 4,
+                "sequence": 15,
+                "first_at": "2026-10-04T02:24:29.474Z",
+                "last_at": "2026-10-04T02:24:29.484Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "warning",
+                "source": "LogScript",
+                "message": "“无访问”正在尝试读取属性 CallFunc_GetController_ReturnValue\r\n\tBPC_CP_Camera_C /Game/CharacterPure/Demo/UEDPIE_0_L_CharacterPure.L_CharacterPure:PersistentLevel.BP_CP_Character_C_3.CameraRig\r\n\tFunction /Game/CharacterPure/Runtime/Control/Camera/BPC_CP_Camera.BPC_CP_Camera_C:ApplyPose:025C",
+                "occurrence_count": 16,
+                "sequence": 46,
+                "first_at": "2026-10-04T02:24:29.509Z",
+                "last_at": "2026-10-04T02:24:30.475Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            },
+            {
+                "severity": "error",
+                "source": "PIE",
+                "message": "蓝图运行时错误：\"“无访问”正在尝试读取属性 CallFunc_GetController_ReturnValue\"。 节点：  设置控制旋转 图表：  ApplyPose 函数：  Apply Pose 蓝图：  BPC_CP_Camera",
+                "asset_path": "/Game/CharacterPure/Runtime/Control/Camera/BPC_CP_Camera.BPC_CP_Camera",
+                "node": "设置控制旋转",
+                "node_guid": "0E6EB87A49A1C40B1BF367A26E3374A2",
+                "graph": "ApplyPose",
+                "function": "ApplyPose",
+                "occurrence_count": 297,
+                "sequence": 328,
+                "first_at": "2026-10-04T02:24:29.510Z",
+                "last_at": "2026-10-04T02:24:35.304Z",
+                "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c"
+            }
+        ],
+        "runtime":
+        {
+            "session_id": "0e7c8dfe-4135-765b-ae73-2d92f5d9728c",
+            "pie": true,
+            "active": false,
+            "error_count": 303,
+            "warning_count": 22,
+            "dropped_count": 0,
+            "next_cursor": 328,
+            "unattributed_error_count": 0,
+            "asset_counts_complete": true,
+            "instance_id": "8a370aff4cd74087bb99346333db149a",
+            "pid": 36124,
+            "available": true,
+            "matched_error_count": 303,
+            "matched_warning_count": 22,
+            "cursor_gap": false,
+            "retained_bytes": 21518,
+            "truncated": false
+        }
+    }
+}

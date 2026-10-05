@@ -16,6 +16,7 @@ from ..errors import InstanceError
 DEFAULT_WAIT_SECONDS = 45.0
 MAX_WAIT_SECONDS = 900.0
 POLL_SECONDS = 1.0
+GIB = 1024 ** 3
 SETTLED = frozenset(("READY", "IDLE", "BLOCKED"))
 ERRORS = dict(exited=("startup_failed", "the editor exited before it became ready"),
               unresponsive=("startup_timeout", "the editor did not become ready and shows no prompt"),
@@ -88,6 +89,10 @@ def warnings(report_: dict) -> list[str]:
     if report_["outcome"] == "waiting_for_user":
         dialog = report_.get("blocking_dialog") or dict()
         result.append(f"editor is waiting for an answer to: {dialog.get('title', '')}")
+    admission = report_.get("admission")
+    if admission and admission["memory_override"]:
+        result.append(f"editor started below its memory requirement: {admission['available_bytes'] / GIB:.1f} GiB available, "
+                      f"{admission['required_bytes'] / GIB:.1f} GiB required")
     return result
 
 

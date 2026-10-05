@@ -41,6 +41,22 @@ is measured from the editor rather than taken from memory, and measured again
 after an earlier apply of the same push compiled. `stale_target` then means
 another writer; `details.stale` names the asset, its role and both revisions.
 
+High-risk publication first runs complete isolation: Niagara changes, material
+Custom/WPO/depth/interpolator contracts and MaterialFunction interface changes.
+The worker compiles, saves and exports through its own guarded native transaction.
+Admission requires matching candidate and dependencies, live package baseline,
+engine/loaded plugin/configuration identity, measured RHI and normal exit code 0.
+The result row and apply record retain `safety_validation`; failed or stale proof
+prevents the publishing editor's apply. Ordinary material values use the normal
+transaction directly. High-risk publication requires `compile=true`.
+
+Baseline serialization preserves the publishing editor's dirty flags and disk
+bytes. Explicit `safety_validate` uses saved disk inputs; automatic publication
+uses `baseline=live_memory`. Resource admission remains enabled. After explicit
+user authorization, `safety_allow_low_memory=true` on this push/continue permits
+that invocation's workers to start below the memory threshold. A legacy high-risk
+push reports `safety_workspace_required`; use checkout and commit its candidate.
+
 `fetch` observes UE without moving workspace layers. `pull` integrates that
 version and replays staged and unstaged changes separately. `status` reports
 both layers, branch movement, active conflicts, pending applies and file paths.

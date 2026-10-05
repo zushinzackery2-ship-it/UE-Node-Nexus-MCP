@@ -1,7 +1,6 @@
 #include "UeNodeNexusBridgeNamedPipeIo.h"
 
-#include "Async/Async.h"
-#include "Async/Future.h"
+#include "Dispatch/NexusFrameQueue.h"
 #include "HAL/PlatformProcess.h"
 #include "UeNodeNexusBridgeRequestDispatch.h"
 
@@ -146,14 +145,7 @@ bool DispatchNamedPipeRequest(
     {
         return true;
     }
-    TSharedRef<TPromise<FString>, ESPMode::ThreadSafe> Promise =
-        MakeShared<TPromise<FString>, ESPMode::ThreadSafe>();
-    TFuture<FString> Future = Promise->GetFuture();
-
-    AsyncTask(ENamedThreads::GameThread, [Request, Promise]()
-    {
-        Promise->SetValue(DispatchParsedRequest(Request));
-    });
+    TFuture<FString> Future = EnqueueBridgeRequest(Request);
 
     // Stay responsive to ShutdownModule on the game thread instead of waiting
     // unconditionally for a task that could no longer execute.

@@ -23,6 +23,7 @@ from .instances.session.work import reserve
 from .instances.errors import InstanceError
 from .tasks.runner import ensure_worker as _ensure_worker
 from .contracts import ALL_OPERATIONS
+from .diagnostics.contracts.notice import normalize
 
 MAX_ACTIVE_TASKS = 20
 MAX_FINISHED_TASKS = 50
@@ -55,6 +56,7 @@ class _TaskRecord:
     executor: Any = None
     on_cancel: Any = None
     on_finish: Any = None
+    diagnostic_snapshot: dict[str, Any] = field(default_factory=dict)
 
 
 _lock = threading.Lock()
@@ -100,6 +102,9 @@ def _status_row(record: _TaskRecord) -> dict[str, Any]:
         row["error"] = record.error
     if record.status == "succeeded" and record.result is not None:
         row["summary"] = compact_data_summary(record.result.get("data"))
+    row.update(record.diagnostic_snapshot)
+    if isinstance(row.get("runtime_diagnostics"), dict):
+        row["runtime_diagnostics"] = normalize(row["runtime_diagnostics"], recorded=True)
     return row
 
 
@@ -187,7 +192,7 @@ def task_result(task_id: str) -> dict[str, Any]:
                 f"task is still {record.status}; poll task_status until it finishes",
                 {"task_id": task_id, "status": record.status},
             )
-        data: dict[str, Any] = {"task_id": task_id, "status": record.status, "operation": record.operation}
+        data: dict[str, Any] = _status_row(record)
         if record.result is not None:
             data["result"] = record.result
         if record.error is not None:

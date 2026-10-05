@@ -34,7 +34,9 @@ def test_a_payload_that_fits_is_returned_whole(small):
     artifact = stored({"rows": ["a", "b"]})
     response = page(artifact.artifact_id)
     assert response["ok"] is True
-    assert response["data"] == {"rows": ["a", "b"]}
+    assert response["data"]["rows"] == ["a", "b"]
+    assert response["data"]["runtime_observed"] is False
+    assert response["data"]["runtime_diagnostics"]["status"] == "unknown"
 
 
 def test_an_oversized_payload_is_paged_and_reassembles_exactly(small):

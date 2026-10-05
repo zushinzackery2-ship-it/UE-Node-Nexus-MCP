@@ -13,6 +13,10 @@ from ...errors import SyncError
 from ...storage.io import digest
 from ..history import History
 from .state import TERMINAL, active, update
+from ....diagnostics.contracts.observation import capture
+from ....diagnostics.contracts.notice import normalize
+from ....diagnostics.contracts.workflows import attach_report, stored_fields
+from ....diagnostics.contracts.response import DIAGNOSTIC_FIELDS
 
 
 def submit(store, action, paths, options, runner, scope=None):
@@ -69,18 +73,20 @@ def create(store, action, paths, options):
 
 def execute(store, identifier, runner):
     record = update(store, identifier, status="running", started_at=time.time())
-    try:
-        with active(store, identifier):
-            result = runner(record["operation"], record["paths"], record["options"])
-        status = "failed" if result.get("error_count") or result.get("status") in ("blocked", "partial", "conflict", "stale") else "succeeded"
-    except (SyncError, InstanceError) as exc:
-        status = "cancelled" if exc.code in ("sync_job_cancelled", "sync_job_deadline") else "failed"
-        result = dict(status=status, error_count=1, error=dict(code=exc.code, message=str(exc), details=exc.details))
-    except Exception as exc:
-        status = "failed"
-        result = dict(status=status, error_count=1, error=dict(code="sync_job_failed", message=str(exc)))
+    with capture() as observed:
+        try:
+            with active(store, identifier):
+                result = runner(record["operation"], record["paths"], record["options"])
+            status = "failed" if result.get("error_count") or result.get("status") in ("blocked", "partial", "conflict", "stale") else "succeeded"
+        except (SyncError, InstanceError) as exc:
+            status = "cancelled" if exc.code in ("sync_job_cancelled", "sync_job_deadline") else "failed"
+            result = dict(status=status, error_count=1, error=dict(code=exc.code, message=str(exc), details=exc.details))
+        except Exception as exc:
+            status = "failed"
+            result = dict(status=status, error_count=1, error=dict(code="sync_job_failed", message=str(exc)))
+        attach_report(result, record["operation"], observed.last, recorded=True)
     result_id = store.objects.put("sync_result", result)
-    update(store, identifier, status=status, result_id=result_id, finished_at=time.time())
+    update(store, identifier, status=status, result_id=result_id, finished_at=time.time(), **stored_fields(result))
     store.event("sync_job_finished", job_id=identifier, status=status, result_id=result_id)
     return dict(ok=status == "succeeded", data=result, error=result.get("error"))
 
@@ -117,16 +123,19 @@ def observe(store, action, options):
             if record["status"] in TERMINAL:
                 return dict(report(record), error_count=1)
             raise SyncError("job_not_done", "job has no completed result", report(record))
-        return dict(store.objects.data(record["result_id"], "sync_result"), job_id=identifier, job_status=record["status"])
+        result = dict(store.objects.data(record["result_id"], "sync_result"), job_id=identifier, job_status=record["status"])
+        return attach_report(result, record["operation"], recorded=True)
     return report(record)
 
 
 def report(record):
     keys = ("workspace_id", "operation", "status", "submitted_at", "started_at", "finished_at", "source_commit",
-            "stage", "current_asset", "completed_assets", "deadline_at", "cancel_requested", "error")
+            "stage", "current_asset", "completed_assets", "deadline_at", "cancel_requested", "error", *DIAGNOSTIC_FIELDS)
     result = dict((key, record[key]) for key in keys if key in record)
     result.update(action="job_status", job_id=record["id"], durable=True,
                   next=dict(action="job_result" if record.get("result_id") else "job_status", options=dict(job_id=record["id"])))
+    if isinstance(result.get("runtime_diagnostics"), dict):
+        result["runtime_diagnostics"] = normalize(result["runtime_diagnostics"], recorded=True)
     if record["status"] == "interrupted":
         result["recover"] = dict(action="recover", options=dict(workspace_id=record.get("workspace_id"), dry_run=False))
         result["error_count"] = 1

@@ -27,6 +27,7 @@ class BrokerClient:
         self.registered = False
         self.closed = False
         self.policy = dict()
+        self.features = frozenset()
         self.lock = threading.RLock()
 
     def _send(self, action: str, payload: dict) -> dict:
@@ -79,8 +80,18 @@ class BrokerClient:
             result = self._send("register", dict(client_session_id=self.session_id, workspace=self.workspace,
                                                 process_created=identity["process_created"]))
             require(isinstance(result.get("policy"), dict), "manager_response_unknown", "manager registration has no valid policy")
+            features = result.get("features", [])
+            require(isinstance(features, list) and all(isinstance(name, str) for name in features),
+                    "manager_response_unknown", "manager registration has invalid features")
             self.policy = result["policy"]
+            self.features = frozenset(features)
             self.registered = True
+
+    def supports(self, feature: str) -> bool:
+        """Whether the manager reads ``feature``; one that predates it ignores the field."""
+        with self.lock:
+            self.connect()
+            return feature in self.features
 
     def call(self, action: str, payload: dict | None = None) -> dict:
         with self.lock:

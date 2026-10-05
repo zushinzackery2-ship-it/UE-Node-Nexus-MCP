@@ -27,6 +27,7 @@ def test_log_polling_is_offline_before_use_and_after_reclamation(lifecycle, monk
         session.ensure(dict(mode="reuse_or_start", dry_run=False))
         ready(session, service)
         identifier = session.current()["instance_id"]
+        (logs / (identifier + ".log")).write_text("LogNexus: selected instance evidence\n", encoding="utf-8")
         for _ in range(32):
             clock.advance(15)
             assert tools_system.log_tail_get()["ok"]

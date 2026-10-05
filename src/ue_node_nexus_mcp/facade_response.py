@@ -6,6 +6,8 @@ from typing import Any
 from .diagnostic_counting import count_diagnostic_errors, count_diagnostic_warnings
 from .facade_state import StoredDiff, facade_state
 from .runtime import response_mode
+from .diagnostics.summary import attach as attach_diagnostics, counts as data_diagnostic_counts
+from .diagnostics.contracts.response import attach as attach_contract
 
 LARGE_RESPONSE_INLINE_BYTE_LIMIT = 16 * 1024
 
@@ -25,6 +27,8 @@ def with_optional_remaining_errors(result: dict[str, Any], response: dict[str, A
     remaining = response.get("remaining_errors")
     if isinstance(remaining, int):
         result["remaining_errors"] = remaining
+        if "remaining_errors_scope" in response:
+            result["remaining_errors_scope"] = response["remaining_errors_scope"]
     return result
 
 
@@ -39,6 +43,10 @@ def diagnostic_counts(response: dict[str, Any]) -> dict[str, int]:
     remaining = response.get("remaining_errors")
     if isinstance(remaining, int):
         error_count = max(error_count, remaining)
+
+    data_errors, data_warnings = data_diagnostic_counts(response)
+    error_count = max(error_count, data_errors)
+    warning_count = max(warning_count, data_warnings)
 
     return {"errors": error_count, "warnings": warning_count}
 
@@ -118,6 +126,7 @@ def diff_changes(diff: StoredDiff) -> list[list[Any]]:
 
 
 def summarize_response(operation: str, payload: dict[str, Any], response: dict[str, Any], mode: str) -> dict[str, Any]:
+    attach_contract(response, response, operation)
     raw_mode = mode if mode in {"full", "debug"} else "full"
     if mode in {"full", "debug"} or response_mode() == "full":
         payload_bytes = response_payload_bytes(response)
@@ -126,12 +135,10 @@ def summarize_response(operation: str, payload: dict[str, Any], response: dict[s
         return response
 
     if response.get("ok") is False:
-        return with_optional_remaining_errors({
-            "ok": False,
-            "error": response.get("error", {"code": "operation_failed", "message": "Operation failed.", "details": {}}),
-            "diagnostics": diagnostic_counts(response),
-            "artifact": artifact_handle(f"{operation}_error", response),
-        }, response)
+        result = dict(ok=False, error=response.get("error", dict(code="operation_failed", message="Operation failed.", details=dict())),
+                      diagnostics=diagnostic_counts(response), artifact=artifact_handle(f"{operation}_error", response))
+        attach_diagnostics(result, response, operation, payload)
+        return with_optional_remaining_errors(result, response)
 
     diff = facade_state.store_diff(operation, payload, response)
     data = response.get("data")
@@ -154,6 +161,7 @@ def summarize_response(operation: str, payload: dict[str, Any], response: dict[s
             },
         }
 
+    attach_diagnostics(summary, response, operation, payload)
     return with_optional_remaining_errors({"ok": True, "data": summary}, response)
 
 
@@ -191,6 +199,11 @@ def _artifact_summary_for_large_response(
 
     summary["next_read"] = follow(artifact["id"])
     summary["page_lists_with"] = list_reads(artifact["id"], response)
+    if operation == "workflow_guide_get" and isinstance(data, dict):
+        for key in ("category", "title", "query"):
+            if isinstance(data.get(key), str):
+                summary[key] = data[key]
+    attach_diagnostics(summary, response, operation, payload)
 
     return with_optional_remaining_errors({
         "ok": response.get("ok", False),

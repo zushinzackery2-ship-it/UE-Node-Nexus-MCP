@@ -52,7 +52,7 @@ def test_force_local_compares_with_live_asset_even_when_only_ue_changed(sync_wor
     assert run_sync(ue, "status", [MAT], env=env)["counts"] == dict(clean=1)
 
 
-def test_function_refresh_keeps_unselected_callers_local_edits(sync_workspace):
+def test_legacy_interface_rejection_preserves_unselected_local_edits(sync_workspace):
     ue, env, project = sync_workspace
     ue.referencers[MF] = [MAT.rsplit(".", 1)[0]]
     function = project / "WaterStains/Functions/MF_WS_S.mf.nexus"
@@ -70,7 +70,9 @@ def test_function_refresh_keeps_unselected_callers_local_edits(sync_workspace):
 
     report = run_sync(ue, "push", [MF], dict(dry_run=False), env)
 
-    assert report["error_count"] == 0, report
+    assert report["error_count"] == 1, report
+    assert any("safety_workspace_required" in item for item in report["diagnostics"])
+    assert not ue.applied
     assert caller.read_bytes() == intended
     assert base_path(project, MAT).read_bytes() == base
 

@@ -7,9 +7,12 @@ persistent conflicts when necessary. Load `workflow_guide_get(category="collabor
 for stage/commit, conflict resolution, history and recovery. The operation
 rules below apply to direct bridge calls.
 
-The bridge executes each request on the UE game thread, one at a time per
-editor instance. Parallel MCP calls do not run UE work in parallel — they
-queue. Plan accordingly.
+The bridge queues transport requests and executes at most one per editor frame
+on `OnBeginFrame`, before world ticking. Pumping game-thread tasks during a world
+tick, GC, shader wait or modal dialog cannot start another queued mutation.
+The four pipe workers bound the queue at four requests; shutdown settles pending
+responses before stopping transport. Parallel calls serialize at this frame
+boundary, and save/GC/streaming/asynchronous ownership checks still apply.
 All MCP workspaces for the same physical `.uproject` acquire the same editor
 through `bridge_instance_ensure`. Independent checkouts need no extra editor.
 Load the `instances` guide for lifecycle operations and ownership.
@@ -60,6 +63,19 @@ compile). Prefer `ue_plan_validate` first for high-risk batches, and prefer a
 single patch/build op over a batch when one exists.
 
 ## Background task queue
+
+Viewport captures return an accepted job with `capture_id`, `file_path` and
+`state=queued`. Guard retains the request and work scope through deferred drawing,
+pixel verification and the terminal receipt. Bridge asset work, save watchers
+and editor shutdown wait for that ownership to finish. Capability discovery
+remains available while a capture owns resources.
+
+Poll `viewport_capture_status` with `file_path` and `capture_id`. Only
+`state=completed`, `done=true`, `ok=true` proves this request produced a complete
+PNG with matching dimensions, size and digest. An existing file without a
+receipt is `untracked`; it cannot complete a new request. Failed, timed-out,
+replaced or interrupted requests report a terminal error. External UE screenshot
+requests are refused before capture submission and are never cleared by Nexus.
 
 For a long-running call you do not want to block on (a big `asset_compile`,
 a heavy `graph_build_apply`, a whole `batch_execute`), submit it instead:

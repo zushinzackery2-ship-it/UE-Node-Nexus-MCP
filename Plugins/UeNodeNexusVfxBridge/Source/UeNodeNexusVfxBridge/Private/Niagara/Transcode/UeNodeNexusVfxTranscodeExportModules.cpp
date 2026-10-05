@@ -86,7 +86,7 @@ static TMap<FString, FString> AssignmentDefaults(UNiagaraNodeFunctionCall* Modul
     return Defaults;
 }
 
-static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle, UNiagaraNodeOutput* Output, UNiagaraNodeFunctionCall* Module)
+static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle, UNiagaraNodeOutput* Output, UNiagaraNodeFunctionCall* Module, FString& Error)
 {
     TArray<TSharedPtr<FJsonValue>> Inputs;
     UNiagaraGraph* CalledGraph = Module->GetCalledGraph();
@@ -129,7 +129,12 @@ static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle
             && ResolveRapidIterationInput(*Handle, Output->GetUsage(), Output->GetUsageId(), Module, Name, RapidVariable, Script)
             && Script->RapidIterationParameters.IndexOf(RapidVariable) != INDEX_NONE)
         {
-            const FString RapidText = ParameterValueText(Script->RapidIterationParameters, RapidVariable);
+            const FString RapidText = ParameterValueText(Script->RapidIterationParameters, RapidVariable, &Error);
+            if (!Error.IsEmpty())
+            {
+                Error = Script->GetPathName() + TEXT(" input=") + Name + TEXT(": ") + Error;
+                return TArray<TSharedPtr<FJsonValue>>();
+            }
             if (!RapidText.IsEmpty())
             {
                 bHasOverride = true;
@@ -176,7 +181,7 @@ static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle
     return Inputs;
 }
 
-TSharedPtr<FJsonObject> ModuleJson(FNiagaraEmitterHandle* Handle, UNiagaraNodeOutput* Output, UNiagaraNodeFunctionCall* Module)
+TSharedPtr<FJsonObject> ModuleJson(FNiagaraEmitterHandle* Handle, UNiagaraNodeOutput* Output, UNiagaraNodeFunctionCall* Module, FString& Error)
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     Json->SetStringField(TEXT("guid"), Module->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
@@ -188,7 +193,11 @@ TSharedPtr<FJsonObject> ModuleJson(FNiagaraEmitterHandle* Handle, UNiagaraNodeOu
     Json->SetStringField(TEXT("function_name"), Module->GetFunctionName());
     Json->SetBoolField(TEXT("enabled"), Module->IsNodeEnabled());
     Json->SetBoolField(TEXT("assignment"), bAssignment);
-    Json->SetArrayField(TEXT("inputs"), ModuleInputs(Handle, Output, Module));
+    Json->SetArrayField(TEXT("inputs"), ModuleInputs(Handle, Output, Module, Error));
+    if (!Error.IsEmpty())
+    {
+        return nullptr;
+    }
     return Json;
 }
 }

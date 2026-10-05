@@ -12,7 +12,6 @@ except ModuleNotFoundError:  # MCP 2.x renamed FastMCP to MCPServer.
 
 from .bridge import BridgeError, UeBridgeClient
 from .contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
-from .diagnostic_counting import coerce_error_count, count_diagnostic_errors
 from .features import consume_feature_args, read_feature_env, resolve_enabled_features
 from .instances.session import instance_manager
 from .instances.errors import InstanceError
@@ -148,6 +147,9 @@ def thin_tool(offload: bool = False):
         # annotations``. Resolve them once before registration; MCP 2.x accepts
         # the resulting runtime types as well.
         func.__annotations__ = get_type_hints(func)
+        from .diagnostics.contracts.observation import tool_wrapper
+
+        func = tool_wrapper(func)
         if offload:
             from asyncio import to_thread
             from functools import wraps
@@ -177,60 +179,14 @@ def hidden_tool(feature: str | None = None):
     return decorator
 
 
-def _max_nested_error_count(value: Any) -> int:
-    if isinstance(value, list):
-        maximum = 0
-        for item in value:
-            maximum = max(maximum, _max_nested_error_count(item))
-        return maximum
-    if not isinstance(value, dict):
-        return 0
-
-    maximum = 0
-    for key, child in value.items():
-        if key == "error_count":
-            maximum = max(maximum, coerce_error_count(child))
-            continue
-        maximum = max(maximum, _max_nested_error_count(child))
-    return maximum
-
-
-def _strip_nested_remaining_errors(value: Any) -> None:
-    if isinstance(value, list):
-        for item in value:
-            _strip_nested_remaining_errors(item)
-        return
-    if not isinstance(value, dict):
-        return
-
-    for key in list(value):
-        if key == "remaining_errors":
-            value.pop(key, None)
-            continue
-        _strip_nested_remaining_errors(value[key])
-
-
-def _count_response_errors(response: dict[str, Any]) -> int:
-    diagnostic_total = count_diagnostic_errors(response.get("diagnostics"))
-    nested_total = _max_nested_error_count(response.get("data"))
-    total = max(diagnostic_total, nested_total)
-    if response.get("ok") is False and total == 0 and isinstance(response.get("error"), dict):
-        return 1
-    return total
-
-
-def _payload_asset_path(payload: dict[str, Any]) -> str | None:
-    value = payload.get("asset_path")
-    if isinstance(value, str) and value:
-        return value
-    return None
-
-
 def _with_remaining_errors(operation: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
-    response.pop("remaining_errors", None)
-    _strip_nested_remaining_errors(response)
-    if _payload_asset_path(payload) is not None:
-        response["remaining_errors"] = _count_response_errors(response)
+    from .diagnostics.contracts.counters import postcheck
+    from .diagnostics.contracts.observation import record
+    from .diagnostics.contracts.response import attach
+
+    postcheck(operation, payload, response)
+    attach(response, response, operation)
+    record(response)
     return response
 
 
@@ -243,15 +199,16 @@ def _is_busy(response: dict[str, Any]) -> bool:
     return isinstance(error, dict) and error.get("code") == "bridge_busy"
 
 
-def call_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+def call_bridge(operation: str, payload: dict[str, Any], *, client: Any | None = None) -> dict[str, Any]:
+    selected = bridge if client is None else client
     try:
-        response = bridge.call(operation, payload)
+        response = selected.call(operation, payload)
         # the editor refuses to nest requests while one is still executing (see RequestDispatch.cpp)
         for _ in range(_BUSY_RETRIES):
             if not _is_busy(response):
                 break
             time.sleep(_BUSY_RETRY_SECONDS)
-            response = bridge.call(operation, payload)
+            response = selected.call(operation, payload)
         return _with_remaining_errors(operation, payload, normalize_bridge_response(response))
     except (BridgeError, ValueError) as exc:
         if isinstance(exc, InstanceError):

@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Material/ControlFlow/NexusMaterialControlFlow.h"
 
 #include "MaterialExpressionIO.h"
 #include "Materials/Material.h"
@@ -52,6 +53,7 @@ static TSharedPtr<FJsonObject> ExpressionNodeJson(UMaterialExpression* Expressio
     {
         Outputs.Add(MakeShared<FJsonValueString>(Output.OutputName.IsNone() ? FString() : Output.OutputName.ToString()));
     }
+    AppendMaterialControlFlowPins(Expression, Inputs, Outputs);
     Node->SetArrayField(TEXT("inputs"), Inputs);
     Node->SetArrayField(TEXT("outputs"), Outputs);
     return Node;
@@ -85,6 +87,7 @@ static TSharedPtr<FJsonObject> GraphJson(TConstArrayView<TObjectPtr<UMaterialExp
         {
             Nodes.Add(MakeShared<FJsonValueObject>(ExpressionNodeJson(Expression, Expressions)));
             AppendExpressionLinks(Expression, Expressions, Links);
+            AppendMaterialControlFlowLinks(Expression, Expressions, Links);
         }
     }
     TArray<TSharedPtr<FJsonValue>> Outputs;

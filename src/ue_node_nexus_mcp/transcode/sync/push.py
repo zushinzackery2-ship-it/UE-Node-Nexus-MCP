@@ -5,12 +5,10 @@ from __future__ import annotations
 import logging
 
 from ..errors import Diagnostic
-from ..material.calls import changed_calls
 from ..storage.paths import display_path
 from ..push.apply import accept_unchanged, apply_item
 from ..push.model import Prepared, PushOptions, PushResult, row
 from ..push.prepare import prepare_item
-from ..push.refresh import refresh_caller, refresh_callers
 from .state import SyncState
 from .dependencies import document_dependencies, order_assets
 from .files import mirrored_assets
@@ -83,8 +81,7 @@ def push_assets(bridge: BridgeCall, context: ProjectContext, state: SyncState, s
     result.stopped = options.stop_on_error and bool(blocked)
     if not result.stopped:
         ensure_root_registered(bridge, context)
-    interfaces: set[str] = set()
-    for position, asset in enumerate(order):
+    for asset in order:
         item = prepared[asset]
         if asset in blocked:
             continue
@@ -97,26 +94,12 @@ def push_assets(bridge: BridgeCall, context: ProjectContext, state: SyncState, s
             blocked.add(asset)
             continue
         try:
-            calls = changed_calls(item.status.kind, dependencies[asset], interfaces)
-            if item.plan.empty and not item.reconcile and calls:
-                # The refresh commits its own export, or keeps local text it may not replace.
-                if refresh_caller(bridge, context, state, asset, calls, options, result):
-                    result.rows.append(row(asset, item.status.kind, item.status.state, "unchanged", refreshed=sorted(calls)))
-                else:
-                    blocked.add(asset)
-                continue
             if item.plan.empty and not item.reconcile:
                 accept_unchanged(context, state, item, result)
                 continue
-            if not apply_item(bridge, context, state, item, options, result, calls):
+            if not apply_item(bridge, context, state, item, options, result):
                 blocked.add(asset)
                 continue
-            if item.plan.interface_changed and item.status.kind == "material_function" and not item.plan.creates_asset:
-                interfaces.add(asset)
-                # Consumers still to come whose own text calls it rebuild those nodes in their own apply.
-                own = set(later for later in order[position + 1:]
-                          if later not in blocked and changed_calls(prepared[later].status.kind, dependencies[later], set((asset,))))
-                blocked.update(refresh_callers(bridge, context, state, asset, options, result, own))
         except (OSError, SyncError) as exc:
             error = exc if isinstance(exc, SyncError) else SyncError("sync_io_failed", str(exc))
             _failure(context, item.status, result, error)

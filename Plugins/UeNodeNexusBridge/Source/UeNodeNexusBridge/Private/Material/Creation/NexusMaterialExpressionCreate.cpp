@@ -1,4 +1,5 @@
 #include "Material/Creation/NexusMaterialExpressionCreate.h"
+#include "Material/ControlFlow/NexusMaterialControlFlow.h"
 
 #include "MaterialEditingLibrary.h"
 #include "Materials/Material.h"
@@ -11,8 +12,14 @@ namespace UeNodeNexusBridge
 {
 UMaterialExpression* CreateNexusMaterialExpression(UObject* Owner, UClass* Class, int32 X, int32 Y)
 {
-    UMaterialExpression* Expression = nullptr;
-    if (UMaterial* Material = Cast<UMaterial>(Owner))
+    UMaterialExpression* Expression = Transcode::FindMaterialControlFlowRoot(Owner, Class);
+    if (Expression != nullptr)
+    {
+        Expression->Modify();
+        Expression->MaterialExpressionEditorX = X;
+        Expression->MaterialExpressionEditorY = Y;
+    }
+    else if (UMaterial* Material = Cast<UMaterial>(Owner))
     {
         Expression = UMaterialEditingLibrary::CreateMaterialExpression(Material, Class, X, Y);
     }
@@ -24,6 +31,7 @@ UMaterialExpression* CreateNexusMaterialExpression(UObject* Owner, UClass* Class
     {
         return nullptr;
     }
+    Transcode::BindMaterialControlFlowRoot(Owner, Expression);
     // The editor's placement defaults differ from reflection's CDO defaults.
     // Every bridge creation path starts with the defaults advertised by schema.
     const UObject* Defaults = Expression->GetClass()->GetDefaultObject();

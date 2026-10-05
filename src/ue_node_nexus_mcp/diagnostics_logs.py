@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Any
+from .diagnostics.runtime.files import read_latest_project_log as read_latest_project_log
+from .diagnostics.runtime.logs import parse as parse_runtime_log_diagnostics
 
-_DEFAULT_TAIL_BYTES = 512 * 1024
 _MAX_LOG_ITEMS = 40
 
 _COMPILE_RE = re.compile(
@@ -30,25 +30,20 @@ _FUNCTION_RE = re.compile(r"Function\s+(?P<function>[^:]+):\s*$", re.IGNORECASE)
 _TIMESTAMP_RE = re.compile(r"^\[(?P<timestamp>\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}:\d{3})\]")
 
 
-def enrich_with_material_log_diagnostics(
+def enrich_with_log_diagnostics(
     response: dict[str, Any],
     project_context: dict[str, Any] | None,
     *,
     asset_path: str | None = None,
     severity: str = "all",
 ) -> dict[str, Any]:
-    """Add recent UE material compile log entries as related diagnostics.
-
-    UE log lines are historical, so these are deliberately not merged into
-    data.items or data.error_count. They are high-signal context for failures
-    like transient Landscape material permutations, but the current MessageLog
-    remains the source of truth for active global counts.
-    """
+    """Attach historical compile, PIE, script and RHI evidence beside native session counts."""
     log_text, log_path = read_latest_project_log(project_context)
     if not log_text:
         return response
 
     items = parse_material_log_diagnostics(log_text, asset_path=asset_path, severity=severity)
+    items.extend(parse_runtime_log_diagnostics(log_text, asset_path=asset_path, severity=severity))
     if not items:
         return response
 
@@ -56,34 +51,11 @@ def enrich_with_material_log_diagnostics(
     if not isinstance(data, dict):
         return response
 
-    data["related_log_items"] = items
-    data["related_log_item_count"] = len(items)
+    data["related_log_items"] = items[-_MAX_LOG_ITEMS:]
+    data["related_log_item_count"] = len(data["related_log_items"])
     data["related_log_source"] = str(log_path) if log_path else None
     data["related_log_stale_possible"] = True
     return response
-
-
-def read_latest_project_log(project_context: dict[str, Any] | None, tail_bytes: int = _DEFAULT_TAIL_BYTES) -> tuple[str, Path | None]:
-    saved_dir = _project_saved_dir(project_context)
-    if saved_dir is None:
-        return "", None
-
-    candidates = sorted(
-        (path for log_dir in (saved_dir / "Logs", saved_dir / "Nexus/Logs")
-         for path in log_dir.glob("*.log") if path.is_file()),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    if not candidates:
-        return "", None
-
-    path = candidates[0]
-    size = path.stat().st_size
-    with path.open("rb") as handle:
-        if size > tail_bytes:
-            handle.seek(size - tail_bytes)
-        text = handle.read(tail_bytes).decode("utf-8", errors="replace")
-    return text, path
 
 
 def parse_material_log_diagnostics(
@@ -168,21 +140,6 @@ def parse_material_log_diagnostics(
                 _append_unique(items, seen, item)
 
     return items[-limit:]
-
-
-def _project_saved_dir(project_context: dict[str, Any] | None) -> Path | None:
-    data = project_context.get("data") if isinstance(project_context, dict) else None
-    if not isinstance(data, dict):
-        return None
-
-    saved_dir = data.get("project_saved_dir")
-    if isinstance(saved_dir, str) and saved_dir:
-        return Path(saved_dir)
-
-    project_file = data.get("project_file_path")
-    if isinstance(project_file, str) and project_file:
-        return Path(project_file).parent / "Saved"
-    return None
 
 
 def _asset_query_terms(asset_path: str | None) -> set[str]:

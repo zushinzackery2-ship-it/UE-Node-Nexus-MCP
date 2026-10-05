@@ -47,7 +47,7 @@ def verify_plugin(source: Path, built: Path) -> None:
         raise RuntimeError(f"module manifest does not match the descriptor: {name}")
 
 
-def install(host: Path, engine: Path) -> None:
+def install(host: Path, engine: Path) -> Path:
     host = host.resolve()
     engine = engine.resolve()
     host.relative_to((ROOT / "build").resolve())
@@ -60,6 +60,7 @@ def install(host: Path, engine: Path) -> None:
         verify_plugin(source, built)
     receipt = install_verified(host, engine, PLUGINS, verify_plugin)
     print(f"installed {', '.join(PLUGINS)} into {engine / 'Engine/Plugins/Marketplace'}; receipt: {receipt}")
+    return receipt
 
 
 def main() -> None:

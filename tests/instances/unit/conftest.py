@@ -43,6 +43,17 @@ class Client:
         pytest.fail("test editor did not become ready")
 
 
+def session_ready(session, service):
+    """Reconcile the fake manager until the session's injected editor is READY."""
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        service.reconcile()
+        if session.status()["state"] == "READY":
+            return
+        time.sleep(0.005)
+    pytest.fail("injected editor did not become ready")
+
+
 @pytest.fixture
 def lifecycle(tmp_path):
     clock, platform = Clock(), Platform()

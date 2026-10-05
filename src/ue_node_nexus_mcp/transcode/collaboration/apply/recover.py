@@ -8,6 +8,7 @@ from ..store.repository import PUBLICATION_WAIT_SECONDS
 from ..workspace.service import Workspace
 from . import transactions
 from .observe import capture, forget
+from ....diagnostics.contracts.workflows import retain_record
 
 TERMINAL = ("completed", "rolled_back", "rejected")
 MISSING_RECEIPT = "durable receipt is missing; transaction cannot be resumed"
@@ -16,6 +17,8 @@ MISSING_RECEIPT = "durable receipt is missing; transaction cannot be resumed"
 def reconcile(bridge, context, workspace, record: dict, restore=False, preserve_current=False) -> dict:
     response = call_ok(bridge, "transcode_recover", dict(apply_id=record["id"], repository=str(workspace.store.root),
                                                          restore=restore, preserve_current=preserve_current))
+    if not record.get("runtime_diagnostics"):
+        retain_record(record, response, origin="recovery_probe")
     receipt = transactions.verify(workspace, record, (response.get("data") or dict()).get("receipt"))
     if not receipt:
         raise SyncError("receipt_invalid", "recovery did not return a receipt for this apply", dict(apply_id=record["id"]))

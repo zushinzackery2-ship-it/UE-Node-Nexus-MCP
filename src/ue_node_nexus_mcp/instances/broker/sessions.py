@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from ..errors import require
+from ..lifecycle.policy import FEATURES
 
 
 class Sessions:
@@ -33,7 +34,8 @@ class Sessions:
                 if lease["client_session_id"] == identifier and lease["identity"] == actual:
                     lease["recovering"] = False
             service.event("client_registered", client_session_id=identifier, pid=peer)
-        return dict(client_session_id=identifier, manager_epoch=service.epoch, policy=service.policy_dict())
+        return dict(client_session_id=identifier, manager_epoch=service.epoch, policy=service.policy_dict(),
+                    features=sorted(FEATURES))
 
     def client(self, identifier: str, peer: int) -> dict:
         record = self.clients.get(identifier)

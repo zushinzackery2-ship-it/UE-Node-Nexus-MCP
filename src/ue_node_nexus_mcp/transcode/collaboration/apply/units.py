@@ -52,11 +52,17 @@ def run_unit(bridge, context, workspace, asset: str, source: str, candidate: str
         return [dict(asset=asset, action="unchanged", **refreshed)]
     if calls:
         item = refresh.with_calls(item, calls)
+    from ....safety.publication.gate import admit
+    safety = admit(bridge, context, workspace, item, batch.get("candidate", candidate), observation, options)
     record = transactions.request(workspace, item, source, batch.get("candidate", candidate), observation["commit"], observation, options)
+    if safety is not None:
+        record["safety_validation"] = safety
+        transactions.save(workspace, record)
     transactions.execute(bridge, workspace, record)
     published = publish_verified(bridge, context, workspace, record)
     transactions.adopt(observation, record, published, workspace.history)
-    rows = [dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published, **refreshed)]
+    rows = [dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published,
+                 **(dict(safety_validation=safety) if safety is not None else dict()), **refreshed)]
     if item.get("interface_changed"):
         snapshot_id = workspace.history.entries(published).get(asset)
         if snapshot_id:

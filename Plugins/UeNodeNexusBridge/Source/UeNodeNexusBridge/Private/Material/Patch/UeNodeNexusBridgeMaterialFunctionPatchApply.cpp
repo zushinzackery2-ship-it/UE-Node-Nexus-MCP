@@ -1,5 +1,7 @@
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
 #include "Material/Creation/NexusMaterialExpressionCreate.h"
+#include "Material/ControlFlow/NexusMaterialControlFlow.h"
+#include "Material/ControlFlow/NexusMaterialControlFlow.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -203,6 +205,7 @@ bool ApplyMaterialFunctionPatchOperation(UMaterialFunction* Function, const TSha
                     Pair.Value = nullptr;
                 }
             }
+            Transcode::DisconnectMaterialControlFlowExpression(Function, Expression);
             UMaterialEditingLibrary::DeleteMaterialExpressionInFunction(Function, Expression);
         }
         return true;

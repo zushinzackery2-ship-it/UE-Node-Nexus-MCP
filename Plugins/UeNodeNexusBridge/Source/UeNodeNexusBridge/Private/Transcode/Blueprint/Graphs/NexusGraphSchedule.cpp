@@ -25,6 +25,21 @@ void RefreshFunctionCalls(UBlueprint* Blueprint, const TSet<FName>& Functions)
     }
 }
 
+void ApplyGraphDeletions(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan,
+    FApplyContext& Context, TArray<UEdGraph*>& Touched)
+{
+    TArray<int32> Deletions;
+    for (int32 Index = 0; Index < Plan.Num(); ++Index)
+    {
+        const TSharedPtr<FJsonObject> Op = Plan[Index].IsValid() ? Plan[Index]->AsObject() : nullptr;
+        if (Op.IsValid() && ReadOpString(Op, TEXT("op")) == TEXT("delete_node"))
+        {
+            Deletions.Add(Index);
+        }
+    }
+    ApplyScheduledGraphOps(Blueprint, Plan, Deletions, Context, Touched);
+}
+
 static bool NeedsTypeAnchor(UBlueprint* Blueprint, UEdGraph* Graph,
     const TSharedPtr<FJsonObject>& Op, const FApplyContext& Context)
 {

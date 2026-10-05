@@ -31,6 +31,8 @@ WRAPPER_MODULES = (
     "tools_viewport",
     "workflow_guides",
     "instances.tools.operations",
+    "safety.tools",
+    "safety.runtime.tools",
 )
 
 PRIMITIVE_JSON_TYPES: dict[type, str] = {

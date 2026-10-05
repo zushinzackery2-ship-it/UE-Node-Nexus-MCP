@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Material/ControlFlow/NexusMaterialControlFlow.h"
 #include "Material/Creation/NexusMaterialExpressionCreate.h"
 #include "UeNodeNexusBridgeTranscodeMaterialApply.h"
 
@@ -133,6 +134,7 @@ void ApplyNodeVerb(UObject* Owner, const FString& Verb, const TSharedPtr<FJsonOb
     FString Error;
     if (Verb == TEXT("delete_node"))
     {
+        DisconnectMaterialControlFlowExpression(Owner, Expression);
         if (UMaterial* Material = Cast<UMaterial>(Owner))
         {
             UMaterialEditingLibrary::DeleteMaterialExpression(Material, Expression);

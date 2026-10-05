@@ -5,6 +5,7 @@ from contextvars import ContextVar
 import time
 
 from ...errors import SyncError
+from ....diagnostics.contracts.observation import fields as observation_fields
 
 TERMINAL = ("succeeded", "failed", "cancelled", "interrupted")
 _job = ContextVar("nexus_sync_job", default=None)
@@ -42,6 +43,7 @@ def checkpoint(stage=None, asset=None, completed=False):
         raise SyncError("sync_job_deadline" if expired else "sync_job_cancelled",
                         "workflow stopped between atomic operations", dict(job_id=identifier, completed_assets=record.get("completed_assets", [])))
     changes = dict(updated_at=time.time())
+    changes.update(observation_fields())
     if stage:
         changes["stage"] = stage
     if asset:

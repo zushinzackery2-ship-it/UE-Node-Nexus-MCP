@@ -13,9 +13,9 @@ sys.path.insert(0, str(ROOT))
 from release.identity import fingerprint
 
 
-def finalize(host: Path, engine: Path) -> None:
+def finalize(host: Path, engine: Path, output_root: Path | None = None) -> None:
     host = host.resolve()
-    host.relative_to((ROOT / "build").resolve())
+    host.relative_to((output_root or ROOT / "build").resolve())
     reference = json.loads((engine / "Engine/Binaries/Win64/UnrealEditor.modules").read_text(encoding="utf-8"))
     build_id = reference["BuildId"]
     for name in ("UeNodeNexusBridge", "UeNodeNexusVfxBridge"):
@@ -44,5 +44,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, required=True)
     parser.add_argument("--engine-dir", type=Path, required=True)
+    parser.add_argument("--output-root", type=Path)
     args = parser.parse_args()
-    finalize(args.host, args.engine_dir)
+    finalize(args.host, args.engine_dir, args.output_root)

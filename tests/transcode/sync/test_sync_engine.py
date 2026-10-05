@@ -96,18 +96,16 @@ def test_push_dry_run_then_apply_and_normalize(mirror) -> None:
     assert len(ue.applied) == 1
 
 
-def test_interface_change_refreshes_callers(mirror) -> None:
+def test_legacy_interface_change_requires_guarded_checkout(mirror) -> None:
     ue, env, root = mirror
     run_sync(ue, "init", env=env)
     mf = root / "Shadetest" / "WaterStains" / "Functions" / "MF_WS_S.mf.nexus"
     mf.write_text(mf.read_text(encoding="utf-8").replace("InputName=B", "InputName=Bee"), encoding="utf-8")
     report = run_sync(ue, "push", env=env, options={"dry_run": False})
-    assert report["counts"] == {"pushed": 1, "skipped": 2}
-    assert report["refreshed_callers"] == ["/Game/Materials/M_Glass.M_Glass"]
-    refresh = [payload for payload in ue.applied if payload["asset_path"] == "/Game/Materials/M_Glass.M_Glass"]
-    assert refresh and refresh[0]["plan"] == [{"op": "refresh_function_calls", "function": "/Game/WaterStains/Functions/MF_WS_S.MF_WS_S"}]
-    # the caller was re-pulled so status stays clean
-    assert run_sync(ue, "status", env=env)["counts"] == {"clean": 3}
+    assert report["counts"] == {"failed": 1, "skipped": 2}
+    assert any("safety_workspace_required" in item for item in report["diagnostics"])
+    assert not ue.applied
+    assert "InputName=Bee" in mf.read_text(encoding="utf-8")
 
 
 def test_conflict_is_refused_without_force(mirror) -> None:

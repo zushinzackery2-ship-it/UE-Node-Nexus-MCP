@@ -120,7 +120,12 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     Data->SetObjectField(TEXT("id_map"), IdMap);
     if (!bDryRun && !OutDir.IsEmpty())
     {
-        TSharedPtr<FJsonObject> Raw = Collaboration::StampRaw(BuildNiagaraSystemRaw(System));
+        FString ReadError;
+        TSharedPtr<FJsonObject> Raw = Collaboration::StampRaw(BuildNiagaraSystemRaw(System, &ReadError));
+        if (!Raw.IsValid())
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("niagara_storage_invalid"), ReadError);
+        }
         FString File;
         FString Error;
         if (ResolveRawFile(OutDir, System->GetPathName(), File, Error) && WriteJsonFile(File, Raw, Error))

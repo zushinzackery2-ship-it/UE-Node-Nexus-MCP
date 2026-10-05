@@ -7,6 +7,8 @@
 #include "UeNodeNexusBridgeOperations.h"
 #include "HAL/PlatformTime.h"
 #include "NexusLifecycle.h"
+#include "Safety/NexusAsyncWork.h"
+#include "Diagnostics/Runtime/NexusRuntimeDiagnostics.h"
 #include "UObject/UObjectGlobals.h"
 #include "UObject/GarbageCollection.h"
 
@@ -30,6 +32,11 @@ FBridgeWorkScope::~FBridgeWorkScope()
 
 bool IsBridgeRequestActive()
 {
+    return GRequestActive || !Safety::AsyncBusyReason().IsEmpty();
+}
+
+bool IsBridgeDispatchActive()
+{
     return GRequestActive;
 }
 
@@ -38,25 +45,23 @@ const FString& ActiveBridgeRequestId()
     return GRequestId;
 }
 
-static FString RequestBusyReason()
+static FString RequestBusyReason(const FString& Operation, const TSharedPtr<FJsonObject>& Payload)
 {
     if (GRequestActive)
     {
         return TEXT("request_active");
     }
-    if (UE::IsSavingPackage())
+    const FString EngineReason = Safety::EngineBusyReason();
+    if (!EngineReason.IsEmpty())
     {
-        return TEXT("package_save");
+        return EngineReason;
     }
-    if (IsGarbageCollecting())
-    {
-        return TEXT("garbage_collection");
-    }
-    if (IsAssetStreamingSuspended())
-    {
-        return TEXT("streaming_suspended");
-    }
-    return FString();
+    // Capability discovery reads registry/build metadata, so a new caller can
+    // learn the protocol while asynchronous resource ownership is retained.
+    bool bInspectAssets = true;
+    Payload->TryGetBoolField(TEXT("include_assets"), bInspectAssets);
+    return Operation == TEXT("bridge_capabilities_get") || Operation == TEXT("runtime_smoke_status")
+        || (Operation == TEXT("diagnostics_get") && !bInspectAssets) ? FString() : Safety::AsyncBusyReason();
 }
 
 FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
@@ -66,14 +71,12 @@ FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
     TSharedPtr<FJsonObject> Payload;
     TryGetPayload(RequestJson, Payload);
 
-    // Requests run as game-thread tasks. If a handler ever pumps messages (modal dialog,
-    // slow task, shader-compile wait), the task graph can start the next request *inside*
-    // it; nested graph edits during a compile cancellation have crashed the editor.
-    // Refuse instead of nesting; the client retries.
+    // The frame queue executes outside world ticking. Direct/internal dispatch
+    // and engine callbacks still obey the same exclusion and lifetime checks.
     // Slate viewport resize suspends streaming and pumps game-thread tasks in
     // FlushRenderingCommands. Reject before any mutation; the owning frame must
     // unwind before a bridge operation may compile or save render assets.
-    const FString BusyReason = RequestBusyReason();
+    const FString BusyReason = RequestBusyReason(Operation, Payload);
     if (!BusyReason.IsEmpty())
     {
         TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
@@ -81,6 +84,7 @@ FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
             TEXT("engine phase prevents bridge execution; retry after the owning frame resumes"));
         Error->SetStringField(TEXT("busy_reason"), BusyReason);
         Response->SetObjectField(TEXT("error"), Error);
+        Response->SetObjectField(TEXT("runtime_diagnostics"), RuntimeDiagnostics::Snapshot());
         UE_LOG(LogTemp, Display, TEXT("Nexus request=%s operation=%s phase=deferred reason=%s"),
             *RequestId, *Operation, *BusyReason);
         NexusLifecycle::Complete(RequestId, false, TEXT("bridge_busy"), false);
@@ -97,8 +101,12 @@ FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
     {
         (*Error)->TryGetStringField(TEXT("code"), Code);
     }
-    NexusLifecycle::Complete(RequestId, Response->GetBoolField(TEXT("ok")), Code, Operation == TEXT("level_open"));
+    if (!Safety::Holds(RequestId))
+    {
+        NexusLifecycle::Complete(RequestId, Response->GetBoolField(TEXT("ok")), Code, Operation == TEXT("level_open"));
+    }
     Response->SetNumberField(TEXT("context_epoch"), NexusLifecycle::Snapshot()->GetNumberField(TEXT("context_epoch")));
+    Response->SetObjectField(TEXT("runtime_diagnostics"), RuntimeDiagnostics::Snapshot());
     UE_LOG(LogTemp, Display, TEXT("Nexus request=%s operation=%s phase=end duration_ms=%.3f"),
         *RequestId, *Operation, (FPlatformTime::Seconds() - Started) * 1000.0);
     return SerializeJsonObjectToString(Response);

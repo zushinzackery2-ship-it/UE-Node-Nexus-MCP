@@ -81,6 +81,24 @@ def test_only_explicit_pre_admission_rejection_is_retried(tmp_path, monkeypatch,
     client.close()
 
 
+@pytest.mark.parametrize("registration, supported", [
+    (dict(policy=dict()), False),
+    (dict(policy=dict(), features=["allow_low_memory"]), True),
+    (dict(policy=dict(), features="allow_low_memory"), None),
+])
+def test_a_manager_announces_the_optional_fields_it_reads(tmp_path, monkeypatch, registration, supported):
+    monkeypatch.setattr(module, "ensure_manager", lambda _root: None)
+    monkeypatch.setattr(module.named_pipe_transport, "send", lambda _target, _request, _timeout: dict(ok=True, data=registration))
+    client = module.BrokerClient(tmp_path)
+    if supported is None:
+        with pytest.raises(InstanceError) as caught:
+            client.supports("allow_low_memory")
+        assert caught.value.code == "manager_response_unknown" and not client.registered
+    else:
+        assert client.supports("allow_low_memory") is supported
+    client.close()
+
+
 @pytest.mark.parametrize("message", ["plain warning", '{"event":"ready","instance_id":"example"}', "x" * 20000])
 def test_lifecycle_log_always_contains_bounded_json(message):
     record = logging.LogRecord("lifecycle", logging.WARNING, __file__, 1, message, (), None)

@@ -4,7 +4,11 @@ namespace UeNodeNexusBridge
 {
 TArray<FString> GetCoreOperationNames()
 {
-    return {
+    return
+    {
+        TEXT("runtime_smoke_start"),
+        TEXT("runtime_smoke_status"),
+        TEXT("safety_baseline_export"),
         TEXT("mesh_geometry_get"),
         TEXT("mesh_geometry_build"),
         TEXT("sound_cue_summary_get"),

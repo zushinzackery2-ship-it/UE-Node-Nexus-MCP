@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeMaterialApply.h"
+#include "Material/ControlFlow/NexusMaterialControlFlow.h"
 
 #include "MaterialExpressionIO.h"
 #include "Materials/Material.h"
@@ -60,12 +61,29 @@ bool ApplyMaterialLink(UObject* Owner, const TSharedPtr<FJsonObject>& Op, int32 
         Context.Fail(Index, TEXT("node_not_found"), FString::Printf(TEXT("source node not found: %s"), *FromId));
         return false;
     }
+    UMaterialExpression* To = ResolveMaterialNode(Owner, Context, ToId);
+    if (To != nullptr && To->HasExecInput() && ToPin.Equals(TEXT("execute"), ESearchCase::IgnoreCase))
+    {
+        if (Context.bDryRun)
+        {
+            return true;
+        }
+        FString Error;
+        if (!ApplyMaterialControlFlowLink(Owner, From, To, FromPin, bConnect, Error))
+        {
+            Context.Fail(Index, TEXT("exec_link_failed"), Error);
+            return false;
+        }
+        Owner->Modify();
+        Context.bChanged = true;
+        return true;
+    }
     FExpressionInput* Input = nullptr;
     if (Material != nullptr && ToId == TEXT("out") && !Context.Ids.Contains(ToId))
     {
         Input = ResolveMaterialOutputInput(Material, ToPin);
     }
-    else if (UMaterialExpression* To = ResolveMaterialNode(Owner, Context, ToId))
+    else if (To != nullptr)
     {
         Input = ResolveMaterialInputPin(To, ToPin);
     }

@@ -27,6 +27,7 @@ from .facade_state import facade_state
 from .operation_registry import get_operation_spec
 from .operation_validation import unknown_field_error
 from .runtime import enabled_features, thin_tool
+from .diagnostics.summary import attach as attach_diagnostics
 
 VALID_RESPONSE_OPTION_FIELDS = {"allow_heavy", "mode"}
 
@@ -134,7 +135,8 @@ def ue_read(
             "state_token": f"state:{resolved_asset_path}:{diff.diff_token}",
             "artifact": artifact,
         }
-        return with_optional_remaining_errors({"ok": raw_response.get("ok", False), "data": data}, raw_response)
+        attach_diagnostics(data, raw_response, operation, operation_payload)
+        return with_optional_remaining_errors(dict(ok=raw_response.get("ok", False), data=data), raw_response)
 
     operation = resolve_read_operation(target)
     if operation is None:
@@ -152,6 +154,8 @@ def ue_read(
         return minimal_error("invalid_read", str(exc), {"target": target})
     if format == "debug":
         return raw_response
+    if target == "diagnostics" and format == "detail":
+        return summarize_response(operation, query_payload, raw_response, "full")
     artifact = artifact_handle(f"{target}_read", raw_response)
     diff = facade_state.store_diff(operation, query_payload, raw_response)
     data = {
@@ -164,6 +168,7 @@ def ue_read(
         "state_token": f"state:{asset_path or target}:{diff.diff_token}",
         "artifact": artifact,
     }
+    attach_diagnostics(data, raw_response, operation, query_payload)
     return with_optional_remaining_errors({"ok": raw_response.get("ok", False), "data": data}, raw_response)
 
 

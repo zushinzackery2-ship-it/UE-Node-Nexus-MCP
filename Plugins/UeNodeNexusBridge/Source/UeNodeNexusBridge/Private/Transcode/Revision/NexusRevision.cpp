@@ -109,7 +109,7 @@ void UnregisterObserver(const FString& Kind)
     Observers.Remove(Kind);
 }
 
-FJson Observe(const FJson& Request)
+FJson Observe(const FJson& Request, FString* OutError)
 {
     FString Kind, AssetPath;
     Request->TryGetStringField(TEXT("kind"), Kind);
@@ -146,7 +146,13 @@ FJson Observe(const FJson& Request)
     }
     if (FObserver* Provider = Observers.Find(Kind))
     {
-        return StampRaw((*Provider)(Request, Asset));
+        FString Error;
+        const FJson Result = (*Provider)(Request, Asset, Error);
+        if (OutError != nullptr)
+        {
+            *OutError = Error;
+        }
+        return StampRaw(Result);
     }
     return StampRaw(Transcode::BuildRawForAsset(Asset, Transcode::KindForClass(Asset->GetClass())));
 }

@@ -39,14 +39,15 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 | **文本资产镜像** | Material、MaterialFunction、MaterialInstance、Blueprint、Niagara System 和属性型资产的导出、校验、差异计划与提交 |
 | **场景组镜像** | 当前世界已加载 Actor、蓝图 Actor、ISM/HISM 的稳定身份、文本编辑、批量实例操作、事务和外部包保存 |
 | **多 agent 协作** | 独立工作区、HEAD/index/files、三方语义合并、持久冲突会话、带 revision 条件的 UE 发布 |
-| **共享编辑器生命周期** | 同项目复用、启动防重、跨会话租约、自动闲置回收、退出保护；总数量不限，启动并发与内存准入受控 |
+| **共享编辑器生命周期** | 同项目复用、启动防重、跨会话租约、自动闲置回收、退出保护；总数量不限，启动并发与内存准入受控，用户同意后可用 `allow_low_memory` 单次越过内存准入 |
 | **本地版本历史** | commit、log/show/diff/blame、branch/tag、restore/revert/reset、stash、cherry-pick/rebase/amend 和 reflog |
 | **统一参数目录** | 按蓝图、材质、Niagara、场景、资产及通用类型分类的 schema JSON、Markdown 索引、定向函数与上下文查询 |
 | **资产查询与管理** | 资产索引、元数据、依赖与引用关系，以及创建、复制、移动、重命名、删除和 redirector 修复 |
 | **图与蓝图** | 节点、引脚、连接、变量、组件、函数，以及动画蓝图与状态机摘要 |
 | **关卡操作** | Actor、变换、组件属性、材质槽、Landscape LayerInfo、关卡切换、视口相机与截图 |
 | **VFX** | Niagara 发射器、模块栈、渲染器和用户参数；Cascade 系统摘要 |
-| **诊断与批处理** | 编译诊断、MessageLog、日志尾、离线材质检查、批量执行和后台任务 |
+| **诊断与批处理** | Blueprint/AnimBlueprint 编译与 PIE 运行时诊断、结构化 MessageLog/脚本/RHI 错误、精确实例日志、退出崩溃证据、批量执行和后台任务 |
+| **独立执行验收** | 保存状态副本中的 PIE/DX12 或 DX11 smoke、实际 PNG 核验、运行时错误判定与正常退出校验 |
 
 七个 MCP 门面保持不变。实例管理通过 `ue_execute` 的 `bridge_instance_*` 操作提供，协作通过 `ue_sync` 扩展动作提供。内部操作默认索引不列出，仍可按名查询 schema 和调用。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
 
@@ -149,6 +150,8 @@ ue_capability_get(operation="level_actors_list", detail="schema")
 
 `ue_read(target="graph")` 读取材质图，`target="material_instance"` 读取实例参数，`target="auto"` 解析未知资产类型。操作的 `format` 控制数据形状，`response.mode` 控制响应详细程度。
 
+`ue_read(target="diagnostics", format="detail")` 返回结构化运行时错误与编译覆盖信息；默认保留最近一次 PIE，游标只影响返回条目，累计错误数继续保留。历史日志单列，不计入当前错误数。`bridge_instance_status` 在 UE 退出后提供 fatal/ensure、转储路径与历史状态。独立执行验收通过 `safety_validate` 的 `level_open`、`runtime_smoke_start` 操作完成，要求渲染帧核验、运行时零错误和编辑器正常退出。参数与保留预算见 [诊断指南](src/ue_node_nexus_mcp/guides/diagnostics_repair.md)。
+
 ---
 
 ## 文本工作区与协作
@@ -225,6 +228,7 @@ value -> out.Roughness
 | **`reset / amend / rebase`** | 修改未发布的私有历史；safety ref 和 reflog 保留原版本 |
 | **`cherry-pick / stash / reflog`** | 挑选提交、保存三层草稿、查找引用移动前的版本 |
 | **条件发布** | 检查当前内存 revision、editor epoch 和依赖 read set，按当前 UE 到候选状态的差异执行 |
+| **高风险准入** | Niagara变更、材质Custom/WPO等渲染契约与函数接口变更，先在独立UE副本完成apply/compile/save/readback并确认正常退出；验证绑定候选、脏内存基线、引擎/插件与RHI |
 | **持久回执** | `apply_id` 绑定执行请求；响应丢失时查询回执，保存结果进入发布历史 |
 | **编辑保护** | 发布期间继续修改文件会保留新字节，并返回 `workspace_rebase_required`；用 pull 整合 |
 
@@ -244,6 +248,12 @@ ue_sync("schema", options=dict(refresh=True))
 schema 按项目、引擎、插件和模块身份隔离。定向采集扩展索引，历史快照保留使用过的 schema 记录；离线读取注明新鲜度未知。
 
 首次 checkout 会启用协作并迁移旧基线，旧文本原始字节保存在 `imported` 工作区。启用后修改调用携带 `workspace_id`。旧工程在 checkout 前继续使用原 init/pull/push；其 force 参数按旧契约处理。协作调用使用具体冲突的 resolution。
+
+高风险发布要求 checkout 工作区；旧式 push 返回 `safety_workspace_required` 和 checkout 路由。普通材质数值变更沿用正常事务。副本保存当前相关包的内存状态并保留主编辑器脏标记和原磁盘字节；完整验证回执见结果行的 `safety_validation`。内存准入默认启用，用户明确授权后可在本次 push/continue 设置 `safety_allow_low_memory=true`。显式 `safety_validate` 使用保存基线，提供 `allow_low_memory` 同等单次参数。
+
+Niagara 参数读取和已有值写入统一校验数据类别、尺寸、字节范围和对象槽位。四元数与向量通过引擎字节复制读取，支持紧凑非对齐布局及 LWC 转换；存储错误携带参数名、类型和具体原因，沿导出、编译读回和发布事务返回。
+
+隔离回执记录复制字节数及预检、复制、启动、执行、退出、源检查的分项耗时。副本验证共用机器的 GPU；工程原生代码、设备故障和调用方持有的 Python 世界引用仍需各自满足资源与生命周期契约。
 
 ### 场景与实例
 
@@ -295,7 +305,8 @@ ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"], options=dict(work
 | **`startup_failed / startup_timeout`** | 启动中退出或无提示停滞：查看 `exit_code`、`exited_while_waiting`、`startup_progress.last_log` 与日志 |
 | **`instance_starting / instance_unresponsive`** | 查询既有实例状态和日志，保留同一项目绑定 |
 | **`ambiguous_class / ambiguous_function`** | 同名类或函数（如两个文件夹里的 `BP_Light_C`）：按诊断给出的候选写完整路径 |
-| **`capacity_exceeded`** | 查看并发启动数及所需/可用内存；编辑器总数量不限 |
+| **`capacity_exceeded`** | 查看并发启动数及所需/可用内存；内存不足且用户同意时，ensure 加 `allow_low_memory=true` 启动本次编辑器，启动并发限制不变；编辑器总数量不限 |
+| **`manager_outdated`** | 运行中的生命周期 manager 早于所需选项；其托管编辑器退出且没有会话使用后，会按已安装版本重启 |
 | **`repository_mismatch`** | 接入返回的共享仓库，保留已有历史 |
 | **操作与 schema 对不上** | 同步更新 Python 服务与 UE 插件，重启编辑器并重连客户端 |
 
@@ -345,7 +356,7 @@ UE-Node-Nexus-MCP/
     compile_check/         编译桩与真实 UE 构建入口
     live/                  隔离编辑器集成验证
   skill/ue-node-nexus-mcp/  Agent skill
-  release/                发行包组装与发布说明
+  release/                发行包组装、构建身份与安装说明
   pyproject.toml
   LICENSE
 ```

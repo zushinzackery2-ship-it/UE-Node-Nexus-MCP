@@ -14,13 +14,26 @@ class LocalBroker:
         self.session_id = uuid.uuid4().hex
         self.epoch = service.epoch
         self.policy = service.policy_dict()
+        self.features = frozenset()
         self.registered = False
 
+    def connect(self):
+        if self.registered:
+            return
+        self.registered = True
+        result = self.send("register", dict(client_session_id=self.session_id, workspace=self.workspace,
+                                            process_created=self.service.platform.inspect(os.getpid())["process_created"]))
+        self.features = frozenset(result.get("features", ()))
+
+    def supports(self, feature):
+        self.connect()
+        return feature in self.features
+
     def call(self, action, payload=None):
-        if not self.registered:
-            self.registered = True
-            self.call("register", dict(client_session_id=self.session_id, workspace=self.workspace,
-                       process_created=self.service.platform.inspect(os.getpid())["process_created"]))
+        self.connect()
+        return self.send(action, payload)
+
+    def send(self, action, payload=None):
         response = self.service.dispatch(dict(protocol=1, action=action, payload=payload or dict(),
                                               client_session_id=self.session_id), os.getpid())
         self.epoch = self.service.epoch

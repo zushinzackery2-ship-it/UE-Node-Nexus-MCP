@@ -30,10 +30,13 @@ FJson CommitError(const FString& Operation, const FString& RequestId, const FStr
 
 static bool CheckOne(const FJson& Expected, FJson& Current, FString& Error)
 {
-    Current = Observe(Expected);
+    Current = Observe(Expected, &Error);
     if (!Current.IsValid())
     {
-        Error = TEXT("cannot observe target: ") + Text(Expected, TEXT("asset_path"));
+        if (Error.IsEmpty())
+        {
+            Error = TEXT("cannot observe target: ") + Text(Expected, TEXT("asset_path"));
+        }
         return false;
     }
     const bool bAbsent = Current->HasField(TEXT("exists")) && !Flag(Current, TEXT("exists"));

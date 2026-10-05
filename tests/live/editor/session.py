@@ -19,7 +19,7 @@ STARTUP_SECONDS = 600
 
 
 class EditorSession:
-    def __init__(self, project: Path, engine: Path, name: str, rhi: str = "d3d12") -> None:
+    def __init__(self, project: Path, engine: Path, name: str, rhi: str = "d3d12", allow_low_memory: bool = False) -> None:
         if rhi not in ("d3d12", "d3d11"):
             raise ValueError("visible validation RHI must be d3d12 or d3d11")
         self.project = project.resolve()
@@ -27,19 +27,22 @@ class EditorSession:
         self.engine = engine.resolve()
         self.name = name
         self.rhi = rhi
+        self.allow_low_memory = allow_low_memory
         self.logs = self.project.parent / "Logs"
         self.logs.mkdir(parents=True, exist_ok=True)
         self.session = ManagedSession(BrokerClient(self.project.parent / "Runtime", str(self.project.parent)), str(self.project))
         self.startup = None
         self.previous_bridge = None
         self.requests = self.logs / f"{name}-requests.jsonl"
+        self.saved_packages = set()
 
     def __enter__(self):
         self.previous_bridge = runtime.bridge
         runtime.bridge = UeBridgeClient(BridgeConfig(timeout_seconds=180), instances=self.session)
         try:
             result = self.session.ensure(dict(mode="reuse_or_start", engine_path=str(self.engine), launch_profile="interactive",
-                                              rhi=self.rhi, dry_run=False, wait_seconds=STARTUP_SECONDS))
+                                              rhi=self.rhi, dry_run=False, wait_seconds=STARTUP_SECONDS,
+                                              allow_low_memory=self.allow_low_memory))
             self.report("launch", result)
             print(json.dumps(dict(phase="editor_start", instance_id=result["instance"]["instance_id"], project=str(self.project))), flush=True)
             self._ready(result["startup"])
@@ -62,6 +65,10 @@ class EditorSession:
     def call(self, operation: str, payload: dict) -> dict:
         started = time.monotonic()
         response = runtime.call_bridge(operation, payload)
+        if operation == "asset_save" and response.get("ok"):
+            dirty = response.get("data", dict()).get("dirty_state", dict())
+            if dirty.get("package_dirty") is False:
+                self.saved_packages.add(dirty["package_name"])
         with self.requests.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(dict(operation=operation, payload=payload, response=response,
                                          elapsed_seconds=time.monotonic() - started), ensure_ascii=False) + "\n")
@@ -105,9 +112,9 @@ class EditorSession:
                 self.session.release()
                 state = self.session.status()
                 if state["state"] in ("READY", "IDLE", "BLOCKED"):
-                    from ue_node_nexus_mcp.instances.session.shutdown import close_instance
+                    from .close import close_owned
 
-                    result = close_instance(self.session, dict(instance_id=identifier, dry_run=False))
+                    result = close_owned(self.session, identifier, self.saved_packages)
                     state = result["instance"]
                 deadline = time.monotonic() + 75
                 while state["state"] not in ("EXITED", "BLOCKED", "UNRESPONSIVE") and time.monotonic() < deadline:

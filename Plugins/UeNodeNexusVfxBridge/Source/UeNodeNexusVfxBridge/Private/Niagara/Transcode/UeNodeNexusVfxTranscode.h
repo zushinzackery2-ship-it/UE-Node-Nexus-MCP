@@ -27,14 +27,14 @@ namespace VfxTranscode
 bool UsageFromGroup(const FString& Group, ENiagaraScriptUsage& OutUsage);
 FString GroupFromUsage(ENiagaraScriptUsage Usage);
 // Raw builders.
-TSharedPtr<FJsonObject> BuildNiagaraSystemRaw(UNiagaraSystem* System);
-TSharedPtr<FJsonObject> BuildNiagaraEmitterRaw(UNiagaraEmitter* Emitter);
-TSharedPtr<FJsonObject> EmitterJson(FNiagaraEmitterHandle* Handle, UNiagaraEmitter* Emitter, const FGuid& Version);
+TSharedPtr<FJsonObject> BuildNiagaraSystemRaw(UNiagaraSystem* System, FString* OutError = nullptr);
+TSharedPtr<FJsonObject> BuildNiagaraEmitterRaw(UNiagaraEmitter* Emitter, FString* OutError = nullptr);
+TSharedPtr<FJsonObject> EmitterJson(FNiagaraEmitterHandle* Handle, UNiagaraEmitter* Emitter, const FGuid& Version, FString* OutError = nullptr);
 // One stack module with its overridden inputs (override pins + rapid-iteration values).
-TSharedPtr<FJsonObject> ModuleJson(FNiagaraEmitterHandle* Handle, UNiagaraNodeOutput* Output, UNiagaraNodeFunctionCall* Module);
+TSharedPtr<FJsonObject> ModuleJson(FNiagaraEmitterHandle* Handle, UNiagaraNodeOutput* Output, UNiagaraNodeFunctionCall* Module, FString& Error);
 // Parameter store value as import/export text.
-FString ParameterValueText(const FNiagaraParameterStore& Store, const FNiagaraVariable& Variable);
-bool SetParameterValueText(FNiagaraParameterStore& Store, const FNiagaraVariable& Variable, const FString& Text, bool bAddIfMissing);
+FString ParameterValueText(const FNiagaraParameterStore& Store, const FNiagaraVariable& Variable, FString* OutError = nullptr);
+bool SetParameterValueText(FNiagaraParameterStore& Store, const FNiagaraVariable& Variable, const FString& Text, bool bAddIfMissing, FString* OutError = nullptr);
 FNiagaraTypeDefinition TypeFromName(const FString& Name);
 FString FriendlyTypeName(const FNiagaraTypeDefinition& Type);
 // Schema files for the mirror (renderer classes are exported by the core module; this adds module signatures).

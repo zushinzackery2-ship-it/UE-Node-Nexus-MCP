@@ -251,7 +251,7 @@ def test_instance_bind_fires_feature_reset_callback(monkeypatch: pytest.MonkeyPa
     project.write_text("{}")
     manager = EditorSession(project=str(project))
     item = dict(instance_id="first", pid=123, state="READY", project_path=str(project), project_name="Demo")
-    monkeypatch.setattr(manager, "call", lambda *_args: dict(instance=dict(item), lease=dict(lease_id="lease")))
+    monkeypatch.setattr(manager, "call", lambda *_args: dict(action="reused", instance=dict(item), lease=dict(lease_id="lease")))
     try:
         manager.set_on_bind_changed(lambda: events.append("bind"))
         manager.ensure(dict(dry_run=False))

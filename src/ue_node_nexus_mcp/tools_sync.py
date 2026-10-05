@@ -12,6 +12,8 @@ from .transcode.errors import SyncError
 from .transcode.collaboration.report.options import COMMON, OPTIONS
 from .transcode.sync.lifecycle import run_managed_sync
 from .instances.errors import InstanceError
+from .diagnostics.contracts.response import DIAGNOSTIC_FIELDS
+from .diagnostics.contracts.workflows import attach_report
 
 SyncAction = Literal["init", "checkout", "workspaces", "status", "fetch", "pull", "lint", "push", "schema",
                      "stage", "unstage", "commit", "amend", "merge", "resolve", "continue", "abort", "recover", "close",
@@ -85,6 +87,7 @@ def _bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _finish(report: dict[str, Any]) -> dict[str, Any]:
+    attach_report(report, str(report.get("action") or "report"))
     result = {"ok": report.get("error_count", 0) == 0 and not report.get("stopped", False) and report.get("status") not in ("conflict", "stale", "recovery_required", "failed", "cancelled", "interrupted"), "data": report}
     if response_payload_bytes(result) <= LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         return result
@@ -110,7 +113,7 @@ def _finish(report: dict[str, Any]) -> dict[str, Any]:
     if response_payload_bytes(dict(ok=result["ok"], data=compact)) > LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         keys = ("action", "status", "workspace_id", "merge_id", "apply_id", "proposal_id", "commit_id", "source_commit",
                 "published_commit", "candidate", "base", "ours", "theirs", "error_count", "conflict_count", "applied",
-                "source_integrated", "workspace_rebase_required", "dry_run", "schema_key")
+                "source_integrated", "workspace_rebase_required", "dry_run", "schema_key", *DIAGNOSTIC_FIELDS)
         summary = dict((key, compact[key]) for key in keys if key in compact)
         summary.update(artifact=artifact, next_read=compact["next_read"], page_lists_with=compact["page_lists_with"],
                        rows_count=len(rows), inline_truncated=True)

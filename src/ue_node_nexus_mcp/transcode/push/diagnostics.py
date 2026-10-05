@@ -6,6 +6,7 @@ from typing import Any
 
 from ..errors import Diagnostic
 from .model import Prepared, PushResult
+from ...diagnostics.contracts.notice import normalize
 
 
 def apply_diagnostics(response: Any, item: Prepared, file: str, result: PushResult) -> list[str]:
@@ -13,6 +14,8 @@ def apply_diagnostics(response: Any, item: Prepared, file: str, result: PushResu
     if not isinstance(response, dict):
         result.diagnostics.append(Diagnostic("error", "invalid_bridge_response", "expected an apply response object", file))
         return [result.diagnostics[-1].format()]
+    if isinstance(response.get("runtime_diagnostics"), dict):
+        result.runtime_diagnostics = normalize(response["runtime_diagnostics"])
     data = response.get("data")
     data = data if isinstance(data, dict) else dict()
     for failure in data.get("failed") or []:
