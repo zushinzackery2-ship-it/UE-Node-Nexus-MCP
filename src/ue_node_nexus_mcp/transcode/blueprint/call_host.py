@@ -11,7 +11,7 @@ A specialised spelling is accepted as the same call.
 from __future__ import annotations
 
 CALL = "CallFunction"
-HOSTS = frozenset(("CallFunction", "CallArrayFunction", "CallDataTableFunction", "CallMaterialParameterCollectionFunction"))
+HOSTS = frozenset(("CallFunction", "CallArrayFunction", "CallDataTableFunction", "CallMaterialParameterCollectionFunction", "InputActionValueAccessor"))
 
 
 def host_name(text: str) -> str:

@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "UeNodeNexusBridgeSaveResult.h"
 
 #include "Dom/JsonValue.h"
 #include "NiagaraEmitter.h"
@@ -161,7 +162,8 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterPropertiesSet(const FString& Operati
         System->MarkPackageDirty();
         System->PostEditChange();
     }
-    const bool bSaved = bSave && Changed > 0 && SaveAssetPackage(System);
+    const auto Save = SaveAssetWrite(System, bSave, bDryRun, Changed > 0);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
@@ -172,6 +174,7 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterPropertiesSet(const FString& Operati
     Data->SetBoolField(TEXT("saved"), bSaved);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 }

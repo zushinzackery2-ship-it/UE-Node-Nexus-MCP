@@ -55,6 +55,15 @@ bool ApplyBlueprintMemberVerb(UBlueprint* Blueprint, const FString& Verb, const 
     {
         return false;
     }
+    if (Verb == TEXT("bp_component_bind"))
+    {
+        FString BindingError;
+        if (!ApplyComponentVerb(Blueprint, Verb, Op, BindingError))
+        {
+            Context.Fail(Index, TEXT("member_failed"), BindingError);
+        }
+        return true;
+    }
     if (Context.bDryRun)
     {
         return true;
@@ -179,6 +188,7 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
     // its reader, writer or caller nodes inside the editor utility. Declarations
     // still precede all remaining graph verbs so new nodes resolve new members.
     TArray<UEdGraph*> Touched;
+    const TSet<int32> Detached = ApplyGraphDetachments(Blueprint, Plan, Context, Touched);
     ApplyGraphDeletions(Blueprint, Plan, Context, Touched);
     TArray<int32> GraphOps;
     TSet<FName> ChangedFunctions;
@@ -192,7 +202,7 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
             continue;
         }
         const FString Verb = ReadOpString(Op, TEXT("op"));
-        if (Verb == TEXT("delete_node"))
+        if (Verb == TEXT("delete_node") || Detached.Contains(Index))
         {
             continue;
         }
@@ -217,6 +227,7 @@ void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValu
         FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
         RefreshFunctionCalls(Blueprint, ChangedFunctions);
     }
+    ApplyGraphDeclarations(Blueprint, Plan, GraphOps, Context, Touched);
     ApplyScheduledGraphOps(Blueprint, Plan, GraphOps, Context, Touched);
     if (Context.bChanged && !Context.bDryRun)
     {

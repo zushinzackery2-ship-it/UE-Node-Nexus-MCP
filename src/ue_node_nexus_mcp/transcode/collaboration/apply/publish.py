@@ -62,7 +62,13 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
     if options.get("dry_run", True):
         preview = dict(source=source, target=observation["commit"], target_tree=observation["tree"], revisions=observation["revisions"], published=store.ref("refs/ue/published"),
                        push_candidate=merged["candidate"], base=merged["base"], conflict_count=len(merged["conflicts"]), conflicts=merged["conflicts"],
-                       plans=[batch["units"][asset].get("summary", batch["units"][asset]) for asset in batch["order"] if asset in batch["units"]], errors=batch["errors"], **explanation)
+                       plans=[batch["units"][asset].get("summary", batch["units"][asset]) for asset in batch["order"] if asset in batch["units"] and asset not in batch["errors"]],
+                       errors=batch["errors"], error_count=len(batch["errors"]),
+                       executable=not batch["errors"] and not merged["conflicts"],
+                       plan_complete=not batch["errors"] and not merged["conflicts"],
+                       blocked_asset_count=len(batch["errors"]),
+                       blocked_assets=[dict(asset=asset, **error) for asset, error in sorted(batch["errors"].items())][:20],
+                       blocked_assets_truncated=max(0, len(batch["errors"]) - 20), **explanation)
         if merged["conflicts"]:
             # A preview must not open a durable session, so it cannot hand out a
             # merge_id; say which call does, instead of returning merge_id=None.

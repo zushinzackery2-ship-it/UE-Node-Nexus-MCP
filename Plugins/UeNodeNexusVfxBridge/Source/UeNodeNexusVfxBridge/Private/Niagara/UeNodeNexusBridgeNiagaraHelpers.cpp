@@ -256,10 +256,4 @@ TSharedPtr<FJsonValue> MakeNiagaraMaterialRow(int32 EmitterIndex, int32 Renderer
     return MakeShared<FJsonValueArray>(Row);
 }
 
-bool SaveAssetPackage(UObject* Asset)
-{
-    // prompt-free; a checked-in read-only file fails instead of opening the SCC dialog
-    FString Error;
-    return Transcode::SavePackageDirect(Asset, Error);
-}
 }

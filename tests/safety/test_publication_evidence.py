@@ -18,7 +18,10 @@ def builds():
 
 def environment():
     return dict(engine_version="5.5.4", engine_build="build", engine_modules="modules", project_definition="project",
-                configuration=dict(), plugins=dict(Niagara="descriptor"), content_mounts=["Niagara"])
+                configuration=dict(), plugins=dict(Niagara="descriptor"), content_mounts=["Niagara"],
+                effective_environment_contract=1,
+                effective_configuration=dict((key, {}) for key in ("Engine", "Game", "Input", "Scalability", "DeviceProfiles", "Hardware")),
+                render_cvars={"r.ScreenPercentage": "100"}, render_launch=dict(arguments=[], unsupported=[]))
 
 
 def fixture():

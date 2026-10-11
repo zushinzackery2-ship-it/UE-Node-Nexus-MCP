@@ -44,7 +44,8 @@ bool ConfigureFromPositional(UBlueprint* Blueprint, UClass* NodeClass, const TAr
         Config->SetStringField(TEXT("axis_name"), First);
         return true;
     }
-    if (ClassName == TEXT("K2Node_InputKey") || ClassName == TEXT("K2Node_InputAction") || ClassName == TEXT("K2Node_EnhancedInputAction"))
+    if (ClassName == TEXT("K2Node_InputKey") || ClassName == TEXT("K2Node_InputAction")
+        || ClassName == TEXT("K2Node_EnhancedInputAction") || ClassName == TEXT("K2Node_GetInputActionValue"))
     {
         Config->SetStringField(ClassName == TEXT("K2Node_InputKey") ? TEXT("input_key")
             : ClassName == TEXT("K2Node_InputAction") ? TEXT("input_action_name") : TEXT("input_action"), First);

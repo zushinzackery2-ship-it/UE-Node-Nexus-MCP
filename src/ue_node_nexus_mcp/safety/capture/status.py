@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ...instances.identity.processes import is_alive
 from .png import inspect_png
+from .receipt import open_receipt
 
 
 def status(file_path: str, capture_id: str | None = None) -> dict:
@@ -19,7 +20,13 @@ def status(file_path: str, capture_id: str | None = None) -> dict:
             data.update(size_bytes=path.stat().st_size, modified_at=path.stat().st_mtime)
         return envelope(True, data)
     try:
-        receipt = json.loads(receipt_path.read_text(encoding="utf-8-sig"))
+        with open_receipt(receipt_path) as reader:
+            receipt_text = reader.read()
+    except (PermissionError, FileNotFoundError) as error:
+        data.update(state="receipt_pending", receipt_path=str(receipt_path), reason=str(error))
+        return envelope(True, data)
+    try:
+        receipt = json.loads(receipt_text)
         if not isinstance(receipt, dict) or receipt.get("capture_protocol") != 1:
             raise ValueError("unsupported capture receipt")
         identifier = receipt.get("capture_id")

@@ -35,6 +35,7 @@ class FakeUe:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.root: str | None = None
         self.applied: list[dict[str, Any]] = []
+        self.material_classes = dict()
         self.referencers: dict[str, list[str]] = {}
         self.fail_apply_index: int | None = None
         self.dirty: set[str] = set()
@@ -80,6 +81,7 @@ class FakeUe:
             "MaterialExpressionFunctionOutput": {"path": "/Script/Engine.MaterialExpressionFunctionOutput", "props": {"Desc": _prop_schema("string", ""), "OutputName": _prop_schema("name", "Result")}, "inputs": [""], "outputs": []},
         }
         (out / "classes.material_expression.json").write_text(json.dumps(classes), encoding="utf-8")
+        self.material_classes = classes
         (out / "classes.asset.json").write_text(json.dumps({
             "Material": {"path": "/Script/Engine.Material", "props": {"BlendMode": _prop_schema("enum", "BLEND_Opaque", enum_values=["BLEND_Opaque", "BLEND_Translucent"]), "TwoSided": _prop_schema("bool", "False")}},
             "MaterialFunction": {"path": "/Script/Engine.MaterialFunction", "props": {"Description": _prop_schema("string", ""), "bExposeToLibrary": _prop_schema("bool", "False"), "LibraryCategoriesText": _prop_schema("array", "()")}},
@@ -177,8 +179,10 @@ class FakeUe:
         elif op == "create_node":
             guid = f"G-NEW-{len(id_map) + 1}"
             id_map[verb["id"]] = guid
-            props = [{"name": key, "type": "FString", "value": value, "default": ""} for key, value in (verb.get("params") or {}).items()]
             cls = verb["class"].rsplit(".", 1)[-1].removeprefix("MaterialExpression")
+            schema = self.material_classes.get("MaterialExpression" + cls, dict()).get("props", dict())
+            props = [dict(name=key, type=schema.get(key, dict()).get("type", "FString"), value=value,
+                          default=schema.get(key, dict()).get("default", "")) for key, value in (verb.get("params") or {}).items()]
             node = dict(guid=guid, class_short=cls, name=verb["id"], x=verb.get("x", 0), y=verb.get("y", 0),
                         props=props, inputs=["A", "B"], outputs=[""] * (5 if cls == "TextureSample" else 1))
             node["class"] = "/Script/Engine.MaterialExpression" + cls

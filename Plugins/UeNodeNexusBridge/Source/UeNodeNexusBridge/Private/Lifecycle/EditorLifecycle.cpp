@@ -11,6 +11,7 @@
 #include "ShaderCompiler.h"
 #include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
+#include "Misc/CoreDelegates.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
@@ -21,6 +22,8 @@
 namespace UeNodeNexusBridge::Lifecycle
 {
 static FTSTicker::FDelegateHandle Ticker;
+static FDelegateHandle FirstFrame;
+static bool bNormalTick = false;
 
 static bool PersistentPackage(UPackage* Package)
 {
@@ -101,6 +104,7 @@ static TSharedPtr<FJsonObject> Inspect(const TArray<FString>& SavePackages, bool
     Result->SetBoolField(TEXT("compiling"), bCompiling);
     Result->SetBoolField(TEXT("saving"), GIsSavingPackage);
     Result->SetBoolField(TEXT("vfx_available"), FModuleManager::Get().IsModuleLoaded(TEXT("UeNodeNexusVfxBridge")));
+    Result->SetBoolField(TEXT("normal_tick"), bNormalTick);
     Result->SetStringField(TEXT("state_sampled_at"), FDateTime::UtcNow().ToIso8601());
     TSharedPtr<FJsonObject> Binding;
     if (Collaboration::ReadJournal(FPaths::ProjectSavedDir() / TEXT("Nexus/collaboration-binding.json"), Binding))
@@ -112,12 +116,24 @@ static TSharedPtr<FJsonObject> Inspect(const TArray<FString>& SavePackages, bool
 
 void Start()
 {
+    bNormalTick = false;
     NexusLifecycle::Attach(Inspect);
     const auto Observe = []()
     {
         return true;
     };
     NexusLifecycle::Publish(Inspect(TArray<FString>(), false, Observe));
+    FirstFrame = FCoreDelegates::OnEndFrame.AddLambda([]()
+    {
+        if (!bNormalTick)
+        {
+            bNormalTick = true;
+            NexusLifecycle::Publish(Inspect(TArray<FString>(), false, []()
+            {
+                return true;
+            }));
+        }
+    });
     Ticker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
     {
         NexusLifecycle::Publish(Inspect(TArray<FString>(), false, []()
@@ -131,6 +147,7 @@ void Start()
 void Stop()
 {
     FTSTicker::GetCoreTicker().RemoveTicker(Ticker);
+    FCoreDelegates::OnEndFrame.Remove(FirstFrame);
     NexusLifecycle::Detach();
     Collaboration::StopPendingIndex();
 }

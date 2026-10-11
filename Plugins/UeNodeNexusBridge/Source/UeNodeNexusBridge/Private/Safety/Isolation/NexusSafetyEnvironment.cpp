@@ -5,6 +5,7 @@
 #include "Misc/Paths.h"
 #include "Transcode/Commit/NexusPackageFiles.h"
 #include "Dom/JsonObject.h"
+#include "NexusValidation.h"
 
 namespace UeNodeNexusBridge::Safety
 {
@@ -21,6 +22,7 @@ TSharedPtr<FJsonObject> Environment()
         Configuration->SetStringField(Name, Collaboration::FileHash(FPaths::ProjectConfigDir() / Name));
     }
     Result->SetObjectField(TEXT("configuration"), Configuration);
+    Result->Values.Append(NexusLifecycle::Validation::Environment()->Values);
     auto Plugins = MakeShared<FJsonObject>();
     TArray<FString> Mounts;
     for (const TSharedRef<IPlugin>& Plugin : IPluginManager::Get().GetEnabledPlugins())

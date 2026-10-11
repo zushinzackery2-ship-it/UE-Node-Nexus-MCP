@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..blueprint.types import is_zero_default, type_text
+from ..blueprint.input_values import input_metadata
 from ..text.ids import IdAllocator, blueprint_node_candidate, short_class_name
 from ..text.model import Decl, Link
 from .common import non_default_params, prop_defaults, prop_types, prop_values
@@ -45,6 +46,7 @@ _CLASS_POSITIONAL = {
     "InputAction": "input_action_name",
     "InputAxisEvent": "input_axis_name",
     "EnhancedInputAction": "input_action",
+    "GetInputActionValue": "input_action",
 }
 
 
@@ -130,6 +132,9 @@ def node_decl(identifier: str, node: dict[str, Any], schema=None) -> Decl:
         "prop_values": prop_values(node.get("props")),
         "supported": bool(node.get("supported", True)),
     }
+    types, defaults = dict(meta["prop_types"]), dict(meta["prop_defaults"])
+    input_metadata(meta, types, defaults)
+    meta["input_types"] = types
     spelling = reference(schema, "k2node", str(node.get("class", "")), class_short)
     decl = Decl(id=identifier, type_name=spelling, pos=position, meta=meta)
     if not node.get("supported", True):

@@ -13,9 +13,37 @@ from ue_node_nexus_mcp.transcode.sync.background import run
 from ue_node_nexus_mcp.transcode.sync.service import run_sync
 from tests.collaboration.fake_bridge import ProtocolUe
 from tests.transcode.fixtures import material_raw
+from tests.support.scopes import Scope
 
 MATERIAL = "/Game/Materials/M_Glass.M_Glass"
 SECOND = "/Game/Materials/M_Second.M_Second"
+
+
+@pytest.mark.parametrize("boundary", ["observe", "worker_start"])
+def test_accepted_job_keeps_scope_when_submission_response_fails(project, monkeypatch, boundary):
+    from ue_node_nexus_mcp.transcode.sync import background
+
+    entered, release = threading.Event(), threading.Event()
+    hold = task_queue.submit_callable("hold", lambda: (entered.set(), release.wait(5), dict(ok=True))[-1])
+    assert entered.wait(3)
+    scope = Scope()
+
+    def reject(*args, **kwargs):
+        raise RuntimeError("submission response interrupted")
+
+    target, name = (background, "observe") if boundary == "observe" else (task_queue, "_ensure_worker")
+    monkeypatch.setattr(target, name, reject)
+    try:
+        with pytest.raises(RuntimeError, match="submission response interrupted"):
+            run("pull", None, dict(project[2], background=True), project[3], project[1], scope)
+        assert scope.released == (boundary == "worker_start")
+    finally:
+        monkeypatch.undo()
+        release.set()
+        task_queue.wait_for_task(hold, 5)
+        for task in task_queue.task_status()["data"]["tasks"]:
+            task_queue.wait_for_task(task["task_id"], 5)
+    assert scope.released
 
 
 @pytest.fixture

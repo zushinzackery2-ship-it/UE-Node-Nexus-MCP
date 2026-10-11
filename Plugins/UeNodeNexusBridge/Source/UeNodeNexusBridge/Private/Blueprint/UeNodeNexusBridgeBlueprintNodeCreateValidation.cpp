@@ -2,6 +2,7 @@
 #include "Blueprint/Variables/NexusBlueprintLocalVariables.h"
 #include "Blueprint/Properties/NexusBlueprintNodeProperties.h"
 #include "Blueprint/Input/NexusEnhancedInputBinding.h"
+#include "Blueprint/Input/NexusEnhancedInputValue.h"
 #include "Blueprint/Animation/NexusTransitionGetterBinding.h"
 
 #include "Blueprint/CallHost/NexusCallHostClass.h"
@@ -9,6 +10,8 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
+#include "K2Node_FunctionEntry.h"
+#include "K2Node_FunctionResult.h"
 #include "K2Node_EnhancedInputAction.h"
 #include "K2Node_InputAction.h"
 #include "K2Node_InputAxisEvent.h"
@@ -26,6 +29,15 @@ bool ValidateBlueprintNodeCreateConfig(
     const TSharedPtr<FJsonObject>& Payload,
     FString& OutError)
 {
+    if (NodeClass->IsChildOf(UK2Node_FunctionEntry::StaticClass()) || NodeClass->IsChildOf(UK2Node_FunctionResult::StaticClass()))
+    {
+        OutError = TEXT("implicit_function_node: use the function signature and entry/result links");
+        return false;
+    }
+    if (IsEnhancedInputValueClass(NodeClass))
+    {
+        return ConfigureEnhancedInputValue(CastChecked<UEdGraphNode>(NodeClass->GetDefaultObject()), Payload, true, OutError);
+    }
     if (NodeClass->IsChildOf(UK2Node_TransitionRuleGetter::StaticClass()))
     {
         auto* Getter = NodeClass->GetDefaultObject<UK2Node_TransitionRuleGetter>();
@@ -68,6 +80,10 @@ bool ValidateBlueprintNodeCreateConfig(
         if (!SelectCallHostClass(NodeClass, FindCallFunction(FunctionOwner, FunctionName), OutError))
         {
             return false;
+        }
+        if (IsEnhancedInputValueClass(NodeClass))
+        {
+            return ConfigureEnhancedInputValue(CastChecked<UEdGraphNode>(NodeClass->GetDefaultObject()), Payload, true, OutError);
         }
     }
     if (NodeClass->IsChildOf(UK2Node_InputKey::StaticClass()))

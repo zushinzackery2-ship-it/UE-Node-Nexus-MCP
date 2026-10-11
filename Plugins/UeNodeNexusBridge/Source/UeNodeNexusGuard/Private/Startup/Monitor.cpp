@@ -1,5 +1,6 @@
 #include "Monitor.h"
 #include "Dialogs.h"
+#include "SlateDialogs.h"
 #include "../Control/State.h"
 
 #include "Misc/CommandLine.h"
@@ -100,13 +101,16 @@ void Install(bool bManaged)
     P.Latest = MakeUnique<FLatestLine>();
     GLog->AddOutputDevice(P.Latest.Get());
     Dialogs::Install(bManaged || P.Window != TEXT("normal"));
+    SlateDialogs::Install();
     P.Modules = FModuleManager::Get().OnModulesChanged().AddLambda([](FName, EModuleChangeReason)
     {
         Dialogs::Wrap();
+        SlateDialogs::Install();
     });
     P.EngineInit = FCoreDelegates::OnPostEngineInit.AddLambda([]()
     {
         Dialogs::Wrap();
+        SlateDialogs::Install();
         EnterPhase(TEXT("post_engine_init"));
     });
     P.LoopInit = FCoreDelegates::OnFEngineLoopInitComplete.AddLambda([]()
@@ -124,6 +128,7 @@ void Uninstall()
     FCoreDelegates::OnPostEngineInit.Remove(P.EngineInit);
     FCoreDelegates::OnFEngineLoopInitComplete.Remove(P.LoopInit);
     Dialogs::Uninstall();
+    SlateDialogs::Uninstall();
     if (P.Latest.IsValid())
     {
         GLog->RemoveOutputDevice(P.Latest.Get());

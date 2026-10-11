@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import time
+import json
 from dataclasses import dataclass
 from itertools import count
 from typing import Any
+
+from .facade_cache.retention import Retention
 
 
 @dataclass
@@ -13,8 +16,7 @@ class StoredArtifact:
     payload: dict[str, Any]
     created_at: float
     expires_at: float
-    # Serialized once on first paged read; a large artifact is read in several
-    # calls and re-encoding tens of megabytes per page is the whole cost.
+    # Serialization is retained and budgeted once when the artifact is admitted.
     encoded: str | None = None
 
 
@@ -29,11 +31,11 @@ class StoredDiff:
 
 
 class FacadeState:
-    def __init__(self, ttl_seconds: int = 600) -> None:
+    def __init__(self, ttl_seconds: int = 600, max_entries: int = 4096,
+                 max_bytes: int = 256 * 1024 * 1024, clock=None) -> None:
         self.ttl_seconds = ttl_seconds
         self._counter = count(1)
-        self.artifacts: dict[str, StoredArtifact] = {}
-        self.diffs: dict[str, StoredDiff] = {}
+        self._cache = Retention(ttl_seconds, max_entries, max_bytes, clock)
 
     def _next_id(self, prefix: str) -> str:
         return f"{prefix}_{next(self._counter)}"
@@ -41,21 +43,10 @@ class FacadeState:
     def _expires_at(self) -> float:
         return time.time() + self.ttl_seconds
 
-    def prune_expired(self) -> None:
-        now = time.time()
-        self.artifacts = {
-            key: item
-            for key, item in self.artifacts.items()
-            if item.expires_at > now
-        }
-        self.diffs = {
-            key: item
-            for key, item in self.diffs.items()
-            if item.expires_at > now
-        }
+    def statistics(self) -> dict:
+        return self._cache.statistics()
 
     def store_artifact(self, kind: str, payload: dict[str, Any]) -> StoredArtifact:
-        self.prune_expired()
         artifact_id = self._next_id("artifact")
         artifact = StoredArtifact(
             artifact_id=artifact_id,
@@ -63,16 +54,16 @@ class FacadeState:
             payload=payload,
             created_at=time.time(),
             expires_at=self._expires_at(),
+            encoded=json.dumps(payload, ensure_ascii=True, separators=(",", ":"), default=str),
         )
-        self.artifacts[artifact_id] = artifact
+        self._cache.put(artifact_id, artifact)
         return artifact
 
     def get_artifact(self, artifact_id: str) -> StoredArtifact | None:
-        self.prune_expired()
-        return self.artifacts.get(artifact_id)
+        result = self._cache.get(artifact_id)
+        return result if isinstance(result, StoredArtifact) else None
 
     def store_diff(self, operation: str, payload: dict[str, Any], response: dict[str, Any]) -> StoredDiff:
-        self.prune_expired()
         diff_token = self._next_id("diff")
         diff = StoredDiff(
             diff_token=diff_token,
@@ -82,12 +73,12 @@ class FacadeState:
             created_at=time.time(),
             expires_at=self._expires_at(),
         )
-        self.diffs[diff_token] = diff
+        self._cache.put(diff_token, diff)
         return diff
 
     def get_diff(self, diff_token: str) -> StoredDiff | None:
-        self.prune_expired()
-        return self.diffs.get(diff_token)
+        result = self._cache.get(diff_token)
+        return result if isinstance(result, StoredDiff) else None
 
 
 facade_state = FacadeState()

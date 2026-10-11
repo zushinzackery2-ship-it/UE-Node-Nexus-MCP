@@ -13,7 +13,7 @@ from ...transcode.storage.io import digest
 from .descriptors import read_descriptor
 
 DIRECTORIES = ("Content", "Config", "Plugins", "Source", "Binaries", "Resources", "Shaders", "Tools")
-IGNORED = frozenset(("Saved", "Intermediate", "DerivedDataCache", ".git", "__pycache__"))
+IGNORED = frozenset(("Saved", "Intermediate", "DerivedDataCache", ".git", "__pycache__", ".auto-index-mcp"))
 
 
 def real_path(path: Path) -> None:
@@ -23,6 +23,7 @@ def real_path(path: Path) -> None:
 
 
 def inventory(project: Path, additional=()) -> dict:
+    additional = tuple(additional)
     project = project.absolute()
     real_path(project)
     real_path(project.parent)
@@ -54,7 +55,7 @@ def inventory(project: Path, additional=()) -> dict:
                 break
         if path not in files:
             files.append(path)
-    return dict(project=str(project.resolve()), files=files, bytes=sum(path.stat().st_size for path in files))
+    return dict(project=str(project.resolve()), files=files, additional=list(additional), bytes=sum(path.stat().st_size for path in files))
 
 
 def copy_project(plan: dict, target: Path) -> dict:
@@ -90,11 +91,17 @@ def copy_project(plan: dict, target: Path) -> dict:
                             sha256=checksum.hexdigest()))
     descriptor = target / Path(plan["project"]).name
     return dict(project=str(descriptor), source=plan["project"], source_root=str(source),
-                files=records, bytes=plan["bytes"], snapshot_digest=digest(records), baseline="saved_disk")
+                files=records, additional=plan.get("additional", []), bytes=plan["bytes"], snapshot_digest=digest(records), baseline="saved_disk")
 
 
 def unchanged(snapshot: dict) -> bool:
     source = Path(snapshot["source_root"])
+    if not Path(snapshot["source"]).is_file() or any(not (source / name).is_file() for name in snapshot.get("additional", [])):
+        return False
+    current = inventory(Path(snapshot["source"]), snapshot.get("additional", []))
+    paths = {path.relative_to(source).as_posix() for path in current["files"]}
+    if paths != {item["path"] for item in snapshot["files"]}:
+        return False
     for item in snapshot["files"]:
         path = source / item["path"]
         real_path(path)

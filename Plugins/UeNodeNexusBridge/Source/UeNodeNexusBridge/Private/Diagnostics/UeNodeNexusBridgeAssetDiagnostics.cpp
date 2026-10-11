@@ -10,6 +10,7 @@
 #include "MaterialShared.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
+#include "Material/Preview/NexusFunctionPreview.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "RHI.h"
@@ -142,8 +143,7 @@ FBridgeAssetCompileDiagnostics CollectAssetCompileDiagnostics(UObject* Asset, co
         Result.bSupported = true;
         Result.bRan = true;
 
-        UMaterialEditingLibrary::UpdateMaterialFunction(Function, nullptr);
-        UMaterialInterface* PreviewMaterial = Function->GetPreviewMaterial();
+        UMaterialInterface* PreviewMaterial = UpdateFunctionPreview(Function);
         return MaterialResourceStatus(PreviewMaterial, true);
     }
 

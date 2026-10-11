@@ -27,8 +27,11 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
     require(isinstance(dry_run, bool), "invalid_request", "dry_run must be a boolean")
     require(isinstance(allow_low_memory, bool), "invalid_request", "allow_low_memory must be a boolean")
     from .mounts import BASE_MOUNTS, plugin_mounts, requested_mounts
+    from .environment import validate as validate_environment, verify_worker
     from ...instances.lifecycle.engine import resolve_engine
     plugin_inputs = dict()
+    if baseline is not None:
+        validate_environment(baseline.get("environment"))
     engine = None
     if requested_mounts(operations) - BASE_MOUNTS:
         engine = resolve_engine(project_path, engine_path)
@@ -67,13 +70,17 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
         report["timings"]["copy_seconds"] = time.monotonic() - phase_started
         atomic_write(root / "snapshot.json", canonical(snapshot))
         worker_marker = Path(snapshot["project"]).parent / "Saved/Nexus/validation-worker.json"
-        atomic_write(worker_marker, canonical(dict(validation_id=identifier,
-                     project_path=str(Path(snapshot["project"]).resolve()).replace("\\", "/"))))
+        marker = dict(validation_id=identifier, project_path=str(Path(snapshot["project"]).resolve()).replace("\\", "/"))
+        if baseline is not None:
+            marker["environment"] = baseline["environment"]
+        atomic_write(worker_marker, canonical(marker))
         report.update(state="starting", snapshot_digest=snapshot["snapshot_digest"], copied_project=snapshot["project"])
         atomic_write(receipt, canonical(report))
         session = ValidationSession(Path(snapshot["project"]), engine, root, rhi, timeout_seconds, allow_low_memory)
         phase_started = time.monotonic()
         report["worker"] = session.start()
+        if baseline is not None:
+            verify_worker(baseline["environment"], report["worker"])
         report["timings"]["startup_seconds"] = time.monotonic() - phase_started
         phase_started = time.monotonic()
         for index, item in enumerate(entries):

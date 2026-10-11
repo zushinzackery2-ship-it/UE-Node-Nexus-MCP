@@ -4,12 +4,15 @@
 
 #include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "Blueprint/Creation/NexusBlueprintNodeDefaults.h"
+#include "Blueprint/Input/NexusEnhancedInputValue.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_DynamicCast.h"
 #include "K2Node_Event.h"
+#include "K2Node_FunctionEntry.h"
+#include "K2Node_FunctionResult.h"
 #include "K2Node_MacroInstance.h"
 #include "K2Node_StructOperation.h"
 #include "K2Node_Variable.h"
@@ -148,6 +151,11 @@ void ApplyBlueprintCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TSha
         Context.Fail(Index, TEXT("unknown_class"), FString::Printf(TEXT("unknown Blueprint node class: %s"), *ReadOpString(Op, TEXT("class"))));
         return;
     }
+    if (NodeClass->IsChildOf(UK2Node_FunctionEntry::StaticClass()) || NodeClass->IsChildOf(UK2Node_FunctionResult::StaticClass()))
+    {
+        Context.Fail(Index, TEXT("implicit_function_node"), TEXT("use the function signature and implicit entry/result links"));
+        return;
+    }
     const TArray<FString> Positional = ReadOpStrings(Op, TEXT("positional"));
     TSharedPtr<FJsonObject> Config = MakeShared<FJsonObject>();
     FString Error;
@@ -164,6 +172,22 @@ void ApplyBlueprintCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TSha
     {
         Context.Fail(Index, TEXT("node_class_mismatch"), FString::Printf(TEXT("%s: %s"), *Id, *Error));
         return;
+    }
+    if (IsEnhancedInputValueClass(NodeClass))
+    {
+        FString Action = ReadOpString(Config, TEXT("input_action"));
+        Op->TryGetStringField(TEXT("input_action"), Action);
+        const TSharedPtr<FJsonObject>* Arguments = nullptr;
+        if (Action.IsEmpty() && Op->TryGetObjectField(TEXT("params"), Arguments))
+        {
+            (*Arguments)->TryGetStringField(TEXT("Action"), Action);
+        }
+        Config->SetStringField(TEXT("input_action"), Action);
+        if (!ConfigureEnhancedInputValue(CastChecked<UEdGraphNode>(NodeClass->GetDefaultObject()), Config, true, Error))
+        {
+            Context.Fail(Index, TEXT("node_config_failed"), Id + TEXT(": ") + Error);
+            return;
+        }
     }
     if (Context.bDryRun)
     {

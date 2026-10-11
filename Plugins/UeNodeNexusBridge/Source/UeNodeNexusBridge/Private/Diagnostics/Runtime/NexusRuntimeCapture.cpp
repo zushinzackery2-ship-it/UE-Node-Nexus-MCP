@@ -23,8 +23,8 @@ public:
     }
     virtual void Serialize(const TCHAR* Text, ELogVerbosity::Type Level, const FName& Category) override
     {
-        if (Level > ELogVerbosity::Warning || (Category != TEXT("LogScript") && Category != TEXT("LogRHI")
-            && Category != TEXT("LogD3D12RHI") && Category != TEXT("LogShaderCompilers")))
+        Level = static_cast<ELogVerbosity::Type>(Level & ELogVerbosity::VerbosityMask);
+        if (Level > ELogVerbosity::Warning)
         {
             return;
         }

@@ -14,7 +14,8 @@ from ..text.emitter import emit
 from ..text.model import Document
 from ..text.parser import parse
 from ..storage.paths import base_path, display_path, iter_text_files, parse_text_path, text_path, undo_dir
-from .state import sha256_text
+from ..storage.io import confined
+from .state import SyncState, sha256_text
 
 UNDO_KEEP = 10
 
@@ -136,13 +137,17 @@ def local_order_from_document(document: Document) -> dict[str, list[str]]:
     return order
 
 
-def mirrored_assets(project: Path) -> dict[str, tuple[str, Path]]:
-    """object path -> (kind, text path) for every mirror file in the project."""
+def mirrored_assets(project: Path, state: SyncState | None = None) -> dict[str, tuple[str, Path]]:
+    """Discover new files while retaining explicitly tracked mirror paths."""
     result: dict[str, tuple[str, Path]] = {}
     for path in iter_text_files(project):
         parsed = parse_text_path(project, path)
         if parsed is not None:
             result[parsed[0]] = (parsed[1], path)
+    if state is not None:
+        for asset, record in state.assets.items():
+            if asset not in result:
+                result[asset] = (record.kind, confined(project, record.file))
     return result
 
 

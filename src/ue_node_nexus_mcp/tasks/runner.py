@@ -8,6 +8,7 @@ from ..instances.errors import InstanceError
 from ..diagnostics.contracts.observation import capture
 from ..diagnostics.contracts.response import destination, finalize
 from ..diagnostics.contracts.workflows import stored_fields
+from .completion import complete
 
 
 def run_one(record) -> None:
@@ -34,11 +35,6 @@ def run_observed(record, owner, execute_operation, observed) -> None:
             record.error = exc.envelope()["error"] if isinstance(exc, InstanceError) else dict(code="operation_failed", message=str(exc))
             result = finalize(dict(ok=False, error=record.error), record.operation, observed.last)
             record.diagnostic_snapshot = stored_fields(result)
-    finally:
-        if record.work_scope:
-            record.work_scope.release()
-        if record.on_finish:
-            record.on_finish(record)
 
 
 def worker_loop() -> None:
@@ -54,11 +50,14 @@ def worker_loop() -> None:
                     continue
                 record.status = "running"
                 record.started_at = time.time()
-            run_one(record)
-            with owner._lock:
-                record.finished_at = time.time()
-            record.done.set()
-            owner._prune_finished()
+            try:
+                run_one(record)
+            except Exception as exc:
+                with owner._lock:
+                    record.status = "failed"
+                    record.error = dict(code="task_worker_failed", message=str(exc))
+            finally:
+                complete(record, owner)
         finally:
             owner._queue.task_done()
 

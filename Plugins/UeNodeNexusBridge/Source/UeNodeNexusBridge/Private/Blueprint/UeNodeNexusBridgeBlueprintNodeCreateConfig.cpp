@@ -2,6 +2,7 @@
 #include "Blueprint/Variables/NexusBlueprintLocalVariables.h"
 #include "Blueprint/Properties/NexusBlueprintNodeProperties.h"
 #include "Blueprint/Input/NexusEnhancedInputBinding.h"
+#include "Blueprint/Input/NexusEnhancedInputValue.h"
 #include "Blueprint/Animation/NexusTransitionGetterBinding.h"
 
 #include "Dom/JsonObject.h"
@@ -212,6 +213,10 @@ static bool ConfigureCustomEventNode(UK2Node_CustomEvent* Node, const TSharedPtr
 
 bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
+    if (IsEnhancedInputValueClass(Node->GetClass()))
+    {
+        return ConfigureEnhancedInputValue(Node, Payload, false, OutError);
+    }
     if (auto* Getter = Cast<UK2Node_TransitionRuleGetter>(Node))
     {
         return ConfigureTransitionGetter(Getter, Node->GetGraph(), Payload, false, OutError)

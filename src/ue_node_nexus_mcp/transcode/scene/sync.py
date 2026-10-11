@@ -9,6 +9,7 @@ from ..sync.dependencies import document_dependencies
 from ..sync.files import mirrored_assets, read_text
 from ..sync.project import BridgeCall, ProjectContext
 from ..sync.schema import ensure_schema
+from ..sync.state import SyncState
 from ..errors import SyncError
 from ..sync.push import FAILED_ACTIONS
 from .files import read_base, read_document
@@ -21,18 +22,20 @@ from .status import status_scenes
 
 
 class SceneBatch:
-    def __init__(self, context: ProjectContext, paths: list[str] | None, options: dict[str, Any], action: str):
+    def __init__(self, context: ProjectContext, paths: list[str] | None, options: dict[str, Any], action: str,
+                 asset_state: SyncState | None = None):
         self.context = context
         self.options = options
+        self.asset_state = asset_state
         self.state = SceneState.load(context.project)
-        self.asset_paths, self.items = (paths, []) if action == "schema" else select(context, self.state, paths, options)
+        self.asset_paths, self.items = (paths, []) if action == "schema" else select(context, self.state, paths, options, asset_state)
         if action == "push" and self.items and options.get("force") == "ue":
             raise SyncError("scene_pull_required", "use pull(force=ue) to adopt scene identity before pushing")
         self.dependencies: dict[str, set[str]] = dict()
         self.errors: dict[str, str] = dict()
 
     def prepare_push(self) -> list[str] | None:
-        local = mirrored_assets(self.context.project)
+        local = mirrored_assets(self.context.project, self.asset_state)
         required = set()
         claimed = dict()
         for item in self.items:

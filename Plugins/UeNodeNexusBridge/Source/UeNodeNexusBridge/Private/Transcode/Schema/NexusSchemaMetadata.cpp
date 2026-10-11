@@ -37,6 +37,11 @@ void AddClassMetadata(UClass* Class, const TSharedPtr<FJsonObject>& Record)
     const auto Bridge = MakeShared<FJsonObject>();
     Bridge->SetBoolField(TEXT("inspect"), true);
     Bridge->SetBoolField(TEXT("create"), bSupported && Kind != TEXT("niagara_system"));
+    if (bK2 && (Class->GetName() == TEXT("K2Node_FunctionEntry") || Class->GetName() == TEXT("K2Node_FunctionResult")))
+    {
+        Bridge->SetBoolField(TEXT("create"), false);
+        Bridge->SetStringField(TEXT("creation_condition"), TEXT("implicit function node; declare the function signature"));
+    }
     Bridge->SetBoolField(TEXT("write"), bSupported);
     Bridge->SetBoolField(TEXT("delete"), bSupported);
     Bridge->SetStringField(TEXT("source"), bK2 ? TEXT("Transcode::IsSupportedNodeClass") : TEXT("Transcode kind and entity adapters"));
@@ -49,6 +54,10 @@ void AddClassMetadata(UClass* Class, const TSharedPtr<FJsonObject>& Record)
     else if (bK2)
     {
         Bridge->SetStringField(TEXT("context"), TEXT("valid Blueprint graph; dynamic pins require target/function context"));
+        if (Class->GetName() == TEXT("K2Node_GetInputActionValue"))
+        {
+            Bridge->SetStringField(TEXT("context"), TEXT("input_action asset path is required before allocating pins"));
+        }
     }
     Record->SetObjectField(TEXT("bridge"), Bridge);
     const auto Conditions = MakeShared<FJsonObject>();

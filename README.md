@@ -184,6 +184,8 @@ Content_Transcoded/
 
 修改 refs、工作文件、会话或 UE 的动作默认预览，实际执行传 `dry_run=false`。预览提供 `proposal_id` 时，可在执行中携带它以校验固定输入。`push` 默认读取已提交 HEAD；后续文件编辑仍留在工作区。
 
+文件发现默认跳过任意层级的点号目录、点号文件和 `__pycache__`，工具生成的 `.auto-index-mcp`、`.git`、`.cache` 等目录会在扫描时直接剪枝。可在工作区返回的 `files_root` 下创建 `.nexusignore`，按根目录相对路径配置额外忽略规则；普通镜像放在 `<Project>/.nexusignore`。规则作用于新文件发现，已登记、暂存或提交的资产继续跟踪。语法与示例见 [文本镜像指南](src/ue_node_nexus_mcp/guides/text_mirror.md#file-discovery-and-ignore-rules)。
+
 ```python
 a = ue_sync("checkout", paths=["/Game/Materials"], options=dict(dry_run=False, agent_id="A"))
 b = ue_sync("checkout", paths=["/Game/Materials"], options=dict(dry_run=False, agent_id="B"))

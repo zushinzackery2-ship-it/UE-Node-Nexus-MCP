@@ -8,13 +8,14 @@ from ...diff.service import build_plan
 from ...material.interfaces import tree as interface_tree
 from ...scene.diff import build_plan as scene_plan
 from ...scene.model import from_document as scene_model
-from ...sync.dependencies import document_dependencies, order_assets
+from ...sync.dependencies import document_dependencies
 from ...errors import SyncError
 from ..merge.trees import resolve_base
 from ..semantic.decode import physical_ids, to_document
 from ..semantic.normalization import normalize_snapshot
 from ..semantic.validation import validate
 from .observe import scene_selector
+from .deletions import execution_order, prerequisites
 
 
 def snapshot(workspace, identifier: str | None) -> dict | None:
@@ -274,9 +275,9 @@ def preflight_candidates(workspace, merged, observation, assets, options):
         except SyncError as exc:
             errors[asset] = dict(code=exc.code, message=str(exc), details=exc.details)
     required = set(asset for asset, item in units.items() if item.get("interface_changed") or asset not in current or item["kind"] == "material")
-    ordered = order_assets(documents, required) + [asset for asset in units if asset not in documents]
+    ordered = execution_order(workspace, units, current, documents, required, assets)
     for asset in ordered:
-        blocked = set(units[asset]["dependencies"]) & errors.keys() if asset in units else set()
+        blocked = prerequisites(units[asset]) & errors.keys() if asset in units else set()
         if blocked:
             errors[asset] = dict(code="dependency_failed", message="blocked by invalid dependencies", assets=sorted(blocked))
     deleted = set(current) - set(candidate)

@@ -38,5 +38,4 @@ FString GetRendererMaterialPath(UNiagaraRendererProperties* Renderer, int32 Mate
 bool SetRendererMaterial(UNiagaraRendererProperties* Renderer, UMaterialInterface* Material, int32 MaterialIndex);
 TSharedPtr<FJsonObject> MakeNiagaraMaterialJson(int32 EmitterIndex, int32 RendererIndex, UNiagaraRendererProperties* Renderer, int32 MaterialIndex);
 TSharedPtr<FJsonValue> MakeNiagaraMaterialRow(int32 EmitterIndex, int32 RendererIndex, UNiagaraRendererProperties* Renderer, int32 MaterialIndex);
-bool SaveAssetPackage(UObject* Asset);
 }

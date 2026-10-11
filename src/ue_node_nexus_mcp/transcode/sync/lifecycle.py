@@ -8,6 +8,8 @@ import sqlite3
 
 from ...instances.session import instance_manager
 from ..collaboration.report.options import BACKGROUND_ACTIONS, JOB_ACTIONS, TRANSPORT_KEYS
+from ..storage.paths import project_dir
+from .options import validate
 
 OFFLINE_ACTIONS = frozenset(("workspaces", "lint", "stage", "unstage", "commit", "amend", "merge", "resolve", "abort",
                              "close", "branch", "switch", "tag", "log", "show", "diff", "blame", "reflog", "stash",
@@ -48,7 +50,9 @@ def run_managed_sync(bridge, action: str, paths, options: dict | None, runner) -
     options = dict(options or dict())
     options.setdefault("project", mapping["mirror_project_name"])
     root = Path(mapping["mirror_root"])
-    online = requires_editor(action, options, root / mapping["mirror_project_name"])
+    project = project_dir(root, mapping["mirror_project_name"])
+    validate(action, options, project)
+    online = requires_editor(action, options, project)
     environment = dict(os.environ, UE_NEXUS_TRANSCODE_DIR=str(root))
     deferred = action in JOB_ACTIONS or action in BACKGROUND_ACTIONS and (online or any(key in options for key in TRANSPORT_KEYS))
     if deferred:

@@ -26,7 +26,8 @@ PUBLICATION_WAIT_SECONDS = 30.0
 
 class Store:
     def __init__(self, root: Path, project_file: str = "") -> None:
-        self.root = root.resolve()
+        # Keep the repository identity used by UE when storage is redirected.
+        self.root = Path(os.path.abspath(root.expanduser()))
         self.db = Database(self.root / "index.sqlite")
         self.objects = Objects(self.root / "objects", self.db)
         canonical_project = os.path.normcase(str(Path(project_file).resolve())) if project_file else ""
@@ -56,9 +57,9 @@ class Store:
             return get_ref(connection, name)
 
     def move(self, name: str, target: str | None, expected: str | None, actor: str = "", reason: str = "") -> None:
-        if target:
-            self.objects.get(target)
         with self.db.connection(write=True) as connection:
+            if target:
+                self.objects.require(target, connection)
             move_ref(connection, name, target, expected, actor, reason)
         self.event("ref", ref=name, old=expected, new=target, actor=actor, reason=reason)
 
@@ -86,11 +87,11 @@ class Store:
 
     def put_record(self, category: str, identifier: str, payload: dict, roots: Iterable[str] = (), expected: int | None = None, connection=None) -> int:
         targets = sorted(set(item for item in roots if item))
-        for target in targets:
-            self.objects.get(target)
         if connection is None:
             with self.db.connection(write=True) as transaction:
                 return self.put_record(category, identifier, payload, targets, expected, transaction)
+        for target in targets:
+            self.objects.require(target, connection)
         row = connection.execute("SELECT generation FROM records WHERE category=? AND id=?", (category, identifier)).fetchone()
         actual = row[0] if row else 0
         if expected is not None and expected != actual:

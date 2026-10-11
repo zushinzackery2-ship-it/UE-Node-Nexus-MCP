@@ -90,6 +90,7 @@ def component_decl(component: dict[str, Any], schema=None) -> Decl:
             "guid": str(component.get("guid", "")),
             "class": class_path,
             "inherited": inherited,
+            "native_aliases": list(component.get("native_aliases", [])),
             "prop_types": prop_types(component.get("props")),
             "prop_defaults": prop_defaults(component.get("props")),
             "prop_values": prop_values(component.get("props")),

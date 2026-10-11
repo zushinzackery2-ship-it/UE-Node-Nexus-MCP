@@ -5,6 +5,7 @@ from contextvars import ContextVar
 import time
 
 from ...errors import SyncError
+from ...progress import listen
 from ....diagnostics.contracts.observation import fields as observation_fields
 
 TERMINAL = ("succeeded", "failed", "cancelled", "interrupted")
@@ -26,13 +27,14 @@ def update(store, identifier, **changes):
 def active(store, identifier):
     token = _job.set((store, identifier))
     try:
-        checkpoint(stage="running")
-        yield
+        with listen(lambda stage, details: checkpoint(stage=stage, schema_progress=details)):
+            checkpoint(stage="running")
+            yield
     finally:
         _job.reset(token)
 
 
-def checkpoint(stage=None, asset=None, completed=False):
+def checkpoint(stage=None, asset=None, completed=False, schema_progress=None):
     context = _job.get()
     if context is None:
         return
@@ -46,6 +48,9 @@ def checkpoint(stage=None, asset=None, completed=False):
     changes.update(observation_fields())
     if stage:
         changes["stage"] = stage
+    if schema_progress is not None:
+        changes["schema_progress"] = schema_progress
+        changes["current_asset"] = None
     if asset:
         changes["current_asset"] = asset
     if completed:

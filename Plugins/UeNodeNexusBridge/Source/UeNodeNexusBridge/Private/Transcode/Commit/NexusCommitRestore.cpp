@@ -81,10 +81,11 @@ bool RestoreCheckpoint(const FJson& Receipt, FString& Error)
         }
     }
     const FJson Current = Observe(Request);
-    const FString Expected = Text(Object(Receipt, TEXT("before")), TEXT("content_revision"));
+    const FJson Baseline = Object(Receipt, Receipt->HasField(TEXT("checkpoint_baseline")) ? TEXT("checkpoint_baseline") : TEXT("before"));
+    const FString Expected = Text(Baseline, TEXT("content_revision"));
     if (!Current.IsValid() || Expected.IsEmpty() || Expected != Text(Current, TEXT("content_revision")))
     {
-        Error = TEXT("checkpoint verification failed: content revision differs from the recorded before state");
+        Error = TEXT("checkpoint verification failed: content revision differs from the serialized checkpoint baseline");
         Receipt->SetObjectField(TEXT("recovery_observation"), Current.IsValid() ? Current : MakeShared<FJsonObject>());
         return false;
     }

@@ -10,7 +10,9 @@
 #include "Materials/MaterialExpressionNamedReroute.h"
 #include "Materials/MaterialFunction.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
+#include "UeNodeNexusMaterialPatchPreparation.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
+#include "UObject/StrongObjectPtr.h"
 
 namespace UeNodeNexusBridge::Transcode
 {
@@ -84,11 +86,6 @@ bool ApplyCreate(UObject* Owner, const TSharedPtr<FJsonObject>& Op, int32 Index,
         Context.Fail(Index, TEXT("unknown_class"), FString::Printf(TEXT("unknown material expression class: %s"), *ReadMaterialOpString(Op, TEXT("class"))));
         return false;
     }
-    if (Context.bDryRun)
-    {
-        Context.Ids.Add(Id, TEXT("dry-run"));
-        return true;
-    }
     int32 X = 0;
     int32 Y = 0;
     Op->TryGetNumberField(TEXT("x"), X);
@@ -125,10 +122,7 @@ void ApplyNodeVerb(UObject* Owner, const FString& Verb, const TSharedPtr<FJsonOb
     UMaterialExpression* Expression = ResolveMaterialNode(Owner, Context, Id);
     if (Expression == nullptr)
     {
-        if (!Context.bDryRun || !Context.Ids.Contains(Id))
-        {
-            Context.Fail(Index, TEXT("node_not_found"), FString::Printf(TEXT("node not found: %s"), *Id));
-        }
+        Context.Fail(Index, TEXT("node_not_found"), FString::Printf(TEXT("node not found: %s"), *Id));
         return;
     }
     FString Error;
@@ -175,6 +169,20 @@ void ApplyNodeVerb(UObject* Owner, const FString& Verb, const TSharedPtr<FJsonOb
 
 void ApplyMaterialPlan(UObject* Owner, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context)
 {
+    if (Context.bDryRun)
+    {
+        // Execute the complete interpreter on a strongly held, non-transactional
+        // graph. New nodes, links and deletions must affect later validation.
+        TStrongObjectPtr<UObject> Preview(MakeMaterialPatchPreview(Owner));
+        if (!Preview.IsValid())
+        {
+            Context.Fail(INDEX_NONE, TEXT("preview_failed"), TEXT("cannot duplicate material graph"));
+            return;
+        }
+        TGuardValue<bool> ApplyingPreview(Context.bDryRun, false);
+        ApplyMaterialPlan(Preview.Get(), Plan, Context);
+        return;
+    }
     if (UMaterial* Material = Cast<UMaterial>(Owner); Material != nullptr && !Context.bDryRun && Plan.Num() > 0)
     {
         // never edit a graph whose shader maps are still compiling (see MaterialPatchOps)
@@ -192,11 +200,11 @@ void ApplyMaterialPlan(UObject* Owner, const TArray<TSharedPtr<FJsonValue>>& Pla
         FString Error;
         if (Verb == TEXT("set_asset_prop"))
         {
-            if (!Context.bDryRun && !ImportPropertyValue(Owner, ReadMaterialOpString(Op, TEXT("name")), ReadMaterialOpString(Op, TEXT("value")), Error))
+            if (!ImportPropertyValue(Owner, ReadMaterialOpString(Op, TEXT("name")), ReadMaterialOpString(Op, TEXT("value")), Error))
             {
                 Context.Fail(Index, TEXT("prop_failed"), Error);
             }
-            Context.bChanged |= !Context.bDryRun;
+            Context.bChanged = true;
         }
         else if (Verb == TEXT("create_node"))
         {

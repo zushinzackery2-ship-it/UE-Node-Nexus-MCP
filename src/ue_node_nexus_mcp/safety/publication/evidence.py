@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from ...transcode.errors import SyncError
 from ...transcode.storage.io import digest
+from ...instances.errors import InstanceError
+from ..isolation.environment import validate as validate_environment
 
 
 BUILD_FIELDS = ("source_fingerprint", "source_commit", "source_dirty", "version", "contract_version", "build_id")
@@ -23,6 +25,10 @@ def binding(item, candidate, observation, builds, rhi, environment):
     if not isinstance(environment, dict) or any(key not in environment for key in
             ("engine_version", "engine_build", "engine_modules", "project_definition", "configuration", "plugins", "content_mounts")):
         raise SyncError("safety_identity_incomplete", "publishing engine and plugin environment is incomplete")
+    try:
+        validate_environment(environment)
+    except InstanceError as error:
+        raise SyncError(error.code, str(error), error.details) from error
     guarded = sorted(set((item["asset"],)) | set(item["dependencies"]))
     return dict(candidate=candidate, asset=item["asset"], kind=item["kind"], payload_digest=digest(item["payload"]),
                 revisions=dict((asset, observation["revisions"].get(asset)) for asset in guarded),

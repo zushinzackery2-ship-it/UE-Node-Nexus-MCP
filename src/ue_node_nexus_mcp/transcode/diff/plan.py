@@ -34,6 +34,7 @@ class AssetPlan:
     creates_asset: bool = False
     asset_class: str = ""
     interface_changed: bool = False
+    interface_identity_changed: bool = False
 
     def add(self, op: str, line: int | None = None, **args: Any) -> Verb:
         verb = Verb(op=op, args=args, line=line)
@@ -82,6 +83,7 @@ class AssetPlan:
             "counts": self.counts(),
             "risky": len(self.risky()),
             "interface_changed": self.interface_changed,
+            "interface_identity_changed": self.interface_identity_changed,
             "first": [verb.to_payload() for verb in self.verbs[:limit]],
             "warnings": [item.format() for item in self.diagnostics if item.severity == "warning"][:limit],
             "errors": [item.format() for item in self.diagnostics if item.severity == "error"][:limit],

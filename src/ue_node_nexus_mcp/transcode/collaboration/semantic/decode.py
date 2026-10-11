@@ -28,6 +28,13 @@ def to_document(snapshot: dict, *, include_defaults=False) -> Document:
             props = [(key, render_field(field, aliases, include_defaults)) for key, field in entity["props"].items() if include_defaults or field.get("state") != "default"]
             binding = bindings.get(identifier, dict())
             meta = dict(binding.get("meta", dict()), semantic_id=identifier)
+            meta["prop_types"] = dict(meta.get("prop_types", dict()))
+            meta["input_types"] = dict(meta.get("input_types", dict()))
+            for key, field in entity["args"].items():
+                meta["prop_types"].setdefault(key, field.get("type"))
+            for key, field in entity["props"].items():
+                meta["input_types"].setdefault(key, field.get("type"))
+            meta["default_type"] = entity["default"].get("type", entity["type"])
             if binding.get("physical"):
                 meta["guid"] = binding["physical"]
             section.entries.append(Decl(id=entity["alias"], type_name=entity["type"], args=args,

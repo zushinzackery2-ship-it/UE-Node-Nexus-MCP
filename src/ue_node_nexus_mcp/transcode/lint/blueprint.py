@@ -9,6 +9,8 @@ from ..blueprint.classes import node_name
 from ..blueprint.members import lint_members
 from ..blueprint.node_ids import lint_node_ids
 from ..blueprint.pins import parent_class
+from ..blueprint.callables import event_signature, local_records
+from .blueprint_links import lint_links
 from ..errors import DiagnosticSink
 from ..text.lexer import LexError
 from .lookup import AMBIGUOUS, lookup
@@ -34,6 +36,7 @@ POSITIONAL_REQUIRED = {
     "InputAction": "ActionName",
     "InputAxisEvent": "AxisName",
     "EnhancedInputAction": "/Game/Input/IA_X",
+    "GetInputActionValue": "/Game/Input/IA_X",
 }
 VARIABLE_META_VALUES = {"Category", "Tooltip", "RepNotify"}
 EXEC_PINS = {"execute", "then"}
@@ -50,7 +53,7 @@ def lint_blueprint(document: Document, schema: SchemaLock | None, sink: Diagnost
     variable_names = set(variables.decl_map()) if variables else set()
     component_names = set(components.decl_map()) if components else set()
     functions = [parse_signature_or_none(section.args, section.line, sink) for section in document.find_sections("function")]
-    function_names = {signature.name for signature in functions if signature is not None}
+    function_names = {signature.name for signature in functions if signature is not None} | set(local_records(document))
     if variables is not None:
         for decl in variables.decls():
             _lint_variable(decl, sink)
@@ -60,6 +63,7 @@ def lint_blueprint(document: Document, schema: SchemaLock | None, sink: Diagnost
     for section in document.sections:
         if section.name in ("graph", "function", "macro"):
             _lint_graph(section, variable_names | component_names, function_names, schema, sink, parent_class(document))
+            lint_links(section, document, schema, sink)
 
 
 def parse_signature_or_none(args: str, line: int, sink: DiagnosticSink):
@@ -140,6 +144,13 @@ def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], sch
         return None, None
     positional = decl.positional()
     spelled = node_name(decl.type_name)
+    if spelled in ("FunctionEntry", "FunctionResult"):
+        sink.error("implicit_function_node", "function entry and result are declared by the function signature; use entry/result links", line=decl.line)
+    if spelled == "CustomEvent" and positional:
+        try:
+            event_signature(decl)
+        except LexError as exc:
+            sink.error("invalid_signature", str(exc), line=decl.line)
     record = _function_record(decl, spelled, schema, sink)
     if call_spelling(decl.type_name) != decl.type_name:
         _lint_call_host(decl, record, sink)

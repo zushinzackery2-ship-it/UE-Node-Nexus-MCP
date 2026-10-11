@@ -213,3 +213,20 @@ def test_partial_function_push_does_not_save_unselected_callers(project):
     result = call(project, "push", [MATERIAL])
     assert result["status"] == "published", result
     assert "Bee" in ue.assets[MATERIAL]["graph"]["nodes"][-1]["inputs"]
+
+
+def test_recreated_input_with_identical_signature_refreshes_caller(project):
+    ue, _, _ = project
+    ue.referencers[FUNCTION] = [package(MATERIAL)]
+    old_guid = next(node["guid"] for node in ue.assets[FUNCTION]["graph"]["nodes"]
+                    if node["class_short"] == "FunctionInput" and any(row["name"] == "InputName" and row["value"] == "B" for row in node["props"]))
+    edit(project, FUNCTION, "in_b", "rebuilt_b")
+    call(project, "commit", all=True, message="recreate input identity without renaming its interface")
+    result = call(project, "push", [MATERIAL, FUNCTION], allow_delete=True)
+    assert result["status"] == "published", result
+    assert [payload["asset_path"] for payload in ue.applied] == [FUNCTION, MATERIAL]
+    assert any(verb["op"] == "delete_node" for verb in ue.applied[0]["plan"])
+    assert any(verb["op"] == "create_node" for verb in ue.applied[0]["plan"])
+    assert [verb["op"] for verb in ue.applied[1]["plan"]] == [REFRESH]
+    assert all(node["guid"] != old_guid for node in ue.assets[FUNCTION]["graph"]["nodes"])
+    assert ue.assets[MATERIAL]["graph"]["nodes"][-1]["inputs"] == ["A", "B"]

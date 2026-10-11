@@ -10,7 +10,7 @@ from .plan import AssetPlan
 from ..schema.records import class_aliases
 from ..schema.lock import SchemaLock
 from ..errors import SyncError
-from ..text.values import values_equal
+from ..text.semantic import values_equal
 
 
 def class_path(schema: SchemaLock | None, family: str, text: str) -> str | None:
@@ -74,26 +74,41 @@ def prop_default(base_section: Section | None, base_decl_meta: dict[str, Any] | 
     return None
 
 
-def diff_prop_section(local: Section | None, base: Section | None, plan: AssetPlan, op: str, **extra: Any) -> None:
+def diff_prop_section(local: Section | None, base: Section | None, plan: AssetPlan, op: str,
+                      *, schema: SchemaLock | None = None, **extra: Any) -> None:
     """Emit ``op(name=, value=)`` for changed/added props and resets for removed ones."""
     local_props = local.prop_map() if local else {}
     base_props = base.prop_map() if base else {}
     for key, prop in local_props.items():
         before = base_props.get(key)
-        if before is None or not values_equal(before.value, prop.value):
+        if before is None or not values_equal(before.value, prop.value, before.type_name or prop.type_name):
             plan.add(op, line=prop.line, name=key, value=prop.value, **extra)
     for key, prop in base_props.items():
         if key in local_props:
             continue
         default = prop.default
+        origin = dict()
+        if default is None and schema is not None and op == "set_asset_prop":
+            info = schema.resolve_class("asset", plan.asset_class)
+            contract = info.prop(key) if info else None
+            if contract is not None and contract.get("default") is not None:
+                default = str(contract["default"])
+                origin = dict(default_source=dict(class_path=info.path, schema_key=schema.key,
+                                                   source=contract.get("default_source", "class_default_object")))
         if default is None:
             plan.error("cannot_reset", f"property {key!r} was removed but its default value is unknown; write an explicit value", line=local.line if local else None)
             continue
-        plan.add(op, name=key, value=default, **extra)
+        plan.add(op, name=key, value=default, **origin, **extra)
 
 
 def decl_params(decl: Decl) -> dict[str, str]:
     return {key: value for key, value in decl.args if key is not None}
+
+
+def field_type(decl: Decl | None, key: str):
+    if decl is None:
+        return None
+    return decl.meta.get("prop_types", dict()).get(key) or decl.meta.get("input_types", dict()).get(key)
 
 
 def diff_params(local: Decl, base: Decl | None, plan: AssetPlan, op: str, skip: set[str] | None = None, **extra: Any) -> None:
@@ -102,7 +117,7 @@ def diff_params(local: Decl, base: Decl | None, plan: AssetPlan, op: str, skip: 
     local_params = {key: value for key, value in decl_params(local).items() if key not in skip}
     base_params = {key: value for key, value in decl_params(base).items() if key not in skip} if base else {}
     for key, value in local_params.items():
-        if key not in base_params or not values_equal(base_params[key], value):
+        if key not in base_params or not values_equal(base_params[key], value, field_type(base, key) or field_type(local, key)):
             plan.add(op, line=local.line, name=key, value=value, **extra)
     for key in base_params:
         if key in local_params:
@@ -116,7 +131,7 @@ def diff_brace_props(local: Decl, base: Decl | None, plan: AssetPlan, op: str, k
     local_props = local.prop_values()
     base_props = base.prop_values() if base else {}
     for key, value in local_props.items():
-        if key not in base_props or not values_equal(base_props[key], value):
+        if key not in base_props or not values_equal(base_props[key], value, field_type(base, key) or field_type(local, key)):
             plan.add(op, line=local.line, value=value, **{key_field: key}, **extra)
     for key in base_props:
         if key in local_props:

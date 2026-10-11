@@ -15,6 +15,9 @@ import os
 import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+from .ignore.policy import metadata
+from .ignore.walk import files as discover_files
+
 ROOT_ENV = "UE_NEXUS_TRANSCODE_DIR"
 DEFAULT_ROOT_NAME = "Content_Transcoded"
 NEXUS_DIR = ".nexus"
@@ -132,7 +135,7 @@ def parse_text_path(project: Path, path: Path) -> tuple[str, str] | None:
         relative = path.resolve().relative_to(project.resolve())
     except ValueError:
         return None
-    if not relative.parts or relative.parts[0] == NEXUS_DIR:
+    if not relative.parts or metadata(relative.parts):
         return None
     match = _SUFFIX_RE.match(relative.name)
     if match is None:
@@ -143,10 +146,7 @@ def parse_text_path(project: Path, path: Path) -> tuple[str, str] | None:
 
 
 def iter_text_files(project: Path) -> list[Path]:
-    if not project.is_dir():
-        return []
-    files = [path for path in project.rglob("*.nexus") if NEXUS_DIR not in path.relative_to(project).parts]
-    return sorted(files)
+    return discover_files(project)
 
 
 def display_path(project: Path, path: Path) -> str:

@@ -4,10 +4,19 @@ from __future__ import annotations
 
 from .scalar import normalize as normalize_scalar
 from .reflected import normalize_reflected
+from .values import normalize_value
 
 
 def normalize(text: str, type_name: str | dict) -> str:
     return normalize_reflected(text, type_name) if isinstance(type_name, dict) else normalize_scalar(text, type_name)
+
+
+def values_equal(left: str | None, right: str | None, type_name=None) -> bool:
+    if left is None or right is None:
+        return left is right
+    if type_name:
+        return normalize(left, type_name) == normalize(right, type_name)
+    return normalize_value(left) == normalize_value(right)
 
 
 def value(text: str | None, type_name: str = "text", state: str = "explicit") -> dict:

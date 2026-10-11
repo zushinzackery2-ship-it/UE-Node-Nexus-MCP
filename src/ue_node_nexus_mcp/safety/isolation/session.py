@@ -73,7 +73,8 @@ class ValidationSession:
         require(measured_rhi == self.rhi, "isolation_identity_mismatch",
                 "worker RHI differs from the requested renderer", requested=self.rhi, actual=measured_rhi)
         return dict(instance=launch["instance"], build=builds, rhi=measured_rhi,
-                    environment=capabilities["data"].get("safety_environment"))
+                    environment=capabilities["data"].get("safety_environment"),
+                    reproduction=capabilities["data"].get("safety_reproduction"))
 
     def execute(self, item: dict) -> dict:
         if item["operation"] in ("transcode_apply", "vfx_transcode_apply"):

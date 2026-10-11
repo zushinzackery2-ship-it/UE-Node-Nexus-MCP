@@ -1,5 +1,6 @@
 #include "UeNodeNexusVfxTranscode.h"
 #include "UeNodeNexusCollaboration.h"
+#include "Niagara/Compilation/NexusNiagaraCompilation.h"
 
 #include "NiagaraSystem.h"
 #include "ScopedTransaction.h"
@@ -75,8 +76,7 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     {
         NiagaraModuleStack::MarkSystemEdited(System);
         System->RequestCompile(true);
-        System->WaitForCompilationComplete(false, false);
-        bReady = System->IsReadyToRun();
+        bReady = NiagaraCompilation::Wait(System);
     }
     bool bSaved = false;
     FString SaveError;
@@ -104,6 +104,10 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     Compile->SetBoolField(TEXT("ran"), !bDryRun && bCompile);
     Compile->SetBoolField(TEXT("ok"), bReady);
     Compile->SetNumberField(TEXT("error_count"), bReady ? 0 : 1);
+    if (!bReady)
+    {
+        Compile->SetArrayField(TEXT("scripts"), NiagaraCompilation::Diagnostics(System));
+    }
     Data->SetObjectField(TEXT("compile"), Compile);
     Data->SetArrayField(TEXT("diagnostics"), TArray<TSharedPtr<FJsonValue>>());
     Data->SetBoolField(TEXT("saved"), bSaved);

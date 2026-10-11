@@ -40,7 +40,7 @@ for action in JOB_ACTIONS:
     OPTIONS[action] = set(("job_id",))
 READ_ACTIONS.update(("job_status", "job_result"))
 ACTIONS = tuple(OPTIONS)
-BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current", "background", "safety_allow_low_memory"))
+BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current", "background", "safety_allow_low_memory", "pull_all", "auto_export", "refresh_schema"))
 STRING_LIST_KEYS = set(("conflict_ids",))
 
 
@@ -48,8 +48,12 @@ def validate(action: str, options: dict) -> None:
     unknown = set(options) - OPTIONS[action] - COMMON
     if unknown:
         raise SyncError("invalid_option", "unsupported options", dict(action=action, unknown=sorted(unknown), allowed=sorted(OPTIONS[action] | COMMON)))
-    if "force" in options and options["force"] != "local":
-        raise SyncError("invalid_option", "force must be 'local' to publish the selected source over UE state")
+    validate_values(action, options)
+
+
+def validate_values(action: str, options: dict, force_values=("local",)) -> None:
+    if "force" in options and options["force"] not in force_values:
+        raise SyncError("invalid_option", "force must be one of " + ", ".join(force_values))
     if options.get("force") and options.get("merge_id"):
         raise SyncError("invalid_option", "force=local publishes the source directly; abort the existing merge session first",
                         dict(abort=dict(action="abort", options=dict(merge_id=options["merge_id"], dry_run=False))))

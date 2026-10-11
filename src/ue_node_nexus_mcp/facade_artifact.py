@@ -146,7 +146,8 @@ def item_page(artifact: StoredArtifact, items: list, path: tuple, cursor: int, b
         return minimal_error("invalid_request", "cursor is past the end of this list",
                              {"artifact_id": artifact.artifact_id, "path": path_argument(path), "cursor": cursor, "total": len(items)})
     page, used = [], 2
-    for item in items[cursor:]:
+    for index in range(cursor, len(items)):
+        item = items[index]
         size = len(encode(item)) + (1 if page else 0)
         if used + size > budget:
             break

@@ -46,7 +46,7 @@ def emit_section_entries(section: Section) -> list[str]:
 
 def emit_entry(entry: Prop | Decl | Link | Bare, pad: int = 0) -> str:
     if isinstance(entry, Prop):
-        return f"{_prop_key(entry.key)} = {format_value(entry.value)}"
+        return f"{_prop_key(entry.key)} = {format_value(entry.value, entry.type_name)}"
     if isinstance(entry, Decl):
         return emit_decl(entry, pad)
     if isinstance(entry, Link):
@@ -59,11 +59,12 @@ def emit_decl(decl: Decl, pad: int = 0) -> str:
     if decl.modifier:
         parts.append(decl.modifier)
         pad = 0
-    parts.append(f"{_ident(decl.id).ljust(pad)} : {decl.type_name}{_args(decl.args)}")
+    parts.append(f"{_ident(decl.id).ljust(pad)} : {decl.type_name}{_args(decl.args, decl.meta)}")
     if decl.default is not None:
-        parts.append(f"= {format_value(decl.default)}")
+        parts.append(f"= {format_value(decl.default, decl.meta.get('default_type', decl.type_name))}")
     if decl.props:
-        parts.append("{ " + ", ".join(_prop_item(key, value) for key, value in decl.props) + " }")
+        types = dict(decl.meta.get("prop_types", dict()), **decl.meta.get("input_types", dict()))
+        parts.append("{ " + ", ".join(_prop_item(key, value, types.get(key)) for key, value in decl.props) + " }")
     if decl.pos is not None:
         parts.append(f"@ {decl.pos[0]},{decl.pos[1]}")
     for flag in decl.flags:
@@ -73,17 +74,18 @@ def emit_decl(decl: Decl, pad: int = 0) -> str:
     return " ".join(parts)
 
 
-def _args(args: list[tuple[str | None, str]]) -> str:
+def _args(args: list[tuple[str | None, str]], metadata: dict) -> str:
     if not args:
         return ""
-    rendered = [format_value(value) if key is None else f"{_prop_key(key)}={format_value(value)}" for key, value in args]
+    types = dict(metadata.get("prop_types", dict()), **metadata.get("input_types", dict()))
+    rendered = [format_value(value) if key is None else f"{_prop_key(key)}={format_value(value, types.get(key))}" for key, value in args]
     return "(" + ", ".join(rendered) + ")"
 
 
-def _prop_item(key: str, value: str | None) -> str:
+def _prop_item(key: str, value: str | None, type_name=None) -> str:
     if value is None:
         return _prop_key(key)
-    return f"{_prop_key(key)}={format_value(value)}"
+    return f"{_prop_key(key)}={format_value(value, type_name)}"
 
 
 def _prop_key(key: str) -> str:

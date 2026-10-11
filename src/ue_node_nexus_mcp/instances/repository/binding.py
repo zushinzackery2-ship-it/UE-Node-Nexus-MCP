@@ -2,6 +2,7 @@
 
 from contextlib import closing
 import json
+from os.path import abspath
 from pathlib import Path
 import sqlite3
 
@@ -42,7 +43,8 @@ def resolve(project: dict, runtime: Path, requested: str | None = None, persist:
         project_name = project["project_name"]
         project_id = None
         if ue:
-            repository = Path(ue["repository"]).resolve()
+            # Mirror layout belongs to the binding path, including redirected storage.
+            repository = Path(abspath(Path(ue["repository"]).expanduser()))
             require(repository.name == "collaboration" and repository.parent.name == ".nexus",
                     "repository_layout_mismatch", "existing repository must use the project's .nexus/collaboration layout")
             validate_repository(repository, project, ue["project_id"])

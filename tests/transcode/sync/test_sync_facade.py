@@ -45,6 +45,8 @@ def test_ue_sync_runs_against_fake_bridge(all_features, monkeypatch: pytest.Monk
     result = ue_sync("init")
     assert result["ok"] is True, result
     assert result["data"]["counts"] == {"pulled": 1}
+    pulled = ue_sync("pull", options=dict(force="ue", include_stubs=True, wait_seconds=5))
+    assert pulled["ok"] is True, pulled
     status = ue_sync("status")
     assert status["ok"] is True and status["data"]["counts"] == {"clean": 1}, status
     lint = ue_sync("lint")

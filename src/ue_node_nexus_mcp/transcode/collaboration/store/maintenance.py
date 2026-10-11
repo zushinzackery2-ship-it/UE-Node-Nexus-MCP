@@ -100,17 +100,7 @@ def collect(store: Store, dry_run: bool = True, retention_days: int = 90,
         with store.db.connection(write=True) as connection:
             expired = expire(connection, instant, retention_days) if not dry_run else dict()
             marked = reachable(store, roots(connection, instant, retention_days))
-            candidates = []
-            for identifier, created, lost_at in connection.execute("SELECT id, created, unreachable FROM objects").fetchall():
-                if identifier in marked:
-                    if not dry_run:
-                        connection.execute("UPDATE objects SET unreachable=NULL WHERE id=?", (identifier,))
-                    continue
-                since = instant if lost_at is None else max(created, lost_at)
-                if since <= instant - grace_days * DAY:
-                    candidates.append(identifier)
-                elif not dry_run and lost_at is None:
-                    connection.execute("UPDATE objects SET unreachable=? WHERE id=?", (instant, identifier))
+            candidates = sweep_candidates(store, connection, marked, instant, grace_days, dry_run)
             if not dry_run:
                 # The tombstone commits the removal before any byte disappears. An
                 # interruption then reports the exact object instead of a corrupt read.
@@ -122,3 +112,23 @@ def collect(store: Store, dry_run: bool = True, retention_days: int = 90,
             finish(store)
     return dict(dry_run=dry_run, reachable=len(marked), garbage=candidates, grace_days=grace_days,
                 resumed=resumed, expired_records=expired)
+
+
+def sweep_candidates(store, connection, marked, instant, grace_days, dry_run):
+    candidates = []
+    objects = connection.execute("SELECT id, created, unreachable FROM objects").fetchall()
+    for identifier, created, lost_at in objects:
+        if identifier in marked:
+            if not dry_run:
+                connection.execute("UPDATE objects SET unreachable=NULL WHERE id=?", (identifier,))
+            continue
+        since = instant if lost_at is None else max(created, lost_at)
+        if since <= instant - grace_days * DAY:
+            candidates.append(identifier)
+        elif not dry_run and lost_at is None:
+            connection.execute("UPDATE objects SET unreachable=? WHERE id=?", (instant, identifier))
+    # Retained objects own their links even while unreachable. Protect their
+    # children without resetting grace clocks so the subgraph expires together.
+    retained = set(row[0] for row in objects) - set(candidates)
+    protected = reachable(store, retained) if retained else set()
+    return [identifier for identifier in candidates if identifier not in protected]

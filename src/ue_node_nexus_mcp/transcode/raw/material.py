@@ -15,6 +15,7 @@ import collections
 from typing import Any
 
 from ..text.ids import material_node_candidate
+from ..material.custom_inputs import normalize_args
 from ..schema.catalog import reference
 from ..text.model import Decl, Document, Link, Section
 from .common import RawError, allocator_for, base_order, header_from_raw, non_default_params, order_ids, prop_defaults, prop_types, prop_values, props_section, require_kind
@@ -76,7 +77,9 @@ def node_decl(identifier: str, node: dict[str, Any], schema=None) -> Decl:
         "prop_values": prop_values(node.get("props")),
     }
     spelling = reference(schema, "material_expression", str(node.get("class", "")), str(node.get("class_short", "")))
-    return Decl(id=identifier, type_name=spelling, args=[(key, value) for key, value in params], pos=position, meta=meta)
+    decl = Decl(id=identifier, type_name=spelling, args=[(key, value) for key, value in params], pos=position, meta=meta)
+    decl.args = list(normalize_args(decl, decl.keyed()).items())
+    return decl
 
 
 def material_document(

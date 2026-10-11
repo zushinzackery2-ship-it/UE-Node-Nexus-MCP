@@ -2,11 +2,14 @@
 
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 #include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_CustomEvent.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 
 namespace UeNodeNexusBridge::Transcode
@@ -23,6 +26,55 @@ void RefreshFunctionCalls(UBlueprint* Blueprint, const TSet<FName>& Functions)
             Call->ReconstructNode();
         }
     }
+}
+
+TSet<int32> ApplyGraphDetachments(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan,
+    FApplyContext& Context, TArray<UEdGraph*>& Touched)
+{
+    TArray<int32> Detachments;
+    TSet<int32> Applied;
+    for (int32 Index = 0; Index < Plan.Num(); ++Index)
+    {
+        const auto Op = Plan[Index].IsValid() ? Plan[Index]->AsObject() : nullptr;
+        if (!Op.IsValid() || ReadOpString(Op, TEXT("op")) != TEXT("disconnect_pins"))
+        {
+            continue;
+        }
+        auto* Graph = FindBlueprintGraph(Blueprint, ReadOpString(Op, TEXT("graph"), TEXT("EventGraph")));
+        if (Graph && ResolveGraphNode(Blueprint, Graph, Context, ReadOpString(Op, TEXT("from")))
+            && ResolveGraphNode(Blueprint, Graph, Context, ReadOpString(Op, TEXT("to"))))
+        {
+            Detachments.Add(Index);
+            Applied.Add(Index);
+        }
+    }
+    ApplyScheduledGraphOps(Blueprint, Plan, Detachments, Context, Touched);
+    return Applied;
+}
+
+void ApplyGraphDeclarations(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan,
+    TArray<int32>& Indices, FApplyContext& Context, TArray<UEdGraph*>& Touched)
+{
+    TArray<int32> Declarations;
+    for (const int32 Index : Indices)
+    {
+        const auto Op = Plan[Index]->AsObject();
+        UClass* Class = ResolveBlueprintNodeClassForCreate(ReadOpString(Op, TEXT("class")));
+        if (ReadOpString(Op, TEXT("op")) == TEXT("create_node")
+            && Class && Class->IsChildOf(UK2Node_CustomEvent::StaticClass()))
+        {
+            Declarations.Add(Index);
+        }
+    }
+    ApplyScheduledGraphOps(Blueprint, Plan, Declarations, Context, Touched);
+    if (!Declarations.IsEmpty() && !Context.bDryRun)
+    {
+        FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+    }
+    Indices.RemoveAll([&Declarations](int32 Index)
+    {
+        return Declarations.Contains(Index);
+    });
 }
 
 void ApplyGraphDeletions(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan,

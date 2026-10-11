@@ -160,4 +160,20 @@ bool DispatchNamedPipeRequest(
     }
     return false;
 }
+
+void AwaitNamedPipePeerClose(
+    void* PipeHandle,
+    void* IoEventHandle,
+    void* StopEventHandle,
+    FThreadSafeBool& Stopping)
+{
+    // The framed client closes after reading the entire response. Holding this
+    // connection until EOF preserves buffered output without an uncancellable
+    // FlushFileBuffers. The overlapped read is interrupted by the stop event.
+    uint8 ExtraByte = 0;
+    if (ReadNamedPipeExact(PipeHandle, IoEventHandle, StopEventHandle, Stopping, &ExtraByte, 1))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Nexus pipe client sent extra data after its single request"));
+    }
+}
 }

@@ -32,9 +32,9 @@ def _failure(context: ProjectContext, status: AssetStatus, result: PushResult, e
     result.rows.append(row(status.asset_path, status.kind, status.state, action, errors=[diagnostic.format()]))
 
 
-def _missing_dependencies(bridge: BridgeCall, context: ProjectContext, selected: set[str], dependencies: dict[str, set[str]]) -> set[str]:
+def _missing_dependencies(bridge: BridgeCall, context: ProjectContext, selected: set[str], dependencies: dict[str, set[str]], state: SyncState) -> set[str]:
     external = set().union(*dependencies.values()) - selected
-    local = set(mirrored_assets(context.project))
+    local = set(mirrored_assets(context.project, state))
     external &= local
     if not external or not context.bridge_available:
         return set()
@@ -61,7 +61,7 @@ def push_assets(bridge: BridgeCall, context: ProjectContext, state: SyncState, s
     required = set(asset for asset, item in prepared.items() if item.plan.creates_asset or item.status.kind in ("material_function", "material_instance"))
     order = order_assets(documents, required)
     blocked = set(entry["asset"] for entry in result.rows if entry["action"] in FAILED_ACTIONS)
-    missing = _missing_dependencies(bridge, context, set(status.asset_path for status in statuses), dependencies)
+    missing = _missing_dependencies(bridge, context, set(status.asset_path for status in statuses), dependencies, state)
     for asset in order:
         unavailable = sorted(dependencies[asset] & (blocked | missing))
         if unavailable:

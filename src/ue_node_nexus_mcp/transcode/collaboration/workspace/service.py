@@ -162,7 +162,8 @@ class Workspace:
         return path.is_file() and byte_hash(path.read_bytes()) == known[0]
 
     def install(self, head: str, index: str | None = None, files_tree: str | None = None, reason="checkout",
-                branch: str | None = None, base: str | None = None, projection_id: str | None = None, include=()) -> dict:
+                branch: str | None = None, base: str | None = None, projection_id: str | None = None, include=(), project_assets=None,
+                file_map=None, authored=None) -> dict:
         from .projection import execute, prepare
 
         pending = self.store.record("projection", projection_id) if projection_id else None
@@ -172,19 +173,30 @@ class Workspace:
         index = index or self.history.commit(head)["tree"]
         entries = self.history.entries(files_tree or index)
         included = set(self.state["files"]) | set(include) if self.state.get("sparse") else set(entries)
-        selected = dict((asset, identifier) for asset, identifier in entries.items() if asset in included)
+        scope = set(project_assets) if project_assets is not None else None
+        selected = dict((asset, identifier) for asset, identifier in entries.items()
+                        if asset in included and (scope is None or asset in scope))
         indexed, memo = self.history.entries(self.state["index"]), cache.load(self)
+        known_files = dict(self.state["files"], **(file_map or dict()))
         files, texts, taken, sources = dict(), dict(), dict(), dict()
+        if scope is not None:
+            files = dict((asset, relative) for asset, relative in self.state["files"].items() if asset not in scope)
+            taken = dict((relative, asset) for asset, relative in files.items())
         for asset, identifier in selected.items():
-            relative = self.state["files"].get(asset) or filename(asset, self.store.objects.data(identifier, "snapshot"))
+            relative = known_files.get(asset) or filename(asset, self.store.objects.data(identifier, "snapshot"))
             if relative in taken:
                 raise SyncError("duplicate_asset", "two semantic assets map to the same workspace file", dict(file=relative))
             files[asset], taken[relative] = relative, asset
+            if asset in (authored or dict()):
+                texts[relative] = authored[asset]
+                continue
             if self.projected(asset, identifier, relative, indexed, memo):
                 continue
             texts[relative] = text_of(self.store.objects.data(identifier, "snapshot")).encode("utf-8")
             sources[relative] = identifier
-        for relative in self.state["files"].values():
+        for asset, relative in known_files.items():
+            if scope is not None and asset not in scope:
+                continue
             if relative not in taken:
                 texts[relative] = None
         after = dict(self.state, head=head, index=index, files=files, base=base or self.state["base"], branch=branch or self.state["branch"])

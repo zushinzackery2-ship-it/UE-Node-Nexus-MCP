@@ -1,4 +1,5 @@
 #include "NexusBlueprintNodeProperties.h"
+#include "NexusAnimGetterProperties.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -13,7 +14,7 @@ namespace UeNodeNexusBridge
 {
 namespace
 {
-bool ValidateNodeValue(const FProperty* Property, const TSharedPtr<FJsonValue>& Value,
+bool ValidateNodeValue(const UEdGraphNode* Node, const FProperty* Property, const TSharedPtr<FJsonValue>& Value,
     const FString& Path, FString& Error)
 {
     if (!Property || !Value.IsValid())
@@ -21,7 +22,7 @@ bool ValidateNodeValue(const FProperty* Property, const TSharedPtr<FJsonValue>& 
         Error = TEXT("unknown_node_property: ") + Path;
         return false;
     }
-    if (!Transcode::IsEditableProperty(Property))
+    if (!Transcode::IsEditableProperty(Property) && !IsAnimGetterBindingProperty(Node, Property))
     {
         Error = TEXT("node_property_not_editable: ") + Path;
         return false;
@@ -35,7 +36,7 @@ bool ValidateNodeValue(const FProperty* Property, const TSharedPtr<FJsonValue>& 
         }
         for (const auto& Pair : Value->AsObject()->Values)
         {
-            if (!ValidateNodeValue(ResolveStructJsonField(Struct->Struct, Pair.Key), Pair.Value,
+            if (!ValidateNodeValue(nullptr, ResolveStructJsonField(Struct->Struct, Pair.Key), Pair.Value,
                 Path + TEXT(".") + Pair.Key, Error))
             {
                 return false;
@@ -61,7 +62,7 @@ bool ValidateNodeValue(const FProperty* Property, const TSharedPtr<FJsonValue>& 
             return false;
         }
     }
-    return true;
+    return ValidateAnimGetterBinding(Node, Property, Value, Error);
 }
 
 TSharedPtr<FJsonValue> ExpandPath(const TArray<FString>& Parts, const TSharedPtr<FJsonValue>& Value)
@@ -90,7 +91,7 @@ bool ApplyBlueprintNodeProperty(UEdGraphNode* Node, const FString& Name,
     }
     FProperty* Property = Node->GetClass()->FindPropertyByName(FName(*Parts[0]));
     const TSharedPtr<FJsonValue> Expanded = ExpandPath(Parts, Value);
-    if (!ValidateNodeValue(Property, Expanded, Parts[0], Error))
+    if (!ValidateNodeValue(Node, Property, Expanded, Parts[0], Error))
     {
         return false;
     }

@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "UeNodeNexusBridgeSaveResult.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Misc/PackageName.h"
@@ -153,9 +154,10 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     System->MarkPackageDirty();
     System->PostEditChange();
 
-    const bool bSaved = bSave && SaveAssetPackage(System);
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, !bSave || bSaved);
-    Response->SetObjectField(TEXT("data"), MakeCreateResponseData(System, ObjectPath, false, bSaved, Format));
+    const auto Save = SaveAssetWrite(System, bSave, false, true);
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, !Save.Failed());
+    auto Data = MakeCreateResponseData(System, ObjectPath, false, Save.bSaved, Format);
+    Response->SetObjectField(TEXT("data"), Data);
     TArray<TSharedPtr<FJsonValue>> Warnings;
     if (SourceSystem == nullptr)
     {
@@ -165,10 +167,7 @@ static TSharedPtr<FJsonObject> CreateNiagaraSystemAsset(
     {
         Response->SetArrayField(TEXT("warnings"), Warnings);
     }
-    if (bSave && !bSaved)
-    {
-        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("save_failed"), TEXT("Niagara system was created but package save failed")));
-    }
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 

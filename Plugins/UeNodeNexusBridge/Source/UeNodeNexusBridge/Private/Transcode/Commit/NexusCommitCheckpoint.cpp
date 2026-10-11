@@ -79,6 +79,10 @@ bool Checkpoint(const FJson& Request, const FJson& Before, const FJson& Receipt,
     }
     else if (UObject* Asset = LoadObject<UObject>(nullptr, *Text(Request, TEXT("asset_path"))))
     {
+        if (!PrepareCheckpointAsset(Request, Asset, Error))
+        {
+            return false;
+        }
         Packages.Add(Asset->GetOutermost());
     }
     for (UPackage* Package : Packages)
@@ -88,6 +92,17 @@ bool Checkpoint(const FJson& Request, const FJson& Before, const FJson& Receipt,
             return false;
         }
     }
+    const FJson Baseline = Observe(Request, &Error);
+    if (!Baseline.IsValid())
+    {
+        Error = TEXT("cannot observe the serialized checkpoint baseline: ") + Error;
+        return false;
+    }
+    Receipt->SetObjectField(TEXT("checkpoint_baseline"), Baseline);
+    Receipt->SetBoolField(TEXT("checkpoint_changed_state"),
+        Text(Before, TEXT("content_revision")) != Text(Baseline, TEXT("content_revision")));
+    UE_LOG(LogTemp, Display, TEXT("Nexus apply_id=%s checkpoint_before=%s checkpoint_baseline=%s"),
+        *Text(Receipt, TEXT("apply_id")), *Text(Before, TEXT("content_revision")), *Text(Baseline, TEXT("content_revision")));
     CaptureRecoveryMemory(Receipt, TEXT("package_memory_before"));
     return SaveReceipt(Receipt, TEXT("prepared"), Error);
 }

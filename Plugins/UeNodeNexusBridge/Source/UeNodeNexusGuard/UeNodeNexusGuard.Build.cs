@@ -21,6 +21,10 @@ public class UeNodeNexusGuard : ModuleRules
         {
             "Core", "Json"
         });
+        PrivateDependencyModuleNames.AddRange(new string[]
+        {
+            "Slate", "SlateCore", "ApplicationCore"
+        });
         PublicSystemLibraries.AddRange(new string[]
         {
             "bcrypt.lib", "advapi32.lib"

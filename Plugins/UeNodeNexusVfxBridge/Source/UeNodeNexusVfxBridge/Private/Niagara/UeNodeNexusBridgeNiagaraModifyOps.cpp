@@ -1,6 +1,8 @@
 #include "UeNodeNexusNiagaraOps.h"
 
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "UeNodeNexusBridgeSaveResult.h"
+#include "Compilation/NexusNiagaraCompilation.h"
 #include "Formats/UeNodeNexusBridgeNiagaraListFormats.h"
 
 #include "Dom/JsonValue.h"
@@ -128,7 +130,8 @@ TSharedPtr<FJsonObject> HandleNiagaraMaterialsSet(const FString& Operation, cons
         System->MarkPackageDirty();
         System->PostEditChange();
     }
-    const bool bSaved = bSave && Changed > 0 && SaveAssetPackage(System);
+    const auto Save = SaveAssetWrite(System, bSave, bDryRun, Changed > 0);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
@@ -157,6 +160,7 @@ TSharedPtr<FJsonObject> HandleNiagaraMaterialsSet(const FString& Operation, cons
     {
         Response->SetArrayField(TEXT("warnings"), Warnings);
     }
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 
@@ -177,9 +181,11 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     const bool bRequested = System->RequestCompile(true);
     if (bWait)
     {
-        System->WaitForCompilationComplete(false, false);
+        NiagaraCompilation::Wait(System);
     }
-    const bool bSaved = bSave && SaveAssetPackage(System);
+    const bool bReady = System->IsReadyToRun();
+    const auto Save = SaveAssetWrite(System, bSave && bReady, false, bReady);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("requested"), bRequested);
@@ -194,12 +200,20 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     Data->SetNumberField(TEXT("readiness_issue_count"), CountNiagaraReadinessIssues(System));
     Data->SetBoolField(TEXT("saved"), bSaved);
 
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
+    const bool bFailed = (bWait && !bReady) || (bSave && bReady && !bSaved);
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, !bFailed);
     Response->SetObjectField(TEXT("data"), Data);
+    Data->SetStringField(TEXT("compile_state"), bReady ? TEXT("ready") : bWait ? TEXT("failed") : TEXT("pending"));
+    if (bFailed)
+    {
+        Response->SetObjectField(TEXT("error"), MakeError(bReady ? TEXT("niagara_save_failed") : TEXT("niagara_compile_failed"),
+            bReady ? TEXT("Compiled Niagara system could not be saved") : TEXT("Niagara system is not ready after CPU and GPU compilation completed")));
+    }
     TArray<TSharedPtr<FJsonValue>> Warnings;
     AppendNiagaraEmptySystemWarning(System, Warnings);
     if (!System->IsReadyToRun())
     {
+        Data->SetArrayField(TEXT("compile_scripts"), NiagaraCompilation::Diagnostics(System));
         Warnings.Add(MakeShared<FJsonValueObject>(MakeNiagaraBoundaryWarning(
             System,
             TEXT("niagara_compile_not_ready"),
@@ -209,6 +223,7 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     {
         Response->SetArrayField(TEXT("warnings"), Warnings);
     }
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 }

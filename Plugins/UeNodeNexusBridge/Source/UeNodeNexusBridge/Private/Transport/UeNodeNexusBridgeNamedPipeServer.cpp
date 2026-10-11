@@ -1,11 +1,10 @@
 #include "UeNodeNexusBridgeNamedPipeServer.h"
 
-#include "Containers/StringConv.h"
+#include "Connection/NexusPipeConnection.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/Runnable.h"
 #include "HAL/RunnableThread.h"
 #include "HAL/ThreadSafeBool.h"
-#include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNamedPipeIo.h"
 
 #if PLATFORM_WINDOWS
@@ -21,8 +20,6 @@ namespace
 // One pipe instance per worker; PIPE_UNLIMITED_INSTANCES lets concurrent MCP
 // sessions (multiple Agents talking to the same editor) each grab a free slot.
 static constexpr int32 WorkerCount = 4;
-// Safety cap so a malformed length prefix cannot make us allocate wildly.
-static constexpr uint32 MaxFrameBytes = 64u * 1024u * 1024u;
 static constexpr uint32 PipeBufferHint = 64u * 1024u;
 
 static FString MakePipeName()
@@ -40,7 +37,10 @@ public:
     }
 
     virtual uint32 Run() override;
-    virtual void Stop() override { bStopping = true; }
+    virtual void Stop() override
+    {
+        bStopping = true;
+    }
 
     void Launch(int32 Index)
     {
@@ -63,10 +63,6 @@ private:
     void* StopEvent = nullptr;   // shared manual-reset event (not owned)
     FRunnableThread* Thread = nullptr;
     FThreadSafeBool bStopping = false;
-
-#if PLATFORM_WINDOWS
-    bool ServeConnection(HANDLE Pipe, HANDLE IoEvent);
-#endif
 };
 
 #if PLATFORM_WINDOWS
@@ -130,6 +126,8 @@ uint32 FUeNodeNexusBridgeNamedPipeServer::FWorker::Run()
                 else
                 {
                     CancelIoEx(Pipe, &Ov);
+                    DWORD Transferred = 0;
+                    GetOverlappedResult(Pipe, &Ov, &Transferred, true);
                     CloseHandle(Pipe);
                     break;   // stop signaled
                 }
@@ -142,10 +140,12 @@ uint32 FUeNodeNexusBridgeNamedPipeServer::FWorker::Run()
 
         if (bConnected && !bStopping)
         {
-            ServeConnection(Pipe, IoEvent);
+            if (UeNodeNexusBridge::ServeNamedPipeConnection(Pipe, IoEvent, StopEvent, bStopping))
+            {
+                UeNodeNexusBridge::AwaitNamedPipePeerClose(Pipe, IoEvent, StopEvent, bStopping);
+            }
         }
 
-        FlushFileBuffers(Pipe);
         DisconnectNamedPipe(Pipe);
         CloseHandle(Pipe);
     }
@@ -154,84 +154,7 @@ uint32 FUeNodeNexusBridgeNamedPipeServer::FWorker::Run()
     return 0;
 }
 
-bool FUeNodeNexusBridgeNamedPipeServer::FWorker::ServeConnection(HANDLE Pipe, HANDLE IoEvent)
-{
-    // Frame = 4-byte little-endian length + UTF-8 JSON body.
-    uint8 LengthBytes[4];
-    if (!UeNodeNexusBridge::ReadNamedPipeExact(
-        Pipe,
-        IoEvent,
-        StopEvent,
-        bStopping,
-        LengthBytes,
-        4))
-    {
-        return false;
-    }
-    const uint32 BodyLength =
-        static_cast<uint32>(LengthBytes[0]) |
-        (static_cast<uint32>(LengthBytes[1]) << 8) |
-        (static_cast<uint32>(LengthBytes[2]) << 16) |
-        (static_cast<uint32>(LengthBytes[3]) << 24);
 
-    if (BodyLength == 0 || BodyLength > MaxFrameBytes)
-    {
-        UE_LOG(LogUeNodeNexusBridge, Warning, TEXT("Named pipe rejected frame length %u"), BodyLength);
-        return false;
-    }
-
-    TArray<uint8> BodyBytes;
-    BodyBytes.SetNumUninitialized(static_cast<int32>(BodyLength));
-    if (!UeNodeNexusBridge::ReadNamedPipeExact(
-        Pipe,
-        IoEvent,
-        StopEvent,
-        bStopping,
-        BodyBytes.GetData(),
-        BodyLength))
-    {
-        return false;
-    }
-
-    const FString Body = UeNodeNexusBridge::BodyToString(BodyBytes);
-
-    FString ResponseString;
-    if (!UeNodeNexusBridge::DispatchNamedPipeRequest(Body, Pipe, bStopping, ResponseString))
-    {
-        return false;   // stopping mid-flight
-    }
-
-    const FTCHARToUTF8 Utf8(*ResponseString);
-    const uint32 RespLength = static_cast<uint32>(Utf8.Length());
-    uint8 RespLengthBytes[4];
-    RespLengthBytes[0] = static_cast<uint8>(RespLength & 0xFF);
-    RespLengthBytes[1] = static_cast<uint8>((RespLength >> 8) & 0xFF);
-    RespLengthBytes[2] = static_cast<uint8>((RespLength >> 16) & 0xFF);
-    RespLengthBytes[3] = static_cast<uint8>((RespLength >> 24) & 0xFF);
-
-    if (!UeNodeNexusBridge::WriteNamedPipeAll(
-        Pipe,
-        IoEvent,
-        StopEvent,
-        bStopping,
-        RespLengthBytes,
-        4))
-    {
-        return false;
-    }
-    if (RespLength > 0
-        && !UeNodeNexusBridge::WriteNamedPipeAll(
-            Pipe,
-            IoEvent,
-            StopEvent,
-            bStopping,
-            reinterpret_cast<const uint8*>(Utf8.Get()),
-            RespLength))
-    {
-        return false;
-    }
-    return true;
-}
 #else  // !PLATFORM_WINDOWS
 uint32 FUeNodeNexusBridgeNamedPipeServer::FWorker::Run()
 {

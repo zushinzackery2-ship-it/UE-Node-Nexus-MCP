@@ -108,12 +108,18 @@ def verify_wheel(wheel: Path, version: str) -> None:
             if f"ue_node_nexus_mcp/transcode/push/{module}.py" not in members:
                 raise RuntimeError(f"wheel missing sync module: {module}")
         source_root = ROOT / "src/ue_node_nexus_mcp"
+        expected_members = set()
         for path in source_root.rglob("*"):
             if not path.is_file() or path.suffix not in (".py", ".json", ".md") or "__pycache__" in path.parts:
                 continue
             member = "ue_node_nexus_mcp/" + path.relative_to(source_root).as_posix()
+            expected_members.add(member)
             if member not in members or archive.read(member) != path.read_bytes():
                 raise RuntimeError(f"wheel source differs or is missing: {member}")
+        unexpected = sorted(name for name in members if name.startswith("ue_node_nexus_mcp/")
+                            and not name.endswith("/") and name not in expected_members)
+        if unexpected:
+            raise RuntimeError(f"wheel contains unexpected package files; rebuild from clean source inputs: {unexpected}")
         if any("Task-Status" in member or ".high-value-information" in member for member in members):
             raise RuntimeError("wheel contains private workspace records")
 

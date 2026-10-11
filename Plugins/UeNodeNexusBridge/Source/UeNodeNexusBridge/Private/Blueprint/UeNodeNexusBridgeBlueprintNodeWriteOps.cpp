@@ -20,6 +20,14 @@ static TSharedPtr<FJsonObject> MakeBlueprintNodeError(const FString& Operation, 
 
 UClass* ResolveBlueprintNodeClassForCreate(const FString& NodeClass)
 {
+    if (NodeClass.IsEmpty())
+    {
+        return nullptr;
+    }
+    if (NodeClass == TEXT("GetInputActionValue") || NodeClass == TEXT("K2Node_GetInputActionValue"))
+    {
+        return LoadClass<UEdGraphNode>(nullptr, TEXT("/Script/InputBlueprintNodes.K2Node_GetInputActionValue"));
+    }
     if (NodeClass == TEXT("EnhancedInputAction") || NodeClass == TEXT("K2Node_EnhancedInputAction"))
     {
         return LoadClass<UEdGraphNode>(nullptr, TEXT("/Script/InputBlueprintNodes.K2Node_EnhancedInputAction"));

@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "UeNodeNexusBridgeSaveResult.h"
 #include "UeNodeNexusBridgeNiagaraModuleStack.h"
 
 #include "NiagaraEmitterHandle.h"
@@ -68,7 +69,8 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleAdd(const FString& Operation, const F
     TArray<UNiagaraNodeFunctionCall*> After;
     NiagaraModuleStack::GetOrderedModules(Output, After);
     const bool bChanged = !bDryRun && After.Num() > Before.Num();
-    const bool bSaved = bSave && bChanged && SaveAssetPackage(System);
+    const auto Save = SaveAssetWrite(System, bSave, bDryRun, bChanged);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
@@ -81,6 +83,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleAdd(const FString& Operation, const F
     Data->SetStringField(TEXT("node_guid"), Added ? Added->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens) : FString());
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 
@@ -114,7 +117,8 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleRemove(const FString& Operation, cons
     {
         NiagaraModuleStack::MarkSystemEdited(System);
     }
-    const bool bSaved = bSave && bRemoved && SaveAssetPackage(System);
+    const auto Save = SaveAssetWrite(System, bSave, bDryRun, bRemoved);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
@@ -124,6 +128,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleRemove(const FString& Operation, cons
     Data->SetStringField(TEXT("removed_function_name"), FunctionName);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 
@@ -165,7 +170,8 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleSetEnabled(const FString& Operation, 
         NiagaraModuleStack::MarkSystemEdited(System);
     }
     const bool bChanged = !bDryRun && bBefore != bEnabled;
-    const bool bSaved = bSave && bChanged && SaveAssetPackage(System);
+    const auto Save = SaveAssetWrite(System, bSave, bDryRun, bChanged);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
@@ -176,6 +182,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleSetEnabled(const FString& Operation, 
     Data->SetBoolField(TEXT("saved"), bSaved);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 }

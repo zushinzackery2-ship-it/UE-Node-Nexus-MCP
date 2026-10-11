@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from ...errors import SyncError
 from ...storage.io import atomic_write, canonical
-from ..workspace.files import capture_files, hashes
+from ..workspace.files import capture_files, discover, hashes
 from .findings import Findings
 from .resolutions import resolve_tree
 from .trees import merge_trees
@@ -52,6 +52,8 @@ class Sessions:
     def save(self, session: dict) -> dict:
         roots = [session["base"], session["ours"], session["theirs"], session["original"]["index"], session["original_files"]]
         roots.extend(session.get("candidates", dict()).values())
+        for source in session["metadata"].get("authored_sources", []):
+            roots.extend([source["tree"], *filter(None, source["originals"].values())])
         if session.get("result_commit"):
             roots.append(session["result_commit"])
         session["generation"] = self.store.put_record("session", session["id"], session, roots, session["generation"])
@@ -74,7 +76,8 @@ class Sessions:
         findings = Findings(self.history, self.workspace.schema)
         for layer, base, ours, theirs in self.stages(session):
             base, ours = candidates.get(base, base), candidates.get(ours, ours)
-            tree, found = merge_trees(self.history, base, ours, theirs, self.workspace.schema, session["selected"], layer)
+            selected = None if session["replay_layers"] and layer in ("index", "files") else session["selected"]
+            tree, found = merge_trees(self.history, base, ours, theirs, self.workspace.schema, selected, layer)
             tree = self.decide(session, tree, found, conflicts)
             all_conflicts.extend(found)
             candidates[layer] = findings.check_tree(session, tree, layer, (ours, theirs), conflicts, all_conflicts)
@@ -139,7 +142,7 @@ class Sessions:
                             dict(merge_id=session["id"], session_schema=session["schema_key"], current_schema=self.workspace.schema.key,
                                  abort=dict(action="abort", options=dict(merge_id=session["id"], dry_run=False)),
                                  retry=dict(action=session["operation"], options=dict(dry_run=False))))
-        changed = session["operation"] != "push" and (current["generation"] != original["generation"] or hashes(self.workspace.root, current["files"]) != session["original_hashes"])
+        changed = session["operation"] != "push" and (current["generation"] != original["generation"] or hashes(self.workspace.root, discover(self.workspace.root, current["files"])) != session["original_hashes"])
         if any(self.store.ref(ref) != value for ref, value in session["metadata"].get("refs", dict()).items()):
             changed = True
         if session.get("source_ref") and self.store.ref(session["source_ref"]) != session["theirs"]:
@@ -212,10 +215,14 @@ class Sessions:
             raise SyncError("unresolved_conflicts", "resolve all conflicts before continuing", self.report(session))
         candidate = session["candidates"]["head"]
         if session["metadata"].get("no_commit"):
+            from ..workspace.authored import projection_options
+
             session["metadata"]["projection_id"] = uuid4().hex
             self.save(session)
             self.workspace.install(session["original"]["head"], index=candidate,
-                                   files_tree=session["candidates"].get("files", candidate), reason=session["operation"], projection_id=session["metadata"]["projection_id"])
+                                   files_tree=session["candidates"].get("files", candidate), reason=session["operation"],
+                                   projection_id=session["metadata"]["projection_id"], project_assets=session["selected"],
+                                   **projection_options(self.workspace, session))
             session["status"] = "completed"
             return self.save(session)
         result = session.get("result_commit")
@@ -226,7 +233,8 @@ class Sessions:
             self.save(session)
         if self.workspace.state["head"] != result and not session["metadata"].get("deferred"):
             self.workspace.install(result, index=session["candidates"].get("index", candidate),
-                                   files_tree=session["candidates"].get("files", candidate), reason=session["operation"], base=result)
+                                   files_tree=session["candidates"].get("files", candidate), reason=session["operation"],
+                                   base=result, project_assets=session["selected"])
         session["status"] = "completed"
         return self.save(session)
 

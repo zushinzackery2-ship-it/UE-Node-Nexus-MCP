@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeBlueprintPatchOps.h"
 #include "Blueprint/Properties/NexusBlueprintNodeProperties.h"
+#include "Blueprint/Properties/NexusAnimGetterProperties.h"
 
 #include "Dom/JsonValue.h"
 #include "EdGraph/EdGraph.h"
@@ -61,7 +62,8 @@ TArray<TSharedPtr<FJsonValue>> BuildBlueprintNodeParams(UEdGraphNode* Node)
     }
     for (TFieldIterator<FProperty> It(Node->GetClass()); It; ++It)
     {
-        if (Transcode::IsEditableProperty(*It) && !Node->FindPin(It->GetFName(), EGPD_Input))
+        if ((Transcode::IsEditableProperty(*It) || IsAnimGetterBindingProperty(Node, *It))
+            && !Node->FindPin(It->GetFName(), EGPD_Input))
         {
             Params.Add(MakeShared<FJsonValueObject>(NodePropertyParamToJson(
                 It->GetName(), Transcode::ExportPropertyValue(Node, *It), true)));

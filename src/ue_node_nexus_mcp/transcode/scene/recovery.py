@@ -7,7 +7,7 @@ from typing import Any
 from ..sync.files import read_json, write_json
 from ..sync.project import ProjectContext, now_iso
 from ..errors import SyncError
-from ..text.values import values_equal
+from ..text.semantic import values_equal
 from .paths import storage
 from .state import SceneRecord
 

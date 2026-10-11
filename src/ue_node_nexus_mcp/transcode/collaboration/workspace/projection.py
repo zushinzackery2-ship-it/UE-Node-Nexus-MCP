@@ -45,7 +45,7 @@ def prepare(workspace, after: dict, texts: dict[str, bytes | None], reason: str,
             source = (sources or dict()).get(relative)
             old, new = blob(store, current), dict(snapshot=source) if source else blob(store, desired)
             journal["files"][relative] = dict(before=old, after=new)
-            roots.extend(item for item in (old, source) if item)
+            roots.extend(item for item in (old, source or new) if item)
         journal["roots"] = roots
         journal["generation"] = store.put_record("projection", journal["id"], journal, roots, expected=0)
     return journal
@@ -65,6 +65,20 @@ def execute(workspace, journal: dict, rollback: bool = False) -> dict:
         store.put_record("projection", journal["id"], journal, journal["roots"], journal["generation"])
         return journal
     expected_side, target_side = ("after", "before") if rollback else ("before", "after")
+    conflicts = write_files(workspace, journal, expected_side, target_side)
+    if conflicts:
+        journal.update(phase="local_restore_conflict", conflicts=conflicts)
+        journal["generation"] = store.put_record("projection", journal["id"], journal, journal["roots"], journal["generation"])
+        raise SyncError("local_restore_conflict", "new file edits were preserved; projection requires reconciliation", dict(projection_id=journal["id"], conflicts=conflicts))
+    if not rollback:
+        publish(workspace, journal)
+    journal["phase"] = "aborted" if rollback else "completed"
+    store.put_record("projection", journal["id"], journal, journal["roots"], journal["generation"])
+    return journal
+
+
+def write_files(workspace, journal, expected_side, target_side):
+    store = workspace.store
     conflicts = []
     for relative, versions in journal["files"].items():
         path = confined(workspace.root, relative)
@@ -79,28 +93,24 @@ def execute(workspace, journal: dict, rollback: bool = False) -> dict:
             path.unlink(missing_ok=True)
         else:
             atomic_write(path, target)
-    if conflicts:
-        journal.update(phase="local_restore_conflict", conflicts=conflicts)
-        journal["generation"] = store.put_record("projection", journal["id"], journal, journal["roots"], journal["generation"])
-        raise SyncError("local_restore_conflict", "new file edits were preserved; projection requires reconciliation", dict(projection_id=journal["id"], conflicts=conflicts))
-    if not rollback:
-        before, after = journal["before"], journal["after"]
-        try:
-            with store.db.connection(write=True) as connection:
-                if before["branch"] == after["branch"]:
-                    move_ref(connection, before["branch"], after["head"], before["head"], before["id"], journal["reason"])
-                else:
-                    from ..store.refs import get_ref
+    return conflicts
 
-                    if get_ref(connection, after["branch"]) != after["head"]:
-                        raise SyncError("branch_moved", "switch destination changed")
-                workspace.persist(after, expected=before["generation"], connection=connection)
-        except SyncError:
-            execute(workspace, journal, rollback=True)
-            raise
-    journal["phase"] = "aborted" if rollback else "completed"
-    store.put_record("projection", journal["id"], journal, journal["roots"], journal["generation"])
-    return journal
+
+def publish(workspace, journal):
+    before, after = journal["before"], journal["after"]
+    try:
+        with workspace.store.db.connection(write=True) as connection:
+            if before["branch"] == after["branch"]:
+                move_ref(connection, before["branch"], after["head"], before["head"], before["id"], journal["reason"])
+            else:
+                from ..store.refs import get_ref
+
+                if get_ref(connection, after["branch"]) != after["head"]:
+                    raise SyncError("branch_moved", "switch destination changed")
+            workspace.persist(after, expected=before["generation"], connection=connection)
+    except SyncError:
+        execute(workspace, journal, rollback=True)
+        raise
 
 
 def state_matches(current: dict, expected: dict, generation: int) -> bool:

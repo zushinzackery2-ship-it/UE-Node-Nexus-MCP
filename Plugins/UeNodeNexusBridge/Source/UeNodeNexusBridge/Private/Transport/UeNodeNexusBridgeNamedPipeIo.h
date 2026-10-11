@@ -19,6 +19,11 @@ bool WriteNamedPipeAll(
     FThreadSafeBool& Stopping,
     const uint8* Buffer,
     uint32 NumBytes);
+void AwaitNamedPipePeerClose(
+    void* PipeHandle,
+    void* IoEventHandle,
+    void* StopEventHandle,
+    FThreadSafeBool& Stopping);
 bool DispatchNamedPipeRequest(
     const FString& Body,
     void* PipeHandle,

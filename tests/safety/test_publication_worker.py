@@ -22,6 +22,7 @@ def test_worker_apply_has_transaction_and_worker_owned_readback(tmp_path, monkey
     worker = ValidationSession.__new__(ValidationSession)
     worker.project = tmp_path / "Project/Probe.uproject"
     worker.project.parent.mkdir()
+    worker.project.touch()
     calls = []
 
     def call(operation, payload):
@@ -40,3 +41,31 @@ def test_worker_apply_has_transaction_and_worker_owned_readback(tmp_path, monkey
     assert request["expected_absent"] and request["compile"] and request["save"]
     Path(request["out_dir"]).resolve().relative_to(worker.project.parent.resolve())
     Path(request["repository"]).resolve().relative_to(worker.project.parent.resolve())
+
+
+def test_multi_asset_worker_reuses_the_same_project_repository_binding(tmp_path):
+    worker = ValidationSession.__new__(ValidationSession)
+    worker.project = tmp_path / "Project/Probe.uproject"
+    worker.project.parent.mkdir()
+    worker.project.touch()
+    bindings, requests = [], []
+
+    def call(operation, payload):
+        if operation == "transcode_root_set":
+            if bindings:
+                expected = Path(payload["root"]) / worker.project.stem / ".nexus/collaboration"
+                if Path(payload["collaboration_root"]) != expected or bindings[0] != payload:
+                    return dict(ok=False, error=dict(code="repository_mismatch"))
+            bindings.append(payload)
+            return dict(ok=True, data=dict(collaboration_version=1))
+        if operation == "transcode_export":
+            return dict(ok=True, data=dict(assets=[], skipped=[dict(asset_path=payload["asset_paths"][0], reason="asset_not_found")]))
+        requests.append(payload)
+        return dict(ok=False, error=dict(code="deliberate_rejection"))
+
+    worker.call = call
+    for asset in ("/Game/First.First", "/Game/Second.Second"):
+        response = worker.execute(dict(operation="transcode_apply", payload=dict(asset_path=asset, kind="material", plan=[])))
+        assert response["error"]["code"] == "deliberate_rejection"
+    assert bindings[0] == bindings[1]
+    assert requests[0]["apply_id"] != requests[1]["apply_id"]

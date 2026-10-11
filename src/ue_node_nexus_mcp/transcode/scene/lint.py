@@ -13,6 +13,13 @@ from .model import from_document
 from .state import SceneRecord
 
 
+def validate_document(document, base=None, selected=None):
+    desired, aliases = from_document(document, base)
+    if base and selected is not None:
+        build_plan(base, desired, selected, True)
+    return desired, aliases
+
+
 def lint_scenes(context: ProjectContext, items: list[SceneRecord]) -> dict[str, Any]:
     rows, diagnostics = [], []
     for item in items:
@@ -22,9 +29,7 @@ def lint_scenes(context: ProjectContext, items: list[SceneRecord]) -> dict[str, 
             errors.extend(message.format() for message in sink.errors())
             if not errors:
                 base = read_base(context.project, item)
-                desired, _ = from_document(document, base)
-                if base:
-                    build_plan(base, desired, selector(item, base), True)
+                validate_document(document, base, selector(item, base) if base else None)
                 if document.header.schema and context.schema_key and document.header.schema != context.schema_key:
                     raise SyncError("schema_stale", "scene schema differs from the project lock")
         except (OSError, ValueError, SyncError) as exc:

@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 from ...errors import SyncError
 from .database import Database
+from .edges import require_registered
 from ...storage.io import OBJECT_ID, atomic_write, byte_hash, canonical, read_json
 
 
@@ -23,14 +24,14 @@ class Objects:
 
     def put(self, kind: str, data: Any, links: Iterable[str] = ()) -> str:
         targets = sorted(set(item for item in links if item))
-        for target in targets:
-            self.get(target)
         payload = canonical(dict(format=1, kind=kind, data=data, links=targets))
         object_id = byte_hash(payload)
         path = self.path(object_id)
         # Materializing and registering inside one write transaction excludes the
         # collector: an object can never be half-created while it is being swept.
         with self.database.connection(write=True) as connection:
+            for target in targets:
+                self.require(target, connection)
             if path.exists():
                 self.get(object_id, kind)
             else:
@@ -39,6 +40,11 @@ class Objects:
             connection.execute("UPDATE objects SET unreachable=NULL WHERE id=?", (object_id,))
             connection.execute("DELETE FROM tombstones WHERE id=?", (object_id,))
         return object_id
+
+    def require(self, object_id: str, connection, kind: str | None = None) -> dict:
+        """Validate a new edge while its writer excludes a committed sweep."""
+        require_registered(connection, object_id)
+        return self.get(object_id, kind)
 
     def exists(self, object_id) -> bool:
         """Whether a remembered identifier still names stored bytes."""

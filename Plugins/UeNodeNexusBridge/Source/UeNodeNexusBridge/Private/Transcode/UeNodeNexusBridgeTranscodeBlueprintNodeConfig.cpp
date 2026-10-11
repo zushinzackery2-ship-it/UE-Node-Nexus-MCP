@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Blueprint/Input/NexusEnhancedInputValue.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -118,7 +119,7 @@ TSharedPtr<FJsonObject> NodeConfigJson(UBlueprint* Blueprint, UEdGraphNode* Node
     {
         Config->SetStringField(TEXT("dynamic_pins"), FString::FromInt(CountDataInputs(Node)));
     }
-    else if (Node->GetClass()->GetName() == TEXT("K2Node_EnhancedInputAction"))
+    if (Node->GetClass()->GetName() == TEXT("K2Node_EnhancedInputAction") || IsEnhancedInputValueClass(Node->GetClass()))
     {
         FProperty* Property = Node->GetClass()->FindPropertyByName(TEXT("InputAction"));
         if (FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))

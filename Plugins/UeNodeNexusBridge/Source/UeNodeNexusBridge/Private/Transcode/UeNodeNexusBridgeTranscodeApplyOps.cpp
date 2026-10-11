@@ -5,10 +5,13 @@
 #include "Diagnostics/Compilation/UeNodeNexusBridgeCompilation.h"
 
 #include "Engine/Blueprint.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialFunction.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UObject/Package.h"
+#include "UObject/StrongObjectPtr.h"
 #include "UeNodeNexusBridgeDiagnostics.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -81,6 +84,8 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
         }
     }
     bool bCreated = false;
+    bool bWouldCreate = false;
+    TStrongObjectPtr<UObject> CreatedPreview;
     if (Asset == nullptr)
     {
         if (!bCreate)
@@ -96,20 +101,34 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
             {
                 return MakeOperationError(Operation, RequestId, TEXT("create_failed"), Error);
             }
-            TSharedPtr<FJsonObject> DryData = MakeShared<FJsonObject>();
-            DryData->SetBoolField(TEXT("dry_run"), true);
-            DryData->SetBoolField(TEXT("would_create"), true);
-            DryData->SetNumberField(TEXT("applied"), 0);
-            TSharedPtr<FJsonObject> DryResponse = MakeEnvelope(Operation, RequestId, true);
-            DryResponse->SetObjectField(TEXT("data"), DryData);
-            return DryResponse;
+            if (Kind == TEXT("material") || Kind == TEXT("material_function"))
+            {
+                CreatedPreview.Reset(Kind == TEXT("material")
+                    ? static_cast<UObject*>(NewObject<UMaterial>())
+                    : static_cast<UObject*>(NewObject<UMaterialFunction>()));
+                Asset = CreatedPreview.Get();
+                bWouldCreate = true;
+            }
+            else
+            {
+                TSharedPtr<FJsonObject> DryData = MakeShared<FJsonObject>();
+                DryData->SetBoolField(TEXT("dry_run"), true);
+                DryData->SetBoolField(TEXT("would_create"), true);
+                DryData->SetNumberField(TEXT("applied"), 0);
+                TSharedPtr<FJsonObject> DryResponse = MakeEnvelope(Operation, RequestId, true);
+                DryResponse->SetObjectField(TEXT("data"), DryData);
+                return DryResponse;
+            }
         }
-        Asset = CreateAssetForKind(AssetPath, Kind, *Plan, AssetClass, Error);
-        if (Asset == nullptr)
+        else
         {
-            return MakeOperationError(Operation, RequestId, TEXT("create_failed"), Error);
+            Asset = CreateAssetForKind(AssetPath, Kind, *Plan, AssetClass, Error);
+            if (Asset == nullptr)
+            {
+                return MakeOperationError(Operation, RequestId, TEXT("create_failed"), Error);
+            }
+            bCreated = true;
         }
-        bCreated = true;
     }
     const FString ActualKind = KindForClass(Asset->GetClass());
     if (ActualKind != Kind)
@@ -171,6 +190,7 @@ static TSharedPtr<FJsonObject> ApplyAsset(const FString& Operation, const FStrin
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("created"), bCreated);
+    Data->SetBoolField(TEXT("would_create"), bWouldCreate);
     Data->SetNumberField(TEXT("applied"), Plan->Num() - Context.Failures.Num());
     Data->SetBoolField(TEXT("changed"), Context.bChanged);
     TArray<TSharedPtr<FJsonValue>> Failed;

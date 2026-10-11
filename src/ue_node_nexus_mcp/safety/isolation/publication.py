@@ -9,15 +9,17 @@ from uuid import uuid4
 
 from ...instances.errors import require
 from ...transcode.storage.paths import object_path
+from ...instances.identity.paths import project_identity
 
 
 def execute(session, item: dict) -> dict:
     identifier = uuid4().hex
     root = session.project.parent / "Saved/Nexus/ValidationPublication"
     root.mkdir(parents=True, exist_ok=True)
-    repository = root / "Repository"
-    repository.mkdir(exist_ok=True)
-    bound = session.call("transcode_root_set", dict(root=str(root), collaboration_root=str(repository), project_id=identifier))
+    repository = root / session.project.stem / ".nexus/collaboration"
+    repository.mkdir(parents=True, exist_ok=True)
+    identity = project_identity(session.project)
+    bound = session.call("transcode_root_set", dict(root=str(root), collaboration_root=str(repository), project_id=identity["project_key"]))
     require(bound.get("ok") and bound.get("data", dict()).get("collaboration_version") == 1,
             "isolation_protocol_mismatch", "worker could not bind its publication repository", response=bound)
     payload = deepcopy(item["payload"])

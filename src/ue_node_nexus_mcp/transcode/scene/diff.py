@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..errors import SyncError
-from ..text.values import values_equal
+from ..text.semantic import values_equal
 from .validation import hierarchy
 
 

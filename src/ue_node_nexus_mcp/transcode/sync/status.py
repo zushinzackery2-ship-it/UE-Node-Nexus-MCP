@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..storage.paths import object_path, parse_text_path
+from ..storage.ignore.policy import IgnorePolicy
 from .state import AssetState, SyncState, UeAssetInfo, classify
 from .files import canonical_hash, mirrored_assets, read_text
 from .project import BridgeCall, ProjectContext, call_ok
@@ -30,12 +31,6 @@ class AssetStatus:
         if self.ue is not None and self.record is not None:
             saved_changed = bool(self.ue.saved_hash and self.ue.saved_hash != self.record.ue_saved_hash)
         return [self.asset_path, self.kind, self.state, self.ue.dirty if self.ue else None, saved_changed]
-
-
-def _known_assets(context: ProjectContext, state: SyncState) -> set[str]:
-    known = set(mirrored_assets(context.project))
-    known.update(state.assets)
-    return known
 
 
 def _expand_game_path(text: str, known: set[str]) -> list[str]:
@@ -68,10 +63,12 @@ def _locate_mirror_path(context: ProjectContext, text: str) -> Path | None:
 
 def resolve_selection(context: ProjectContext, paths: list[str] | None, state: SyncState) -> list[str]:
     """Turn user paths (asset paths, mirror files or directories) into object paths."""
-    known = _known_assets(context, state)
+    local = mirrored_assets(context.project, state)
+    known = set(local)
     if not paths:
         return sorted(known)
     selected: list[str] = []
+    policy = None
     for item in paths:
         text = item.strip()
         if not text:
@@ -84,9 +81,22 @@ def resolve_selection(context: ProjectContext, paths: list[str] | None, state: S
             raise SyncError("invalid_path", f"no such mirror file or directory: {item}", {"tried": ["<absolute>", "<project dir>", "<mirror root>", "<cwd>"]})
         if path.is_dir():
             root = path.resolve()
-            selected.extend(asset_path for asset_path, (_, file) in mirrored_assets(context.project).items() if file.resolve().is_relative_to(root))
+            selected.extend(asset_path for asset_path, (_, file) in local.items() if file.resolve().is_relative_to(root))
             continue
+        resolved = path.resolve()
         parsed = parse_text_path(context.project, path)
+        if parsed is not None and parsed[0] in local:
+            selected.append(parsed[0])
+            continue
+        if parsed is None:
+            registered = next((asset for asset, (_, file) in local.items() if file == resolved), None)
+            if registered is not None:
+                selected.append(registered)
+                continue
+        if resolved.is_relative_to(context.project.resolve()):
+            policy = policy or IgnorePolicy.load(context.project)
+            if policy.ignored(resolved.relative_to(context.project.resolve()).parts):
+                raise SyncError("path_ignored", f"mirror file is ignored: {item}", dict(file=str(path)))
         if parsed is None:
             raise SyncError("invalid_path", f"not a /Game asset path or a mirror file: {item}")
         selected.append(parsed[0])
@@ -115,7 +125,7 @@ def query_ue(bridge: BridgeCall, context: ProjectContext, asset_paths: list[str]
 
 
 def compute_status(context: ProjectContext, state: SyncState, asset_paths: list[str], ue_infos: dict[str, UeAssetInfo], ue_known: bool) -> list[AssetStatus]:
-    local = mirrored_assets(context.project)
+    local = mirrored_assets(context.project, state)
     statuses: list[AssetStatus] = []
     for asset_path in asset_paths:
         record = state.get(asset_path)

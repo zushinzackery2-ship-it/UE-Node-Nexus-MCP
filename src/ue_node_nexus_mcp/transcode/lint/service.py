@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..errors import DiagnosticSink
+from ..errors import DiagnosticSink, SyncError
 from .blueprint import lint_blueprint
 from .lookup import AMBIGUOUS, lookup
 from .material import lint_material_graph
@@ -18,6 +18,7 @@ KIND_CLASS = {
     "blueprint": ("Blueprint", "AnimBlueprint"),
     "niagara_system": ("NiagaraSystem",),
     "niagara_emitter": ("NiagaraEmitter",),
+    "scene": ("World",),
 }
 ALLOWED_SECTIONS = {
     "material": {"asset", "graph"},
@@ -36,6 +37,14 @@ BARE_SECTIONS = {"dispatchers", "interfaces"}
 def lint_document(document: Document, kind: str, schema: SchemaLock | None, file: str | None = None, current_key: str | None = None) -> DiagnosticSink:
     sink = DiagnosticSink(file=file)
     _lint_header(document, kind, sink, current_key)
+    if kind == "scene":
+        from ..scene.lint import validate_document
+
+        try:
+            validate_document(document)
+        except SyncError as exc:
+            sink.error(exc.code, str(exc), line=exc.details.get("line"))
+        return sink
     _lint_structure(document, kind, sink)
     if sink.has_errors:
         return sink

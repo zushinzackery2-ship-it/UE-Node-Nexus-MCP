@@ -8,6 +8,7 @@
 #include "UeNodeNexusCollaboration.h"
 #include "NiagaraEmitter.h"
 #include "NiagaraSystem.h"
+#include "Niagara/Recovery/NexusNiagaraCheckpoint.h"
 
 IMPLEMENT_MODULE(FUeNodeNexusVfxBridgeModule, UeNodeNexusVfxBridge)
 
@@ -76,7 +77,7 @@ void FUeNodeNexusVfxBridgeModule::StartupModule()
         Missing->SetStringField(TEXT("asset_path"), Path);
         return TSharedPtr<FJsonObject>(Missing);
     };
-    UeNodeNexusBridge::Collaboration::RegisterObserver(TEXT("niagara_system"), Observer);
+    UeNodeNexusBridge::Collaboration::RegisterObserver(TEXT("niagara_system"), Observer, UeNodeNexusBridge::NiagaraCheckpoint::Prepare);
     UeNodeNexusBridge::Collaboration::RegisterObserver(TEXT("niagara_emitter"), Observer);
     for (const FVfxOperation& Operation : VfxOperations())
     {

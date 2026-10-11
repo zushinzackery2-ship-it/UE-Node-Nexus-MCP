@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "NexusBlueprintAssetType.h"
+#include "Blueprint/Components/NexusNativeComponentTemplates.h"
 
 #include "Components/ActorComponent.h"
 #include "EdGraph/EdGraph.h"
@@ -25,6 +26,15 @@ static TSharedPtr<FJsonObject> ComponentJson(const FString& Name, const FString&
     Json->SetStringField(TEXT("parent"), Parent);
     Json->SetStringField(TEXT("socket"), Socket);
     Json->SetBoolField(TEXT("inherited"), bInherited);
+    if (bInherited)
+    {
+        TArray<TSharedPtr<FJsonValue>> Aliases;
+        for (const FString& Alias : NativeComponentAliases(Template))
+        {
+            Aliases.Add(MakeShared<FJsonValueString>(Alias));
+        }
+        Json->SetArrayField(TEXT("native_aliases"), Aliases);
+    }
     Json->SetArrayField(TEXT("props"), Template ? ExportEditableProps(Template, Defaults) : TArray<TSharedPtr<FJsonValue>>());
     return Json;
 }

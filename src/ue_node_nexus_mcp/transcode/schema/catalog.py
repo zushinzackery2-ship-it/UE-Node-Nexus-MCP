@@ -9,6 +9,8 @@ from ..storage.io import atomic_write, canonical, digest, read_json, confined
 from ..errors import SyncError
 from .names import CLASS_TIERS, OWNER_TIERS, RECORD_TIERS, class_spellings
 from .records import FAMILIES, normalize
+from .progress import scope
+from ..storage.metrics import measure
 
 # The first release wrote one table per family; ``migrate`` reads them.
 LEGACY_FILES = dict(material_expression="classes.material_expression.json", k2node="classes.k2node.json",
@@ -48,6 +50,12 @@ def legacy_tables(source: Path) -> dict:
 
 
 def _publish(directory, key, tables, environment, coverage, incremental) -> dict:
+    with scope(key) as progress:
+        progress.begin("migration", sum(len(records) for records in tables.values()))
+        return _publish_records(directory, key, tables, environment, coverage, incremental, progress)
+
+
+def _publish_records(directory, key, tables, environment, coverage, incremental, progress) -> dict:
     old = read_json(directory / "key.json") if (directory / "key.json").is_file() else dict()
     index = dict(old.get("tables", dict())) if incremental else dict()
     for family, records in tables.items():
@@ -69,19 +77,29 @@ def _publish(directory, key, tables, environment, coverage, incremental) -> dict
             record_hash = digest(record)
             filename = re.sub(r"[^A-Za-z0-9_.-]", "_", record["path"])[-100:]
             path = f"{FAMILIES[family]}/{filename}.{record_hash}.json"
-            if not (directory / path).is_file():
+            with measure("lookup"):
+                exists = (directory / path).is_file()
+            if not exists:
                 atomic_write(directory / path, canonical(record))
             entries[name] = dict(file=path, hash=record_hash, path=record["path"], aliases=record["aliases"],
                                  category=record["category"], coverage=record["coverage"], bridge=record["bridge"],
                                  deprecated=bool(record.get("deprecated")))
+            progress.advance(family)
         index[family] = entries
     manifest = dict(format=2, key=key, environment=environment or old.get("environment", dict()),
                     generation=old.get("generation", 0) + 1, tables=index,
                     coverage=coverage or old.get("coverage", dict()), contexts=old.get("contexts", dict()))
     manifest["content_hash"] = digest(dict(tables=index, environment=manifest["environment"]))
+    progress.phase = "manifest"
+    progress.emit(force=True)
     atomic_write(directory / "indexes" / f"{manifest['content_hash']}.json", canonical(manifest))
+    progress.emit(force=True)
     atomic_write(directory / "key.json", canonical(manifest))
+    progress.phase = "documentation"
+    progress.emit(force=True)
     markdown(directory, manifest)
+    progress.phase = "ready"
+    progress.emit(force=True)
     return manifest
 
 

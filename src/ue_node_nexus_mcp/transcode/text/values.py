@@ -20,6 +20,15 @@ _UNESCAPES = {"\\": "\\", '"': '"', "n": "\n", "r": "\r", "t": "\t"}
 STRING_TYPES = {"FString", "FName", "FText"}
 
 
+class QuotedValue(str):
+    """Decoded content whose quoting must survive a type-free parse/emit."""
+
+
+def is_string_type(type_name) -> bool:
+    name = type_name.get("type", "") if isinstance(type_name, dict) else type_name or ""
+    return name.rstrip("&").lower() in ("fstring", "string", "str", "fname", "name", "ftext", "text")
+
+
 def _strip_number(match: re.Match[str]) -> str:
     integer, fraction = match.group(1), match.group(2).rstrip("0")
     return integer if not fraction else f"{integer}.{fraction}"
@@ -44,12 +53,6 @@ def _find_quote_end(text: str, start: int) -> int:
             return index + 1
         index += 1
     return len(text)
-
-
-def values_equal(left: str | None, right: str | None) -> bool:
-    if left is None or right is None:
-        return left is right
-    return normalize_value(left) == normalize_value(right)
 
 
 def quote(raw: str) -> str:
@@ -164,14 +167,17 @@ def _has_unterminated_quote(raw: str) -> bool:
     return False
 
 
-def format_value(raw: str) -> str:
+def format_value(raw: str, type_name=None) -> str:
     """Render a raw import-text value for the text format.
 
-    Quoting is decided purely by content so that ``emit(parse(text))`` is
-    stable without type information: simple tokens, paths, enum names and
-    balanced ``(...)`` structs stay verbatim, everything else is quoted.
-    Numeric tokens are normalized (``1.000000`` -> ``1``).
+    Reflected strings keep their content. Parsed quoted values retain their
+    syntax when no type is available; numeric normalization applies to values
+    outside those string boundaries.
     """
+    if is_string_type(type_name):
+        return quote(raw) if needs_quotes(raw) or normalize_display(raw) != raw else raw
+    if not type_name and isinstance(raw, QuotedValue):
+        return quote(raw)
     if needs_quotes(raw):
         return quote(raw)
     return normalize_display(raw)
@@ -198,7 +204,7 @@ def parse_value(token: str) -> str:
     """Inverse of :func:`format_value`: quoted text is unescaped, else verbatim."""
     token = token.strip()
     if token.startswith('"'):
-        return unquote(token)
+        return QuotedValue(unquote(token))
     return token
 
 

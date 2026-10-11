@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from ..errors import SyncError
+from .metrics import measure, written
 
 OBJECT_ID = re.compile(r"^[0-9a-f]{64}$")
 # Object files fan out over 256 fixed directories, so a write batch asked the
@@ -39,25 +40,33 @@ def byte_hash(value: bytes) -> str:
 
 
 def atomic_write(path: Path, data: bytes) -> None:
-    ensure_directory(path.parent)
+    with measure("lookup"):
+        ensure_directory(path.parent)
     try:
-        fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        with measure("create"):
+            fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     except FileNotFoundError:
         _DIRECTORIES.discard(str(path.parent))
         ensure_directory(path.parent)
-        fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        with measure("create"):
+            fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
+            with measure("write"):
+                stream.write(data)
+            with measure("flush"):
+                stream.flush()
+                os.fsync(stream.fileno())
+        with measure("replace"):
+            os.replace(temporary, path)
         if os.name != "nt":
             directory = os.open(path.parent, os.O_RDONLY)
             try:
-                os.fsync(directory)
+                with measure("flush"):
+                    os.fsync(directory)
             finally:
                 os.close(directory)
+        written(len(data))
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)

@@ -56,7 +56,7 @@ class FunctionSignature:
 def _param_text(param: SignatureParam) -> str:
     text = f"{param.name}: {param.type_text}"
     if param.default not in (None, ""):
-        text += f" = {format_value(param.default)}"
+        text += f" = {format_value(param.default, param.type_text)}"
     return text
 
 

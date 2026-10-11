@@ -9,10 +9,12 @@ from ...text.model import Document
 from ...raw.simple import INSTANCE_TYPES
 from ...errors import SyncError
 from .contracts import same_contract
-from .blueprint import declaration_default, input_metadata, positional_values, signature, signature_contracts
+from .blueprint import declaration_default, positional_values, signature, signature_contracts
+from ...blueprint.input_values import input_metadata
 from .identity import Identities
 from .links import encode_links
 from ...text.semantic import field_values, value
+from ...material.custom_inputs import normalize_args
 
 # Sections whose declarations carry a property block instead of named arguments.
 PROPERTY_SECTIONS = ("components", "actors", "instances", "renderers")
@@ -135,7 +137,8 @@ def entity_state(decl, section: str, metadata: dict, old: dict, context: Encodin
     # Host spellings of one call are one state; the bridge picks the host.
     entity = dict(alias=decl.id, type=class_name,
                   positional=[value(text) for text in positional_values(decl, family, metadata, context.schema)],
-                  args=field_values(decl.keyed(), types, dict() if prop_style else defaults, previous.get("args")),
+                  args=field_values(normalize_args(decl, decl.keyed()) if context.kind in ("material", "material_function") else decl.keyed(),
+                                    types, dict() if prop_style else defaults, previous.get("args")),
                   props=field_values(decl.prop_map(), types, defaults if prop_style else dict(), previous.get("props")),
                   default=declaration_default(decl, context.kind, section, class_name),
                   position=list(decl.pos) if decl.pos else old.get("position"),
@@ -155,12 +158,7 @@ def normalize_references(sections: dict, kind: str) -> None:
         if section["name"] == "variables":
             variables.update(aliases)
         for entity in section["entities"].values():
-            for namespace in ("args", "props"):
-                for key in ("Parent", "parent"):
-                    field = entity[namespace].get(key)
-                    if field and field.get("value") in aliases:
-                        field["ref"] = aliases[field["value"]]
-                        field.pop("value")
+            parent_references(entity, aliases)
     for section in sections.values():
         if kind == "scene" and section["name"] == "components" and section["args"] in actor_aliases:
             section["owner"] = actor_aliases[section["args"]]
@@ -172,3 +170,11 @@ def normalize_references(sections: dict, kind: str) -> None:
                 field = entity["positional"][0]
                 if field.get("value") in visible:
                     field["ref"] = visible[field.pop("value")]
+
+
+def parent_references(entity, aliases):
+    for namespace in ("args", "props"):
+        for key in ("Parent", "parent"):
+            field = entity[namespace].get(key)
+            if field and field.get("value") in aliases:
+                field["ref"] = aliases[field.pop("value")]

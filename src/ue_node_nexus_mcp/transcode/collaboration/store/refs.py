@@ -7,6 +7,7 @@ import sqlite3
 import time
 
 from ...errors import SyncError
+from .edges import require_registered
 
 REF_NAME = re.compile(r"^refs/[A-Za-z0-9_./-]+$")
 
@@ -24,6 +25,8 @@ def get_ref(connection: sqlite3.Connection, name: str) -> str | None:
 def move_ref(connection: sqlite3.Connection, name: str, target: str | None, expected: str | None,
              actor: str = "", reason: str = "") -> None:
     validate_ref(name)
+    if target:
+        require_registered(connection, target)
     actual = get_ref(connection, name)
     if actual != expected:
         raise SyncError("branch_moved", f"{name} moved since it was read", dict(ref=name, expected=expected, actual=actual))

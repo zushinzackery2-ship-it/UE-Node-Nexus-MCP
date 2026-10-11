@@ -113,14 +113,15 @@ bool AttachComponentNode(UBlueprint* Blueprint, USCS_Node* Node, const FString& 
     }
     else
     {
-        if (Cast<USceneComponent>(FindNativeComponentTemplate(Blueprint, FName(*Parent))) == nullptr)
+        const auto* Native = Cast<USceneComponent>(FindNativeComponentTemplate(Blueprint, FName(*Parent)));
+        if (Native == nullptr)
         {
             OutError = FString::Printf(TEXT("scene component parent not found: %s"), *Parent);
             return false;
         }
         Scs->AddNode(Node);
         Node->bIsParentComponentNative = true;
-        Node->ParentComponentOrVariableName = FName(*Parent);
+        Node->ParentComponentOrVariableName = Native->GetFName();
         Node->ParentComponentOwnerClassName = Blueprint->ParentClass ? Blueprint->ParentClass->GetFName() : NAME_None;
     }
     Node->AttachToName = Socket.IsEmpty() ? NAME_None : FName(*Socket);
@@ -184,6 +185,17 @@ bool ApplyVariableVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
 
 bool ApplyComponentVerb(UBlueprint* Blueprint, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError)
 {
+    if (Verb == TEXT("bp_component_bind"))
+    {
+        auto* Template = FindNativeComponentTemplate(Blueprint, FName(*ReadOpString(Op, TEXT("name"))));
+        UClass* Class = ResolveClassByNameOrPath(ReadOpString(Op, TEXT("class")));
+        if (!Template || !Class || !Template->IsA(Class))
+        {
+            OutError = TEXT("inherited component declaration does not match the parent CDO: ") + ReadOpString(Op, TEXT("name"));
+            return false;
+        }
+        return true;
+    }
     USimpleConstructionScript* Scs = Blueprint->SimpleConstructionScript;
     if (Scs == nullptr)
     {

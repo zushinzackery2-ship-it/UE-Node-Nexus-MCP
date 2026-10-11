@@ -5,6 +5,8 @@
 #include "K2Node_CallDataTableFunction.h"
 #include "K2Node_CallFunction.h"
 #include "K2Node_CallMaterialParameterCollectionFunction.h"
+#include "Blueprint/Input/NexusEnhancedInputValue.h"
+#include "EnhancedInputLibrary.h"
 
 namespace UeNodeNexusBridge
 {
@@ -13,7 +15,8 @@ bool IsCallHostClass(const UClass* NodeClass)
     return NodeClass == UK2Node_CallFunction::StaticClass()
         || NodeClass == UK2Node_CallArrayFunction::StaticClass()
         || NodeClass == UK2Node_CallDataTableFunction::StaticClass()
-        || NodeClass == UK2Node_CallMaterialParameterCollectionFunction::StaticClass();
+        || NodeClass == UK2Node_CallMaterialParameterCollectionFunction::StaticClass()
+        || (IsEnhancedInputValueClass(NodeClass) && NodeClass->IsChildOf(UK2Node_CallFunction::StaticClass()));
 }
 
 UClass* CallHostClassFor(const UFunction* Function)
@@ -24,6 +27,11 @@ UClass* CallHostClassFor(const UFunction* Function)
     if (Function == nullptr)
     {
         return UK2Node_CallFunction::StaticClass();
+    }
+    if (Function->GetOwnerClass() == UEnhancedInputLibrary::StaticClass()
+        && Function->GetFName() == GET_FUNCTION_NAME_CHECKED(UEnhancedInputLibrary, GetBoundActionValue))
+    {
+        return LoadObject<UClass>(nullptr, TEXT("/Script/InputBlueprintNodes.K2Node_InputActionValueAccessor"));
     }
     if (Function->HasMetaData(FBlueprintMetadata::MD_MaterialParameterCollectionFunction))
     {
@@ -70,6 +78,11 @@ bool SelectCallHostClass(UClass*& InOutClass, const UFunction* Function, FString
         return false;
     }
     UClass* Required = CallHostClassFor(Function);
+    if (!Required)
+    {
+        OutError = TEXT("required function host class is unavailable");
+        return false;
+    }
     if (InOutClass != UK2Node_CallFunction::StaticClass() && InOutClass != Required)
     {
         OutError = FString::Printf(TEXT("%s cannot call %s.%s; its metadata requires %s (write CallFunction and the bridge chooses)"),

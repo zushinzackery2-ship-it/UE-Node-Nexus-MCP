@@ -17,11 +17,11 @@ from ....diagnostics.contracts.observation import capture
 from ....diagnostics.contracts.notice import normalize
 from ....diagnostics.contracts.workflows import attach_report, stored_fields
 from ....diagnostics.contracts.response import DIAGNOSTIC_FIELDS
+from .queue_contract import submission_callable
+from .reconciliation import reconcile
 
 
-def submit(store, action, paths, options, runner, scope=None):
-    from ....task_queue import submit_callable
-
+def submit(store, action, paths, options, runner, scope=None, on_submit=None):
     key = options.pop("idempotency_key", None)
     request = dict(action=action, paths=paths, options=deepcopy(options))
     request_id = digest(dict(workspace_id=options.get("workspace_id"), key=key)) if key else None
@@ -30,22 +30,29 @@ def submit(store, action, paths, options, runner, scope=None):
         if previous:
             if previous["digest"] != digest(request):
                 raise SyncError("idempotency_conflict", "sync job key parameters changed")
-            if scope:
-                scope.release()
             return observe(store, "job_status", dict(job_id=previous["job_id"]))
+        submit_callable = submission_callable()
         record = create(store, action, paths, options)
         if request_id:
             store.put_record("sync_job_request", request_id, dict(job_id=record["id"], digest=digest(request)))
+        accepted = False
+
+        def queued(identifier):
+            nonlocal accepted
+            update(store, record["id"], task_id=identifier)
+            if on_submit:
+                on_submit(identifier)
+            accepted = True
+
         try:
-            task_id = submit_callable("ue_sync_" + action, lambda: execute(store, record["id"], runner), scope,
-                                      lambda: cancel_queued(store, record["id"]),
-                                      lambda task: finish_failed_task(store, record["id"], task))
-        except InstanceError as exc:
-            update(store, record["id"], status="failed", error=dict(code=exc.code, message=str(exc)), finished_at=time.time())
-            if scope:
-                scope.release()
+            submit_callable("ue_sync_" + action, lambda: execute(store, record["id"], runner), scope,
+                            lambda: cancel_queued(store, record["id"]),
+                            lambda task: finish_failed_task(store, record["id"], task), on_submit=queued)
+        except Exception as exc:
+            if not accepted:
+                update(store, record["id"], status="failed",
+                       error=dict(code=getattr(exc, "code", "sync_job_submit_failed"), message=str(exc)), finished_at=time.time())
             raise
-        update(store, record["id"], task_id=task_id)
     return observe(store, "job_status", dict(job_id=record["id"]))
 
 
@@ -92,10 +99,12 @@ def execute(store, identifier, runner):
 
 
 def finish_failed_task(store, identifier, task):
-    record = store.record("sync_job", identifier)
-    if record["status"] not in TERMINAL:
-        update(store, identifier, status="failed", error=task.error, finished_at=time.time())
-    store.db.discard()
+    try:
+        record = store.record("sync_job", identifier)
+        if record["status"] not in TERMINAL:
+            update(store, identifier, status="failed", error=task.error, finished_at=time.time())
+    finally:
+        store.db.discard()
 
 
 def cancel_queued(store, identifier):
@@ -109,6 +118,7 @@ def observe(store, action, options):
     record = store.record("sync_job", identifier)
     if record is None:
         raise SyncError("job_not_found", identifier)
+    record = reconcile(store, record)
     if record["status"] not in TERMINAL and not is_alive(record["owner"]):
         record = update(store, identifier, status="interrupted", stage="owner_exited", finished_at=time.time())
     if action == "job_cancel" and record["status"] not in TERMINAL:
@@ -130,7 +140,7 @@ def observe(store, action, options):
 
 def report(record):
     keys = ("workspace_id", "operation", "status", "submitted_at", "started_at", "finished_at", "source_commit",
-            "stage", "current_asset", "completed_assets", "deadline_at", "cancel_requested", "error", *DIAGNOSTIC_FIELDS)
+            "stage", "schema_progress", "updated_at", "current_asset", "completed_assets", "deadline_at", "cancel_requested", "error", *DIAGNOSTIC_FIELDS)
     result = dict((key, record[key]) for key in keys if key in record)
     result.update(action="job_status", job_id=record["id"], durable=True,
                   next=dict(action="job_result" if record.get("result_id") else "job_status", options=dict(job_id=record["id"])))

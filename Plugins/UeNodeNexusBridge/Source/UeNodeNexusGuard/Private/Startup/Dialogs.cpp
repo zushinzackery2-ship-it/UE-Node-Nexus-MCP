@@ -1,4 +1,5 @@
 #include "Dialogs.h"
+#include "SlateDialogs.h"
 #include "../Control/State.h"
 
 #include "HAL/PlatformMisc.h"
@@ -192,10 +193,11 @@ void AppendStatus(const TSharedPtr<FJsonObject>& Status)
 {
     const FDialogs& D = Get();
     // Copies: the answering thread keeps writing the records after this lock.
-    Status->SetBoolField(TEXT("waiting_for_user"), !D.Open.IsEmpty());
-    if (!D.Open.IsEmpty())
+    const auto Open = OpenLocked();
+    Status->SetBoolField(TEXT("waiting_for_user"), Open.IsValid());
+    if (Open)
     {
-        Status->SetObjectField(TEXT("blocking_dialog"), MakeShared<FJsonObject>(*D.Open.Last()));
+        Status->SetObjectField(TEXT("blocking_dialog"), Open);
     }
     TArray<TSharedPtr<FJsonValue>> Notices;
     for (const TSharedPtr<FJsonObject>& Notice : D.Notices)
@@ -210,7 +212,7 @@ TSharedPtr<FJsonObject> OpenLocked()
     const FDialogs& D = Get();
     if (D.Open.IsEmpty())
     {
-        return nullptr;
+        return SlateDialogs::OpenLocked();
     }
     return MakeShared<FJsonObject>(*D.Open.Last());
 }

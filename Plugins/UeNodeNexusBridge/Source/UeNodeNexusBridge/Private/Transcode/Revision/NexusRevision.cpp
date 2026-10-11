@@ -12,7 +12,13 @@ namespace UeNodeNexusBridge::Collaboration
 {
 namespace
 {
-TMap<FString, FObserver> Observers;
+struct FObservedAsset
+{
+    FObserver Observer;
+    FCheckpointPreparation Preparation;
+};
+
+TMap<FString, FObservedAsset> Observers;
 
 FString Quote(const FString& Text)
 {
@@ -99,14 +105,29 @@ FJson StampRaw(const FJson& Raw)
     return Raw;
 }
 
-void RegisterObserver(const FString& Kind, FObserver Observer)
+void RegisterObserver(const FString& Kind, FObserver Observer, FCheckpointPreparation Preparation)
 {
-    Observers.Add(Kind, MoveTemp(Observer));
+    FObservedAsset Provider;
+    Provider.Observer = MoveTemp(Observer);
+    Provider.Preparation = MoveTemp(Preparation);
+    Observers.Add(Kind, MoveTemp(Provider));
 }
 
 void UnregisterObserver(const FString& Kind)
 {
     Observers.Remove(Kind);
+}
+
+bool PrepareCheckpointAsset(const FJson& Request, UObject* Asset, FString& Error)
+{
+    FString Kind;
+    Request->TryGetStringField(TEXT("kind"), Kind);
+    const FObservedAsset* Provider = Observers.Find(Kind);
+    if (Provider && Provider->Preparation)
+    {
+        return Provider->Preparation(Asset, Error);
+    }
+    return true;
 }
 
 FJson Observe(const FJson& Request, FString* OutError)
@@ -133,7 +154,9 @@ FJson Observe(const FJson& Request, FString* OutError)
             return StampRaw(Transcode::BuildStubRaw(AssetData));
         }
     }
-    UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
+    const uint32 LoadFlags = Request->HasTypedField<EJson::Boolean>(TEXT("expected_absent"))
+        && Request->GetBoolField(TEXT("expected_absent")) ? LOAD_NoWarn | LOAD_Quiet : LOAD_None;
+    UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath, nullptr, LoadFlags);
     // ObjectTools deletion only clears RF_Public and RF_Standalone; the object stays in
     // memory until garbage collection, which the deleting apply's own references and the
     // transaction buffer postpone. LoadObject still finds it, but it is no longer an asset.
@@ -144,10 +167,10 @@ FJson Observe(const FJson& Request, FString* OutError)
         Missing->SetStringField(TEXT("asset_path"), AssetPath);
         return StampRaw(Missing);
     }
-    if (FObserver* Provider = Observers.Find(Kind))
+    if (FObservedAsset* Provider = Observers.Find(Kind))
     {
         FString Error;
-        const FJson Result = (*Provider)(Request, Asset, Error);
+        const FJson Result = Provider->Observer(Request, Asset, Error);
         if (OutError != nullptr)
         {
             *OutError = Error;

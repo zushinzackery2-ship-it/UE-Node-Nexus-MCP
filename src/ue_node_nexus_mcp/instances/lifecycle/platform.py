@@ -80,6 +80,7 @@ class WindowsPlatform:
             if any(observed.get(key) != record.get(key) for key in ("pid", "process_created", "project_key")):
                 raise InstanceError("instance_unverified", "lifecycle identity differs from the observed process")
             record.update(observed, control_available=True)
+            record.pop("control_error", None)
             guard = observed
         except InstanceError as exc:
             record.update(ready=False, control_available=False, control_error=exc.envelope()["error"])
@@ -179,6 +180,8 @@ class WindowsPlatform:
         command = [options["executable"], instance["project_path"], "-" + options["rhi"], "-nosplash",
                    "-NexusInstance=" + instance["instance_id"], "-NexusIntent=" + instance["start_intent_id"],
                    "-NexusRuntime=" + str(self.root), "-abslog=" + str(logs / (instance["instance_id"] + ".log"))]
+        from ...safety.isolation.environment import launch_arguments
+        command.extend(launch_arguments(instance["project_path"]))
         with (logs / (instance["instance_id"] + "-console.log")).open("ab") as output:
             process = subprocess.Popen(command, cwd=str(Path(instance["project_path"]).parent),
                                        stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,

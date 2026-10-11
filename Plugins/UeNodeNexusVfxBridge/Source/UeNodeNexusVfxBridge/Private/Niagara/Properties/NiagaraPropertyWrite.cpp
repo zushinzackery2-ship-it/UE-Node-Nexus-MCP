@@ -2,7 +2,7 @@
 
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
-#include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "UeNodeNexusBridgeSaveResult.h"
 #include "UeNodeNexusPropertyValue.h"
 #include "ScopedTransaction.h"
 #include "UObject/Package.h"
@@ -113,12 +113,13 @@ TSharedPtr<FJsonObject> WriteNiagaraProperties(const FString& Operation, const F
             Item->AsObject()->SetBoolField(TEXT("applied"), true);
         }
     }
-    const bool bSaveAttempted = Errors.IsEmpty() && !bDryRun && bSave && Asset->GetOutermost()->IsDirty();
-    const bool bSaved = bSaveAttempted && SaveAssetPackage(Asset);
-    const bool bSaveFailed = bSaveAttempted && !bSaved;
+    const auto Save = SaveAssetWrite(Asset, bSave && Errors.IsEmpty(), bDryRun, bApply);
+    const bool bSaveAttempted = Save.bAttempted;
+    const bool bSaved = Save.bSaved;
+    const bool bSaveFailed = Save.Failed();
     if (bSaveFailed)
     {
-        Errors.Add(MakeShared<FJsonValueObject>(MakeError(TEXT("save_failed"), TEXT("property changes remain in editor memory"))));
+        Errors.Add(MakeShared<FJsonValueObject>(UeNodeNexusBridge::MakeError(TEXT("save_failed"), Save.Error)));
     }
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetBoolField(TEXT("applied"), bApply);
@@ -144,6 +145,7 @@ TSharedPtr<FJsonObject> WriteNiagaraProperties(const FString& Operation, const F
         Response->SetObjectField(TEXT("error"), MakeError(bSaveFailed ? TEXT("save_failed") : TEXT("invalid_properties"),
             bSaveFailed ? TEXT("properties applied but package save failed") : TEXT("property preflight failed; inspect data.errors")));
     }
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 }

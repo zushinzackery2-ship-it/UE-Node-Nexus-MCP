@@ -243,6 +243,7 @@ TSharedPtr<FJsonObject> HandleProjectInputMappingsPatch(const FString& Operation
     Data->SetNumberField(TEXT("axis_removed"), 0);
     Data->SetNumberField(TEXT("actions_added"), 0);
     Data->SetNumberField(TEXT("actions_removed"), 0);
+    bool bConfigSaveFailed = false;
 
     TArray<TSharedPtr<FJsonValue>> Diagnostics;
     for (const TSharedPtr<FJsonValue>& Value : *Operations)
@@ -259,20 +260,30 @@ TSharedPtr<FJsonObject> HandleProjectInputMappingsPatch(const FString& Operation
     if (!bDryRun && ChangedCount > 0)
     {
         Settings->ForceRebuildKeymaps();
-        if (bSaveConfig)
-        {
-            Settings->SaveKeyMappings();
-            FString ConfigFile;
-            const bool bConfigSaved = SaveObjectConfig(Settings, ConfigFile);
-            Data->SetBoolField(TEXT("config_saved"), bConfigSaved);
-            Data->SetStringField(TEXT("config_file"), ConfigFile);
-        }
+    }
+    if (!bDryRun && bSaveConfig && Diagnostics.IsEmpty())
+    {
+        Settings->SaveKeyMappings();
+        FString ConfigFile;
+        const bool bConfigSaved = SaveObjectConfig(Settings, ConfigFile);
+        bConfigSaveFailed = !bConfigSaved;
+        Data->SetBoolField(TEXT("config_saved"), bConfigSaved);
+        Data->SetStringField(TEXT("config_file"), ConfigFile);
+        Data->SetBoolField(TEXT("save_attempted"), true);
+        Data->SetBoolField(TEXT("partial"), bConfigSaveFailed);
     }
     Data->SetObjectField(TEXT("mappings"), MakeMappingsData(Settings, Format));
 
-    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Diagnostics.Num() == 0);
+    TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, Diagnostics.Num() == 0 && !bConfigSaveFailed);
     Response->SetObjectField(TEXT("data"), Data);
     Response->SetArrayField(TEXT("diagnostics"), Diagnostics);
+    if (bConfigSaveFailed)
+    {
+        const FString Error = TEXT("input config changes remain in editor memory; could not save: ") + Data->GetStringField(TEXT("config_file"));
+        Data->SetStringField(TEXT("save_error"), Error);
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("save_failed"), Error));
+        UE_LOG(LogTemp, Warning, TEXT("Nexus request=%s phase=input_config_save ok=0 error=%s"), *RequestId, *Error);
+    }
     return Response;
 }
 }

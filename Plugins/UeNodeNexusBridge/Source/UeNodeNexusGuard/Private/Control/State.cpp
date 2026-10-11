@@ -66,7 +66,6 @@ TSharedPtr<FJsonObject> StatusLocked()
         Result->Values.Append(S.Identity->Values);
     }
     Result->Values.Append(S.Editor->Values);
-    Result->SetBoolField(TEXT("ready"), S.bReady);
     Result->SetBoolField(TEXT("draining"), S.bDraining);
     Result->SetBoolField(TEXT("stopping"), S.bStopping);
     Result->SetNumberField(TEXT("manager_epoch"), S.ManagerEpoch);
@@ -74,6 +73,7 @@ TSharedPtr<FJsonObject> StatusLocked()
     Result->SetNumberField(TEXT("close_revision"), S.Revision);
     Result->SetNumberField(TEXT("scope_count"), S.Grants.Num());
     Startup::AppendStatus(Result);
+    Result->SetBoolField(TEXT("ready"), S.bReady && !Startup::OpenDialogLocked().IsValid());
     return Result;
 }
 
@@ -93,7 +93,7 @@ void Attach(FInspector Inspector)
 {
     FScopeLock Lock(&State().Mutex);
     State().Inspector = MoveTemp(Inspector);
-    State().bReady = true;
+    State().bReady = false;
 }
 
 void Detach()
@@ -108,6 +108,9 @@ void Publish(const TSharedPtr<FJsonObject>& Editor)
 {
     FScopeLock Lock(&State().Mutex);
     State().Editor = Editor;
+    bool bNormalTick = false;
+    Editor->TryGetBoolField(TEXT("normal_tick"), bNormalTick);
+    State().bReady = State().Inspector && bNormalTick && !State().bStopping;
 }
 
 TSharedPtr<FJsonObject> Dispatch(const TSharedPtr<FJsonObject>& Request, uint32 Peer)
@@ -166,6 +169,15 @@ TSharedPtr<FJsonObject> Dispatch(const TSharedPtr<FJsonObject>& Request, uint32 
             {
                 return Failure(TEXT("stale_scope"), TEXT("a released scope or changed owner cannot be granted again"));
             }
+        }
+        const auto Dialog = Startup::OpenDialogLocked();
+        if (Dialog.IsValid())
+        {
+            auto Result = Failure(TEXT("waiting_for_user"), TEXT("editor is waiting for an answer to a prompt"));
+            auto Details = MakeShared<FJsonObject>();
+            Details->SetObjectField(TEXT("blocking_dialog"), Dialog);
+            Result->GetObjectField(TEXT("error"))->SetObjectField(TEXT("details"), Details);
+            return Result;
         }
         if (S.bDraining || S.bStopping || !S.bReady)
         {

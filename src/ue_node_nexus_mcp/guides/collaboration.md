@@ -26,6 +26,11 @@ Mutations default to `dry_run=True`; queries run directly. `push` defaults to
 committed HEAD, or accepts `source`/`revision`. A changed preview input returns
 `stale_proposal`. Uncommitted file changes remain local.
 
+New-file discovery prunes dot-prefixed directories/files and `__pycache__`.
+Put additional rules in `<files_root>/.nexusignore`; they apply to this checkout
+and leave registered, staged and committed files tracked. See the
+`text_mirror` guide's file discovery section for patterns and negation.
+
 For work on a few assets, check out only those paths: the workspace answers
 `sparse: true` and holds them plus what they reference. A push merges and checks
 exactly its selection, and its dry run computes the same merge session the real
@@ -49,6 +54,13 @@ engine/loaded plugin/configuration identity, measured RHI and normal exit code 0
 The result row and apply record retain `safety_validation`; failed or stale proof
 prevents the publishing editor's apply. Ordinary material values use the normal
 transaction directly. High-risk publication requires `compile=true`.
+
+The environment binding includes merged runtime configuration, current rendering
+console variables and supported rendering launch arguments. Workers install the
+captured values before RHI initialization and complete change callbacks after the
+engine initializes. The measured environment must match before candidate execution;
+source drift also rejects publication. Unsupported rendering launch overrides,
+including `-ExecCmds` and `-ini`, return `safety_launch_unsupported` with the arguments.
 
 Baseline serialization preserves the publishing editor's dirty flags and disk
 bytes. Explicit `safety_validate` uses saved disk inputs; automatic publication
@@ -87,8 +99,15 @@ ue_sync("job_result", options=dict(job_id="<job-id>"))
 ue_sync("job_cancel", options=dict(job_id="<job-id>"))
 ```
 
-Status reports the current stage/asset and completed assets. Results live in the
-repository and can be read from another MCP session. Cancellation and optional
+Status reports the current stage/asset and completed assets. Schema refresh reports `schema_collection`,
+`schema_migration`, `schema_manifest`, `schema_documentation` and `schema_ready`.
+`schema_progress` includes the schema key, phase, processed/total records, family,
+elapsed seconds and local durable I/O timings (creation, lookup, write, flush and
+replacement). Migration checkpoints are bounded to twice per second, with explicit
+phase and completion updates. Cancellation stops between
+durable operations before the manifest is committed; the old catalog stays readable.
+
+Results live in the repository and can be read from another MCP session. Cancellation and optional
 `deadline_seconds` stop between atomic asset operations; committed receipts stay
 published. An exited worker owner reports `interrupted` with recovery instructions.
 Queued jobs are cancelled when their MCP session closes. Running writes retain

@@ -2,6 +2,7 @@
 
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "UeNodeNexusBridgeSaveResult.h"
 #include "Formats/UeNodeNexusBridgeNiagaraListFormats.h"
 
 #include "Dom/JsonValue.h"
@@ -140,7 +141,8 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterCreate(const FString& Operation, con
     System->Modify();
     System->MarkPackageDirty();
     System->PostEditChange();
-    const bool bSaved = bSave && SaveAssetPackage(System);
+    const auto Save = SaveAssetWrite(System, bSave && Handle != nullptr, false, Handle != nullptr);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), false);
@@ -157,6 +159,7 @@ TSharedPtr<FJsonObject> HandleNiagaraEmitterCreate(const FString& Operation, con
     {
         Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("emitter_add_failed"), TEXT("Niagara editor API did not return a valid emitter handle")));
     }
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 
@@ -228,7 +231,8 @@ TSharedPtr<FJsonObject> HandleNiagaraRendererCreate(const FString& Operation, co
         System->PostEditChange();
     }
     const int32 AfterCount = EmitterData->GetRenderers().Num();
-    const bool bSaved = bSave && AfterCount > BeforeCount && SaveAssetPackage(System);
+    const auto Save = SaveAssetWrite(System, bSave, bDryRun, AfterCount > BeforeCount);
+    const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
@@ -240,6 +244,7 @@ TSharedPtr<FJsonObject> HandleNiagaraRendererCreate(const FString& Operation, co
     Data->SetNumberField(TEXT("enabled_renderer_count"), CountEnabledNiagaraRenderers(System));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 }

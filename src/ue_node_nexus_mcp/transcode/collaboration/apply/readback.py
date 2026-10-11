@@ -1,9 +1,12 @@
 """Verify the values an apply was asked to write before publishing its receipt."""
 
 from ...storage.paths import object_path
+from ...storage.io import confined, read_json
 from ...errors import SyncError
 from ..semantic.normalization import normalize_snapshot
 from ...text.semantic import equivalent, value
+from ...text.writes import write_differences
+from ...material.custom_inputs import layout
 from ..workspace.files import filename
 
 
@@ -34,11 +37,29 @@ def differences(expected, actual, path=()):
     return [dict(field=list(path), expected=expected, actual=actual)]
 
 
-def entity_fields(operation, expected, actual):
+def custom_inputs(entity):
+    return entity["type"].rsplit(".", 1)[-1].removeprefix("MaterialExpression") == "Custom"
+
+
+def argument_fields(expected, actual, contract=None, field=None):
+    wanted, received = expected["args"], actual["args"]
+    if not custom_inputs(expected) or (field and field != "Inputs"):
+        return differences(wanted.get(field), received.get(field), ("args", field)) if field else differences(wanted, received, ("args",))
+    left, right = wanted.get("Inputs"), received.get("Inputs")
+    rows = write_differences(layout(left["value"]), layout(right["value"]), contract or "text", ("args", "Inputs")) if left and right else differences(left, right, ("args", "Inputs"))
+    if field is None:
+        rows.extend(differences(dict((key, item) for key, item in wanted.items() if key != "Inputs"),
+                                dict((key, item) for key, item in received.items() if key != "Inputs"), ("args",)))
+    return rows
+
+
+def entity_fields(operation, expected, actual, input_contract=None):
     verb = operation["op"]
     if verb in ("set_node_param", "bp_component_set_prop"):
         field = operation.get("prop", operation.get("name"))
         namespace = "props" if verb == "bp_component_set_prop" else "args"
+        if namespace == "args":
+            return argument_fields(expected, actual, input_contract, field)
         return differences(expected[namespace].get(field), actual[namespace].get(field), (namespace, field))
     if verb == "set_node_position":
         return differences(expected["position"], actual["position"], ("position",))
@@ -51,7 +72,8 @@ def entity_fields(operation, expected, actual):
         fields.append("default")
     if expected.get("position") is not None:
         fields.append("position")
-    return [row for field in fields for row in differences(expected[field], actual[field], (field,))]
+    return [row for field in fields for row in (argument_fields(expected, actual, input_contract) if field == "args" else
+                                               differences(expected[field], actual[field], (field,)))]
 
 
 def property_result(operation, actual):
@@ -67,7 +89,7 @@ def property_result(operation, actual):
     native = next((row for row in rows if row.get("name") == name), None)
     contract = (native or dict()).get("value_schema") or (native or field or dict()).get("type", "text")
     if native:
-        field = value(native.get("value"), contract)
+        return write_differences(operation.get("value"), native.get("value"), contract, (section, name))
     expected = value(operation.get("value"), contract)
     return differences(expected, field, (section, name))
 
@@ -97,6 +119,55 @@ def contract_result(operation, desired, actual):
     return differences(expected, received, (section, name))
 
 
+def graph_result(graph, desired, actual, checked):
+    rows = []
+    for scope, section in desired["semantic"]["sections"].items():
+        if not graph_scope(scope, graph) or scope in checked:
+            continue
+        checked.add(scope)
+        incoming = actual["semantic"]["sections"].get(scope, dict()).get("links", dict())
+        rows.extend(exact_fields(section["links"], incoming, (scope, "links")))
+    return rows
+
+
+def scene_result(workspace, desired, actual, record):
+    rows = differences(desired["semantic"], actual["semantic"])
+    actors = dict((actor["id"], actor) for actor in actual.get("raw", dict()).get("actors", []))
+    components = dict()
+    plan = read_json(confined(workspace.store.root, record["request"]["plan_file"]))
+    for operation in plan["ops"]:
+        verb, identifier = operation["op"], operation.get("id")
+        if verb == "delete_actor":
+            found = actors.get(identifier)
+        elif verb == "remove_component":
+            actor_id = operation["actor_id"]
+            if actor_id not in components:
+                components[actor_id] = dict((component["id"], component)
+                                            for component in actors.get(actor_id, dict()).get("components", []))
+            found = components[actor_id].get(identifier)
+        else:
+            continue
+        if found:
+            rows.append(dict(field=[verb, identifier], expected=None, actual=found))
+    return rows
+
+
+def verify_scene_deletion(record, raw):
+    actors = raw.get("actors")
+    if not isinstance(actors, list):
+        raise SyncError("receipt_invalid", "scene deletion receipt has no actor snapshot", dict(apply_id=record["id"]))
+    reject(record, [dict(code="apply_result_mismatch", severity="error", asset=record["asset"],
+                         operation="delete_scene", field=["actors", actor["id"]], expected=None, actual=actor)
+                    for actor in actors])
+
+
+def reject(record, diagnostics):
+    if diagnostics:
+        raise SyncError("apply_result_mismatch", "UE readback differs from the requested writable state",
+                        dict(apply_id=record["id"], asset=record["asset"], diagnostics=diagnostics,
+                             recover=dict(action="recover", options=dict(apply_id=record["id"], resolution="restore", dry_run=False))))
+
+
 def verify_result(workspace, record, expected, actual) -> None:
     if expected is None:
         return
@@ -105,10 +176,14 @@ def verify_result(workspace, record, expected, actual) -> None:
     wanted_aliases, received_aliases = alias_index(wanted), alias_index(received)
     diagnostics = []
     checked_graphs = set()
-    checked_selectors = set()
     asset = record["asset"]
     relative = workspace.state["files"].get(asset) or filename(object_path(asset), desired)
     file = str(workspace.root / relative)
+    if desired["semantic"]["kind"] == "scene":
+        rows = scene_result(workspace, desired, actual, record)
+        reject(record, [dict(row, code="apply_result_mismatch", severity="error", asset=asset,
+                             file=file, line=0, operation="scene_apply") for row in rows])
+        return
     for operation in record["request"].get("plan", []):
         verb = operation.get("op", "")
         rows, line = [], operation.get("line") or 0
@@ -122,15 +197,7 @@ def verify_result(workspace, record, expected, actual) -> None:
             rows = contract_result(operation, desired, actual)
         elif verb in ("connect_pins", "disconnect_pins"):
             graph = operation.get("graph")
-            if graph in checked_selectors:
-                continue
-            checked_selectors.add(graph)
-            for scope, section in desired["semantic"]["sections"].items():
-                if not graph_scope(scope, graph) or scope in checked_graphs:
-                    continue
-                checked_graphs.add(scope)
-                incoming = actual["semantic"]["sections"].get(scope, dict()).get("links", dict())
-                rows.extend(exact_fields(section["links"], incoming, (scope, "links")))
+            rows = graph_result(graph, desired, actual, checked_graphs)
         else:
             alias = operation.get("id") or operation.get("new") or operation.get("name")
             graph = operation.get("graph") or operation.get("function")
@@ -142,11 +209,12 @@ def verify_result(workspace, record, expected, actual) -> None:
                 identifier, entity = wanted[key]
                 line = line or desired.get("locations", dict()).get(identifier, 0)
                 found = received.get(key)
-                rows.extend(entity_fields(operation, entity, found[1]) if found else
+                metadata = actual["bindings"].get(found[0], dict()).get("meta", dict()) if found else dict()
+                contract = metadata.get("prop_types", dict()).get("Inputs")
+                rows.extend(entity_fields(operation, entity, found[1], contract) if found else
                             [dict(field=[key[0], alias], expected=entity, actual=None)])
+                if custom_inputs(entity) and (verb == "create_node" or verb == "set_node_param" and operation.get("name") == "Inputs"):
+                    rows.extend(graph_result(graph, desired, actual, checked_graphs))
         diagnostics.extend(dict(row, code="apply_result_mismatch", severity="error", asset=asset,
                                 file=file, line=line, operation=verb) for row in rows)
-    if diagnostics:
-        raise SyncError("apply_result_mismatch", "UE readback differs from the requested writable state",
-                        dict(apply_id=record["id"], asset=asset, diagnostics=diagnostics,
-                             recover=dict(action="recover", options=dict(apply_id=record["id"], resolution="restore", dry_run=False))))
+    reject(record, diagnostics)

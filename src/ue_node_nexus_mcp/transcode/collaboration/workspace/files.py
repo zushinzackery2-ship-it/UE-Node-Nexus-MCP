@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ...text.parser import parse
 from ...material.interfaces import documents, fingerprint
-from ...storage.paths import object_path, package_name, parse_text_path, text_path
+from ...storage.paths import iter_text_files, object_path, package_name, parse_text_path, text_path
 from ...scene.model import scene_name
 from ...errors import SyncError
 from ..semantic.snapshot import capture
@@ -33,7 +33,7 @@ def discover(root: Path, registered: dict[str, str]) -> dict[str, str]:
     """
     result = dict(registered)
     inverse = dict((relative, asset) for asset, relative in result.items())
-    for path in sorted(root.rglob("*.nexus")):
+    for path in iter_text_files(root):
         relative = path.relative_to(root).as_posix()
         if relative in inverse:
             continue

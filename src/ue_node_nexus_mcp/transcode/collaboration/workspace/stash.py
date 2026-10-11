@@ -17,15 +17,12 @@ def push(workspace, message="") -> dict:
         return dict(status="unchanged")
     tree = workspace.history.tree(entries)
     identifier = uuid4().hex
-    originals = dict()
-    for asset, relative in files.items():
-        path = confined(workspace.root, relative)
-        originals[relative] = blob(workspace.store, path.read_bytes() if path.is_file() else None)
+    originals = original_files(workspace, files)
     record = dict(id=identifier, workspace_id=workspace.state["id"], message=message, head=workspace.state["head"],
                   index=workspace.state["index"], files_tree=tree, files=files, originals=originals)
     roots = [record["head"], record["index"], tree, *[item for item in originals.values() if item]]
     workspace.store.put_record("stash", identifier, record, roots, expected=0)
-    workspace.install(workspace.state["head"], reason="stash_push")
+    workspace.install(workspace.state["head"], reason="stash_push", file_map=files)
     return dict(stash_id=identifier, status="stashed")
 
 
@@ -33,17 +30,27 @@ def apply(workspace, identifier: str, pop=False, auto_finish=True) -> dict:
     stash = workspace.store.record("stash", identifier)
     if stash is None:
         raise SyncError("stash_not_found", identifier)
-    working, _, _ = capture_files(workspace, delete=True)
+    working, files, _ = capture_files(workspace, delete=True)
     working_tree = workspace.history.tree(working)
     stages = [("head", stash["head"], workspace.state["index"], stash["index"]),
               ("local_files", workspace.state["index"], "head", working_tree),
               ("files", stash["index"], "local_files", stash["files_tree"])]
     sessions = Sessions(workspace)
     report = sessions.start("stash_pop" if pop else "stash_apply", stash["head"], stash["index"], [],
-                            layer_sources=stages, no_commit=True, stash_id=identifier, pop=pop)
+                            layer_sources=stages, no_commit=True, stash_id=identifier, pop=pop,
+                            authored_sources=[dict(tree=working_tree, files=files, originals=original_files(workspace, files)),
+                                              dict(tree=stash["files_tree"], files=stash["files"], originals=stash["originals"])])
     if report["status"] == "ready" and auto_finish:
         return finish(workspace, report["merge_id"])
     return report
+
+
+def original_files(workspace, files):
+    originals = dict()
+    for relative in files.values():
+        path = confined(workspace.root, relative)
+        originals[relative] = blob(workspace.store, path.read_bytes() if path.is_file() else None)
+    return originals
 
 
 def finish(workspace, merge_id: str) -> dict:

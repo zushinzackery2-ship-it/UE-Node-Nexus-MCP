@@ -12,6 +12,7 @@ from ..identity.paths import project_identity
 from ..lifecycle.prompts import exited
 from ..lifecycle.crashes.observe import observe as observe_exit
 from .discovery import accept as accept_discovery
+from .freshness import fields as freshness_fields
 
 PIN_FIELDS = frozenset(("instance_id", "reason", "seconds", "dry_run", "proposal_id"))
 # What one observation of a live editor may change in its record.
@@ -131,12 +132,17 @@ class Editors:
             self.seen[identifier] = time.time()
             before = dict(previous)
             previous.update(observed)
+            if observed.get("control_available") is True:
+                previous.pop("control_error", None)
             service.resources.observe(previous)
             if observed.get("control_available") is False and before.get("ready") and before["state"] not in ("DRAINING", "STOPPING"):
                 previous.update(state="UNRESPONSIVE", error=observed.get("control_error"))
                 service.save(previous)
                 continue
-            if (observed.get("ready") and before.get("state") not in ("DRAINING", "STOPPING")
+            if ((observed.get("waiting_for_user") or observed.get("blocking_dialog"))
+                    and before.get("state") in ("READY", "IDLE", "BLOCKED")):
+                previous["state"] = "BLOCKED"
+            elif (observed.get("ready") and before.get("state") not in ("DRAINING", "STOPPING")
                     and not before.get("exit_committed") and not observed.get("stopping")):
                 previous["state"] = "READY" if service.sessions.for_instance(identifier) else "IDLE"
                 if before.get("state") in ("STARTING", "UNRESPONSIVE"):
@@ -163,27 +169,8 @@ class Editors:
                       idle_deadline=instance["idle_since"] + service.policy.grace_seconds if instance.get("idle_since") is not None else None,
                       last_use=max((item["last_use"] for item in leases), default=instance.get("idle_since")),
                       log_path=str(service.root / "Logs/lifecycle.jsonl"))
-        result.update(self.freshness(instance))
+        result.update(freshness_fields(instance, self.seen.get(instance["instance_id"]), service.policy))
         return result
-
-    def freshness(self, instance: dict) -> dict:
-        """How old the evidence behind this row is, and whether it still counts.
-
-        A snapshot from an hour ago says nothing about a process that may have
-        exited since. Reporting ``ready`` from one is how a caller learns the
-        editor is gone only by trying to use it.
-        """
-        seen = self.seen.get(instance["instance_id"])
-        if instance["state"] == "EXITED":
-            return dict(snapshot_age_seconds=None, stale=True, live_state=False)
-        if seen is None:
-            return dict(snapshot_age_seconds=None, stale=True, ready=False)
-        age = max(0.0, time.time() - seen)
-        limit = max(self.service.policy.suspect_seconds, self.service.policy.sweep_seconds * 3)
-        if age <= limit:
-            return dict(snapshot_age_seconds=round(age, 3), stale=False)
-        return dict(snapshot_age_seconds=round(age, 3), stale=True, ready=False,
-                    error=instance.get("error") or dict(code="snapshot_stale", message="no lifecycle observation within the freshness window"))
 
     def list(self, _client, payload: dict) -> dict:
         self.observe()

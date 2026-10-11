@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+import sys
 import zlib
 
 import pytest
@@ -38,6 +39,49 @@ def test_verified_request_completion(tmp_path):
     result = status(str(path), IDENTIFIER)
     assert result["ok"] and result["data"]["done"] and result["data"]["state"] == "completed"
     assert result["data"]["width"] == result["data"]["height"] == 1
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Unreal receipt writer uses a Windows sharing lock")
+def test_locked_receipt_stays_pending_until_writer_releases_it(tmp_path):
+    import ctypes
+    from ctypes import wintypes
+
+    path, journal, _ = receipt(tmp_path)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateFileW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                                  wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.CreateFileW(str(journal), 0x40000000, 0, None, 3, 0x80, None)
+    assert handle != wintypes.HANDLE(-1).value, ctypes.get_last_error()
+    try:
+        result = status(str(path), IDENTIFIER)
+        assert result["ok"] and not result["data"]["done"]
+        assert result["data"]["state"] == "receipt_pending"
+    finally:
+        assert kernel.CloseHandle(handle)
+    assert status(str(path), IDENTIFIER)["data"]["state"] == "completed"
+
+
+def test_replaced_receipt_stays_pending_until_producer_publishes(tmp_path, monkeypatch):
+    import importlib
+
+    module = importlib.import_module("ue_node_nexus_mcp.safety.capture.status")
+    path, journal, record = receipt(tmp_path)
+    original = module.open_receipt
+
+    def replace_before_open(receipt_path):
+        journal.unlink()
+        return original(receipt_path)
+
+    monkeypatch.setattr(module, "open_receipt", replace_before_open)
+    result = status(str(path), IDENTIFIER)
+    assert result["ok"] and not result["data"]["done"]
+    assert result["data"]["state"] == "receipt_pending"
+    journal.write_text(json.dumps(record), encoding="utf-8")
+    monkeypatch.setattr(module, "open_receipt", original)
+    assert status(str(path), IDENTIFIER)["data"]["state"] == "completed"
 
 
 def test_unreal_uppercase_guid_is_a_valid_identity(tmp_path):

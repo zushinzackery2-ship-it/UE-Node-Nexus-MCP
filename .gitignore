@@ -150,3 +150,8 @@ tests/safety/cleanup.py
 tests/safety/live.py
 tests/safety/native.py
 tests/safety/boundaries/
+tests/live/issues8/
+tests/live/issues9/
+tests/live/issues10/
+tests/performance/facade_cache.py
+tests/performance/schema_catalog.py

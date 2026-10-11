@@ -8,7 +8,7 @@
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeTranscodeApi.h"
+#include "UeNodeNexusBridgeSaveResult.h"
 #include "UObject/Package.h"
 
 namespace UeNodeNexusBridge
@@ -88,11 +88,6 @@ TSharedPtr<FJsonObject> MakeInputWriteData(const FString& AssetPath, const TCHAR
     return Data;
 }
 
-bool SaveInputAssetPackage(UObject* Asset)
-{
-    FString Error;
-    return Transcode::SavePackageDirect(Asset, Error);
-}
 }
 
 TSharedPtr<FJsonObject> HandleInputActionCreate(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
@@ -118,7 +113,6 @@ TSharedPtr<FJsonObject> HandleInputActionCreate(const FString& Operation, const 
     Payload->TryGetBoolField(TEXT("save"), bSave);
 
     UInputAction* Action = nullptr;
-    bool bSaved = false;
     if (!bDryRun)
     {
         UPackage* Package = CreatePackage(*PackageName);
@@ -134,13 +128,14 @@ TSharedPtr<FJsonObject> HandleInputActionCreate(const FString& Operation, const 
         Action->ValueType = ValueType;
         FAssetRegistryModule::AssetCreated(Action);
         Package->MarkPackageDirty();
-        bSaved = bSave && SaveInputAssetPackage(Action);
     }
 
-    TSharedPtr<FJsonObject> Data = MakeInputWriteData(Action ? Action->GetPathName() : AssetPath, TEXT("input_action"), bDryRun, Action != nullptr, bSaved);
+    const auto Save = SaveAssetWrite(Action, bSave, bDryRun, Action != nullptr);
+    TSharedPtr<FJsonObject> Data = MakeInputWriteData(Action ? Action->GetPathName() : AssetPath, TEXT("input_action"), bDryRun, Action != nullptr, Save.bSaved);
     Data->SetStringField(TEXT("value_type"), InputActionValueTypeText(ValueType));
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 
@@ -159,7 +154,6 @@ TSharedPtr<FJsonObject> HandleInputMappingContextCreate(const FString& Operation
     Payload->TryGetBoolField(TEXT("save"), bSave);
 
     UInputMappingContext* Context = nullptr;
-    bool bSaved = false;
     if (!bDryRun)
     {
         UPackage* Package = CreatePackage(*PackageName);
@@ -174,12 +168,13 @@ TSharedPtr<FJsonObject> HandleInputMappingContextCreate(const FString& Operation
         }
         FAssetRegistryModule::AssetCreated(Context);
         Package->MarkPackageDirty();
-        bSaved = bSave && SaveInputAssetPackage(Context);
     }
 
-    TSharedPtr<FJsonObject> Data = MakeInputWriteData(Context ? Context->GetPathName() : AssetPath, TEXT("input_mapping_context"), bDryRun, Context != nullptr, bSaved);
+    const auto Save = SaveAssetWrite(Context, bSave, bDryRun, Context != nullptr);
+    TSharedPtr<FJsonObject> Data = MakeInputWriteData(Context ? Context->GetPathName() : AssetPath, TEXT("input_mapping_context"), bDryRun, Context != nullptr, Save.bSaved);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 
@@ -208,7 +203,10 @@ TSharedPtr<FJsonObject> HandleInputMappingContextEntryAdd(const FString& Operati
     {
         return MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("key is required (e.g. SpaceBar, W, Gamepad_FaceButton_Bottom)"));
     }
-    const FKey Key{FName(*KeyName)};
+    const FKey Key
+    {
+        FName(*KeyName)
+    };
     if (!EKeys::GetKeyDetails(Key).IsValid())
     {
         return MakeOperationError(Operation, RequestId, TEXT("invalid_key"), FString::Printf(TEXT("Unknown input key: %s"), *KeyName));
@@ -227,21 +225,21 @@ TSharedPtr<FJsonObject> HandleInputMappingContextEntryAdd(const FString& Operati
     bool bSave = false;
     Payload->TryGetBoolField(TEXT("save"), bSave);
 
-    bool bSaved = false;
     if (!bDryRun)
     {
         Context->Modify();
         Context->MapKey(Action, Key);
         Context->MarkPackageDirty();
-        bSaved = bSave && SaveInputAssetPackage(Context);
     }
 
-    TSharedPtr<FJsonObject> Data = MakeInputWriteData(Context->GetPathName(), TEXT("input_mapping_context"), bDryRun, !bDryRun, bSaved);
+    const auto Save = SaveAssetWrite(Context, bSave, bDryRun, !bDryRun);
+    TSharedPtr<FJsonObject> Data = MakeInputWriteData(Context->GetPathName(), TEXT("input_mapping_context"), bDryRun, !bDryRun, Save.bSaved);
     Data->SetStringField(TEXT("action_path"), Action->GetPathName());
     Data->SetStringField(TEXT("key"), KeyName);
     Data->SetNumberField(TEXT("mapping_count"), Context->GetMappings().Num());
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
+    ApplyAssetWriteSave(Response, Data, Save);
     return Response;
 }
 

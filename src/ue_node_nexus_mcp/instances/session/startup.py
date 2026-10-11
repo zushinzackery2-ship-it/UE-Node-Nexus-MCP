@@ -37,12 +37,14 @@ def budget(value, default: float = DEFAULT_WAIT_SECONDS) -> float:
 
 def outcome(row: dict) -> str:
     state = row.get("state")
-    if state in SETTLED:
-        return "ready"
     if state == "EXITED":
         return "exited"
     if state == "UNRESPONSIVE":
         return "unresponsive"
+    if row.get("waiting_for_user") or row.get("blocking_dialog"):
+        return "waiting_for_user"
+    if state in SETTLED:
+        return "ready" if row.get("ready", True) else "starting"
     return "waiting_for_user" if row.get("waiting_for_user") else "starting"
 
 

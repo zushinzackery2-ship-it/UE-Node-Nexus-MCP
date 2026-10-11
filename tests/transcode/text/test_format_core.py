@@ -4,7 +4,8 @@ from ue_node_nexus_mcp.transcode.text.emitter import emit, emit_entry
 from ue_node_nexus_mcp.transcode.text.lexer import parse_kv_list, split_top_level
 from ue_node_nexus_mcp.transcode.text.model import Link, Prop
 from ue_node_nexus_mcp.transcode.text.parser import parse
-from ue_node_nexus_mcp.transcode.text.values import format_value, normalize_value, parse_value, values_equal
+from ue_node_nexus_mcp.transcode.text.semantic import values_equal
+from ue_node_nexus_mcp.transcode.text.values import format_value, normalize_value, parse_value
 
 
 def test_control_bytes_survive_one_line():

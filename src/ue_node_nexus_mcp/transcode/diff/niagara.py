@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-from .common import decl_params, diff_brace_props, diff_prop_section, same_class
+from .common import decl_params, diff_brace_props, diff_prop_section, field_type, same_class
 from ..text.model import Decl, Document, Section
 from .plan import AssetPlan
 from ..schema.lock import SchemaLock
 from ..errors import SyncError
-from ..text.values import is_marker, values_equal
+from ..text.semantic import values_equal
+from ..text.values import is_marker
 
 ASSIGNMENT_MODULE = "SetVariables"
 
 
 def diff_niagara(local: Document, base: Document | None, plan: AssetPlan, kind: str,
                  schema: SchemaLock | None = None) -> None:
-    diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
+    diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
     _diff_user_params(local.section("user"), base.section("user") if base else None, plan)
     if kind == "niagara_system":
         _diff_emitters(local, base, plan)
@@ -56,7 +57,7 @@ def _diff_user_params(local: Section | None, base: Section | None, plan: AssetPl
         elif before.type_name != decl.type_name:
             plan.add("ns_user_param_remove", line=decl.line, name=name)
             plan.add("ns_user_param_add", line=decl.line, name=name, type=decl.type_name, value=decl.default or "")
-        elif not values_equal(before.default or "", decl.default or ""):
+        elif not values_equal(before.default or "", decl.default or "", before.type_name):
             plan.add("ns_user_param_set", line=decl.line, name=name, value=decl.default or "")
 
 
@@ -82,7 +83,7 @@ def _diff_emitters(local: Document, base: Document | None, plan: AssetPlan) -> N
             if key == "Parent":
                 continue
             old = before_props.get(key)
-            if old is None or not values_equal(old.value, prop.value):
+            if old is None or not values_equal(old.value, prop.value, old.type_name or prop.type_name):
                 plan.add("ns_emitter_prop_set", line=prop.line, emitter=name, name=key, value=prop.value)
         for key, old in before_props.items():
             if key not in props and key != "Parent":
@@ -142,7 +143,7 @@ def _diff_stack(local: Section, base: Section | None, plan: AssetPlan, kind: str
             continue
         local_params, base_params = decl_params(decl), decl_params(before)
         for key, value in local_params.items():
-            if key not in base_params or not values_equal(base_params[key], value):
+            if key not in base_params or not values_equal(base_params[key], value, field_type(before, key)):
                 _add_input(plan, decl, identifier, key, value, base_params.get(key), common)
         for key in base_params:
             if key not in local_params:
@@ -159,7 +160,7 @@ def _diff_stack(local: Section, base: Section | None, plan: AssetPlan, kind: str
 
 def _add_input(plan: AssetPlan, decl: Decl, identifier: str, key: str, value: str, before: str | None, common: dict[str, str]) -> None:
     if is_marker(value):
-        if before is not None and values_equal(before, value):
+        if before is not None and values_equal(before, value, field_type(decl, key)):
             return
         plan.error("unsupported_edit", f"{identifier}.{key}: linked/dynamic inputs (@link/@dynamic) cannot be created from text in this version", decl.line)
         return

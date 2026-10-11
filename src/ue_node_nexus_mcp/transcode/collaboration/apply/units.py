@@ -6,6 +6,7 @@ from ...material.calls import changed_calls
 from ...material.interfaces import publish_observed
 from ...errors import SyncError
 from . import refresh, transactions
+from .deletions import prerequisites
 from ..jobs.state import checkpoint
 
 
@@ -17,8 +18,9 @@ def run_units(bridge, context, workspace, source: str, candidate: str, fixed: di
         if asset in batch["errors"]:
             continue
         item = batch["units"][asset]
-        if set(item["dependencies"]) & batch["errors"].keys():
-            batch["errors"][asset] = dict(code="dependency_failed", message="a required asset failed")
+        blocked = prerequisites(item) & batch["errors"].keys()
+        if blocked:
+            batch["errors"][asset] = dict(code="dependency_failed", message="a required asset failed", assets=sorted(blocked))
             continue
         # Units still to come: those calling a function this one changes rebuild the calls themselves.
         ahead = set(later for later in order[position + 1:] if later not in batch["errors"])

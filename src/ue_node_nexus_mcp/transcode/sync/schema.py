@@ -16,6 +16,7 @@ from ..schema.coverage import CONTEXT_REQUIRED, expand, target_resolution
 from ..schema.functions import CALLABLE_INDEX, EVENT_INDEX
 from ..schema.lock import SchemaLock
 from ..schema.records import FAMILIES
+from ..schema.progress import scope
 
 
 def ensure_schema(bridge: BridgeCall, context: ProjectContext, force: bool = False) -> SchemaLock:
@@ -42,8 +43,16 @@ def ensure_schema(bridge: BridgeCall, context: ProjectContext, force: bool = Fal
 
 
 def collect(bridge, context, staging: Path) -> SchemaLock:
+    with scope(context.schema_key) as progress:
+        progress.begin("collection", 2)
+        return _collect(bridge, context, staging, progress)
+
+
+def _collect(bridge, context, staging, progress) -> SchemaLock:
     data = call_ok(bridge, "schema_export", dict(out_dir=str(staging))).get("data") or dict()
     key = str(data.get("schema_key") or context.schema_key)
+    progress.key = key
+    progress.advance("core", force=True)
     if not key or not (staging / "key.json").is_file():
         raise SyncError("schema_export_failed", "provider did not publish a schema identity")
     core = read_json(staging / "key.json")
@@ -57,6 +66,7 @@ def collect(bridge, context, staging: Path) -> SchemaLock:
     except SyncError as exc:
         coverage["niagara"] = dict(state="provider_unavailable", code=exc.code, reason=str(exc))
         context.warnings.append(f"Niagara schema provider: {exc}")
+    progress.advance("niagara", force=True)
     if data.get("functions"):
         atomic_write(staging / "functions.cache.json", canonical(data["functions"]))
     target = schema_dir(context.root, key)

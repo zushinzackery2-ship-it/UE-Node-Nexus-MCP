@@ -19,7 +19,7 @@ from ..text.ids import IdAllocator
 from ..text.model import Header, Prop, Section
 from ..storage.paths import package_name
 from ..schema.catalog import reference
-from ..text.values import values_equal
+from ..text.semantic import values_equal
 
 RAW_VERSION = 1
 
@@ -52,7 +52,7 @@ def prop_entries(props: list[dict[str, Any]] | None, *, include_defaults: bool =
         default_text = None if default is None else str(default)
         if not name:
             continue
-        if not include_defaults and default_text is not None and values_equal(value, default_text):
+        if not include_defaults and default_text is not None and values_equal(value, default_text, item.get("value_schema") or item.get("type")):
             continue
         entries.append(Prop(key=name, value=value, type_name=item.get("type"), default=default_text))
     return entries

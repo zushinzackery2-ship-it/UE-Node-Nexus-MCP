@@ -28,6 +28,46 @@ exports straight into the mirror directory.
   <Project>/.nexus/scenes/       scene baselines, state, plans and recovery records
 ```
 
+## File discovery and ignore rules
+
+Asset and scene discovery prune dot-prefixed directories at every depth and skip
+dot-prefixed files and `__pycache__`. This covers `.auto-index-mcp`, `.git`,
+`.cache` and Nexus's own `.nexus` metadata. Only file candidates with the
+`.nexus` suffix enter discovery; a directory named `Backup.mat.nexus` is a directory.
+
+Place a UTF-8 `.nexusignore` in the checkout's returned `files_root`, a standalone
+lint `files_root`, or the legacy `<root>/<Project>` directory. Rules are local to
+that files root and are reloaded on each scan. Use forward slashes and matching
+case. `.gitignore` controls Git independently.
+
+```text
+# .nexusignore
+Backups/
+**/*_scratch.mat.nexus
+Scenes/**/Backup.scene.nexus
+```
+
+Patterns support `*`, `?`, `[abc]`, and `**` as a complete path component for any
+number of directories. A basename pattern matches at any depth; a leading `/`
+or an internal `/` anchors the pattern to the files root. A trailing `/` matches
+directories. Blank lines and lines beginning with `#` are comments; `\#` and
+`\!` escape those leading characters. Later matching rules win, and `!` includes
+a path again. Its parent directories must also be included, for example:
+
+```text
+Backups/*
+!Backups/Keep.mat.nexus
+```
+
+Built-in metadata exclusions remain reserved. Ignore rules filter discovery of
+new files for status, lint, stage, commit and push; registered workspace files
+and legacy asset/scene records remain tracked, including their explicit
+deletions. Committed history remains publishable. Explicit file selection also
+respects new-file exclusions: checkout returns `path_not_found`, and legacy
+asset selection returns `path_ignored`. Invalid ignore files and scan permission
+errors return structured errors; the `ue_nexus.discovery` debug logger records
+loaded rules, pruned directories and candidate counts.
+
 ## Loop
 
 1. `ue_sync("status")` — three-way state per asset: `clean`, `local-modified`,

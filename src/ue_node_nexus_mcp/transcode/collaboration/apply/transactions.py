@@ -180,7 +180,12 @@ def actual_snapshot(workspace, record: dict) -> dict | None:
         raise SyncError("receipt_invalid", "saved receipt has no verified result snapshot", dict(apply_id=record["id"]))
     if record["request"].get("delete_asset") and raw.get("exists") is not False:
         raise SyncError("receipt_invalid", "deletion receipt still reports an existing asset", dict(apply_id=record["id"], asset=record["asset"]))
-    if raw.get("exists") is False or record["request"].get("delete_scene"):
+    if record["request"].get("delete_scene"):
+        from .readback import verify_scene_deletion
+
+        verify_scene_deletion(record, raw)
+        return None
+    if raw.get("exists") is False:
         return None
     candidate = workspace.history.entries(record["candidate"]).get(record["asset"])
     prior = deepcopy(workspace.store.objects.data(candidate, "snapshot")) if candidate else None

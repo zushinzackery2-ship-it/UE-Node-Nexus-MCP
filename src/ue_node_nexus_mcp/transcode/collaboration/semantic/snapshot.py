@@ -12,6 +12,7 @@ from .decode import physical_ids, to_document
 from .encode import encode
 from .identity import plain, scene_metadata
 from .locations import stamp
+from ...blueprint.native_components import retain_aliases
 
 VOLATILE = set(("dirty", "saved_hash", "exported_at", "generated_at", "timestamp", "revision", "live_revision", "content_revision", "editor_epoch", "request_token", "apply_id"))
 
@@ -29,6 +30,8 @@ def from_raw(raw: dict, previous: dict | None = None, namespace: str = "ue", sch
     else:
         previous_ids = physical_ids(previous) if previous else raw.get("ids")
         document, _, _ = document_from_raw(raw, previous_ids=previous_ids, schema=schema)
+        if kind == "blueprint":
+            retain_aliases(document, previous)
     stamp(document)
     semantic, bindings, locations = encode(document, kind, previous, namespace, schema, raw=raw)
     return dict(semantic=semantic, semantic_hash=digest(semantic), bindings=bindings,

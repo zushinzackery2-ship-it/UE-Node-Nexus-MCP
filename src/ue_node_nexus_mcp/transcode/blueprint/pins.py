@@ -1,10 +1,10 @@
 """Pin contracts for authored nodes before an export supplies physical bindings."""
 
-from .signature import parse_signature
 from .types import join_type_text, parse_type_text
 from ..text.lexer import LexError
 from ..raw.nodes import single_visible_pin
 from .classes import node_name
+from .callables import event_signature, local_records
 
 
 def pin(name, direction, category="exec", **extra) -> dict:
@@ -23,15 +23,9 @@ def function_record(decl, document, schema) -> dict | None:
         return None
     owner, _, name = positional[0].rpartition(".")
     if owner == "self":
-        for section in document.find_sections("function"):
-            try:
-                signature = parse_signature(section.args)
-            except LexError:
-                continue
-            if signature.name == name:
-                params = [dict(item.to_raw(), dir="in") for item in signature.inputs]
-                params.extend(dict(item.to_raw(), dir="out") for item in signature.outputs)
-                return dict(params=params, pure="Pure" in signature.flags)
+        declared = local_records(document)
+        if name in declared:
+            return declared[name]
         owner = parent_class(document)
     return schema.function(owner, name) if schema and owner else None
 
@@ -78,7 +72,12 @@ def node_pins(decl, document, section, schema=None, metadata=None) -> list:
     if name == "ExecutionSequence":
         count = decl.keyed().get("pins", "2")
         return [pin("execute", "in"), *[pin(f"then_{index}", "out") for index in range(int(count) if count.isdigit() else 2)]]
-    if name in ("Event", "CustomEvent", "FunctionEntry"):
+    if name == "CustomEvent":
+        try:
+            return [pin("then", "out"), *[dict(item.to_raw(), dir="out") for item in event_signature(decl).inputs]]
+        except LexError:
+            return []
+    if name in ("Event", "FunctionEntry"):
         return [pin("then", "out")]
     if name == "EnhancedInputAction":
         return [pin(event, "out") for event in ("Started", "Ongoing", "Triggered", "Canceled", "Completed")]

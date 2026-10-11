@@ -7,12 +7,13 @@ from .common import diff_prop_section
 from .graph import diff_graph_section
 from .niagara import diff_niagara
 from ..material.calls import rebuild_wired_calls
+from ..material.custom_inputs import rewire_inputs
 from ..text.model import Document, Section
 from ..storage.paths import object_path
 from .plan import AssetPlan
 from ..raw.simple import INSTANCE_SECTIONS
 from ..schema.lock import SchemaLock
-from ..text.values import values_equal
+from ..text.semantic import values_equal
 
 FUNCTION_INTERFACE_CLASSES = {"FunctionInput", "FunctionOutput"}
 
@@ -31,19 +32,23 @@ def build_plan(local: Document, base: Document | None, kind: str, ids: dict[str,
             plan.error("stub_read_only", "stub files mirror AssetRegistry tags and cannot be pushed", line=1)
         return plan
     if kind in ("material", "material_function"):
-        diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
+        diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
         local_graph = local.section("graph") or Section(name="graph")
         base_graph = base.section("graph") if base else None
         diff_graph_section(local_graph, base_graph, plan, kind, schema=schema)
         rebuild_wired_calls(local_graph, plan)
+        rewire_inputs(local_graph, plan)
         if kind == "material_function":
-            plan.interface_changed = _function_interface_changed(local_graph, base_graph)
+            plan.interface_identity_changed = _function_identity_changed(local_graph, base_graph, plan)
+            plan.interface_changed = _function_interface_changed(local_graph, base_graph) or plan.interface_identity_changed
     elif kind == "material_instance":
-        diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
+        diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
         for name in INSTANCE_SECTIONS:
             _diff_instance_params(local.section(name), base.section(name) if base else None, name, plan)
     elif kind == "asset":
-        diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
+        diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
+        if local.header.cls.rsplit(".", 1)[-1] == "MaterialParameterCollection":
+            plan.interface_changed = any(verb.args.get("name") in ("ScalarParameters", "VectorParameters") for verb in plan.verbs)
     elif kind == "blueprint":
         diff_blueprint(local, base, plan, schema)
     elif kind in ("niagara_system", "niagara_emitter"):
@@ -64,7 +69,7 @@ def _diff_instance_params(local: Section | None, base: Section | None, kind_name
     base_props = base.prop_map() if base else {}
     for name, prop in local_props.items():
         before = base_props.get(name)
-        if before is None or not values_equal(before.value, prop.value):
+        if before is None or not values_equal(before.value, prop.value, before.type_name or prop.type_name):
             plan.add("mi_set_param", line=prop.line, kind=kind_name, name=name, value=prop.value)
     for name in base_props:
         if name not in local_props:
@@ -78,9 +83,16 @@ def _function_interface_changed(local: Section, base: Section | None) -> bool:
             return []
         items: list[tuple[str, str, str, str]] = []
         for decl in section.decls():
-            if decl.type_name in FUNCTION_INTERFACE_CLASSES:
+            class_name = decl.type_name.rsplit(".", 1)[-1].removeprefix("MaterialExpression")
+            if class_name in FUNCTION_INTERFACE_CLASSES:
                 keyed = decl.keyed()
-                items.append((decl.type_name, keyed.get("InputName", keyed.get("OutputName", "")), keyed.get("InputType", ""), keyed.get("SortPriority", "")))
+                items.append((class_name, keyed.get("InputName", keyed.get("OutputName", "")), keyed.get("InputType", ""), keyed.get("SortPriority", "")))
         return sorted(items)
 
     return signature(local) != signature(base)
+
+
+def _function_identity_changed(local: Section, base: Section | None, plan: AssetPlan) -> bool:
+    interfaces = {decl.id for section in (local, base) if section
+                  for decl in section.decls() if decl.type_name.rsplit(".", 1)[-1].removeprefix("MaterialExpression") in FUNCTION_INTERFACE_CLASSES}
+    return any(verb.op in ("create_node", "delete_node") and verb.args.get("id") in interfaces for verb in plan.verbs)

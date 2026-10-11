@@ -107,6 +107,12 @@ FJson ResultSnapshot(const FJson& Request, const FJson& Response)
     // A scene's members may change in the operation. Use its actual returned
     // selector instead of the selector that described the precondition.
     const FJson Data = Object(Response, TEXT("data"));
+    if (Flag(Request, TEXT("delete_asset")) && Flag(Data, TEXT("deleted")))
+    {
+        // Absence is the expected result of a successful delete. Observe still
+        // reads the real state, using its existing quiet expected-absence path.
+        Observation->SetBoolField(TEXT("expected_absent"), true);
+    }
     if (Data->HasField(TEXT("result_selector")))
     {
         Observation->SetObjectField(TEXT("selector"), Object(Data, TEXT("result_selector")));

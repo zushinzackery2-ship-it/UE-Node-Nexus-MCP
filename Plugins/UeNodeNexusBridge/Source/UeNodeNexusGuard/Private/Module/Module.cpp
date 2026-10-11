@@ -3,6 +3,7 @@
 #include "../Control/Pipe.h"
 #include "../Control/State.h"
 #include "../Startup/Monitor.h"
+#include "NexusValidation.h"
 
 class FUeNodeNexusGuardModule : public IModuleInterface
 {
@@ -11,6 +12,7 @@ public:
     {
         if (NexusLifecycle::InitializeIdentity())
         {
+            NexusLifecycle::Validation::Install();
             NexusLifecycle::Startup::Install(NexusLifecycle::State().bManaged);
             Server = MakeUnique<NexusLifecycle::FPipe>();
         }
@@ -20,9 +22,12 @@ public:
     {
         if (Server.IsValid())
         {
+            // Status readers retain the startup observer until every pipe and
+            // watchdog worker has joined. Only then may its log sink be freed.
+            Server.Reset();
             NexusLifecycle::Startup::Uninstall();
         }
-        Server.Reset();
+        NexusLifecycle::Validation::Uninstall();
         NexusLifecycle::ReleaseIdentity();
     }
 private:

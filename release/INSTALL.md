@@ -115,6 +115,10 @@ High-risk checkout publication now requires isolation contract 1. It validates
 Niagara changes, material rendering contracts and function interfaces through
 complete worker apply/compile/save/export before the main transaction. Results
 bind the live-memory baseline, candidate/dependencies, engine/plugins and RHI.
+Effective runtime INI values, rendering CVars and supported rendering launch
+arguments are reproduced and compared before the candidate executes. Initialization
+values precede RHI startup; dependent change callbacks wait for engine initialization.
+Unsupported rendering launch overrides return `safety_launch_unsupported`.
 Use matching Python and all three plugin modules. Legacy high-risk push requires
 checkout. Low-memory startup remains a user-authorized per-invocation override:
 `safety_allow_low_memory` for push/continue or `allow_low_memory` for explicit

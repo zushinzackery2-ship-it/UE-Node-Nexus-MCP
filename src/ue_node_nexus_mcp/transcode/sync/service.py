@@ -90,7 +90,7 @@ def _run_sync(bridge: BridgeCall, action: str, paths: list[str] | None = None, o
 def _run_locked(bridge: BridgeCall, context: ProjectContext, action: str, paths: list[str] | None, options: dict[str, Any]) -> dict[str, Any]:
     state = SyncState.load(context.project)
     report: dict[str, Any] = {"action": action, **context.info(), "warnings": list(context.warnings)}
-    scenes = SceneBatch(context, paths, options, action)
+    scenes = SceneBatch(context, paths, options, action, state)
     paths = scenes.prepare_push() if action == "push" else scenes.asset_paths
     has_assets = paths is None or bool(paths)
     if action == "init":
@@ -167,12 +167,12 @@ def _pull(bridge: BridgeCall, context: ProjectContext, state: SyncState, paths: 
 
 def _lint(context: ProjectContext, state: SyncState, paths: list[str] | None, report: dict[str, Any]) -> None:
     selected = _selection(context, state, paths)
-    local = mirrored_assets(context.project)
+    local = mirrored_assets(context.project, state)
     diagnostics: list[Diagnostic] = []
     rows: list[dict[str, Any]] = []
     for asset_path in selected:
         entry = local.get(asset_path)
-        if entry is None:
+        if entry is None or not entry[1].is_file():
             # Only an explicit selection can name an asset with no text; a silent
             # skip here once let `lint /Game/Folder` report 0 files as success.
             if paths:

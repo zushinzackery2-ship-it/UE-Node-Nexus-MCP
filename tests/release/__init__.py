@@ -1,0 +1,1 @@
+"""Release artifact acceptance boundaries."""

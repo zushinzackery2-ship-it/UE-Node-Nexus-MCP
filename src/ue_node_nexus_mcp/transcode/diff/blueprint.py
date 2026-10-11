@@ -13,12 +13,12 @@ from ..text.lexer import LexError
 from ..text.model import Decl, Document, Section
 from .plan import AssetPlan
 from ..schema.lock import SchemaLock
-from ..text.values import values_equal
+from ..text.semantic import values_equal
 
 
 def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, schema: SchemaLock | None = None) -> None:
     plan.ids = existing_node_ids(base, plan.ids)
-    diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop")
+    diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
     _diff_variables(local.section("variables"), base.section("variables") if base else None, plan)
     _diff_components(local.section("components"), base.section("components") if base else None, plan, schema)
     diff_prop_section(local.section("defaults"), base.section("defaults") if base else None, plan, "bp_default_set")
@@ -66,14 +66,15 @@ def _diff_variables(local: Section | None, base: Section | None, plan: AssetPlan
             plan.add("bp_variable_add", line=decl.line, **payload)
             continue
         before_payload = _variable_payload(before)
-        changed = {key: value for key, value in payload.items() if key != "name" and not _same(value, before_payload[key])}
+        changed = {key: value for key, value in payload.items() if key != "name" and not _same(value, before_payload[key],
+                   join_type_text(decl.type_name, decl.args) if key == "default" else "FString")}
         if changed:
             plan.add("bp_variable_set", line=decl.line, name=name, **changed)
 
 
-def _same(left: object, right: object) -> bool:
+def _same(left: object, right: object, type_name=None) -> bool:
     if isinstance(left, str) and isinstance(right, str):
-        return values_equal(left, right)
+        return values_equal(left, right, type_name)
     if isinstance(left, list) and isinstance(right, list):
         return sorted(map(str, left)) == sorted(map(str, right))
     return left == right
@@ -96,7 +97,9 @@ def _diff_components(local: Section | None, base: Section | None, plan: AssetPla
         keyed = decl.keyed()
         if before is None:
             if decl.inherited:
-                plan.error("unsupported_edit", f"{name}: @inherited components come from the parent class and cannot be added here", decl.line)
+                plan.add("bp_component_bind", line=decl.line, name=name, **{"class": decl.marker_arg() or decl.type_name})
+                for key, value in decl.prop_values().items():
+                    plan.add("bp_component_set_prop", line=decl.line, name=name, prop=key, value=value)
                 continue
             # The class the catalog resolved, so the editor does not look the name up again.
             component_class = class_path(schema, "component", decl.type_name) or decl.type_name
@@ -182,5 +185,5 @@ def _diff_locals(local: Section, base: Section | None, function: str, plan: Asse
         before = base_locals.get(name)
         if before is None:
             plan.add("bp_local_variable_add", line=decl.line, function=function, name=name, type=type_raw, default=decl.default or "")
-        elif join_type_text(before.type_name, before.args) != join_type_text(decl.type_name, decl.args) or not values_equal(before.default or "", decl.default or ""):
+        elif join_type_text(before.type_name, before.args) != join_type_text(decl.type_name, decl.args) or not values_equal(before.default or "", decl.default or "", join_type_text(decl.type_name, decl.args)):
             plan.add("bp_local_variable_set", line=decl.line, function=function, name=name, type=type_raw, default=decl.default or "")

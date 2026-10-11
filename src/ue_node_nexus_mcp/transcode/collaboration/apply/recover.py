@@ -80,7 +80,8 @@ def owner_of(store, context, record: dict, caller) -> Workspace:
     if caller is not None and caller.state["id"] == record["workspace_id"]:
         return caller
     try:
-        return Workspace(store, record["workspace_id"], context.schema)
+        schema = context.schema if context is not None else caller.schema
+        return Workspace(store, record["workspace_id"], schema)
     except SyncError as exc:
         if exc.code not in ("workspace_not_found", "workspace_closed"):
             raise

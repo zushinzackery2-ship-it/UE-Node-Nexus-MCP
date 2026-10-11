@@ -10,14 +10,17 @@ namespace UeNodeNexusBridge::Collaboration
 using FJson = TSharedPtr<FJsonObject>;
 // Exports one live asset; Observe resolves the asset and answers for a missing one.
 using FObserver = TFunction<FJson(const FJson& Request, UObject* Asset, FString& Error)>;
+// Canonicalize native load-time state before serializing a recovery checkpoint.
+using FCheckpointPreparation = TFunction<bool(UObject* Asset, FString& Error)>;
 using FCommitBody = TFunction<FJson(const FJson&)>;
 
 UENODENEXUSBRIDGE_API FString EditorEpoch();
 UENODENEXUSBRIDGE_API FString ContentDigest(const FJson& Json);
 UENODENEXUSBRIDGE_API FJson StampRaw(const FJson& Raw);
 UENODENEXUSBRIDGE_API FJson Observe(const FJson& Request, FString* OutError = nullptr);
-UENODENEXUSBRIDGE_API void RegisterObserver(const FString& Kind, FObserver Observer);
+UENODENEXUSBRIDGE_API void RegisterObserver(const FString& Kind, FObserver Observer, FCheckpointPreparation Preparation = nullptr);
 UENODENEXUSBRIDGE_API void UnregisterObserver(const FString& Kind);
+UENODENEXUSBRIDGE_API bool PrepareCheckpointAsset(const FJson& Request, UObject* Asset, FString& Error);
 UENODENEXUSBRIDGE_API bool BindRepository(const FString& Repository, const FString& ProjectId, FString& Error);
 UENODENEXUSBRIDGE_API FString BoundRepository();
 UENODENEXUSBRIDGE_API FJson RunCommit(const FString& Operation, const FString& RequestId, const FJson& Payload, FCommitBody Body);

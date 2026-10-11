@@ -9,7 +9,7 @@ from .facade_response import LARGE_RESPONSE_INLINE_BYTE_LIMIT, artifact_handle, 
 from .runtime import call_bridge, thin_tool
 from .transcode.sync.service import ACTIONS, run_sync
 from .transcode.errors import SyncError
-from .transcode.collaboration.report.options import COMMON, OPTIONS
+from .transcode.sync.options import OPTION_KEYS as _OPTION_KEYS
 from .transcode.sync.lifecycle import run_managed_sync
 from .instances.errors import InstanceError
 from .diagnostics.contracts.response import DIAGNOSTIC_FIELDS
@@ -19,17 +19,7 @@ SyncAction = Literal["init", "checkout", "workspaces", "status", "fetch", "pull"
                      "stage", "unstage", "commit", "amend", "merge", "resolve", "continue", "abort", "recover", "close",
                      "branch", "switch", "tag", "log", "show", "diff", "blame", "reflog", "stash", "restore", "revert", "reset", "cherry-pick", "rebase",
                      "job_status", "job_result", "job_cancel"]
-_OPTION_KEYS = {
-    "init": {"pull_all", "include_stubs", "auto_export", "refresh_schema", "scene"},
-    "status": {"discover", "include_stubs", "include_clean", "scene"},
-    "pull": {"discover", "include_stubs", "force", "scene"},
-    "lint": set(),
-    "push": {"dry_run", "compile", "save", "force", "allow_delete", "stop_on_error", "scene"},
-    "schema": set(),
-}
 _ROW_INLINE_LIMIT = 40
-for _action, _keys in OPTIONS.items():
-    _OPTION_KEYS.setdefault(_action, set()).update(_keys | COMMON)
 
 
 @thin_tool(offload=True)
@@ -113,7 +103,8 @@ def _finish(report: dict[str, Any]) -> dict[str, Any]:
     if response_payload_bytes(dict(ok=result["ok"], data=compact)) > LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         keys = ("action", "status", "workspace_id", "merge_id", "apply_id", "proposal_id", "commit_id", "source_commit",
                 "published_commit", "candidate", "base", "ours", "theirs", "error_count", "conflict_count", "applied",
-                "source_integrated", "workspace_rebase_required", "dry_run", "schema_key", *DIAGNOSTIC_FIELDS)
+                "source_integrated", "workspace_rebase_required", "dry_run", "schema_key", "executable", "plan_complete",
+                "blocked_asset_count", "blocked_assets", "blocked_assets_truncated", *DIAGNOSTIC_FIELDS)
         summary = dict((key, compact[key]) for key in keys if key in compact)
         summary.update(artifact=artifact, next_read=compact["next_read"], page_lists_with=compact["page_lists_with"],
                        rows_count=len(rows), inline_truncated=True)

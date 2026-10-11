@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 
 from ..history.query import diff
 from ..store.database import Database
+from ..store.objects import Objects
 from ..workspace import cache
 from ..workspace.commands import run
 from ..workspace.files import capture_files
@@ -28,12 +29,31 @@ def simulate(workspace, action: str, paths, options: dict) -> dict:
         with store.db.connection() as source, closing(sqlite3.connect(database)) as target:
             source.backup(target)
         sandbox.db = Database(database)
+        sandbox.objects = Objects(store.objects.root, sandbox.db)
         try:
-            return preview(workspace, sandbox, action, paths, options)
+            result = preview(workspace, sandbox, action, paths, options)
+            promote(store, sandbox, result["objects"])
+            return result
         finally:
             # The sandbox dies with this block; an open handle would keep its
             # database file alive and turn cleanup into a permission error.
             sandbox.db.discard()
+
+
+def promote(store, sandbox, roots):
+    """Register returned immutable artifacts before publishing their proposal."""
+    with store.db.connection(write=True) as connection:
+        pending = [(identifier, False) for identifier in roots]
+        while pending:
+            identifier, visited = pending.pop()
+            if connection.execute("SELECT 1 FROM objects WHERE id=?", (identifier,)).fetchone():
+                continue
+            value = sandbox.objects.get(identifier)
+            if visited:
+                store.objects.put(value["kind"], value["data"], value["links"])
+            else:
+                pending.append((identifier, True))
+                pending.extend((link, False) for link in value["links"])
 
 
 def preview(workspace, sandbox, action: str, paths, options: dict) -> dict:

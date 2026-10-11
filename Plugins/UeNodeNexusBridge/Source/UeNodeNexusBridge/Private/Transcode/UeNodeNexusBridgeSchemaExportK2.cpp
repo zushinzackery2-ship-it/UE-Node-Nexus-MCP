@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "Schema/NexusSchema.h"
+#include "Blueprint/Properties/NexusAnimGetterProperties.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraphNode_Comment.h"
@@ -20,9 +21,17 @@ static TSharedPtr<FJsonObject> ClassProps(UClass* Class)
     UObject* Cdo = Class->GetDefaultObject();
     for (TFieldIterator<FProperty> It(Class); It; ++It)
     {
-        if (IsEditableProperty(*It))
+        const bool bBinding = IsAnimGetterBindingProperty(Cast<UEdGraphNode>(Cdo), *It);
+        if (IsEditableProperty(*It) || bBinding)
         {
-            Props->SetObjectField(It->GetName(), PropertySchemaJson(*It, Cdo));
+            const auto Property = PropertySchemaJson(*It, Cdo);
+            if (bBinding)
+            {
+                Property->SetBoolField(TEXT("writable"), true);
+                Property->SetStringField(TEXT("write_entry"), TEXT("blueprint_node_params_set"));
+                Property->SetStringField(TEXT("write_condition"), TEXT("AnimGetter typed binding; source objects must share the owning AnimBlueprint"));
+            }
+            Props->SetObjectField(It->GetName(), Property);
         }
     }
     return Props;

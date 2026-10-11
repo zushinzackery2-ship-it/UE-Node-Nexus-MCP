@@ -11,6 +11,7 @@ server restart.
 from __future__ import annotations
 
 import queue
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -138,11 +139,15 @@ def task_submit(operation: str, payload: dict[str, Any] | None = None) -> dict[s
         _tasks[task_id] = record
         queued_before = sum(1 for other in _tasks.values() if other.status == "queued")
 
+    scope = None
     try:
         scope = reserve(operation, call_payload)
+        _ensure_worker()
     except Exception as exc:
         with _lock:
             _tasks.pop(task_id, None)
+        if scope:
+            scope.release()
         if isinstance(exc, InstanceError):
             return _task_error("task_submit", exc.code, str(exc), exc.details)
         raise
@@ -157,7 +162,6 @@ def task_submit(operation: str, payload: dict[str, Any] | None = None) -> dict[s
             scope.release()
         return _envelope("task_submit", True, dict(task_id=task_id, operation=operation, status="cancelled"))
 
-    _ensure_worker()
     return _envelope(
         "task_submit",
         True,
@@ -216,11 +220,8 @@ def task_cancel(task_id: str) -> dict[str, Any]:
             )
         record.status = "cancelled"
         record.finished_at = time.time()
-    record.done.set()
-    if record.work_scope:
-        record.work_scope.release()
-    if record.on_cancel:
-        record.on_cancel()
+    from .tasks.completion import complete
+    complete(record, sys.modules[__name__], cancelled=True)
     return _envelope("task_cancel", True, {"task_id": task_id, "status": "cancelled"})
 
 
@@ -241,22 +242,11 @@ def reset_for_tests() -> None:
         _tasks.clear()
 
 
-def submit_callable(operation, executor, work_scope=None, on_cancel=None, on_finish=None) -> str:
+def submit_callable(operation, executor, work_scope=None, on_cancel=None, on_finish=None, on_submit=None) -> str:
     """Queue an internal workflow on the same worker as registry operations."""
-    global _next_task_number
-    with _lock:
-        if _closing:
-            raise InstanceError("session_closed", "the MCP task queue is closing")
-        active = sum(record.status in ("reserving", "queued", "running") for record in _tasks.values())
-        if active >= MAX_ACTIVE_TASKS:
-            raise InstanceError("task_queue_full", "the MCP task queue is full", dict(limit=MAX_ACTIVE_TASKS))
-        identifier = f"task-{_next_task_number}"
-        _next_task_number += 1
-        _tasks[identifier] = _TaskRecord(identifier, operation, dict(), submitted_at=time.time(), work_scope=work_scope,
-                                         executor=executor, on_cancel=on_cancel, on_finish=on_finish)
-        _queue.put(identifier)
-    _ensure_worker()
-    return identifier
+    from .tasks.submission import submit
+    return submit(sys.modules[__name__], operation, executor, work_scope,
+                  on_cancel, on_finish, on_submit)
 
 
 def shutdown() -> None:

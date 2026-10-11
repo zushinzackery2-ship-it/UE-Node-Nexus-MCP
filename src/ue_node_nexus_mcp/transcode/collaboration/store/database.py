@@ -12,6 +12,7 @@ from typing import Iterator
 
 from ...errors import SyncError
 from .records import DDL as RECORD_DDL, migration_sql
+from .errors import database_error
 
 LOG = logging.getLogger(__name__)
 FORMAT_VERSION = 2
@@ -84,20 +85,22 @@ class Database:
 
     @contextmanager
     def connection(self, write: bool = False) -> Iterator[sqlite3.Connection]:
-        connection = self.handle()
-        owner = write and not connection.in_transaction
+        connection, owner = None, False
         try:
+            connection = self.handle()
+            owner = write and not connection.in_transaction
             if owner:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection
             if owner:
                 connection.commit()
         except sqlite3.DatabaseError as exc:
-            self.unwind(connection, owner)
-            code = "store_busy" if "locked" in str(exc).lower() else "store_corrupt"
-            raise SyncError(code, str(exc), dict(path=str(self.path))) from exc
+            if connection is not None:
+                self.unwind(connection, owner)
+            raise database_error(exc, self.path) from exc
         except BaseException:
-            self.unwind(connection, owner)
+            if connection is not None:
+                self.unwind(connection, owner)
             raise
 
     def unwind(self, connection: sqlite3.Connection, owner: bool) -> None:

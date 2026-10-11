@@ -7,6 +7,8 @@ from typing import Any
 
 from ..sync.files import mirrored_assets
 from ..sync.project import ProjectContext
+from ..sync.state import SyncState
+from ..storage.ignore.walk import files as discover_files
 from ..errors import SyncError
 from .files import read_base
 from .paths import identity, is_scene_file, scene_path, storage
@@ -36,7 +38,7 @@ def resolve_file(context: ProjectContext, text: str) -> Path:
 def records(context: ProjectContext, state: SceneState) -> list[SceneRecord]:
     found = dict(state.records)
     known_files = dict(((context.project / item.file).resolve(), item.key) for item in found.values())
-    for file in sorted((context.project / "Scenes").rglob("*.scene.nexus")):
+    for file in discover_files(context.project, ".scene.nexus", context.project / "Scenes"):
         if file.resolve() in known_files:
             continue
         if not file.resolve().is_relative_to(context.project.resolve()):
@@ -50,7 +52,7 @@ def records(context: ProjectContext, state: SceneState) -> list[SceneRecord]:
 
 
 def select(context: ProjectContext, state: SceneState, paths: list[str] | None,
-           options: dict[str, Any]) -> tuple[list[str] | None, list[SceneRecord]]:
+           options: dict[str, Any], asset_state: SyncState | None = None) -> tuple[list[str] | None, list[SceneRecord]]:
     available = records(context, state)
     explicit = options.get("scene")
     selected = dict()
@@ -80,7 +82,7 @@ def select(context: ProjectContext, state: SceneState, paths: list[str] | None,
         scene_root = (context.project / "Scenes").resolve()
         if not is_scene_file(file) and not file.is_relative_to(scene_root):
             if file.is_dir() and matches:
-                assets.extend(asset for asset, (_, mirror) in mirrored_assets(context.project).items()
+                assets.extend(asset for asset, (_, mirror) in mirrored_assets(context.project, asset_state).items()
                               if mirror.resolve().is_relative_to(file))
             else:
                 assets.append(text)
