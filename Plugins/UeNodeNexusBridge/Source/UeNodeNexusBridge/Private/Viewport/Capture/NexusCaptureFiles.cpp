@@ -11,6 +11,22 @@
 
 namespace UeNodeNexusBridge::Capture
 {
+bool IsSafeScreenshotName(const FString& Name)
+{
+    if (Name.IsEmpty() || Name.Len() > 100)
+    {
+        return false;
+    }
+    for (TCHAR Char : Name)
+    {
+        if (!FChar::IsAlnum(Char) && Char != TEXT('_') && Char != TEXT('-'))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool WriteReceipt(const TSharedPtr<FJsonObject>& Receipt)
 {
     const FString Path = Receipt->GetStringField(TEXT("receipt_path"));

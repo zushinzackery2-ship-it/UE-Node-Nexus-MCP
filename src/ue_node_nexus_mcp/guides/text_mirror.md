@@ -17,7 +17,8 @@ exports straight into the mirror directory.
 
 ```
 <root>/                          shared mirror_root returned by bridge_instance_ensure
-  .nexus/schema/<key>/           schema lock (classes, props, defaults, enums, MF signatures)
+  .nexus/schema/<key>/           environment manifest and readable category indexes
+  .nexus/schema/.objects/        immutable definitions shared across environments
   <Project>/A/B/M_X.mat.nexus    material        .mf = function   .mi = instance
   <Project>/A/B/BP_X.bp.nexus    blueprint       .ns/.ne = Niagara system/emitter
   <Project>/A/B/DA_X.asset.nexus property-bag asset (DataAsset, InputAction, IMC, ...)
@@ -27,6 +28,11 @@ exports straight into the mirror directory.
   <Project>/.nexus/pending/      raw exports and *.push.json recovery records
   <Project>/.nexus/scenes/       scene baselines, state, plans and recovery records
 ```
+
+Each environment keeps one current manifest. Format 3 shares identical records
+and property pages by content hash; reads restore that environment's identity
+and verify its bound record hash. Existing format 2 records and historical
+bindings remain readable. Retain the shared object pool together with the catalogs.
 
 ## File discovery and ignore rules
 

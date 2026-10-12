@@ -19,15 +19,24 @@ def close_instance(session, payload):
     if not wait:
         return dict(result, exit_confirmed=False)
     deadline = time.monotonic() + session.broker.policy.get("shutdown_seconds", 60)
+    exit_deadline = time.monotonic() + session.broker.policy.get("exit_seconds", 240)
     while True:
         state = session.status(dict(instance_id=identifier))
         if state["state"] == "EXITED":
             return dict(result, state="EXITED", exit_confirmed=True, exit_code=state.get("exit_code"), instance=state)
+        committed = state.get("exit_committed") is True
         if state["state"] in ("BLOCKED", "UNRESPONSIVE"):
-            raise InstanceError("close_blocked" if state["state"] == "BLOCKED" else "instance_unresponsive",
+            # A committed normal exit may outlive the drain deadline while the
+            # editor flushes shaders and caches; the process is shutting down,
+            # not hung, until the exit deadline passes.
+            if committed and state["state"] == "UNRESPONSIVE" and time.monotonic() < exit_deadline:
+                time.sleep(0.2)
+                continue
+            raise InstanceError("close_blocked" if state["state"] == "BLOCKED"
+                                else ("shutdown_timeout" if committed else "instance_unresponsive"),
                                 "editor process is still alive; inspect the close blockers",
                                 dict(instance=state, exit_confirmed=False))
-        if time.monotonic() >= deadline:
+        if time.monotonic() >= (exit_deadline if committed else deadline):
             raise InstanceError("shutdown_timeout", "editor process has not exited before the close deadline",
                                 dict(instance=state, exit_confirmed=False))
         time.sleep(0.2)

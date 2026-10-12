@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
-from ..storage.io import atomic_write, canonical, digest, read_json, confined
+from ..storage.io import atomic_write, canonical, digest, read_json
 from ..errors import SyncError
 from .names import CLASS_TIERS, OWNER_TIERS, RECORD_TIERS, class_spellings
 from .records import FAMILIES, normalize
+from .objects import write as write_object, path as record_path
 from .progress import scope
-from ..storage.metrics import measure
 
 # The first release wrote one table per family; ``migrate`` reads them.
 LEGACY_FILES = dict(material_expression="classes.material_expression.json", k2node="classes.k2node.json",
@@ -31,7 +32,7 @@ def publish(directory: Path, key: str, tables: dict, environment: dict | None = 
 
 
 def ensure_format(directory: Path, key: str) -> dict:
-    """The format-2 manifest of ``directory``, converting first-release tables once.
+    """The versioned manifest of ``directory``, converting first-release tables once.
 
     Conversion rewrites only this catalog's own files, so an offline reader needs
     no editor; the lock makes concurrent first readers convert exactly once.
@@ -40,7 +41,7 @@ def ensure_format(directory: Path, key: str) -> dict:
 
     with MirrorLock(directory, directory / "index.lock"):
         manifest = read_json(directory / "key.json")
-        if manifest.get("format") == 2:
+        if manifest.get("format") in (2, 3):
             return manifest
         return _publish(directory, key, legacy_tables(directory), None, None, False)
 
@@ -70,31 +71,32 @@ def _publish_records(directory, key, tables, environment, coverage, incremental,
                     page = dict((name, props[name]) for name in keys[start:start + 256])
                     page_hash = digest(page)
                     path = f"{FAMILIES[family]}/pages/{page_hash}.json"
-                    atomic_write(directory / path, canonical(page))
+                    write_object(directory, path, page)
                     pages.append(dict(file=path, hash=page_hash))
                 record.update(props=dict(), props_pages=pages)
             record["content_hash"] = digest(record)
             record_hash = digest(record)
+            shared = dict(record)
+            shared.pop("schema_key")
+            shared.pop("content_hash")
+            object_hash = digest(shared)
             filename = re.sub(r"[^A-Za-z0-9_.-]", "_", record["path"])[-100:]
-            path = f"{FAMILIES[family]}/{filename}.{record_hash}.json"
-            with measure("lookup"):
-                exists = (directory / path).is_file()
-            if not exists:
-                atomic_write(directory / path, canonical(record))
-            entries[name] = dict(file=path, hash=record_hash, path=record["path"], aliases=record["aliases"],
+            path = f"{FAMILIES[family]}/{filename}.{object_hash}.json"
+            path = write_object(directory, path, shared)
+            entries[name] = dict(file=path, storage="shared", object_hash=object_hash, hash=record_hash,
+                                 path=record["path"], aliases=record["aliases"],
                                  category=record["category"], coverage=record["coverage"], bridge=record["bridge"],
                                  deprecated=bool(record.get("deprecated")))
             progress.advance(family)
         index[family] = entries
-    manifest = dict(format=2, key=key, environment=environment or old.get("environment", dict()),
+    manifest = dict(format=3, key=key, environment=environment or old.get("environment", dict()),
                     generation=old.get("generation", 0) + 1, tables=index,
                     coverage=coverage or old.get("coverage", dict()), contexts=old.get("contexts", dict()))
     manifest["content_hash"] = digest(dict(tables=index, environment=manifest["environment"]))
     progress.phase = "manifest"
+    manifest_bytes = canonical(manifest)
     progress.emit(force=True)
-    atomic_write(directory / "indexes" / f"{manifest['content_hash']}.json", canonical(manifest))
-    progress.emit(force=True)
-    atomic_write(directory / "key.json", canonical(manifest))
+    atomic_write(directory / "key.json", manifest_bytes)
     progress.phase = "documentation"
     progress.emit(force=True)
     markdown(directory, manifest)
@@ -111,18 +113,25 @@ def read_entry(lock, family: str, name: str, entry: dict) -> dict:
     lock.used[(family, name)] = entry["hash"]
     if entry["hash"] in lock.records:
         return lock.records[entry["hash"]]
-    path = confined(lock.directory, entry["file"])
+    path = record_path(lock.directory, entry)
     record = read_json(path)
+    if entry.get("storage") == "shared":
+        if digest(record) != entry["object_hash"]:
+            raise SyncError("schema_corrupt", f"shared schema object checksum mismatch: {path}")
+        record["schema_key"] = lock.key
+        record["content_hash"] = digest(record)
     if digest(record) != entry["hash"]:
         raise SyncError("schema_corrupt", f"schema record checksum mismatch: {path}")
     if record.get("props_pages"):
         props = dict(record.get("props", dict()))
         for page in record["props_pages"]:
-            data = read_json(confined(lock.directory, page["file"]))
+            reference = dict(page, storage="shared") if entry.get("storage") == "shared" else page
+            data = read_json(record_path(lock.directory, reference))
             if digest(data) != page["hash"]:
                 raise SyncError("schema_corrupt", "property page checksum mismatch", page)
             props.update(data)
         record["props"] = props
+    record["schema_key"] = lock.key
     lock.records[entry["hash"]] = record
     return record
 
@@ -174,7 +183,8 @@ def markdown(directory: Path, manifest: dict) -> None:
     for family, entries in manifest["tables"].items():
         for name, entry in entries.items():
             label = name.replace("|", "\\|").replace("\n", " ")
-            categories[FAMILIES[family]].append(f"| {label} | [{entry['path']}]({Path(entry['file']).name}) | {entry['coverage']} | {entry['bridge'].get('write', 'unknown')} |")
+            link = Path(os.path.relpath(record_path(directory, entry), directory / FAMILIES[family])).as_posix()
+            categories[FAMILIES[family]].append(f"| {label} | [{entry['path']}]({link}) | {entry['coverage']} | {entry['bridge'].get('write', 'unknown')} |")
     index = [f"# Schema {manifest['key']}", "", f"Generation: {manifest['generation']}. JSON records are the source for validation and editing.", ""]
     for category, rows in categories.items():
         index.append(f"- [{category}]({category}/index.md): {len(rows)} records")

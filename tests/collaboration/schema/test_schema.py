@@ -212,6 +212,7 @@ def test_targeted_function_details_extend_the_catalog_in_place(project):
 def test_an_interrupted_collection_leaves_the_catalog_and_its_directory_clean(project):
     ue, env, workspace, store, root = project
     before = manifest(root, SCHEMA_KEY)
+    before_names = sorted(path.name for path in (root / ".nexus" / "schema").iterdir())
 
     def aborted(payload):
         out = Path(payload["out_dir"])
@@ -224,7 +225,7 @@ def test_an_interrupted_collection_leaves_the_catalog_and_its_directory_clean(pr
         run_sync(ue, "schema", options=dict(refresh=True), env=env)
     assert failure.value.code == "schema_provider_failed"
     assert manifest(root, SCHEMA_KEY) == before
-    assert [path.name for path in (root / ".nexus" / "schema").iterdir()] == [SCHEMA_KEY]
+    assert sorted(path.name for path in (root / ".nexus" / "schema").iterdir()) == before_names
     assert find_any_schema_lock(root).key == SCHEMA_KEY
     del ue.op_schema_export
     assert run_sync(ue, "schema", options=dict(refresh=True), env=env)["schema_key"] == SCHEMA_KEY

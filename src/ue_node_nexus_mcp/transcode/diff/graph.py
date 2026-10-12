@@ -148,7 +148,13 @@ def _diff_links(local: Section, base: Section | None, local_decls: dict[str, Dec
         if link.src in removed_nodes or link.dst in removed_nodes:
             continue
         plan.add("disconnect_pins", **{"from": link.src, "from_pin": link.src_pin, "to": link.dst, "to_pin": link.dst_pin}, **extra)
-    for key, link in local_links.items():
+    connections = local_links.items()
+    if kind == "blueprint":
+        # Establish array wildcards from their providers before object consumers
+        # can bind an element to a less specific class such as UObject.
+        connections = sorted(connections, key=lambda pair: (pair[1].dst_pin or "").casefold()
+                             not in ("array", "targetarray", "sourcearray"))
+    for key, link in connections:
         if key in base_links and link.src not in replaced_nodes and link.dst not in replaced_nodes:
             continue
         if link.src not in local_decls and link.src not in implicit:

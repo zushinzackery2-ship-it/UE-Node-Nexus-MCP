@@ -4,11 +4,35 @@
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphSchema.h"
+#include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 
 namespace UeNodeNexusBridge::Transcode
 {
+static bool IsElementLayoutMismatch(FName From, FName To)
+{
+    const auto ObjectLike = [](FName Category)
+    {
+        return Category == UEdGraphSchema_K2::PC_Object || Category == UEdGraphSchema_K2::PC_Class
+            || Category == UEdGraphSchema_K2::PC_SoftObject || Category == UEdGraphSchema_K2::PC_SoftClass;
+    };
+    const bool bFromInterface = From == UEdGraphSchema_K2::PC_Interface;
+    const bool bToInterface = To == UEdGraphSchema_K2::PC_Interface;
+    return (bFromInterface && ObjectLike(To)) || (bToInterface && ObjectLike(From));
+}
+
+static bool IsContainerLayoutMismatch(const FEdGraphPinType& From, const FEdGraphPinType& To)
+{
+    if (From.ContainerType == EPinContainerType::None || From.ContainerType != To.ContainerType)
+    {
+        return false;
+    }
+    return IsElementLayoutMismatch(From.PinCategory, To.PinCategory)
+        || (From.ContainerType == EPinContainerType::Map
+            && IsElementLayoutMismatch(From.PinValueType.TerminalCategory, To.PinValueType.TerminalCategory));
+}
+
 static void ApplyLink(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Op, int32 Index, FApplyContext& Context, bool bConnect)
 {
     const FString FromId = ReadOpString(Op, TEXT("from"));
@@ -29,6 +53,16 @@ static void ApplyLink(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<F
     if (FromPin == nullptr || ToPin == nullptr)
     {
         Context.Fail(Index, TEXT("pin_not_found"), FString::Printf(TEXT("pin not found: %s.%s -> %s.%s"), *FromId, *ReadOpString(Op, TEXT("from_pin")), *ToId, *ReadOpString(Op, TEXT("to_pin"))));
+        return;
+    }
+    if (bConnect && IsContainerLayoutMismatch(FromPin->PinType, ToPin->PinType))
+    {
+        // K2 may accept this connection, but object arrays and interface arrays
+        // have different element layouts; executing the graph then reads the
+        // interface pointer from the wrong offset and crashes the editor.
+        Context.Fail(Index, TEXT("array_layout_mismatch"),
+            FString::Printf(TEXT("%s.%s -> %s.%s: interface and object array elements have different runtime layouts; use matching element types"),
+                *FromId, *FromPin->PinName.ToString(), *ToId, *ToPin->PinName.ToString()));
         return;
     }
     Graph->Modify();

@@ -55,6 +55,22 @@ The result row and apply record retain `safety_validation`; failed or stale proo
 prevents the publishing editor's apply. Ordinary material values use the normal
 transaction directly. High-risk publication requires `compile=true`.
 
+One immutable push validates all high-risk candidates in dependency order using one
+project copy and one worker. Every result row retains its own bound receipt with a
+shared `validation_id` and `batch_size`. Internal dependencies updated by verified
+members reuse that proof; candidate, external revision or environment changes require
+new validation. A failed batch blocks its guarded candidates before main mutation.
+Finished copied projects move to `.del` for manual deletion; receipts and runtime logs
+stay in place. `UE_NEXUS_VALIDATION_DIR` selects the volume, whose real allocation and
+live baseline sizes enter the disk budget before copying.
+
+Live baseline export has a project-local journal and consumer lock before native
+serialization begins. Success, export failure and preflight failure all move that
+export to `<Project>/.del/SafetyBaseline/<id>` after consumption. Evidence retains
+the original files and hashes plus `baseline_lease`; a dead consumer's creation
+identity permits recovery on the next publication. Manual deletion of `.del`
+reclaims those archived payloads.
+
 The environment binding includes merged runtime configuration, current rendering
 console variables and supported rendering launch arguments. Workers install the
 captured values before RHI initialization and complete change callbacks after the

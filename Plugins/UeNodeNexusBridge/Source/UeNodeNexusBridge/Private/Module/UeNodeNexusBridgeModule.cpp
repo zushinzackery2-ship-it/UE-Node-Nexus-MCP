@@ -12,6 +12,7 @@
 #include "Diagnostics/Runtime/NexusRuntimeDiagnostics.h"
 #include "Diagnostics/Runtime/Validation/NexusRuntimeSmoke.h"
 #include "Transport/Dispatch/NexusFrameQueue.h"
+#include "Diagnostics/Viewport/NexusViewportShaderPhase.h"
 
 IMPLEMENT_MODULE(FUeNodeNexusBridgeModule, UeNodeNexusBridge)
 
@@ -33,6 +34,7 @@ void FUeNodeNexusBridgeModule::ShutdownModule()
 {
     UeNodeNexusBridge::StopRequestQueue();
     UeNodeNexusBridge::Capture::Stop();
+    UeNodeNexusBridge::Diagnostics::StopViewportShaderPhase();
     UeNodeNexusBridge::RuntimeSmoke::Stop();
     UeNodeNexusBridge::Lifecycle::Stop();
     UeNodeNexusBridge::RuntimeDiagnostics::Stop();

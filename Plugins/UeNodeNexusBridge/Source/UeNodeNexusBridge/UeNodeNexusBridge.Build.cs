@@ -5,11 +5,13 @@ public class UeNodeNexusBridge : ModuleRules
     public UeNodeNexusBridge(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        bUsePrecompiled = false;
         IWYUSupport = IWYUSupport.Full;
         ConfigureBuildIdentity(this);
 
         PrivateIncludePaths.AddRange(new string[]
         {
+            System.IO.Path.Combine(EngineDirectory, "Source", "Runtime", "Renderer", "Private"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Animation"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Audio"),
             System.IO.Path.Combine(ModuleDirectory, "Private", "Assets"),
@@ -66,6 +68,7 @@ public class UeNodeNexusBridge : ModuleRules
             "PhysicsCore",
             "Projects",
             "RenderCore",
+            "Renderer",
             "RHI",
             "UnrealEd",
             "UeNodeNexusGuard"

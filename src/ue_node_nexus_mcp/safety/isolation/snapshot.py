@@ -14,6 +14,10 @@ from .descriptors import read_descriptor
 
 DIRECTORIES = ("Content", "Config", "Plugins", "Source", "Binaries", "Resources", "Shaders", "Tools")
 IGNORED = frozenset(("Saved", "Intermediate", "DerivedDataCache", ".git", "__pycache__", ".auto-index-mcp"))
+# Measured on the validation volume: a copied project's actual allocation is
+# about 1.42x its logical input size once the worker writes mirrors and caches.
+ALLOCATION_FACTOR = 1.5
+WORKING_BYTES = 1024 ** 3
 
 
 def real_path(path: Path) -> None:
@@ -58,7 +62,7 @@ def inventory(project: Path, additional=()) -> dict:
     return dict(project=str(project.resolve()), files=files, additional=list(additional), bytes=sum(path.stat().st_size for path in files))
 
 
-def copy_project(plan: dict, target: Path) -> dict:
+def copy_project(plan: dict, target: Path, *, baseline=None) -> dict:
     source = Path(plan["project"]).parent
     target = target.absolute()
     require(not target.exists(), "isolation_target_exists", "validation copy must use a new directory")
@@ -68,8 +72,13 @@ def copy_project(plan: dict, target: Path) -> dict:
     while not ancestor.exists():
         ancestor = ancestor.parent
     real_path(ancestor)
-    require(shutil.disk_usage(ancestor).free >= plan["bytes"] + 1024 ** 3,
-            "isolation_disk_budget", "snapshot requires its measured size plus 1 GiB working space", required=plan["bytes"] + 1024 ** 3)
+    from .capacity import estimate
+
+    budget = estimate(plan, target, ALLOCATION_FACTOR, WORKING_BYTES, baseline)
+    available = shutil.disk_usage(ancestor).free
+    require(available >= budget["required_bytes"], "isolation_disk_budget",
+            "snapshot requires target-volume allocation, live baseline and 1 GiB working space",
+            available=available, **budget)
     target.mkdir(parents=True)
     records = []
     for path in plan["files"]:
@@ -91,7 +100,8 @@ def copy_project(plan: dict, target: Path) -> dict:
                             sha256=checksum.hexdigest()))
     descriptor = target / Path(plan["project"]).name
     return dict(project=str(descriptor), source=plan["project"], source_root=str(source),
-                files=records, additional=plan.get("additional", []), bytes=plan["bytes"], snapshot_digest=digest(records), baseline="saved_disk")
+                files=records, additional=plan.get("additional", []), bytes=plan["bytes"], snapshot_digest=digest(records),
+                disk_budget=budget, baseline="saved_disk")
 
 
 def unchanged(snapshot: dict) -> bool:

@@ -1,4 +1,5 @@
 #include "NexusRestore.h"
+#include "NexusRestoreRenderScope.h"
 
 #include "Editor.h"
 #include "PackageTools.h"
@@ -54,6 +55,8 @@ bool PrepareCheckpointPackages(const FJson& Receipt, FString& Error)
 
 bool RestoreCheckpointMemory(const FJson& Receipt, FString& Error)
 {
+    FRestoreRenderScope RenderScope;
+    Receipt->SetNumberField(TEXT("restore_render_target_count"), RenderScope.Num());
     TArray<UPackage*> LoadedPackages;
     TMap<FString, TWeakObjectPtr<UPackage>> Previous;
     for (const auto& Value : Rows(Receipt, TEXT("packages")))

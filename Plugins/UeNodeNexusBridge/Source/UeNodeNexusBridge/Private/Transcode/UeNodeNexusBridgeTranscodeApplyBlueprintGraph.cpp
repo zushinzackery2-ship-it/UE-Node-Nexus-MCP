@@ -201,6 +201,12 @@ static int32 CountDynamicPins(UEdGraphNode* Node)
 
 bool SetDynamicPins(UEdGraphNode* Node, int32 Count, FString& OutError)
 {
+    auto* Sequence = Cast<UK2Node_ExecutionSequence>(Node);
+    if (Count < (Sequence ? 2 : 0) || Count > 64)
+    {
+        OutError = TEXT("pins count is outside the native node's supported range");
+        return false;
+    }
     IK2Node_AddPinInterface* AddPin = Cast<IK2Node_AddPinInterface>(Node);
     if (AddPin == nullptr)
     {
@@ -208,6 +214,7 @@ bool SetDynamicPins(UEdGraphNode* Node, int32 Count, FString& OutError)
         return false;
     }
     int32 Guard = 64;
+    Node->Modify();
     while (CountDynamicPins(Node) < Count && Guard-- > 0)
     {
         AddPin->AddInputPin();
@@ -222,11 +229,32 @@ bool SetDynamicPins(UEdGraphNode* Node, int32 Count, FString& OutError)
                 Last = Pin;
             }
         }
-        if (Last == nullptr || !AddPin->CanRemovePin(Last))
+        if (Last == nullptr)
         {
             break;
         }
-        AddPin->RemoveInputPin(Last);
+        if (Sequence)
+        {
+            if (!Sequence->CanRemoveExecutionPin())
+            {
+                break;
+            }
+            Last->BreakAllPinLinks();
+            Sequence->RemovePinFromExecutionNode(Last);
+        }
+        else if (AddPin->CanRemovePin(Last))
+        {
+            AddPin->RemoveInputPin(Last);
+        }
+        else
+        {
+            break;
+        }
+    }
+    if (CountDynamicPins(Node) != Count)
+    {
+        OutError = FString::Printf(TEXT("%s cannot reach pins=%d using its native pin operations"), *Node->GetClass()->GetName(), Count);
+        return false;
     }
     return true;
 }

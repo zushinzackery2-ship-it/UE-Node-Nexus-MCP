@@ -49,6 +49,7 @@ coverage.xml
 .tox/
 .nox/
 build/
+.del/
 dist/
 bin/
 obj/
@@ -153,5 +154,8 @@ tests/safety/boundaries/
 tests/live/issues8/
 tests/live/issues9/
 tests/live/issues10/
+tests/live/issues11/
+tests/live/issues12/
+tests/live/issues13/
 tests/performance/facade_cache.py
 tests/performance/schema_catalog.py

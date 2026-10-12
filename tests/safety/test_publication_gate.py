@@ -39,6 +39,25 @@ def fixture(monkeypatch):
 
     monkeypatch.setattr(gate, "validate", validate)
     monkeypatch.setattr(gate, "actual_snapshot", lambda *args: dict())
+    class Lease:
+        journal = "private/lease.json"
+
+        def __init__(self, project):
+            self.project = project
+
+        def __enter__(self):
+            return self
+
+        def export(self, bridge, assets):
+            return bridge("safety_baseline_export", dict(asset_paths=assets, dry_run=False))["data"]
+
+        def bind(self, report):
+            pass
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(gate, "BaselineLease", Lease)
     return bridge, context, workspace, item, observation, capabilities, calls, events
 
 

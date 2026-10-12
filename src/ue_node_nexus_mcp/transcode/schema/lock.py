@@ -1,10 +1,11 @@
 """Schema lock: the reflection catalog one ``schema_export`` published.
 
-Files under ``<root>/.nexus/schema/<key>/``: ``key.json`` is the format-2
+Files under ``<root>/.nexus/schema/<key>/``: ``key.json`` is the catalog
 manifest naming every record file of every family, and ``index.md`` with the
 per-category indexes are its readable views. A directory that still holds the
 first release's per-family tables is converted in place on first read, so every
-reader resolves through one record layout.
+reader resolves through one record layout. Format 3 shares immutable records in
+``schema/.objects``; format 2 keeps its recorded files and checksum bindings.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ class SchemaLock:
         stamp = (stat.st_mtime_ns, stat.st_size)
         if stamp != self._manifest_stamp:
             manifest = _read_json(path) or dict()
-            if manifest.get("format") != 2:
+            if manifest.get("format") not in (2, 3):
                 from .catalog import ensure_format
 
                 manifest = ensure_format(self.directory, self.key)

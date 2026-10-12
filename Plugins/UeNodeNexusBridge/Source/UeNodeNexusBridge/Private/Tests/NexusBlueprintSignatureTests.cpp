@@ -110,4 +110,33 @@ bool FNexusInterfaceSignature::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusEmptyReturnResult,
+    "Nexus.Issues13.Blueprint.EmptyReturnResultNode",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNexusEmptyReturnResult::RunTest(const FString& Parameters)
+{
+    UBlueprint* Owner = Blueprint();
+    UEdGraph* Graph = Function(Owner);
+    FString Error;
+    auto Empty = Json(TEXT(R"({"inputs":[{"name":"Value","type":{"category":"real","subcategory":"float"}}],"outputs":[],"flags":[]})"));
+    if (!TestTrue(TEXT("a function without outputs accepts its signature"), ApplyBlueprintFunctionSignature(Graph, Empty, Error)))
+    {
+        AddError(Error);
+        return false;
+    }
+    TArray<UK2Node_FunctionEntry*> Entries;
+    Graph->GetNodesOfClass(Entries);
+    TArray<UK2Node_FunctionResult*> Results;
+    Graph->GetNodesOfClass(Results);
+    if (!TestEqual(TEXT("an empty-return function still owns a result node"), Results.Num(), 1))
+    {
+        return false;
+    }
+    const auto* Schema = GetDefault<UEdGraphSchema_K2>();
+    TestTrue(TEXT("the implicit result accepts the entry execute link"),
+        Schema->TryCreateConnection(Entries[0]->FindPin(TEXT("then")), Results[0]->FindPin(TEXT("execute"))));
+    return true;
+}
+
 #endif

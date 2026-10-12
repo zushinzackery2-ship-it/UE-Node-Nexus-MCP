@@ -77,7 +77,7 @@ bool ValidateBlueprintNodeCreateConfig(
         }
         // Chosen before anything is created, so a dry run refuses what the
         // real call would, and a plain request becomes the class UE spawns.
-        if (!SelectCallHostClass(NodeClass, FindCallFunction(FunctionOwner, FunctionName), OutError))
+        if (!SelectCallHostClass(NodeClass, FindCallFunction(FunctionOwner, FunctionName, Blueprint), OutError))
         {
             return false;
         }

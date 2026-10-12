@@ -47,7 +47,11 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 | **关卡操作** | Actor、变换、组件属性、材质槽、Landscape LayerInfo、关卡切换、视口相机与截图 |
 | **VFX** | Niagara 发射器、模块栈、渲染器和用户参数；Cascade 系统摘要 |
 | **诊断与批处理** | Blueprint/AnimBlueprint 编译与 PIE 运行时诊断、结构化 MessageLog/脚本/RHI 错误、精确实例日志、退出崩溃证据、批量执行和后台任务 |
-| **独立执行验收** | 保存状态副本中的 PIE/DX12 或 DX11 smoke、实际 PNG 核验、运行时错误判定与正常退出校验 |
+| **独立执行验收** | 同一发布候选的高风险资产共用一份副本与一个验证编辑器，逐项编译、保存、回读并确认正常退出；支持 PIE/DX12 或 DX11 smoke |
+
+截图通过 `viewport_capture` 显式选择 `level`、`active` 或 `pie`。完成收据记录实际渲染世界、视口类型与截图提交帧；使用 `pie` 可以独立于资产编辑器焦点核验游戏世界。
+
+隔离副本目录可用 `UE_NEXUS_VALIDATION_DIR` 配置。容量预算包含目标卷实际分配、脏包快照与工作余量；确认结束的工程副本集中到该目录的 `.del`，回执和生命周期日志保留在原验证目录，供检查和手动删除。
 
 七个 MCP 门面保持不变。实例管理通过 `ue_execute` 的 `bridge_instance_*` 操作提供，协作通过 `ue_sync` 扩展动作提供。内部操作默认索引不列出，仍可按名查询 schema 和调用。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
 
@@ -57,7 +61,7 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 
 ### 使用发行包
 
-[Release 页面](https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/releases) 提供已发布制品；当前工作树版本为 0.6.0。使用同一次构建的 UE 5.5 Windows x64 插件 ZIP、Python Wheel 和校验文件。目标编辑器完成保存并退出后，安装插件与 Wheel。实例管理要求 Bridge 插件内同时包含 Core 和 Guard DLL；VFX 插件按需要启用：
+[Release 页面](https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP/releases) 提供已发布制品；当前工作树版本为 0.6.0。使用同一次构建的 UE 5.5 Windows x64 插件 ZIP、Python Wheel 和校验文件。关闭使用该引擎的编辑器后，将两份插件安装到 `Engine/Plugins/Marketplace/`，各工程统一加载引擎版。Bridge 包含 Core 和 Guard DLL；VFX 插件按需要启用。安装对应 Wheel：
 
 ```bat
 py -3 -m venv .venv
@@ -86,17 +90,23 @@ tests\compile_check\build_plugins.bat
 
 脚本使用 `vswhere` 查找 Visual Studio，在 `build/validation/` 内准备精确源码副本，编译 Guard、Core、VFX 三个模块。DLL 与 `BuildIdentity.json` 位于 `build/validation/Plugins/`；身份文件记录版本、源码指纹、提交、脏状态和契约版本。
 
-关闭目标编辑器，将编译后的插件复制到 UE 工程的 `Plugins/` 目录：
+关闭使用目标引擎的编辑器，安装已经核验源码指纹和模块身份的引擎插件：
 
 ```bat
-set "UE_PROJECT_DIR=D:\UEProjects\MyProject"
-robocopy "build\validation\Plugins\UeNodeNexusBridge" "%UE_PROJECT_DIR%\Plugins\UeNodeNexusBridge" /E /XD Intermediate
-robocopy "build\validation\Plugins\UeNodeNexusVfxBridge" "%UE_PROJECT_DIR%\Plugins\UeNodeNexusVfxBridge" /E /XD Intermediate
+.venv\Scripts\python.exe -m tests.compile_check.install_engine --host build/validation --engine-dir "%UE_NEXUS_ENGINE_DIR%"
 ```
 
 `UeNodeNexusBridge` 是必需插件；`UeNodeNexusVfxBridge` 用于 Niagara 和 Cascade。重新打开工程，在 Plugins 面板确认所需插件启用。
 
-已有 C++ 工程也可以直接复制仓库中的 `Plugins/` 源码，通过工程自己的构建流程编译。
+工程已有局部 Nexus 插件时，先对照正式交付检查全部源码，将本地扩展合入正式版，再完整备份旧插件并移出 `Plugins/` 加载目录。引擎安装器为旧引擎副本保留备份与回执。
+
+```text
+UE_5.5/Engine/Plugins/Marketplace/
+├── UeNodeNexusBridge/       Core、Guard、主视口诊断
+└── UeNodeNexusVfxBridge/    Niagara、Cascade
+```
+
+主视口扩展包含输入控制、状态/历史、相位截图、像素/TSR 探针及 GPU profiling，保留 `unreal.NexusViewportDiagnosticsLibrary` 的原调用。其 Renderer 私有接口适配 UE 5.5；详细契约可通过 `workflow_guide_get(category="viewport_diagnostics")` 或[接口指南](src/ue_node_nexus_mcp/guides/viewport_diagnostics.md)读取。
 
 ### 3. 配置 MCP 客户端
 
@@ -156,121 +166,23 @@ ue_capability_get(operation="level_actors_list", detail="schema")
 
 ## 文本工作区与协作
 
-同一工程的 agent 使用 ensure 返回的共享镜像根与版本库，每个任务分别 `checkout`。已有 UE 仓库绑定优先；新项目默认根为 `<Project>/Saved/Nexus/Content_Transcoded`。工具返回该工作区的 `id`、`files_root` 和 `file_paths`；编辑时以这些路径为准。回收编辑器后，工作区和历史继续支持离线 lint/stage/commit。
+同一工程共用 ensure 返回的镜像根与版本库，每个 agent 分别 checkout 独立工作区。新项目默认镜像位于 `<Project>/Saved/Nexus/Content_Transcoded`；编辑工具返回的 `file_paths`，然后 lint、commit、push。
 
-```
-Content_Transcoded/
-├── .nexus/schema/<schema_key>/
-│   ├── index.md
-│   ├── blueprint/  material/  niagara/
-│   └── scene/  asset/  common/  contexts/
-└── MyProject/.nexus/collaboration/
-    ├── index.sqlite
-    ├── objects/
-    ├── workspaces/<workspace_id>/files/
-    ├── sessions/
-    ├── transactions/
-    └── locks/
+```python
+ue_sync("checkout", paths=["/Game/Materials"], options=dict(dry_run=False, agent_id="A"))
+ue_sync("commit", options=dict(workspace_id="<id>", all=True, message="调整材质", dry_run=False))
+ue_sync("push", options=dict(workspace_id="<id>", dry_run=False))
 ```
 
-| 动作 | 行为 |
+Schema 格式 3 在 `.nexus/schema/.objects/` 按内容共享定义，各环境保留当前索引与独立校验绑定；旧格式和历史绑定继续可读。整理镜像时保留共享对象池及引用它的历史目录。
+
+| 指南 | 内容 |
 |:-----|:-----|
-| **`checkout / workspaces / close`** | 创建、查询和关闭独立工作区；分支历史继续保留 |
-| **`status / diff / lint`** | 查看暂存与未暂存修改、语义差异、会话和恢复状态，校验文本 |
-| **`stage / unstage / commit`** | 暂存资产、撤回暂存、建立本地版本；`commit(all=true)` 捕获并提交指定文件 |
-| **`fetch / pull`** | 观察当前 UE / 整合 UE 版本并分别重放暂存与未暂存修改 |
-| **`merge / resolve / continue / abort`** | 合并分支、逐项解决冲突、继续或取消持久会话 |
-| **`push / recover`** | 将已提交版本合并到当前 UE，按条件应用、保存、记录回执；查询或恢复中断执行 |
+| [协作入门](src/ue_node_nexus_mcp/guides/collaboration_quickstart.md) | 文本路径、动作、schema、发布验收与场景示例 |
+| [完整协作契约](src/ue_node_nexus_mcp/guides/collaboration.md) | 合并、版本历史、执行回执及恢复 |
+| [存储与整理](src/ue_node_nexus_mcp/guides/storage.md) | Saved/Nexus 的用途、占用来源、归档与保留规则 |
 
-修改 refs、工作文件、会话或 UE 的动作默认预览，实际执行传 `dry_run=false`。预览提供 `proposal_id` 时，可在执行中携带它以校验固定输入。`push` 默认读取已提交 HEAD；后续文件编辑仍留在工作区。
-
-文件发现默认跳过任意层级的点号目录、点号文件和 `__pycache__`，工具生成的 `.auto-index-mcp`、`.git`、`.cache` 等目录会在扫描时直接剪枝。可在工作区返回的 `files_root` 下创建 `.nexusignore`，按根目录相对路径配置额外忽略规则；普通镜像放在 `<Project>/.nexusignore`。规则作用于新文件发现，已登记、暂存或提交的资产继续跟踪。语法与示例见 [文本镜像指南](src/ue_node_nexus_mcp/guides/text_mirror.md#file-discovery-and-ignore-rules)。
-
-```python
-a = ue_sync("checkout", paths=["/Game/Materials"], options=dict(dry_run=False, agent_id="A"))
-b = ue_sync("checkout", paths=["/Game/Materials"], options=dict(dry_run=False, agent_id="B"))
-# 分别编辑 a/b 返回的 file_paths，然后各自提交。
-ue_sync("commit", options=dict(workspace_id="<A-id>", all=True, message="调整颜色", dry_run=False))
-ue_sync("push", options=dict(workspace_id="<A-id>", dry_run=False))
-ue_sync("commit", options=dict(workspace_id="<B-id>", all=True, message="调整粗糙度", dry_run=False))
-ue_sync("push", options=dict(workspace_id="<B-id>", dry_run=False))
-```
-
-不同字段的兼容修改会合并；同字段竞争返回 `merge_id` 和包含 base/ours/theirs 的冲突。`ours` 表示当前工作区，`theirs` 表示待整合版本或 UE 状态。
-
-```python
-ue_sync("show", options=dict(workspace_id="<id>", merge_id="<merge-id>"))
-ue_sync("resolve", options=dict(workspace_id="<id>", merge_id="<merge-id>",
-    conflict_id="<conflict-id>", choice="ours", dry_run=False))
-ue_sync("continue", options=dict(workspace_id="<id>", merge_id="<merge-id>", dry_run=False))
-```
-
-新建材质时，在工作区 `files_root` 下写入 `Materials/M_Example.mat.nexus`，`schema` 使用工作区绑定的 key：
-
-```text
-nexus: 1
-asset: /Game/Materials/M_Example
-class: Material
-schema: <current-schema-key>
-
-[graph]
-value : Constant(R=0.5) @ 0,0
-value -> out.Roughness
-```
-
-文本仅记录非默认值。删除属性行表示恢复默认值，删除实例参数行表示清除 override；省略贴图属性表示使用引擎默认贴图。完整语法和类型边界见 [文本镜像指南](src/ue_node_nexus_mcp/guides/text_mirror.md)。
-
-### 历史、回退与恢复
-
-| 动作或机制 | 行为 |
-|:-----|:-----|
-| **`log / show / diff / blame`** | 查询版本父链、提交内容、语义差异与字段来源 |
-| **`branch / switch / tag`** | 创建分支、切换干净工作区、标记里程碑 |
-| **`restore / revert`** | 从旧版本选择状态，或撤销某次提交的增量；再次 commit/push 才修改 UE |
-| **`reset / amend / rebase`** | 修改未发布的私有历史；safety ref 和 reflog 保留原版本 |
-| **`cherry-pick / stash / reflog`** | 挑选提交、保存三层草稿、查找引用移动前的版本 |
-| **条件发布** | 检查当前内存 revision、editor epoch 和依赖 read set，按当前 UE 到候选状态的差异执行 |
-| **高风险准入** | Niagara变更、材质Custom/WPO等渲染契约与函数接口变更，先在独立UE副本完成apply/compile/save/readback并确认正常退出；验证绑定候选、脏内存基线、引擎/插件与RHI |
-| **持久回执** | `apply_id` 绑定执行请求；响应丢失时查询回执，保存结果进入发布历史 |
-| **编辑保护** | 发布期间继续修改文件会保留新字节，并返回 `workspace_rebase_required`；用 pull 整合 |
-
-默认 `stop_on_error=true`；设为 false 时按依赖阻断失败项，结果可能部分完成。删除需要 `allow_delete=true`。已发布历史使用 restore/revert 创建新版本；`recover` 返回执行阶段与恢复证据。
-
-### 可用参数目录
-
-模型可以先读 schema 的 `index.md` 和分类索引，再读一个目标 JSON。记录包含类型、默认值、合法枚举、约束、来源与桥接读写支持；动态引脚或条件未解析时标为 `context_required`。
-
-```python
-ue_sync("schema", options=dict(category="material", query="TextureSample", details=True))
-ue_sync("schema", options=dict(function="KismetSystemLibrary.PrintString"))
-ue_sync("schema", options=dict(target="/Game/Materials/MI_Example.MI_Example"))
-ue_sync("schema", options=dict(refresh=True))
-```
-
-schema 按项目、引擎、插件和模块身份隔离。定向采集扩展索引，历史快照保留使用过的 schema 记录；离线读取注明新鲜度未知。
-
-首次 checkout 会启用协作并迁移旧基线，旧文本原始字节保存在 `imported` 工作区。启用后修改调用携带 `workspace_id`。旧工程在 checkout 前继续使用原 init/pull/push；其 force 参数按旧契约处理。协作调用使用具体冲突的 resolution。
-
-高风险发布要求 checkout 工作区；旧式 push 返回 `safety_workspace_required` 和 checkout 路由。普通材质数值变更沿用正常事务。副本保存当前相关包的内存状态并保留主编辑器脏标记和原磁盘字节；完整验证回执见结果行的 `safety_validation`。内存准入默认启用，用户明确授权后可在本次 push/continue 设置 `safety_allow_low_memory=true`。显式 `safety_validate` 使用保存基线，提供 `allow_low_memory` 同等单次参数。
-
-Niagara 参数读取和已有值写入统一校验数据类别、尺寸、字节范围和对象槽位。四元数与向量通过引擎字节复制读取，支持紧凑非对齐布局及 LWC 转换；存储错误携带参数名、类型和具体原因，沿导出、编译读回和发布事务返回。
-
-隔离回执记录复制字节数及预检、复制、启动、执行、退出、源检查的分项耗时。副本验证共用机器的 GPU；工程原生代码、设备故障和调用方持有的 Python 世界引用仍需各自满足资源与生命周期契约。
-
-### 场景与实例
-
-首次导入明确选择的场景组，之后通过 `Scenes/` 内的文件或目录执行相同的同步动作：
-
-```python
-ue_sync("checkout", options=dict(dry_run=False, scene=dict(
-    map_path="/Game/Maps/World", name="Block",
-    actor_paths=["/Game/Maps/World.World:PersistentLevel.Tiles"],
-)))
-ue_sync("commit", options=dict(workspace_id="<id>", all=True, message="调整场景", dry_run=False))
-ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"], options=dict(workspace_id="<id>"))
-```
-
-根 Actor 使用世界变换，挂接 Actor、组件和实例使用相对变换。实例 ID 随删除和重排保留；首次写入才绑定编辑器专用元数据。场景提交先处理镜像资产依赖，再应用场景事务，保存涉及的地图、子关卡和外部 Actor 包。完整语法、只读内容及失败恢复见 [场景镜像指南](src/ue_node_nexus_mcp/guides/scene_mirror.md)。分页及直接批量编辑使用 `component_instances_get/patch`。
+高风险候选共用一份隔离副本和一个验证编辑器，逐资产证据绑定候选及环境。结束的副本与内存基线集中到 `.del`，由用户手动删除；回执和恢复记录保留。完整流程见上述指南。
 
 ---
 
@@ -318,70 +230,16 @@ ue_sync("push", paths=["Scenes/Maps/World/Block.scene.nexus"], options=dict(work
 
 ## 目录与开发
 
-```
+```text
 UE-Node-Nexus-MCP/
-  assets/branding/         项目标识、透明标记和单色 SVG
-  Plugins/
-    UeNodeNexusBridge/       Guard 早期门禁及核心编辑器插件
-    UeNodeNexusVfxBridge/    VFX 插件
-  src/ue_node_nexus_mcp/
-    operations.json        操作定义索引
-    operations/            按能力组划分的操作定义
-    build_info/            三模块构建身份与契约校验
-    coordination/          通用 OS 锁与控制管道
-    instances/             身份、Broker、租约、作用域、回收与仓库绑定
-    diagnostics/           独立会话日志和总量保留策略
-    guides/                客户端可查询的工作流指南
-    transcode/             文本解析、schema、diff 和同步
-      collaboration/       store、history、workspace、semantic、merge、apply、report
-      text/                语法、值与语义规范化
-      raw/                 原始图与文本转换
-      diff/                图差异与操作计划
-      lint/                按资产类型校验
-      sync/                项目同步与 schema 编排
-      storage/             文件与路径
-      blueprint/           签名、引脚与类身份
-      schema/              反射目录、名称索引与上下文查询
-      push/                计划、提交、恢复和调用者刷新
-      scene/               场景编解码、预检、提交和恢复
-      transaction/         镜像事务所有权
-  tests/
-    contracts/             操作契约、导入架构与源码预算
-    facade/                对外入口与响应行为
-    diagnostics/           日志与保留策略
-    instances/             单元、跨进程竞争、故障与真实 UE 长测
-    collaboration/         版本库、工作区、历史、合并与发布回归
-    transcode/             blueprint/material/schema/semantic/text/raw/diff/sync
-    performance/           性能回归
-    support/               跨领域测试夹具
-    scene/                 场景、身份、并发与原生回归源码
-    compile_check/         编译桩与真实 UE 构建入口
-    live/                  隔离编辑器集成验证
-  skill/ue-node-nexus-mcp/  Agent skill
-  release/                发行包组装、构建身份与安装说明
-  pyproject.toml
-  LICENSE
+├── Plugins/                 Guard、Core、VFX 原生模块
+├── src/ue_node_nexus_mcp/    门面、实例、诊断、隔离与文本协作
+├── tests/                   单元、编译、性能与独立 UE 验收
+├── skill/                   随包 Agent skill
+└── release/                 身份核验、打包与安装说明
 ```
 
-```bat
-.venv\Scripts\python.exe -m pip install -e . pytest
-.venv\Scripts\python.exe -m pytest -q
-set "UE_NEXUS_ENGINE_DIR=D:\Unreal\UE_5.5"
-tests\compile_check\build_plugins.bat
-tests\compile_check\build_startup_fixture.bat
-tests\compile_check\compile_scene_tests.bat
-.venv\Scripts\python.exe -m tests.live.automation
-.venv\Scripts\python.exe -m tests.live.issues4.runner
-.venv\Scripts\python.exe -m tests.live.native_runner
-.venv\Scripts\python.exe tests\live\sync_smoke.py
-.venv\Scripts\python.exe -m tests.live.collaboration_runner
-```
-
-测试按领域及单元、集成、实机层次组织，覆盖操作契约、导入无环、文本往返、失败恢复、并发与 300 行源码预算；共享夹具集中在 support。pytest 临时目录默认为项目内 `build/pytest-temp`，可用 `--basetemp` 指定。真实 UE 构建验证引擎 API 和链接，并生成与引擎 BuildId 匹配的模块清单。
-
-`automation` 运行全部 `Nexus.` 原生自动化；`issues4.runner` 验证四种启动状态及 sparse/MF 发布。启动提示由独立测试插件在隔离工程中通过真实模态对话框触发；`--engine-plugins` 验证正式安装路径。
-
-原生测试在 `build/scene-tests/` 内编译和运行实例身份及 Undo/Redo 回归；生产插件在 `build/validation/` 内构建。同步 smoke 使用 DX12 验证 shader/RHI 就绪、保存失败恢复与回读，runner 绑定自建编辑器并正常退出。场景与捕获批次的重放入口位于 `tests/live/`，每次运行记录构建身份、请求响应和验收结果。
+[开发指南](release/DEVELOPMENT.md)提供模块目录、完整构建与测试命令、回执位置和测试范围。源码与文档按模块组织；构建产物、项目资产和本地验收记录独立保留。
 
 ## 支持边界
 

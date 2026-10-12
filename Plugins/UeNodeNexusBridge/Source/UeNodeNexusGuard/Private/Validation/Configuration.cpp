@@ -1,4 +1,5 @@
 #include "Environment.h"
+#include "ConfigurationLayers.h"
 
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/Paths.h"
@@ -43,7 +44,10 @@ TSharedPtr<FJsonObject> Configuration()
         auto Sections = MakeShared<FJsonObject>();
         if (const FConfigFile* File = GConfig->FindConfigFile(Pair.Value))
         {
-            for (const auto& Section : *File)
+            const FConfigFile Effective = EffectiveConfigurationFile(*File);
+            UE_LOG(LogTemp, Display, TEXT("Nexus effective configuration captured category=%s runtime_sections=%d effective_sections=%d"),
+                *Pair.Key, File->Num(), Effective.Num());
+            for (const auto& Section : Effective)
             {
                 TArray<TSharedPtr<FJsonValue>> Values;
                 for (const auto& Entry : Section.Value)

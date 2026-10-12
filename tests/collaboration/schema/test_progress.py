@@ -10,6 +10,7 @@ from ue_node_nexus_mcp.transcode.collaboration.jobs.state import active, update
 from ue_node_nexus_mcp.transcode.collaboration.store import Store
 from ue_node_nexus_mcp.transcode.errors import SyncError
 from ue_node_nexus_mcp.transcode.schema import catalog
+from ue_node_nexus_mcp.transcode.schema import objects
 from ue_node_nexus_mcp.transcode.storage.io import digest, read_json
 
 
@@ -32,7 +33,7 @@ def test_migration_reports_phase_counts_and_elapsed_before_manifest(tmp_path, mo
     store, identifier = job(tmp_path)
     directory = tmp_path / "catalog"
     samples = []
-    original = catalog.atomic_write
+    original = objects.atomic_write
 
     def write(path, data):
         if path.parent.name == "asset" and path.suffix == ".json":
@@ -40,7 +41,7 @@ def test_migration_reports_phase_counts_and_elapsed_before_manifest(tmp_path, mo
             assert not (directory / "key.json").exists()
         original(path, data)
 
-    monkeypatch.setattr(catalog, "atomic_write", write)
+    monkeypatch.setattr(objects, "atomic_write", write)
     with active(store, identifier):
         result = catalog.publish(directory, uuid4().hex, dict(asset=records(3)))
     assert len(samples) == 3
@@ -54,7 +55,7 @@ def test_migration_reports_phase_counts_and_elapsed_before_manifest(tmp_path, mo
     assert all(final["io"][key] >= 0 for key in ("create_seconds", "lookup_seconds", "flush_seconds"))
     assert read_json(directory / "key.json") == result
     for entry in result["tables"]["asset"].values():
-        assert digest(read_json(directory / entry["file"])) == entry["hash"]
+        assert digest(read_json(directory / entry["file"])) == entry["object_hash"]
     store.db.discard()
 
 
@@ -62,14 +63,14 @@ def test_cancelled_migration_keeps_committed_manifest_and_hash_binding(tmp_path,
     directory = tmp_path / "catalog"
     before = catalog.publish(directory, "old", dict(asset=records(1)))
     store, identifier = job(tmp_path)
-    original = catalog.atomic_write
+    original = objects.atomic_write
 
     def write(path, data):
         original(path, data)
         if path.parent.name == "asset" and path.suffix == ".json":
             update(store, identifier, cancel_requested=True)
 
-    monkeypatch.setattr(catalog, "atomic_write", write)
+    monkeypatch.setattr(objects, "atomic_write", write)
     with active(store, identifier), pytest.raises(SyncError) as failure:
         catalog.publish(directory, "new", dict(asset=records(5)))
     assert failure.value.code == "sync_job_cancelled"
@@ -77,18 +78,19 @@ def test_cancelled_migration_keeps_committed_manifest_and_hash_binding(tmp_path,
     store.db.discard()
 
 
-def test_cancellation_after_immutable_index_still_preserves_commit_point(tmp_path, monkeypatch):
+def test_cancellation_after_manifest_serialization_preserves_commit_point(tmp_path, monkeypatch):
     directory = tmp_path / "catalog"
     before = catalog.publish(directory, "old", dict(asset=records(1)))
     store, identifier = job(tmp_path)
-    original = catalog.atomic_write
+    original = catalog.canonical
 
-    def write(path, data):
-        original(path, data)
-        if path.parent.name == "indexes":
+    def serialize(value):
+        data = original(value)
+        if isinstance(value, dict) and value.get("format") in (2, 3):
             update(store, identifier, cancel_requested=True)
+        return data
 
-    monkeypatch.setattr(catalog, "atomic_write", write)
+    monkeypatch.setattr(catalog, "canonical", serialize)
     with active(store, identifier), pytest.raises(SyncError) as failure:
         catalog.publish(directory, "new", dict(asset=records(2)))
     assert failure.value.code == "sync_job_cancelled"

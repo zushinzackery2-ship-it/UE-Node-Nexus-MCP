@@ -5,22 +5,6 @@
 
 namespace UeNodeNexusBridge
 {
-static bool IsSafeScreenshotName(const FString& Name)
-{
-    if (Name.IsEmpty() || Name.Len() > 100)
-    {
-        return false;
-    }
-    for (TCHAR Char : Name)
-    {
-        if (!FChar::IsAlnum(Char) && Char != TEXT('_') && Char != TEXT('-'))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 TSharedPtr<FJsonObject> HandleViewportCapture(const FString& Operation, const FString& RequestId, const TSharedPtr<FJsonObject>& Payload)
 {
     FString Name = TEXT("UeNodeNexus");
@@ -32,11 +16,11 @@ TSharedPtr<FJsonObject> HandleViewportCapture(const FString& Operation, const FS
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     Payload->TryGetBoolField(TEXT("show_ui"), bShowUi);
     Payload->TryGetNumberField(TEXT("timeout_seconds"), Timeout);
-    if (!IsSafeScreenshotName(Name) || (Target != TEXT("level") && Target != TEXT("active"))
+    if (!Capture::IsSafeScreenshotName(Name) || (Target != TEXT("level") && Target != TEXT("active") && Target != TEXT("pie"))
         || !FMath::IsFinite(Timeout) || Timeout < 1 || Timeout > 120)
     {
         return MakeOperationError(Operation, RequestId, TEXT("invalid_request"),
-            TEXT("filename must be a basename, target must be level/active, timeout_seconds must be 1..120"));
+            TEXT("filename must be a basename, target must be level/active/pie, timeout_seconds must be 1..120"));
     }
     FString Error;
     auto Data = Capture::Submit(RequestId, Name, Target, bShowUi, Timeout, bDryRun, Error);

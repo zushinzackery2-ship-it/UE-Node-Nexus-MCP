@@ -28,6 +28,10 @@ class Policy:
     resource_seconds: float = 30
     startup_seconds: float = 240
     shutdown_seconds: float = 60
+    # A committed normal exit can outlast the drain deadline while the editor
+    # flushes shaders and caches under load; close keeps waiting this long
+    # before the process is called hung.
+    exit_seconds: float = 240
     broker_idle_seconds: float = 60
     recovery_seconds: float = 60
     # A pin is renewed by pinning again, but a single hold has to outlast the

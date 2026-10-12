@@ -88,14 +88,24 @@ Internal viewport screenshots read rendered pixels and do not require an always-
 Use `viewport_capture`; avoid helper scripts that call `SetForegroundWindow` or set `HWND_TOPMOST` unless the user requests window activation.
 Handle background refresh or minimized-viewport issues through capture scheduling and explicit diagnostics, rather than forcing the editor in front of the user's work.
 Capture acceptance is asynchronous: poll `viewport_capture_status(file_path=..., capture_id=...)` until `state=completed`, `done=true`, `ok=true`. A file without its matching receipt is not completion evidence.
+Choose `target="pie"` for the game's image across asset editor focus changes.
+Check `producer_view.world`, `viewport_type` and its `engine_frame` against the
+receipt's frame. The producer is captured when the target submits the screenshot.
 Checkout publication automatically isolates high-risk Niagara, material rendering and function-interface changes. Inspect the result row's `safety_validation`: exact candidate/dependency binding, `baseline=live_memory`, engine/plugins/configuration, actual RHI, compile/save/exported readback and worker exit code 0. Dirty flags and original disk bytes survive baseline serialization. Explicit `safety_validate` uses `baseline=saved_disk`; transcode operations execute complete worker-owned publication. Legacy high-risk push requires checkout. Normal material values use the publishing transaction directly. Resource admission stays enabled; after explicit user authorization, `safety_allow_low_memory=true` on one push/continue or `allow_low_memory=true` on explicit validation permits that invocation's private workers to start below the memory threshold.
 Inspect validation receipt `copied_bytes` and `timings` for project-specific copy/startup/execution/exit cost. Niagara storage failures include the parameter name, type and category/range reason; preserve those details when reporting failed export or publication.
+Commit and push a related asset batch together: its high-risk candidates share one
+copy and worker, with individual bound receipts and a shared `validation_id`.
+`UE_NEXUS_VALIDATION_DIR` selects the output volume. Confirmed ended copies move to
+`.del` for manual deletion while receipts and runtime logs stay available.
 
 ## Author and publish assets
 
 Load `workflow_guide_get(category="collaboration")` for the full local protocol.
 Use ensure's shared `mirror_root`; an existing UE repository binding takes
 precedence. Each workspace gets an independent checkout and files directory.
+Schema format 3 shares immutable definitions under `.nexus/schema/.objects/`
+while each environment retains its own manifest and checksum binding. Preserve
+the object pool and historical catalogs together when organizing a mirror.
 
 1. `ue_sync("checkout", paths=["/Game/MyFolder"], options=dict(agent_id="A", dry_run=False))`.
    A scoped checkout is sparse and includes referenced dependencies.

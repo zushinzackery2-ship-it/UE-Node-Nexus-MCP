@@ -17,7 +17,8 @@ _GUIDES_DIR = Path(__file__).with_name("guides")
 
 # category -> (title, keywords). Keywords drive query matching; keep them
 # lowercase. The markdown file name is "<category>.md".
-GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
+GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = (
+{
     "mesh_geometry": (
         "Mesh lattice deformation, constrained remeshing and deterministic noise",
         ("mesh", "geometry", "lattice", "remesh", "noise", "terrain", "晶格", "重网格", "噪波", "地形"),
@@ -42,6 +43,14 @@ GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
         "Independent workspaces, semantic merges, version history and recovery",
         ("collaboration", "workspace", "checkout", "commit", "branch", "merge", "revert", "rebase", "stash", "history", "多agent", "协作", "历史", "回退"),
     ),
+    "collaboration_quickstart": (
+        "文本工作区与协作入门：路径、schema、发布和场景",
+        ("协作入门", "文本工作区", "quickstart", "checkout"),
+    ),
+    "storage": (
+        "Nexus storage: mirrors, schema objects, live baselines and retention",
+        ("storage", "saved", "size", "disk", "baseline", "retention", "存储", "体积", "整理"),
+    ),
     "graph_editing": (
         "Reading and patching Material/Blueprint graphs",
         ("graph", "node", "pin", "wire", "patch", "snapshot", "connect", "client_id", "build"),
@@ -62,11 +71,16 @@ GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
         "Diagnostics semantics, triage, and compile-fix loops",
         ("diagnostics", "error", "warning", "repair", "empty", "contract", "log", "triage", "fix"),
     ),
+    "viewport_diagnostics": (
+        "Primary viewport input, render phases, pixel probes and temporal history",
+        ("viewport", "tsr", "phase capture", "pixel probe", "gpu profile", "视口", "像素", "时序"),
+    ),
     "concurrency": (
         "Parallel-safe reads, per-asset writes, batching",
         ("concurrency", "parallel", "batch", "sequential", "queue", "conflict", "order", "timeout"),
     ),
 }
+)
 
 
 def guide_categories() -> list[dict[str, Any]]:

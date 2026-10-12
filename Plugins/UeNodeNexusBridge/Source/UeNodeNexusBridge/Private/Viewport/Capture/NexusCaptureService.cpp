@@ -8,6 +8,10 @@
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
 #include "NexusLifecycle.h"
+#include "Diagnostics/Viewport/NexusViewportState.h"
+#include "Diagnostics/Viewport/NexusViewportShaderPhase.h"
+#include "Diagnostics/Viewport/NexusViewportDiagnosticsLog.h"
+#include "Engine/GameViewportClient.h"
 #include "Transport/Safety/NexusAsyncWork.h"
 #include "Transport/UeNodeNexusBridgeRequestDispatch.h"
 #include "UnrealClient.h"
@@ -24,11 +28,14 @@ struct FJob
     bool bSubmitted = false;
     bool bProcessed = false;
     bool bRetainScope = false;
+    TSharedPtr<FJsonObject> Phase;
+    FViewport* Viewport = nullptr;
 };
 
 static TUniquePtr<FJob> Active;
 static FTSTicker::FDelegateHandle Ticker;
 static FDelegateHandle Processed;
+static FDelegateHandle Rendered;
 
 static void Finish(const FString& Code)
 {
@@ -38,6 +45,10 @@ static void Finish(const FString& Code)
     }
     const FString RequestId = Active->RequestId;
     const FString Path = Active->Receipt->GetStringField(TEXT("file_path"));
+    if (FScreenshotRequest::GetFilename() == Path)
+    {
+        FScreenshotRequest::Reset();
+    }
     FString Failure = Code;
     FString Digest;
     int32 Width = 0, Height = 0;
@@ -58,8 +69,12 @@ static void Finish(const FString& Code)
         Failure = TEXT("capture_journal_failed");
         UE_LOG(LogTemp, Error, TEXT("Nexus request=%s capture receipt could not be persisted"), *RequestId);
     }
+    UE_LOG(LogNexusViewportDiagnostics, Display, TEXT("capture request=%s state=%s reason=%s file=%s"),
+        *RequestId, Failure.IsEmpty() ? TEXT("completed") : TEXT("failed"), *Failure, *Path);
     FScreenshotRequest::OnScreenshotRequestProcessed().Remove(Processed);
+    UGameViewportClient::OnViewportRendered().Remove(Rendered);
     Processed.Reset();
+    Rendered.Reset();
     const bool bRetainScope = Active->bRetainScope;
     Active.Reset();
     if (!bRetainScope)
@@ -68,56 +83,56 @@ static void Finish(const FString& Code)
     }
 }
 
-static bool Tick(float Delta)
+static void OnRendered(FViewport* Viewport)
 {
-    if (!Active)
+    if (!Active || Active->bSubmitted || IsBridgeDispatchActive() || !Safety::EngineBusyReason().IsEmpty())
     {
-        return false;
+        return;
     }
-    const FString Path = Active->Receipt->GetStringField(TEXT("file_path"));
-    if (FPlatformTime::Seconds() >= Active->Deadline)
+    if (Viewport != Active->Viewport)
     {
-        if (FScreenshotRequest::GetFilename() == Path)
-        {
-            FScreenshotRequest::Reset();
-        }
-        Finish(TEXT("capture_timeout"));
-        return false;
+        return;
     }
-    if (Active->bSubmitted)
+    TSharedPtr<FJsonObject> State;
+    if (Active->Phase.IsValid())
     {
-        if (Active->bProcessed)
+        State = Diagnostics::ReadPrimaryViewport();
+        if (!State->GetBoolField(TEXT("available")))
         {
-            Finish(FString());
-            return false;
+            return;
         }
-        if (FScreenshotRequest::GetFilename() != Path)
+        for (const auto& Requested : Active->Phase->Values)
         {
-            Finish(TEXT("capture_request_replaced"));
+            double Observed = 0;
+            if (!State->TryGetNumberField(Requested.Key, Observed) || Observed != Requested.Value->AsNumber())
+            {
+                return;
+            }
         }
-        return Active.IsValid();
-    }
-    if (IsBridgeDispatchActive() || !Safety::EngineBusyReason().IsEmpty())
-    {
-        return true;
     }
     if (FScreenshotRequest::IsScreenshotRequested() || GIsHighResScreenshot || GIsDumpingMovie)
     {
         Finish(TEXT("capture_external_busy"));
-        return false;
+        return;
     }
-    FString Resolved;
-    FViewport* Viewport = ResolveViewport(Active->Target, Resolved);
-    if (!Viewport || Viewport->GetSizeXY().X <= 0 || Viewport->GetSizeXY().Y <= 0)
-    {
-        Finish(TEXT("viewport_unavailable"));
-        return false;
-    }
+    const FString Path = Active->Receipt->GetStringField(TEXT("file_path"));
     Active->Receipt->SetStringField(TEXT("state"), TEXT("rendering"));
+    Active->Receipt->SetNumberField(TEXT("engine_frame"), GFrameCounter);
+    // Freeze the actual producing view at submission. Reading it on a later
+    // completion tick can accidentally bind the image to a newer rendered frame.
+    if (!Diagnostics::AppendViewportRenderReceipt(Active->Receipt))
+    {
+        Finish(TEXT("capture_producer_mismatch"));
+        return;
+    }
+    if (State.IsValid())
+    {
+        Active->Receipt->SetObjectField(TEXT("render_state"), State);
+    }
     if (!WriteReceipt(Active->Receipt))
     {
         Finish(TEXT("capture_journal_failed"));
-        return false;
+        return;
     }
     Active->bSubmitted = true;
     Processed = FScreenshotRequest::OnScreenshotRequestProcessed().AddLambda([]()
@@ -128,20 +143,41 @@ static bool Tick(float Delta)
         }
     });
     FScreenshotRequest::RequestScreenshot(Path, Active->bShowUi, false);
-    // Run outside request dispatch and retain admission through pixel readback.
-    // Nested bridge calls pumped by the viewport cannot mutate this frame.
-    Viewport->Draw(false);
-    // Screenshot processing is inside Draw. Keep admission closed until the
-    // rendering owner has unwound, including all later screenshot delegates.
-    if (Active && Active->bProcessed)
+}
+
+static bool Tick(float Delta)
+{
+    if (!Active)
+    {
+        return false;
+    }
+    FString Resolved;
+    if (ResolveViewport(Active->Target, Resolved) != Active->Viewport)
+    {
+        Finish(TEXT("capture_viewport_changed"));
+        return false;
+    }
+    const FString Path = Active->Receipt->GetStringField(TEXT("file_path"));
+    if (FPlatformTime::Seconds() >= Active->Deadline)
+    {
+        Finish(TEXT("capture_timeout"));
+        return false;
+    }
+    if (Active->bProcessed)
     {
         Finish(FString());
+        return false;
+    }
+    if (Active->bSubmitted && FScreenshotRequest::GetFilename() != Path)
+    {
+        Finish(TEXT("capture_request_replaced"));
     }
     return Active.IsValid();
 }
 
 TSharedPtr<FJsonObject> Submit(const FString& RequestId, const FString& BaseName,
-    const FString& Target, bool bShowUi, double Timeout, bool bDryRun, FString& Error, bool bRetainScope)
+    const FString& Target, bool bShowUi, double Timeout, bool bDryRun, FString& Error, bool bRetainScope,
+    const TSharedPtr<FJsonObject>& Phase)
 {
     const bool bAdmissionValid = bRetainScope ? Safety::Holds(RequestId) : Safety::AsyncBusyReason().IsEmpty();
     if (!IsInGameThread() || Active || !bAdmissionValid
@@ -151,7 +187,8 @@ TSharedPtr<FJsonObject> Submit(const FString& RequestId, const FString& BaseName
         return nullptr;
     }
     FString Resolved;
-    if (!ResolveViewport(Target, Resolved))
+    FViewport* Viewport = ResolveViewport(Target, Resolved);
+    if (!Viewport)
     {
         Error = TEXT("viewport_unavailable");
         return nullptr;
@@ -186,6 +223,11 @@ TSharedPtr<FJsonObject> Submit(const FString& RequestId, const FString& BaseName
     Receipt->SetBoolField(TEXT("dry_run"), bDryRun);
     Receipt->SetBoolField(TEXT("requested"), !bDryRun);
     Receipt->SetBoolField(TEXT("exists"), false);
+    Receipt->SetStringField(TEXT("scheduling"), TEXT("target_normal_draw"));
+    if (Phase.IsValid())
+    {
+        Receipt->SetObjectField(TEXT("requested_phase"), Phase);
+    }
     if (bDryRun)
     {
         return Receipt;
@@ -209,18 +251,22 @@ TSharedPtr<FJsonObject> Submit(const FString& RequestId, const FString& BaseName
     Active->Target = Target;
     Active->bShowUi = bShowUi;
     Active->bRetainScope = bRetainScope;
+    Active->Phase = Phase;
+    Active->Viewport = Viewport;
+    // Identity data for the completion receipt must be current even for a plain
+    // capture, so the extension binds on every admitted job.
+    Diagnostics::BindViewportShaderPhase(Viewport);
     Active->Deadline = FPlatformTime::Seconds() + Timeout;
+    Rendered = UGameViewportClient::OnViewportRendered().AddStatic(&OnRendered);
     Ticker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&Tick));
+    UE_LOG(LogNexusViewportDiagnostics, Display, TEXT("capture request=%s state=queued target=%s timeout=%.3f"),
+        *RequestId, *Resolved, Timeout);
     return MakeShared<FJsonObject>(*Receipt);
 }
 
 void Stop()
 {
     FTSTicker::GetCoreTicker().RemoveTicker(Ticker);
-    if (Active && FScreenshotRequest::GetFilename() == Active->Receipt->GetStringField(TEXT("file_path")))
-    {
-        FScreenshotRequest::Reset();
-    }
     Finish(TEXT("capture_interrupted"));
 }
 }

@@ -33,10 +33,15 @@ bool ApplyBlueprintFunctionSignature(UEdGraph* Graph, const TSharedPtr<FJsonObje
     {
         return false;
     }
-    if (Outputs != nullptr && Outputs->Num() > 0)
+    const UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(Graph);
+    const bool bFunctionGraph = Blueprint != nullptr && !Blueprint->UbergraphPages.Contains(Graph);
+    if (bFunctionGraph)
     {
+        // Every K2 function graph owns a result node, even with no outputs: a
+        // document may wire its execute pin, and the link needs the endpoint to
+        // exist before it applies. Ubergraph pages (construction script) do not.
         UK2Node_FunctionResult* Result = FBlueprintEditorUtils::FindOrCreateFunctionResultNode(Entry);
-        if (!SetSignaturePins(Result, Outputs, EGPD_Input, bInherited, OutError))
+        if (!SetSignaturePins(Result, (Outputs != nullptr && Outputs->Num() > 0) ? Outputs : nullptr, EGPD_Input, bInherited, OutError))
         {
             return false;
         }

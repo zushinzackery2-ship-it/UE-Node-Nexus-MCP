@@ -4,6 +4,7 @@
 #include "Blueprint/Input/NexusEnhancedInputBinding.h"
 #include "Blueprint/Input/NexusEnhancedInputValue.h"
 #include "Blueprint/Animation/NexusTransitionGetterBinding.h"
+#include "Blueprint/CallHost/NexusCallHostClass.h"
 
 #include "Dom/JsonObject.h"
 #include "EdGraph/EdGraphNode.h"
@@ -55,7 +56,7 @@ static bool ConfigureVariableNode(UK2Node_Variable* Node, UBlueprint* Blueprint,
     return false;
 }
 
-static bool ConfigureCallFunctionNode(UK2Node_CallFunction* Node, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
+static bool ConfigureCallFunctionNode(UK2Node_CallFunction* Node, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
     FString FunctionName;
     FString FunctionOwner;
@@ -66,17 +67,10 @@ static bool ConfigureCallFunctionNode(UK2Node_CallFunction* Node, const TSharedP
         return false;
     }
 
-    UClass* OwnerClass = LoadClass<UObject>(nullptr, *FunctionOwner);
-    if (OwnerClass == nullptr)
-    {
-        OutError = FString::Printf(TEXT("Function owner class not found: %s"), *FunctionOwner);
-        return false;
-    }
-
-    UFunction* Function = OwnerClass->FindFunctionByName(FName(*FunctionName));
+    UFunction* Function = FindCallFunction(FunctionOwner, FunctionName, Blueprint);
     if (Function == nullptr)
     {
-        OutError = FString::Printf(TEXT("Function not found: %s.%s"), *OwnerClass->GetName(), *FunctionName);
+        OutError = FString::Printf(TEXT("Function not found: %s.%s"), *FunctionOwner, *FunctionName);
         return false;
     }
 
@@ -232,7 +226,7 @@ bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, UBlueprint* Blueprint, co
     }
     if (UK2Node_CallFunction* CallFunctionNode = Cast<UK2Node_CallFunction>(Node))
     {
-        return ConfigureCallFunctionNode(CallFunctionNode, Payload, OutError);
+        return ConfigureCallFunctionNode(CallFunctionNode, Blueprint, Payload, OutError);
     }
     if (UK2Node_InputKey* InputKeyNode = Cast<UK2Node_InputKey>(Node))
     {

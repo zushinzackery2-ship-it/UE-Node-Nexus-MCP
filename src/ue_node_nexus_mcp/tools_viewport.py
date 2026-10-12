@@ -8,23 +8,28 @@ from .contracts import require_non_empty_string
 from .runtime import call_bridge as _call
 from .runtime import default_tool
 
+TARGETS = ("level", "active", "pie")
+
 
 @default_tool()
 def viewport_capture(
     filename: str | None = None,
-    target: Literal["level", "active"] = "level",
+    target: Literal["level", "active", "pie"] = "level",
     show_ui: bool = False,
     dry_run: bool = False,
     timeout_seconds: float = 30,
 ) -> dict[str, Any]:
-    """Screenshot the level editor viewport (or the Slate-active one); returns the absolute PNG path.
+    """Screenshot an explicitly selected native viewport; returns the absolute PNG path.
 
     ``target="level"`` is the viewport the user looks through and is what you want
     for "show me the scene"; ``"active"`` is whatever panel Slate last focused,
     which after an editor restart is often a reopened asset editor's preview.
+    ``"pie"`` selects the running game viewport and fails when PIE is absent.
     """
     if filename is not None:
         require_non_empty_string(filename, "filename")
+    if target not in TARGETS:
+        raise ValueError("target must be level/active/pie")
     if not isinstance(timeout_seconds, (int, float)) or isinstance(timeout_seconds, bool) or not 1 <= timeout_seconds <= 120:
         raise ValueError("timeout_seconds must be 1..120")
     return _call(

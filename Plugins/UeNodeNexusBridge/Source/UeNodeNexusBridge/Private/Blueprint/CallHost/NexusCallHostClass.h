@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 class UClass;
+class UBlueprint;
 class UEdGraphNode;
 class UFunction;
 
@@ -17,7 +18,7 @@ bool IsCallHostClass(const UClass* NodeClass);
 // class, so a plain call node for such a function can never compile.
 UClass* CallHostClassFor(const UFunction* Function);
 
-UFunction* FindCallFunction(const FString& OwnerPath, const FString& FunctionName);
+UFunction* FindCallFunction(const FString& OwnerPath, const FString& FunctionName, UBlueprint* Blueprint = nullptr);
 
 // Replaces a requested call class by the one ``Function`` requires. The plain
 // call class is a request for "whatever this function needs"; a specialised

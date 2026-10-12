@@ -1,6 +1,7 @@
 #include "Blueprint/CallHost/NexusCallHostClass.h"
 
 #include "EdGraphSchema_K2.h"
+#include "Engine/Blueprint.h"
 #include "K2Node_CallArrayFunction.h"
 #include "K2Node_CallDataTableFunction.h"
 #include "K2Node_CallFunction.h"
@@ -48,7 +49,7 @@ UClass* CallHostClassFor(const UFunction* Function)
     return UK2Node_CallFunction::StaticClass();
 }
 
-UFunction* FindCallFunction(const FString& OwnerPath, const FString& FunctionName)
+UFunction* FindCallFunction(const FString& OwnerPath, const FString& FunctionName, UBlueprint* Blueprint)
 {
     if (OwnerPath.IsEmpty() || FunctionName.IsEmpty())
     {
@@ -58,6 +59,12 @@ UFunction* FindCallFunction(const FString& OwnerPath, const FString& FunctionNam
     if (Owner == nullptr)
     {
         Owner = LoadClass<UObject>(nullptr, *OwnerPath);
+    }
+    if (Owner && Blueprint && Owner->ClassGeneratedBy == Blueprint)
+    {
+        // The skeleton owns the declarations from this plan. The generated
+        // class still contains the last compiled body until publication ends.
+        Owner = Blueprint->SkeletonGeneratedClass;
     }
     return Owner ? Owner->FindFunctionByName(FName(*FunctionName)) : nullptr;
 }

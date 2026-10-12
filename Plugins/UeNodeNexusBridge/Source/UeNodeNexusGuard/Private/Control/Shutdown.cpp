@@ -104,7 +104,7 @@ TSharedPtr<FJsonObject> Close(const FString& Operation, const TSharedPtr<FJsonOb
         ++S.Revision;
         return Success(StatusLocked());
     }
-    if (CloseId.IsEmpty() || !S.bReady)
+    if (CloseId.IsEmpty())
     {
         return Failure(TEXT("instance_unavailable"), TEXT("ready instance and close_id required"));
     }
@@ -115,6 +115,13 @@ TSharedPtr<FJsonObject> Close(const FString& Operation, const TSharedPtr<FJsonOb
         if (S.CloseId == CloseId)
         {
             return S.Prepared.IsValid() ? Success(S.Prepared) : Pending(S.Revision);
+        }
+        // Starting a drain needs a ready editor. Committing one does not: a
+        // modal or compiling tick flips readiness off, and refusing the commit
+        // there leaves the editor alive with no close left to finish.
+        if (!S.bReady)
+        {
+            return Failure(TEXT("instance_unavailable"), TEXT("ready instance and close_id required"));
         }
         if (S.bDraining || S.bStopping)
         {

@@ -2,11 +2,16 @@
 
 ## Install
 
-1. Finish work, save the intended changes and close the target editor. Install the archive's `Plugins` directory into
-   your UE project's root directory. The resulting paths must include
-   `Plugins/UeNodeNexusBridge/UeNodeNexusBridge.uplugin` and
-   `Plugins/UeNodeNexusVfxBridge/UeNodeNexusVfxBridge.uplugin`. Bridge must contain
+1. Finish work, save the intended changes and close editors using the target
+   engine. Install the archive's two plugin directories under
+   `UE_5.5/Engine/Plugins/Marketplace`. The paths must include
+   `Engine/Plugins/Marketplace/UeNodeNexusBridge/UeNodeNexusBridge.uplugin` and
+   `Engine/Plugins/Marketplace/UeNodeNexusVfxBridge/UeNodeNexusVfxBridge.uplugin`. Bridge must contain
    both Core and Guard DLLs plus the module manifest. VFX is optional.
+   Keep Nexus enabled in project descriptors. Compare an older project copy's
+   complete sources against the delivery and merge local extensions first.
+   Preserve the complete original tree in a backup outside plugin discovery,
+   then remove its copy from the project's `Plugins` directory.
 2. Install Python 3.11+ and the matching wheel from the same release or local build:
 
    ```bat
@@ -45,8 +50,7 @@ https://github.com/zushinzackery2-ship-it/UE-Node-Nexus-MCP
 
 ## Compatibility
 
-For an engine-wide installation, place both plugin directories under
-`Engine/Plugins/Marketplace`. UE 5.5 Launcher builds compile this directory's
+UE 5.5 Launcher builds compile `Engine/Plugins/Marketplace`'s
 rules in `MarketplaceRules.dll`; installing additional C++ modules under
 `Engine/Plugins/Editor` leaves them absent from the precompiled `UE5Rules.dll`.
 The repository's `tests/compile_check/install_engine.py` verifies and stages
@@ -62,6 +66,10 @@ module rules as well as UBT rule discovery. Set `UE_NEXUS_ENGINE_DIR` first.
 The binaries target UE 5.5.4 Launcher on Windows x64, module BuildId `37670630`.
 They are editor Development binaries. Source is included for rebuilding against
 other engine builds; matching Python and plugin versions are required.
+The primary viewport diagnostic library includes input/state/history control,
+normal-draw phase capture, pixel/TSR probes and GPU profiling. Its renderer
+integration targets UE 5.5. The wheel's `guides/viewport_diagnostics.md` describes
+API contracts and native texture availability.
 
 Version 0.6.0 uses bridge contract 4 and lifecycle protocol 1. `bridge_capabilities_get` reports each loaded
 module's embedded source fingerprint, commit/dirty state, version, path and
@@ -129,3 +137,14 @@ object-slot validation. Engine byte copies handle packed vector/quaternion
 values and LWC conversion. Storage failures retain the parameter name/type and
 reason through export and publication. Isolation receipts include copied bytes
 and per-phase timings for measuring project-specific validation cost.
+
+One committed publication validates its ordered high-risk candidates in one copy
+and one worker. Per-asset receipts bind the exact payload and dependencies; external
+revision or environment changes invalidate that evidence. The copied project moves
+to the validation directory's `.del` after confirmed exit; receipts and runtime logs
+remain available. `UE_NEXUS_VALIDATION_DIR` selects the output volume. Disk admission
+accounts for that volume's allocation units, live package snapshots and working space.
+
+`viewport_capture` accepts `level`, `active` and `pie`. A completed PNG receipt includes
+`producer_view` with the producing world, viewport type and matching `engine_frame`.
+Use `pie` when verifying the game's rendered view across editor focus changes.

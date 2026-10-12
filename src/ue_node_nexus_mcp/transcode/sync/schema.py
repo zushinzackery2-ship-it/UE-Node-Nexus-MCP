@@ -16,6 +16,7 @@ from ..schema.coverage import CONTEXT_REQUIRED, expand, target_resolution
 from ..schema.functions import CALLABLE_INDEX, EVENT_INDEX
 from ..schema.lock import SchemaLock
 from ..schema.records import FAMILIES
+from ..schema.objects import path as record_path
 from ..schema.progress import scope
 
 
@@ -105,7 +106,7 @@ def query(lock: SchemaLock, category=None, text=None, limit=40, cursor=0, detail
     rows = []
     for family, name, entry in matches[start:start + count]:
         row = dict(name=name, family=family, **entry)
-        row["file"] = str(lock.directory / entry["file"])
+        row["file"] = str(record_path(lock.directory, entry))
         if details:
             row["definition"] = read_entry(lock, family, name, entry)
         rows.append(row)

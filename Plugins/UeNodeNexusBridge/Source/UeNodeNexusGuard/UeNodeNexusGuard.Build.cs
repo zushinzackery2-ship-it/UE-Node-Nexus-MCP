@@ -5,6 +5,7 @@ public class UeNodeNexusGuard : ModuleRules
     public UeNodeNexusGuard(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        bUsePrecompiled = false;
         // Resolve the sibling rules from this rules assembly. An installed Marketplace
         // assembly can contain the same type name when a project supplies its own plugin.
         var CoreRules = GetType().Assembly.GetType("UeNodeNexusBridge");

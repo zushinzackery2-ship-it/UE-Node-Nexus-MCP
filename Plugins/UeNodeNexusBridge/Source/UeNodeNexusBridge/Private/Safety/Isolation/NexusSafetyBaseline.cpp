@@ -58,8 +58,24 @@ TSharedPtr<FJsonObject> ExportBaseline(const FString& Operation, const FString& 
             return MakeOperationError(Operation, RequestId, TEXT("isolation_baseline_budget"), TEXT("baseline dependency closure exceeds 4096 packages"));
         }
     }
+    FString Identifier = FGuid::NewGuid().ToString(EGuidFormats::Digits);
+    FString RequestedId;
+    if (Payload->HasField(TEXT("baseline_id")))
+    {
+        FGuid Parsed;
+        if (!Payload->TryGetStringField(TEXT("baseline_id"), RequestedId)
+            || !FGuid::ParseExact(RequestedId, EGuidFormats::Digits, Parsed))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("isolation_baseline_identity"), TEXT("baseline_id must be a UUID in digits format"));
+        }
+        Identifier = RequestedId;
+    }
     const FString Root = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir()
-        / TEXT("Nexus/SafetyBaseline") / FGuid::NewGuid().ToString(EGuidFormats::Digits));
+        / TEXT("Nexus/SafetyBaseline") / Identifier);
+    if (!bDryRun && IFileManager::Get().DirectoryExists(*Root))
+    {
+        return MakeOperationError(Operation, RequestId, TEXT("isolation_baseline_identity"), TEXT("baseline export requires an unused directory"));
+    }
     TArray<TSharedPtr<FJsonValue>> Files;
     FString Error;
     for (const FName Name : Packages)

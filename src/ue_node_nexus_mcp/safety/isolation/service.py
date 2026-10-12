@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import asdict
 from pathlib import Path
 import time
@@ -10,9 +11,10 @@ from uuid import uuid4
 
 from ...instances.errors import InstanceError, require
 from ...instances.identity.paths import runtime_root
+from ...instances.identity.processes import inspect_process
 from ...transcode.storage.io import atomic_write, canonical, digest
 from .inputs import validate_operations
-from .snapshot import copy_project, inventory, unchanged
+from .snapshot import ALLOCATION_FACTOR, WORKING_BYTES, copy_project, inventory, unchanged
 
 LOG = logging.getLogger(__name__)
 
@@ -43,10 +45,17 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
     scene_files = [item["payload"]["plan_file"].replace("\\", "/") for item in entries if item["operation"] == "scene_apply"]
     plan = inventory(Path(project_path), scene_files)
     identifier = uuid4().hex
-    root = runtime_root() / "Validation" / identifier
+    configured_root = os.environ.get("UE_NEXUS_VALIDATION_DIR")
+    validation_directory = Path(configured_root).resolve() if configured_root else runtime_root() / "Validation"
+    root = validation_directory / identifier
+    from .capacity import estimate
+
+    disk_budget = estimate(plan, root, ALLOCATION_FACTOR, WORKING_BYTES, baseline)
     report = dict(validation_id=identifier, source_project=plan["project"], operations=entries,
+                  owner=inspect_process(os.getpid()),
                   validation_root=str(root), dry_run=dry_run, baseline="saved_disk", copied_bytes=plan["bytes"],
-                  copied_files=len(plan["files"]), state="preview", applied_to_source=False,
+                  copied_files=len(plan["files"]), disk_estimate_bytes=disk_budget["required_bytes"], disk_budget=disk_budget,
+                  state="preview", applied_to_source=False,
                   plugin_mounts=plugin_inputs, operations_digest=digest(entries), allow_low_memory=allow_low_memory)
     report["timings"] = dict(preflight_seconds=time.monotonic() - entered)
     if dry_run:
@@ -54,6 +63,10 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
     from .session import ValidationSession
     engine = engine or resolve_engine(plan["project"], engine_path)
     root.mkdir(parents=True)
+    from .retention import retain, sweep
+    swept = sweep(validation_directory)
+    if swept:
+        report["swept_interrupted"] = swept
     from ...instances.lifecycle.policy import Policy
     atomic_write(root / "Runtime/policy.json", canonical(asdict(Policy.read(runtime_root()))))
     receipt = root / "receipt.json"
@@ -62,7 +75,7 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
     session, snapshot = None, None
     try:
         phase_started = time.monotonic()
-        snapshot = copy_project(plan, root / "Project")
+        snapshot = copy_project(plan, root / "Project", baseline=baseline)
         if baseline is not None:
             from .baseline import overlay
             snapshot = overlay(snapshot, baseline)
@@ -137,6 +150,13 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
             except (OSError, InstanceError) as error:
                 report.update(state="stale", source_unchanged=False, source_check_error=str(error))
         report["finished_at"] = time.time()
+        if session is None:
+            report["cleanup"] = dict(exit_confirmed=True, launched=False)
+        atomic_write(receipt, canonical(report))
+        try:
+            report["retention"] = retain(validation_directory, root, report)
+        except OSError as error:
+            report["retention"] = dict(retained=False, error=str(error))
         atomic_write(receipt, canonical(report))
     return dict(ok=report["state"] == "validated", operation="safety_validate", data=report,
                 **(dict(error=report["error"]) if report.get("error") else dict()))

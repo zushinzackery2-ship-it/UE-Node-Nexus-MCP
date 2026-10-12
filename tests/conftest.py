@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import shutil
+from pathlib import Path
 from typing import Any, Callable
 
 import pytest
@@ -10,7 +13,19 @@ from ue_node_nexus_mcp.contracts import FEATURE_GROUPS
 
 def pytest_configure(config: pytest.Config) -> None:
     if config.option.basetemp is None:
-        config.option.basetemp = str(config.rootpath / "build" / "pytest-temp")
+        config.option.basetemp = str(_space_root(config))
+
+
+def _space_root(config: pytest.Config) -> Path:
+    """Use the explicit test volume or the workspace, preserving disk admission."""
+    from ue_node_nexus_mcp.safety.isolation.snapshot import WORKING_BYTES
+
+    required = WORKING_BYTES + 64 * 1024 ** 2
+    configured = os.environ.get("UE_NEXUS_TEST_SPACE_DIR")
+    directory = Path(configured) if configured else config.rootpath / "build"
+    if not directory.is_dir() or shutil.disk_usage(directory).free < required:
+        raise pytest.UsageError(f"test volume requires {required} bytes; set UE_NEXUS_TEST_SPACE_DIR to an existing NTFS directory on Windows")
+    return directory / "nexus-pytest-temp"
 
 
 @pytest.fixture

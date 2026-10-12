@@ -74,14 +74,19 @@ void Install()
         return;
     }
     ApplyConfiguration(*ConfigurationInput);
+    const auto CapturedConfiguration = *ConfigurationInput;
     const auto Captured = *Variables;
     const auto Pending = ApplyConsoleVariables(Captured);
     Status->SetBoolField(TEXT("applied"), false);
     Status->SetBoolField(TEXT("values_applied"), true);
     Status->SetBoolField(TEXT("callbacks_applied"), false);
     Status->SetStringField(TEXT("phase"), TEXT("PostConfigInit"));
-    Completion = FCoreDelegates::OnFEngineLoopInitComplete.AddLambda([Captured, Pending]()
+    Completion = FCoreDelegates::OnFEngineLoopInitComplete.AddLambda([CapturedConfiguration, Captured, Pending]()
     {
+        // Late engine defaults and CDO reads happen between the two phases;
+        // replaying the captured layers again keeps every inherited key the
+        // running configuration held at capture time.
+        ApplyConfiguration(CapturedConfiguration);
         FString Error;
         const bool bCompleted = CompleteConsoleVariables(Captured, Pending, Error);
         Status->SetBoolField(TEXT("applied"), bCompleted);

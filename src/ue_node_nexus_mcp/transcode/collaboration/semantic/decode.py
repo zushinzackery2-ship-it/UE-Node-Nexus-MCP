@@ -31,9 +31,9 @@ def to_document(snapshot: dict, *, include_defaults=False) -> Document:
             meta["prop_types"] = dict(meta.get("prop_types", dict()))
             meta["input_types"] = dict(meta.get("input_types", dict()))
             for key, field in entity["args"].items():
-                meta["prop_types"].setdefault(key, field.get("type"))
+                meta["prop_types"].setdefault(key, meta["input_types"].get(key, field.get("type")))
             for key, field in entity["props"].items():
-                meta["input_types"].setdefault(key, field.get("type"))
+                meta["input_types"].setdefault(key, meta["prop_types"].get(key, field.get("type")))
             meta["default_type"] = entity["default"].get("type", entity["type"])
             if binding.get("physical"):
                 meta["guid"] = binding["physical"]

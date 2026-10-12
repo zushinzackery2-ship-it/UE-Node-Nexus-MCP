@@ -71,3 +71,29 @@ def test_new_parent_component_is_bound_before_child_attachment():
     child = next(index for index, verb in enumerate(plan.verbs) if verb.op == "bp_component_add")
     assert binding < child
     assert plan.verbs[binding].args == dict(name="CollisionComponent", **{"class": "SphereComponent"})
+
+
+def test_object_array_cannot_connect_to_interface_array(schema):
+    body = ("[variables]\nObjects : Array<Object(/Script/Engine.StaticMesh)>\n"
+            "[function Sink(Items: Array<Interface(/Script/Engine.BlendableInterface)>)]\n"
+            "[graph EventGraph]\nobjects : VariableGet(Objects)\nsink : CallFunction(self.Sink)\n"
+            "objects.Objects -> sink.Items\n")
+    errors = lint_document(document(body), "blueprint", schema).errors()
+    assert [item.code for item in errors] == ["array_layout_mismatch"]
+
+
+def test_function_entry_array_endpoint_follows_the_same_layout_rule(schema):
+    body = ("[variables]\nObjects : Array<Object(/Script/Engine.StaticMesh)>\n"
+            "[function Sink(Items: Array<Interface(/Script/Engine.BlendableInterface)>)]\n"
+            "[function Feed(Materials: Array<Object(/Script/Engine.StaticMesh)>)]\n"
+            "sink : CallFunction(self.Sink)\nentry.Materials -> sink.Items\n")
+    errors = lint_document(document(body), "blueprint", schema).errors()
+    assert [item.code for item in errors] == ["array_layout_mismatch"]
+
+
+def test_matching_array_element_layouts_still_lint_clean(schema):
+    body = ("[variables]\nObjects : Array<Object(/Script/Engine.StaticMesh)>\n"
+            "[function Sink(Items: Array<Object(/Script/Engine.StaticMesh)>)]\n"
+            "[function Feed(Materials: Array<Object(/Script/Engine.StaticMesh)>)]\n"
+            "sink : CallFunction(self.Sink)\nentry.Materials -> sink.Items\n")
+    assert lint_document(document(body), "blueprint", schema).errors() == []
