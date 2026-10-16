@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Blueprint/NexusBlueprintPinNames.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -52,7 +53,16 @@ static void ApplyLink(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<F
     UEdGraphPin* ToPin = ResolvePin(To, ReadOpString(Op, TEXT("to_pin")), EGPD_Input);
     if (FromPin == nullptr || ToPin == nullptr)
     {
-        Context.Fail(Index, TEXT("pin_not_found"), FString::Printf(TEXT("pin not found: %s.%s -> %s.%s"), *FromId, *ReadOpString(Op, TEXT("from_pin")), *ToId, *ReadOpString(Op, TEXT("to_pin"))));
+        FString Detail;
+        if (FromPin == nullptr)
+        {
+            Detail += TEXT(" [") + DescribePinNames(From, EGPD_Output) + TEXT("]");
+        }
+        if (ToPin == nullptr)
+        {
+            Detail += TEXT(" [") + DescribePinNames(To, EGPD_Input) + TEXT("]");
+        }
+        Context.Fail(Index, TEXT("pin_not_found"), FString::Printf(TEXT("pin not found: %s.%s -> %s.%s%s"), *FromId, *ReadOpString(Op, TEXT("from_pin")), *ToId, *ReadOpString(Op, TEXT("to_pin")), *Detail));
         return;
     }
     if (bConnect && IsContainerLayoutMismatch(FromPin->PinType, ToPin->PinType))

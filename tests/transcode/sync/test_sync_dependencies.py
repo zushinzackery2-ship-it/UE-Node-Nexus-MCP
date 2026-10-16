@@ -29,7 +29,7 @@ def test_dependencies_include_component_properties_and_nested_arrays():
 def test_dependency_cycle_is_reported_with_asset_paths():
     a, _ = _document("/Game/A", "[asset]\nParent=/Game/B.B", "MaterialInstanceConstant")
     b, _ = _document("/Game/B", "[asset]\nParent=/Game/A.A", "MaterialInstanceConstant")
-    documents = dict((("/Game/A.A", ("material_instance", a)), ("/Game/B.B", ("material_instance", b))))
+    documents = {"/Game/A.A": ("material_instance", a), "/Game/B.B": ("material_instance", b)}
     with pytest.raises(SyncError, match="/Game/A.A") as caught:
         order_assets(documents)
     assert caught.value.code == "dependency_cycle"
@@ -144,7 +144,7 @@ def test_preflight_errors_stop_other_writes(sync_workspace):
 def test_existing_mutually_referencing_blueprints_need_no_creation_order():
     a, _ = _document("/Game/A", "[asset]\nOther=/Game/B.B")
     b, _ = _document("/Game/B", "[asset]\nOther=/Game/A.A")
-    documents = dict((("/Game/A.A", ("blueprint", a)), ("/Game/B.B", ("blueprint", b))))
+    documents = {"/Game/A.A": ("blueprint", a), "/Game/B.B": ("blueprint", b)}
     assert order_assets(documents, required=set()) == ["/Game/A.A", "/Game/B.B"]
 
 
@@ -155,3 +155,71 @@ def test_value_parser_ignores_prose_and_supports_wrapped_references():
         "Items=((Value=SoftObject(/Game/C.C)),(Value=\"/Game/D.D\"))",
     )
     assert document_dependencies(document, "asset") == set(("/Game/B.B", "/Game/C.C", "/Game/D.D"))
+
+
+def _typed_schema(tmp_path):
+    from ue_node_nexus_mcp.transcode.schema.catalog import publish
+    from ue_node_nexus_mcp.transcode.schema.lock import SchemaLock
+
+    directory = tmp_path / ".nexus" / "schema" / "key"
+    publish(directory, "key", dict(functions={
+        "/Script/Engine.KismetStringLibrary.Concat_StrStr": dict(
+            path="/Script/Engine.KismetStringLibrary.Concat_StrStr",
+            params=[dict(name="A", dir="in", type=dict(category="string")),
+                    dict(name="B", dir="in", type=dict(category="string"))],
+        ),
+        "/Script/Engine.KismetSystemLibrary.LoadAsset": dict(
+            path="/Script/Engine.KismetSystemLibrary.LoadAsset",
+            params=[dict(name="Asset", dir="in", type=dict(category="softobject"))],
+        ),
+    }))
+    return SchemaLock(directory, "key")
+
+
+def test_string_parameters_never_become_asset_dependencies(tmp_path):
+    schema = _typed_schema(tmp_path)
+    document, _ = _document(
+        "/Game/A",
+        '[graph EventGraph]\nconcat : CallFunction(KismetStringLibrary.Concat_StrStr, '
+        'A="/Game/CharacterPure/Runtime/Animation/Clips/Original/", '
+        'B="/Game/CharacterPure/Runtime/Animation/Clips/Original/A_CP_")\n'
+        '[function Build()]\njoin : CallFunction(KismetStringLibrary.Concat_StrStr, '
+        'A="/Game/Clips/A_CP_Run.A_CP_Run", B="/Plain")\n',
+    )
+    assert document_dependencies(document, "blueprint", schema) == set()
+
+
+def test_soft_object_parameters_still_name_their_asset(tmp_path):
+    schema = _typed_schema(tmp_path)
+    document, _ = _document(
+        "/Game/A",
+        "[graph EventGraph]\nload : CallFunction(KismetSystemLibrary.LoadAsset, "
+        'Asset="/Game/Clips/A_CP_Run.A_CP_Run")\n',
+    )
+    assert document_dependencies(document, "blueprint", schema) == set(("/Game/Clips/A_CP_Run.A_CP_Run",))
+
+
+def test_directory_strings_never_reach_object_path():
+    document, _ = _document("/Game/A", "[asset]\nNotes=/Game/Materials/Empty/")
+    assert document_dependencies(document, "asset") == set()
+
+
+def test_declaration_cycles_are_distinct_from_body_cycles():
+    a, _ = _document("/Game/A", "[variables]\nBee : Object(/Game/B.B)")
+    b, _ = _document("/Game/B", "[graph EventGraph]\ncall : CallFunction(/Game/A.A_C.Func)")
+    documents: dict = {"/Game/A.A": ("blueprint", a), "/Game/B.B": ("blueprint", b)}
+    with pytest.raises(SyncError) as caught:
+        order_assets(documents, required=set(("/Game/A.A", "/Game/B.B")))
+    assert caught.value.code == "declaration_cycle"
+    # An object the editor already holds constrains no creation order.
+    assert order_assets(documents, required=set(("/Game/A.A", "/Game/B.B")),
+                        available={"/Game/B.B"}) == ["/Game/A.A", "/Game/B.B"]
+
+
+def test_body_cycles_keep_the_general_rejection():
+    a, _ = _document("/Game/A", "[graph EventGraph]\nx : CallFunction(self.F, Target=/Game/B.B)")
+    b, _ = _document("/Game/B", "[graph EventGraph]\ny : CallFunction(self.G, Target=/Game/A.A)")
+    documents: dict = {"/Game/A.A": ("blueprint", a), "/Game/B.B": ("blueprint", b)}
+    with pytest.raises(SyncError) as caught:
+        order_assets(documents, required=set(("/Game/A.A", "/Game/B.B")))
+    assert caught.value.code == "dependency_cycle"

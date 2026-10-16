@@ -1,5 +1,6 @@
 #include "NexusBlueprintNodeProperties.h"
 #include "NexusAnimGetterProperties.h"
+#include "NexusNodeGeneratedState.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -90,6 +91,12 @@ bool ApplyBlueprintNodeProperty(UEdGraphNode* Node, const FString& Name,
         return false;
     }
     FProperty* Property = Node->GetClass()->FindPropertyByName(FName(*Parts[0]));
+    if (IsGeneratedNodeProperty(Node->GetClass(), Property))
+    {
+        Error = FString::Printf(
+            TEXT("node_property_generated: %s is maintained by the node rebuild and cannot be set from text"), *Name);
+        return false;
+    }
     const TSharedPtr<FJsonValue> Expanded = ExpandPath(Parts, Value);
     if (!ValidateNodeValue(Node, Property, Expanded, Parts[0], Error))
     {

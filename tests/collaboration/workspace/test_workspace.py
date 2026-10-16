@@ -98,3 +98,32 @@ def test_cross_workspace_file_selection_is_rejected(repository):
     with pytest.raises(SyncError) as failure:
         a.stage([str(b.root / b.state["files"][asset])])
     assert failure.value.code == "invalid_path"
+
+
+def test_registered_deletion_leaves_registry_and_lint_clean(repository):
+    from ue_node_nexus_mcp.transcode.collaboration.workspace.lint import lint
+
+    store, root, asset = repository
+    workspace = checkout(store, root)
+    (workspace.root / workspace.state["files"][asset]).unlink()
+    workspace.stage(delete=True)
+    workspace.commit("remove asset", delete=True)
+    assert asset not in workspace.history.entries(workspace.state["head"])
+    # The registry keeps the entry for unstage/history recovery, but the
+    # committed deletion is no longer reported as an unregistered edit.
+    assert asset in workspace.state["files"]
+    result = lint(workspace, None)
+    assert result["rows"] == [] and result["error_count"] == 0
+
+
+def test_lint_accepts_registered_deletion_option_and_still_reports_unregistered(repository):
+    from ue_node_nexus_mcp.transcode.collaboration.workspace.lint import lint
+
+    store, root, asset = repository
+    workspace = checkout(store, root)
+    (workspace.root / workspace.state["files"][asset]).unlink()
+    with pytest.raises(SyncError) as failure:
+        lint(workspace, None)
+    assert failure.value.code == "local-deleted"
+    result = lint(workspace, None, delete=True)
+    assert result["rows"] == [] and result["error_count"] == 0

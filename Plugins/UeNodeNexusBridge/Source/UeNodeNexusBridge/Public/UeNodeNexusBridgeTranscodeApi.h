@@ -29,6 +29,8 @@ struct FApplyContext
     // as pins whose type never settled. A plan that only reports what it refused
     // to do leaves the caller guessing about what it did.
     TArray<FApplyFailure> Notes;
+    // Final dispatcher signatures declared by this dry-run plan, before a skeleton exists.
+    TMap<FName, TSharedPtr<FJsonObject>> DispatcherSignatures;
     bool bChanged = false;
     bool bDryRun = false;
 

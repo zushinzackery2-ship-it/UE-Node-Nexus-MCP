@@ -73,7 +73,7 @@ void Install()
         UE_LOG(LogTemp, Error, TEXT("Nexus validation bootstrap rejected: %s"), *Error);
         return;
     }
-    ApplyConfiguration(*ConfigurationInput);
+    ApplyConfiguration(*ConfigurationInput, EConfigurationPhase::Startup);
     const auto CapturedConfiguration = *ConfigurationInput;
     const auto Captured = *Variables;
     const auto Pending = ApplyConsoleVariables(Captured);
@@ -83,10 +83,10 @@ void Install()
     Status->SetStringField(TEXT("phase"), TEXT("PostConfigInit"));
     Completion = FCoreDelegates::OnFEngineLoopInitComplete.AddLambda([CapturedConfiguration, Captured, Pending]()
     {
-        // Late engine defaults and CDO reads happen between the two phases;
-        // replaying the captured layers again keeps every inherited key the
-        // running configuration held at capture time.
-        ApplyConfiguration(CapturedConfiguration);
+        // Native startup consumers have now read and removed their input
+        // sections. Synchronize both live and reconstruction state so future
+        // captures reflect the source rather than the worker's original layers.
+        ApplyConfiguration(CapturedConfiguration, EConfigurationPhase::Runtime);
         FString Error;
         const bool bCompleted = CompleteConsoleVariables(Captured, Pending, Error);
         Status->SetBoolField(TEXT("applied"), bCompleted);

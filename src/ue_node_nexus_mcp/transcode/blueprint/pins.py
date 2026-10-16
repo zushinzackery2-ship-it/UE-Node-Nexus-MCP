@@ -5,6 +5,8 @@ from ..text.lexer import LexError
 from ..raw.nodes import single_visible_pin
 from .classes import node_name
 from .callables import event_signature, local_records
+from .delegates import DELEGATE_NODES, record as delegate_record
+from ..errors import SyncError
 
 
 def pin(name, direction, category="exec", **extra) -> dict:
@@ -54,6 +56,19 @@ def node_pins(decl, document, section, schema=None, metadata=None) -> list:
     info = schema.resolve_class("k2node", decl.type_name) if schema and not decl.opaque else None
     if info and info.pins and not info.dynamic_pins:
         return info.pins
+    if name in DELEGATE_NODES:
+        pins = [pin("execute", "in"), pin("then", "out"), pin("self", "in", "object")]
+        if name in ("AddDelegate", "RemoveDelegate"):
+            pins.append(pin("Delegate", "in", "delegate"))
+        if name == "CallDelegate":
+            try:
+                record = delegate_record(decl, document, schema)
+            except SyncError:
+                record = None
+            if record:
+                resolved: dict = record
+                pins.extend(dict(item) for item in resolved.get("params", []))
+        return pins
     if name in ("CallFunction", "CallParentFunction", "Message"):
         record = function_record(decl, document, schema)
         if record is not None:
@@ -74,7 +89,8 @@ def node_pins(decl, document, section, schema=None, metadata=None) -> list:
         return [pin("execute", "in"), *[pin(f"then_{index}", "out") for index in range(int(count) if count.isdigit() else 2)]]
     if name == "CustomEvent":
         try:
-            return [pin("then", "out"), *[dict(item.to_raw(), dir="out") for item in event_signature(decl).inputs]]
+            return [pin("then", "out"), pin("OutputDelegate", "out", "delegate"),
+                    *[dict(item.to_raw(), dir="out") for item in event_signature(decl).inputs]]
         except LexError:
             return []
     if name in ("Event", "FunctionEntry"):
@@ -88,8 +104,22 @@ def node_pins(decl, document, section, schema=None, metadata=None) -> list:
     return info.pins if info else []
 
 
-def canonical_pin(name, direction, pins) -> str | None:
+def class_pin_aliases(schema, spelling: str) -> dict[str, str]:
+    """Author alias -> real pin name for the node class a spelling names."""
+    if schema is None or not spelling:
+        return dict()
+    try:
+        info = schema.resolve_class("k2node", spelling)
+    except SyncError:
+        return dict()
+    return dict(info.pin_aliases) if info is not None else dict()
+
+
+def canonical_pin(name, direction, pins, aliases: dict[str, str] | None = None) -> str | None:
     if name is None:
         return single_visible_pin(dict(pins=pins), direction)
+    if aliases:
+        lowered = name.strip().lower()
+        name = next((canonical for alias, canonical in aliases.items() if alias.lower() == lowered), name)
     return next((item["name"] for item in pins if item.get("dir") == direction
-                 and str(item.get("name", "")).lower() == name.lower()), name)
+                 and str(item.get("name", "")).lower() == str(name).lower()), name)

@@ -99,7 +99,7 @@ def run(workspace, action: str, paths, options: dict) -> dict:
         return paged(rows, options, left=left, right=right)
     if action == "lint":
         from .lint import lint
-        return lint(workspace, paths)
+        return lint(workspace, paths, options.get("delete", False))
     raise SyncError("invalid_action", action)
 
 

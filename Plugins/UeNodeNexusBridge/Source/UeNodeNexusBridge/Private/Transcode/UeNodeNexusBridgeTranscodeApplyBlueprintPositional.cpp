@@ -3,6 +3,7 @@
 
 #include "Engine/Blueprint.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_BaseMCDelegate.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_DynamicCast.h"
 #include "K2Node_Event.h"
@@ -33,6 +34,20 @@ UClass* ResolveClassByNameOrPath(const FString& Text)
 bool ConfigureFromPositional(UBlueprint* Blueprint, UClass* NodeClass, const TArray<FString>& Positional, const TSharedPtr<FJsonObject>& Config, FString& OutError)
 {
     const FString First = Positional.Num() > 0 ? Positional[0] : FString();
+    if (NodeClass->IsChildOf(UK2Node_BaseMCDelegate::StaticClass()))
+    {
+        FString Owner;
+        FString Name;
+        if (Positional.Num() != 1 || !First.Split(TEXT("."), &Owner, &Name,
+            ESearchCase::CaseSensitive, ESearchDir::FromEnd) || Owner.IsEmpty() || Name.IsEmpty())
+        {
+            OutError = FString::Printf(TEXT("%s needs Owner.Dispatcher or self.Dispatcher"), *NodeClass->GetName());
+            return false;
+        }
+        Config->SetStringField(TEXT("delegate_owner"), Owner);
+        Config->SetStringField(TEXT("delegate_name"), Name);
+        return true;
+    }
     if (NodeClass->IsChildOf(UK2Node_CustomEvent::StaticClass()))
     {
         Config->SetStringField(TEXT("event_name"), First);

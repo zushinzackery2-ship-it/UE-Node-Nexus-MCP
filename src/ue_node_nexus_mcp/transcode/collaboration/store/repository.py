@@ -31,6 +31,20 @@ class Store:
         self.db = Database(self.root / "index.sqlite")
         self.objects = Objects(self.root / "objects", self.db)
         canonical_project = os.path.normcase(str(Path(project_file).resolve())) if project_file else ""
+        try:
+            self.project_id = self.identity(canonical_project)
+        except BaseException:
+            self.db.discard()
+            raise
+
+    def identity(self, canonical_project: str) -> str:
+        with self.db.connection() as connection:
+            metadata = dict(connection.execute("SELECT key, value FROM meta WHERE key IN ('project_id', 'project_file')"))
+        if "project_id" in metadata and (not canonical_project or "project_file" in metadata):
+            if canonical_project and metadata["project_file"] != canonical_project:
+                raise SyncError("project_mismatch", "repository belongs to a different project",
+                    dict(expected=metadata["project_file"], actual=canonical_project))
+            return metadata["project_id"]
         with self.db.connection(write=True) as connection:
             connection.execute("INSERT OR IGNORE INTO meta VALUES ('project_id', ?)", (str(uuid.uuid4()),))
             row = connection.execute("SELECT value FROM meta WHERE key='project_file'").fetchone()
@@ -38,7 +52,7 @@ class Store:
                 raise SyncError("project_mismatch", "repository belongs to a different project", dict(expected=row[0], actual=canonical_project))
             if canonical_project:
                 connection.execute("INSERT OR IGNORE INTO meta VALUES ('project_file', ?)", (canonical_project,))
-            self.project_id = connection.execute("SELECT value FROM meta WHERE key='project_id'").fetchone()[0]
+            return connection.execute("SELECT value FROM meta WHERE key='project_id'").fetchone()[0]
 
     def lock(self, name: str, timeout: float = 0.0, **holder: Any) -> MirrorLock:
         if not name.replace("-", "").replace("_", "").isalnum():

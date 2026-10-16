@@ -27,10 +27,14 @@ CALLABLE_INDEX = "registered_callable_index"
 
 
 def resolve(lock, owner: str, name: str) -> dict | None:
+    return resolve_member(lock, owner, name, lock.direct_function)
+
+
+def resolve_member(lock, owner: str, name: str, direct) -> dict | None:
     seen = set()
     while owner and owner not in seen:
         seen.add(owner)
-        record = lock.direct_function(owner, name)
+        record = direct(owner, name)
         if record is not None:
             return record
         # Owners are written from native class paths, so only a path or a real

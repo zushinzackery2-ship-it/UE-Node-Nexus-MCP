@@ -10,6 +10,7 @@ from ..text.ids import short_class_name
 from ..text.model import Bare, Decl, Document, Prop, Section
 from .nodes import IMPLICIT_ID_NAMES, assign_node_ids, build_links, node_decl
 from .common import allocator_for, base_order, claim_section_ids, header_from_raw, non_default_params, order_ids, prop_defaults, prop_types, prop_values, props_section, require_kind, section_allocator
+from .templates import inherited_event_pair
 from ..schema.catalog import reference
 
 VARIABLE_FLAG_ORDER = (
@@ -45,7 +46,7 @@ def variable_decl(variable: dict[str, Any]) -> Decl:
     default = variable.get("default")
     full_type = type_text(variable.get("type"))
     type_name, type_args = split_type_text(full_type)
-    # the bridge reads the effective value off the CDO, so zero/empty means "no default"
+    # Omit only effective values proven to match this type's native initialization.
     if default in (None, "") or is_zero_default(str(default), full_type):
         default = None
     return Decl(
@@ -114,7 +115,10 @@ def _is_ghost_event(node: dict[str, Any]) -> bool:
 
 def _visible_nodes(graph: dict[str, Any]) -> list[dict[str, Any]]:
     """Nodes the text carries, in raw order; editor template scaffolding stays hidden."""
-    return [node for node in graph.get("nodes") or [] if not _is_ghost_event(node)]
+    nodes = graph.get("nodes") or []
+    pins = dict((str(pin.get("guid", "")), (node, pin)) for node in nodes for pin in node.get("pins", []))
+    inherited = set().union(*(inherited_event_pair(node, pins) for node in nodes))
+    return [node for node in nodes if not _is_ghost_event(node) and str(node.get("guid", "")) not in inherited]
 
 
 def _graph_guids(graphs: list[dict[str, Any]]) -> list[list[str]]:

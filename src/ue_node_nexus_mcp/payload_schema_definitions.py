@@ -164,6 +164,8 @@ OPERATION_ITEM_SCHEMAS: dict[str, dict[str, Any]] = {
                 "description": "Owner class path for K2Node_CallFunction or K2Node_Event",
             },
             "event_name": {"type": "string", "description": "K2Node_CustomEvent event name"},
+            "delegate_name": {"type": "string", "description": "Multicast dispatcher property name"},
+            "delegate_owner": {"type": "string", "description": "Multicast dispatcher owner class path or self"},
             "input_key": {"type": "string", "description": "K2Node_InputKey key name"},
             "input_action_name": {
                 "type": "string",

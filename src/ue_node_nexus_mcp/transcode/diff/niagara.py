@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from .common import decl_params, diff_brace_props, diff_prop_section, field_type, same_class
 from ..text.model import Decl, Document, Section
 from .plan import AssetPlan
@@ -11,6 +13,7 @@ from ..text.semantic import values_equal
 from ..text.values import is_marker
 
 ASSIGNMENT_MODULE = "SetVariables"
+USER_LINK = re.compile(r"@link\((User\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\)")
 
 
 def diff_niagara(local: Document, base: Document | None, plan: AssetPlan, kind: str,
@@ -159,10 +162,15 @@ def _diff_stack(local: Section, base: Section | None, plan: AssetPlan, kind: str
 
 
 def _add_input(plan: AssetPlan, decl: Decl, identifier: str, key: str, value: str, before: str | None, common: dict[str, str]) -> None:
-    if is_marker(value):
-        if before is not None and values_equal(before, value, field_type(decl, key)):
-            return
-        plan.error("unsupported_edit", f"{identifier}.{key}: linked/dynamic inputs (@link/@dynamic) cannot be created from text in this version", decl.line)
+    if before is not None and values_equal(before, value, field_type(decl, key)):
+        return
+    linked = USER_LINK.fullmatch(value)
+    if linked is not None:
+        plan.add("ns_module_input_link", line=decl.line, id=identifier, input=key,
+                 parameter=linked.group(1), **common)
+        return
+    if is_marker(value) or value.startswith("@"):
+        plan.error("unsupported_edit", f"{identifier}.{key}: new input links require @link(User.Name); dynamic and other namespaces remain read-only", decl.line)
         return
     plan.add("ns_module_input_set", line=decl.line, id=identifier, input=key, value=value, **common)
 

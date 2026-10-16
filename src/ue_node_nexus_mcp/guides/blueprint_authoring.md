@@ -41,6 +41,56 @@ Use `graph_patch_apply(graph_kind="blueprint")`:
   specialised class that does not match the function is refused, dry run included.
 - Same-batch `client_id` references work for Blueprints, including dry-run.
 
+## Pin names
+
+The text and the canonical export both use the engine's own pin names. Where
+the editor builds a name an author cannot guess, the mirror registers a stable
+alias that resolves on both sides of a comparison:
+
+- Array Get Item (`K2Node_GetArrayItem`) builds `Array` / `Dimension 1` /
+  `Output`; the spellings `TargetArray` / `Index` / `Item` are accepted for
+  them. The engine name stays reachable in both directions.
+
+Write whichever spelling reads better: lint, diff and the editor canonicalize
+to the engine name, and a `pin_not_found` failure lists the node's real pins
+with its aliases.
+
+## Multicast dispatchers
+
+Declare a dispatcher and use its native delegate nodes in the text mirror:
+
+```nexus
+[dispatchers]
+Changed(Value: int)
+
+[graph EventGraph]
+listener : CustomEvent(OnValue, Value: int)
+bind : AddDelegate(self.Changed)
+emit : CallDelegate(self.Changed)
+remove : RemoveDelegate(self.Changed)
+clear : ClearDelegate(self.Changed)
+listener.OutputDelegate -> bind.Delegate
+listener.OutputDelegate -> remove.Delegate
+```
+
+Wire the execution pins to the events that bind, emit, remove or clear the
+dispatcher. `CallDelegate` takes the dispatcher's declared input parameters;
+binding events must match their types and order. Parameter names may differ.
+
+For another object, use its class and dispatcher name, for example
+`AddDelegate(/Game/Example/BP_Emitter.BP_Emitter_C.Changed)`, and wire the
+emitter object to the node's `self` pin. Native class aliases are accepted.
+External calls require a Blueprint-callable multicast property; external
+binding/removal/clearing require a Blueprint-assignable property.
+
+`graph_patch_apply` uses `delegate_owner` and `delegate_name` in node config.
+The four node classes are `K2Node_CallDelegate`, `K2Node_AddDelegate`,
+`K2Node_RemoveDelegate` and `K2Node_ClearDelegate`. Binding is configured from
+the reflected multicast property before pins are allocated. Preview validates
+the same reference without creating nodes or mutating node defaults; it also
+accepts a dispatcher declared earlier in the same plan. The schema's
+`delegates.json` family records owner, signature and access flags.
+
 ## Input wiring
 
 Legacy Project Settings mappings are read/written with

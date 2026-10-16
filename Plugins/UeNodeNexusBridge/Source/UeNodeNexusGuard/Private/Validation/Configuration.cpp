@@ -1,5 +1,6 @@
 #include "Environment.h"
 #include "ConfigurationLayers.h"
+#include "ConfigurationDiagnostics.h"
 
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/Paths.h"
@@ -45,6 +46,7 @@ TSharedPtr<FJsonObject> Configuration()
         if (const FConfigFile* File = GConfig->FindConfigFile(Pair.Value))
         {
             const FConfigFile Effective = EffectiveConfigurationFile(*File);
+            LogConfigurationLayers(Pair.Key, *File, Effective);
             UE_LOG(LogTemp, Display, TEXT("Nexus effective configuration captured category=%s runtime_sections=%d effective_sections=%d"),
                 *Pair.Key, File->Num(), Effective.Num());
             for (const auto& Section : Effective)
@@ -104,12 +106,12 @@ bool ValidateConfiguration(const TSharedPtr<FJsonObject>& Input, FString& Error)
     return true;
 }
 
-void ApplyConfiguration(const TSharedPtr<FJsonObject>& Input)
+void ApplyConfiguration(const TSharedPtr<FJsonObject>& Input, EConfigurationPhase Phase)
 {
     for (const auto& Pair : Files())
     {
         FConfigFile* File = GConfig->FindConfigFile(Pair.Value);
-        File->Empty();
+        FConfigFile Snapshot;
         for (const auto& Section : Input->GetObjectField(Pair.Key)->Values)
         {
             FConfigSection Output;
@@ -118,8 +120,12 @@ void ApplyConfiguration(const TSharedPtr<FJsonObject>& Input)
                 const auto Row = Entry->AsObject();
                 Output.Add(FName(*Row->GetStringField(TEXT("key"))), FConfigValue(Expand(Row->GetStringField(TEXT("value")))));
             }
-            File->Add(Section.Key, MoveTemp(Output));
+            Snapshot.Add(Section.Key, MoveTemp(Output));
         }
+        ApplyConfigurationFile(*File, Snapshot, Phase);
+        UE_LOG(LogTemp, Display, TEXT("Nexus configuration replay category=%s phase=%s source_sections=%d runtime_sections=%d reconstruction_sections=%d"),
+            *Pair.Key, Phase == EConfigurationPhase::Startup ? TEXT("PostConfigInit") : TEXT("EngineLoopInitComplete"),
+            Snapshot.Num(), File->Num(), File->Branch != nullptr ? File->Branch->FinalCombinedLayers.Num() : 0);
     }
 }
 }

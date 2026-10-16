@@ -28,6 +28,7 @@ class ClassInfo:
     pins: list[dict[str, Any]] = field(default_factory=list)
     dynamic_pins: bool = False
     inheritance: str = ""
+    pin_aliases: dict[str, str] = field(default_factory=dict)
 
     def prop(self, name: str) -> dict[str, Any] | None:
         return self.props.get(name)
@@ -85,10 +86,12 @@ class SchemaLock:
         record = lookup_class(self, family, name.strip(), aliases=aliases)
         if record is None:
             return None
+        pin_aliases = record.get("pin_aliases") or dict()
         return ClassInfo(name=record["name"], path=record["path"], props=record.get("props", dict()),
                          inputs=record.get("inputs", []), outputs=record.get("outputs", []),
                          pins=record.get("pins", []), dynamic_pins=record.get("dynamic_pins", False),
-                         inheritance=record.get("inheritance", ""))
+                         inheritance=record.get("inheritance", ""),
+                         pin_aliases=dict((str(key), str(value)) for key, value in pin_aliases.items()))
 
     def material_function(self, path: str) -> dict[str, Any] | None:
         from .catalog import lookup_record
@@ -111,6 +114,13 @@ class SchemaLock:
 
         key = owner + "." + name
         return lookup_record(self, "functions", key) or lookup_record(self, "callable_functions", key)
+
+    def delegate(self, owner: str, name: str) -> dict[str, Any] | None:
+        from .catalog import lookup_record
+        from .functions import resolve_member
+
+        return resolve_member(self, owner, name, lambda current, member:
+                              lookup_record(self, "delegates", current + "." + member))
 
     def binding(self) -> dict:
         return dict(schema_key=self.key, entries=[dict(family=family, name=name, hash=hash_value) for (family, name), hash_value in sorted(self.used.items())])

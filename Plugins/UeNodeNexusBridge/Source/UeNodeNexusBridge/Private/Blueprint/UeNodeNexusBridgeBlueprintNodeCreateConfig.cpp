@@ -5,12 +5,14 @@
 #include "Blueprint/Input/NexusEnhancedInputValue.h"
 #include "Blueprint/Animation/NexusTransitionGetterBinding.h"
 #include "Blueprint/CallHost/NexusCallHostClass.h"
+#include "Blueprint/Delegates/NexusDelegateBinding.h"
 
 #include "Dom/JsonObject.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraph.h"
 #include "InputCoreTypes.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_BaseMCDelegate.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
 #include "K2Node_EnhancedInputAction.h"
@@ -207,6 +209,10 @@ static bool ConfigureCustomEventNode(UK2Node_CustomEvent* Node, const TSharedPtr
 
 bool ConfigureCreatedBlueprintNode(UEdGraphNode* Node, UBlueprint* Blueprint, const TSharedPtr<FJsonObject>& Payload, FString& OutError)
 {
+    if (auto* Delegate = Cast<UK2Node_BaseMCDelegate>(Node))
+    {
+        return ConfigureDelegateBinding(Delegate, Blueprint, Payload, false, OutError);
+    }
     if (IsEnhancedInputValueClass(Node->GetClass()))
     {
         return ConfigureEnhancedInputValue(Node, Payload, false, OutError);

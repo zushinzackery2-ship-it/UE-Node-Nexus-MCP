@@ -72,7 +72,7 @@ def dependencies(workspace, source: str, assets) -> set[str]:
     for asset in assets:
         value = snapshot(workspace, entries.get(asset))
         if value:
-            result.update(document_dependencies(to_document(value), value["semantic"]["kind"]))
+            result.update(document_dependencies(to_document(value), value["semantic"]["kind"], workspace.schema))
     return result
 
 
@@ -202,7 +202,7 @@ def unit(workspace, asset: str, candidate: dict | None, current: dict | None, ra
         payload = dict(asset_path=asset, kind=kind, delete_asset=True, plan=[], ids=dict())
         return dict(asset=asset, kind=kind, empty=False, payload=payload, dependencies=[], risky=True)
     document = to_document(candidate)
-    dependencies = sorted(document_dependencies(document, kind))
+    dependencies = sorted(document_dependencies(document, kind, workspace.schema))
     if kind == "scene":
         if raw is None:
             raise SyncError("base_missing", "scene publication needs a current map observation")
@@ -284,7 +284,7 @@ def preflight_candidates(workspace, merged, observation, assets, options):
     if deleted:
         for asset, identifier in candidate.items():
             state = snapshot(workspace, identifier)
-            references = document_dependencies(to_document(state), state["semantic"]["kind"]) & deleted
+            references = document_dependencies(to_document(state), state["semantic"]["kind"], workspace.schema) & deleted
             for target in references:
                 errors[target] = dict(code="referenced_asset", message="remaining candidate still references the deleted asset", consumer=asset)
     return dict(units=units, order=ordered, errors=errors, selected=list(assets))

@@ -30,10 +30,16 @@ def to_document(snapshot: dict, *, include_defaults=False) -> Document:
             meta = dict(binding.get("meta", dict()), semantic_id=identifier)
             meta["prop_types"] = dict(meta.get("prop_types", dict()))
             meta["input_types"] = dict(meta.get("input_types", dict()))
+            meta["prop_defaults"] = dict(meta.get("prop_defaults", dict()))
+            meta["input_defaults"] = dict(meta.get("input_defaults", dict()))
             for key, field in entity["args"].items():
                 meta["prop_types"].setdefault(key, meta["input_types"].get(key, field.get("type")))
+                if field.get("state") == "default" and "value" in field:
+                    meta["input_defaults"].setdefault(key, field["value"])
             for key, field in entity["props"].items():
                 meta["input_types"].setdefault(key, meta["prop_types"].get(key, field.get("type")))
+                if field.get("state") == "default" and "value" in field:
+                    meta["prop_defaults"].setdefault(key, field["value"])
             meta["default_type"] = entity["default"].get("type", entity["type"])
             if binding.get("physical"):
                 meta["guid"] = binding["physical"]

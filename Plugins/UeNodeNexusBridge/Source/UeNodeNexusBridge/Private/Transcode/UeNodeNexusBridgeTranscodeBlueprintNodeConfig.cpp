@@ -7,6 +7,7 @@
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_BaseMCDelegate.h"
 #include "K2Node_CommutativeAssociativeBinaryOperator.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_DynamicCast.h"
@@ -52,7 +53,15 @@ TSharedPtr<FJsonObject> NodeConfigJson(UBlueprint* Blueprint, UEdGraphNode* Node
 {
     TSharedPtr<FJsonObject> Config = MakeShared<FJsonObject>();
     UClass* SelfClass = Blueprint ? Blueprint->SkeletonGeneratedClass : nullptr;
-    if (UK2Node_CustomEvent* Custom = Cast<UK2Node_CustomEvent>(Node))
+    if (UK2Node_BaseMCDelegate* Delegate = Cast<UK2Node_BaseMCDelegate>(Node))
+    {
+        UClass* Owner = Delegate->DelegateReference.GetMemberParentClass(SelfClass);
+        Config->SetStringField(TEXT("delegate_owner"), Owner ? Owner->GetPathName() : FString());
+        Config->SetStringField(TEXT("delegate_name"), Delegate->GetPropertyName().ToString());
+        Config->SetStringField(TEXT("self_context"), Delegate->DelegateReference.IsSelfContext()
+            ? TEXT("true") : TEXT("false"));
+    }
+    else if (UK2Node_CustomEvent* Custom = Cast<UK2Node_CustomEvent>(Node))
     {
         Config->SetStringField(TEXT("event_name"), Custom->CustomFunctionName.ToString());
     }

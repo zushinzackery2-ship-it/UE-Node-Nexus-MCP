@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from ..storage.io import atomic_write, canonical, digest, read_json
 from ..errors import SyncError
 from .names import CLASS_TIERS, OWNER_TIERS, RECORD_TIERS, class_spellings
 from .records import FAMILIES, normalize
-from .objects import write as write_object, path as record_path
+from .objects import write as write_object, path as record_path, document_link
 from .progress import scope
 
 # The first release wrote one table per family; ``migrate`` reads them.
@@ -18,7 +17,7 @@ LEGACY_FILES = dict(material_expression="classes.material_expression.json", k2no
                     asset="classes.asset.json", component="classes.component.json",
                     niagara_renderer="classes.niagara_renderer.json", material_functions="material_functions.json",
                     niagara_modules="niagara_modules.json", functions="functions.cache.json",
-                    callable_functions="functions.index.json", types="types.json")
+                    callable_functions="functions.index.json", delegates="delegates.json", types="types.json")
 # Families whose records are classes: a short spelling is a class name, not a member.
 CLASS_FAMILIES = frozenset(("material_expression", "k2node", "asset", "component", "niagara_renderer"))
 
@@ -183,7 +182,7 @@ def markdown(directory: Path, manifest: dict) -> None:
     for family, entries in manifest["tables"].items():
         for name, entry in entries.items():
             label = name.replace("|", "\\|").replace("\n", " ")
-            link = Path(os.path.relpath(record_path(directory, entry), directory / FAMILIES[family])).as_posix()
+            link = document_link(directory, FAMILIES[family], entry)
             categories[FAMILIES[family]].append(f"| {label} | [{entry['path']}]({link}) | {entry['coverage']} | {entry['bridge'].get('write', 'unknown')} |")
     index = [f"# Schema {manifest['key']}", "", f"Generation: {manifest['generation']}. JSON records are the source for validation and editing.", ""]
     for category, rows in categories.items():

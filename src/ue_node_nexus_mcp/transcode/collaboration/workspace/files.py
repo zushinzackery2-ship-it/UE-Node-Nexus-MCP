@@ -117,6 +117,12 @@ def capture_candidates(workspace, paths, delete, registered, selected):
         if not path.is_file():
             captured_hashes[asset] = None
             if not delete:
+                # The index no longer holds this asset, so its deletion is
+                # already registered (staged or committed). The registry keeps
+                # the entry for unstage and history recovery; a missing file
+                # for it is the recorded state, not an unregistered edit.
+                if asset not in entries:
+                    continue
                 raise SyncError("local-deleted", "register file deletion explicitly with delete=true and allow_delete=true", dict(asset=asset, file=str(path)))
             entries.pop(asset, None)
             continue
@@ -134,7 +140,15 @@ def capture_candidates(workspace, paths, delete, registered, selected):
             fresh[asset] = known
             continue
         prior = store.objects.data(previous_id, "snapshot") if previous_id else None
-        kind = prior["semantic"]["kind"] if prior else ("scene" if path.name.endswith(".scene.nexus") else parse_text_path(workspace.root, path)[1])
+        if prior:
+            kind = prior["semantic"]["kind"]
+        elif path.name.endswith(".scene.nexus"):
+            kind = "scene"
+        else:
+            parsed = parse_text_path(workspace.root, path)
+            if parsed is None:
+                raise SyncError("invalid_document", "unrecognized mirror file", dict(file=str(path)))
+            kind = parsed[1]
         snapshot = capture(data.decode("utf-8-sig"), prior, f"{state['id']}:{state['head']}", kind, workspace.schema, str(path))
         if kind != "scene" and object_path(snapshot["semantic"]["header"]["asset"]) != asset:
             raise SyncError("asset_identity_changed", "asset header does not match its file path", dict(file=str(path)))

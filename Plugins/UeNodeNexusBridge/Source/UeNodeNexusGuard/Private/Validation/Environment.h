@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NexusValidation.h"
+#include "ConfigurationLayers.h"
 
 namespace NexusLifecycle::Validation
 {
@@ -8,7 +9,7 @@ FString Normalize(const FString& Value);
 FString Expand(const FString& Value);
 TSharedPtr<FJsonObject> Configuration();
 bool ValidateConfiguration(const TSharedPtr<FJsonObject>& Input, FString& Error);
-void ApplyConfiguration(const TSharedPtr<FJsonObject>& Input);
+void ApplyConfiguration(const TSharedPtr<FJsonObject>& Input, EConfigurationPhase Phase);
 TSharedPtr<FJsonObject> ConsoleVariables();
 bool ValidateConsoleVariables(const TSharedPtr<FJsonObject>& Input, FString& Error);
 TArray<FString> ApplyConsoleVariables(const TSharedPtr<FJsonObject>& Input);

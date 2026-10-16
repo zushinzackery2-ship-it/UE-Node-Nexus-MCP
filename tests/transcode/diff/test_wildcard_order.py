@@ -1,6 +1,6 @@
 """Prevent native wildcard arrays from adopting the first consumer's base class."""
 
-from ue_node_nexus_mcp.transcode.diff.graph import _diff_links
+from ue_node_nexus_mcp.transcode.diff.graph import _diff_connects, _link_key
 from ue_node_nexus_mcp.transcode.diff.plan import AssetPlan
 from ue_node_nexus_mcp.transcode.text.model import Link, Section
 
@@ -9,7 +9,10 @@ def connect_plan(kind, links, base=None):
     local = Section("graph", entries=links)
     declarations = dict((link.src, None) for link in links if link.src != "entry")
     plan = AssetPlan("/Game/Test/Wildcard", kind)
-    _diff_links(local, base, declarations, dict(), dict(entry=None), plan, kind, dict(), set())
+    known = dict()
+    local_links = {_link_key(link, known, kind, dict()): link for link in local.links()}
+    base_links = {_link_key(link, known, kind, dict()): link for link in (base.links() if base else [])}
+    _diff_connects(local_links, base_links, declarations, dict(entry=None), plan, kind, dict(), set())
     return [verb.to_payload() for verb in plan.verbs]
 
 

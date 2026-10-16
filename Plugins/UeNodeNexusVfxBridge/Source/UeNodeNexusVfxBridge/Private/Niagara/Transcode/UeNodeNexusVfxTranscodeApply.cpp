@@ -1,15 +1,13 @@
 #include "UeNodeNexusVfxTranscode.h"
+#include "Inputs/NexusNiagaraInputApply.h"
 
 #include "NiagaraEmitter.h"
 #include "NiagaraEmitterHandle.h"
 #include "NiagaraNodeFunctionCall.h"
 #include "NiagaraNodeOutput.h"
-#include "NiagaraParameterStore.h"
 #include "NiagaraRendererProperties.h"
 #include "NiagaraScript.h"
 #include "NiagaraSystem.h"
-#include "ScopedTransaction.h"
-#include "Templates/UniquePtr.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/UnrealType.h"
 #include "UeNodeNexusBridgeJson.h"
@@ -117,7 +115,8 @@ TSharedPtr<FJsonObject> BasePayload(UNiagaraSystem* System, int32 Emitter)
 
 }
 
-void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Op, int32 Index, FApplyContext& Context)
+void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Op, int32 Index,
+    FApplyContext& Context, FInputBindingContext& Bindings)
 {
     const FString Verb = Str(Op, TEXT("op"));
     FString Error;
@@ -252,38 +251,17 @@ void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJs
         Payload->SetBoolField(TEXT("enabled"), bEnabled);
         Reenter(TEXT("niagara_module_set_enabled"), &HandleNiagaraModuleSetEnabled, Payload, Index, Context, Data);
     }
-    else if (Verb == TEXT("ns_module_input_set") || Verb == TEXT("ns_module_input_reset"))
+    else if (Verb == TEXT("ns_module_input_set") || Verb == TEXT("ns_module_input_reset") || Verb == TEXT("ns_module_input_link"))
     {
-        // Values the editor stored as rapid-iteration parameters are updated in place so the
-        // stack UI keeps showing them; anything else goes through the override-pin path.
         TArray<UNiagaraNodeFunctionCall*> Modules;
         NiagaraModuleStack::GetOrderedModules(Output, Modules);
-        FNiagaraVariable RapidVariable;
-        UNiagaraScript* Script = nullptr;
-        if (Modules.IsValidIndex(Module)
-            && ResolveRapidIterationInput(System->GetEmitterHandles()[Emitter], Usage, Output->GetUsageId(), Modules[Module], Str(Op, TEXT("input")), RapidVariable, Script)
-            && Script->RapidIterationParameters.IndexOf(RapidVariable) != INDEX_NONE)
+        if (!Modules.IsValidIndex(Module))
         {
-            Script->Modify();
-            bool bOk = true;
-            if (Verb == TEXT("ns_module_input_reset"))
-            {
-                Script->RapidIterationParameters.RemoveParameter(RapidVariable);
-            }
-            else
-            {
-                bOk = SetParameterValueText(Script->RapidIterationParameters, RapidVariable, Str(Op, TEXT("value")), false);
-            }
-            if (!bOk) { Context.Fail(Index, TEXT("input_failed"), FString::Printf(TEXT("could not parse %s for input %s"), *Str(Op, TEXT("value")), *Str(Op, TEXT("input")))); return; }
-            NiagaraModuleStack::MarkSystemEdited(System);
-            Context.bChanged = true;
+            Context.Fail(Index, TEXT("module_not_found"), TEXT("module disappeared before input apply"));
             return;
         }
-        TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
-        Param->SetStringField(TEXT("name"), Str(Op, TEXT("input")));
-        Param->SetStringField(TEXT("value_text"), Verb == TEXT("ns_module_input_set") ? Str(Op, TEXT("value")) : Str(Op, TEXT("default")));
-        Payload->SetArrayField(TEXT("params"), { MakeShared<FJsonValueObject>(Param) });
-        Reenter(TEXT("niagara_module_inputs_set"), &HandleNiagaraModuleInputsSet, Payload, Index, Context, Data);
+        ApplyModuleInput(*System, System->GetEmitterHandles()[Emitter], *Output, *Modules[Module],
+            Usage, Op, Index, Context, Payload, Bindings);
     }
     else if (Verb == TEXT("ns_module_move"))
     {

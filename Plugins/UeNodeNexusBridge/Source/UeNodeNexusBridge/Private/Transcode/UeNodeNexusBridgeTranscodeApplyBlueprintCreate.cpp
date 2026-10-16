@@ -5,10 +5,14 @@
 #include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "Blueprint/Creation/NexusBlueprintNodeDefaults.h"
 #include "Blueprint/Input/NexusEnhancedInputValue.h"
+#include "Blueprint/Delegates/NexusDelegateBinding.h"
+#include "Blueprint/Delegates/NexusDelegatePlanBinding.h"
+#include "Blueprint/Members/NexusCustomEventPins.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
 #include "K2Node_CustomEvent.h"
+#include "K2Node_BaseMCDelegate.h"
 #include "K2Node_DynamicCast.h"
 #include "K2Node_Event.h"
 #include "K2Node_FunctionEntry.h"
@@ -117,29 +121,6 @@ UK2Node_Event* FindGhostEvent(UEdGraph* Graph, UClass* NodeClass, const TSharedP
     return nullptr;
 }
 
-void AddCustomEventParams(UK2Node_CustomEvent* Event, const TArray<FString>& Positional, FApplyContext& Context, int32 Index)
-{
-    for (int32 ParamIndex = 1; ParamIndex < Positional.Num(); ++ParamIndex)
-    {
-        FString Name;
-        FString TypeText;
-        if (!Positional[ParamIndex].Split(TEXT(":"), &Name, &TypeText))
-        {
-            Context.Fail(Index, TEXT("invalid_param"), FString::Printf(TEXT("custom event parameter needs Name: Type, got %s"), *Positional[ParamIndex]));
-            continue;
-        }
-        TSharedPtr<FJsonObject> TypeJson = MakeShared<FJsonObject>();
-        TypeJson->SetStringField(TEXT("category"), TypeText.TrimStartAndEnd());
-        FEdGraphPinType PinType;
-        FString Error;
-        if (!PinTypeFromJson(TypeJson, PinType, Error))
-        {
-            Context.Fail(Index, TEXT("invalid_type"), Error);
-            continue;
-        }
-        Event->CreateUserDefinedPin(FName(*Name.TrimStartAndEnd()), PinType, EGPD_Output);
-    }
-}
 }
 
 void ApplyBlueprintCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TSharedPtr<FJsonObject>& Op, int32 Index, FApplyContext& Context)
@@ -189,6 +170,12 @@ void ApplyBlueprintCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TSha
             return;
         }
     }
+    if (NodeClass->IsChildOf(UK2Node_BaseMCDelegate::StaticClass())
+        && !ValidateDelegatePlanBinding(Blueprint, NodeClass, Config, Context, Error))
+    {
+        Context.Fail(Index, TEXT("node_config_failed"), Id + TEXT(": ") + Error);
+        return;
+    }
     if (Context.bDryRun)
     {
         Context.Ids.Add(Id, TEXT("dry-run"));
@@ -227,7 +214,10 @@ void ApplyBlueprintCreateNode(UBlueprint* Blueprint, UEdGraph* Graph, const TSha
     InitializeBlueprintNodeDefaults(Node);
     if (UK2Node_CustomEvent* Event = Cast<UK2Node_CustomEvent>(Node))
     {
-        AddCustomEventParams(Event, Positional, Context, Index);
+        if (!ConfigureCustomEventPins(Event, Op, Error))
+        {
+            Context.Fail(Index, TEXT("invalid_event_signature"), Error);
+        }
     }
     const TSharedPtr<FJsonObject>* Params = nullptr;
     if (Op->TryGetObjectField(TEXT("params"), Params) && Params != nullptr)

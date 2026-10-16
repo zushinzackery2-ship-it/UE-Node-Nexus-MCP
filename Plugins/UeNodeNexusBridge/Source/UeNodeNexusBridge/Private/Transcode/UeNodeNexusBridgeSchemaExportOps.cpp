@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Schema/NexusDelegateSchema.h"
 #include "Material/ControlFlow/NexusMaterialControlFlow.h"
 #include "Schema/NexusSchema.h"
 
@@ -223,6 +224,8 @@ TSharedPtr<FJsonObject> HandleSchemaExport(const FString& Operation, const FStri
     }));
     Files.Emplace(TEXT("material_functions.json"), MaterialFunctionSignatures());
     Files.Emplace(TEXT("functions.index.json"), FunctionIndex());
+    Files.Emplace(TEXT("delegates.json"), BuildDelegateSchema());
+    KeyJson->SetStringField(TEXT("delegate_index"), TEXT("multicast_delegates"));
     // Readers validate Event / CallParentFunction references only against an
     // index that states it holds BlueprintEvent functions too.
     KeyJson->SetStringField(TEXT("function_index"), TEXT("callable_and_events"));

@@ -1,5 +1,6 @@
 #include "NexusRestore.h"
 #include "NexusRestoreRenderScope.h"
+#include "NexusRestoreBlueprintScope.h"
 
 #include "Editor.h"
 #include "PackageTools.h"
@@ -88,9 +89,11 @@ bool RestoreCheckpointMemory(const FJson& Receipt, FString& Error)
             return false;
         }
         FText ReloadError;
+        FRestoreBlueprintScope BlueprintScope(LoadedPackages);
         // UE fixes asset references, Blueprint instances and loaded worlds here.
         // Its bool result counts asset reloads and is false for a world-only reload.
         UPackageTools::ReloadPackages(LoadedPackages, ReloadError, UPackageTools::EReloadPackagesInteractionMode::AssumePositive);
+        Receipt->SetNumberField(TEXT("restore_retired_blueprint_count"), BlueprintScope.Num());
         if (!ReloadError.IsEmpty())
         {
             Error = TEXT("checkpoint package reload failed: ") + ReloadError.ToString();

@@ -52,10 +52,19 @@ class Database:
         self.path = path
         self.local = threading.local()
         path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.initialize()
+        except BaseException:
+            self.discard()
+            raise
+
+    def initialize(self) -> None:
         with self.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version > FORMAT_VERSION:
                 raise SyncError("store_version", f"repository format {version} exceeds supported {FORMAT_VERSION}")
+            if version == FORMAT_VERSION:
+                return
             connection.execute("PRAGMA journal_mode=WAL")
             started = time.monotonic()
             migration = migration_sql() if version < 2 else ""
@@ -65,7 +74,7 @@ class Database:
                 connection.rollback()
                 raise
             if version < FORMAT_VERSION:
-                LOG.info("repository_migrated path=%s from=%s to=%s elapsed_seconds=%.3f", path, version, FORMAT_VERSION, time.monotonic() - started)
+                LOG.info("repository_migrated path=%s from=%s to=%s elapsed_seconds=%.3f", self.path, version, FORMAT_VERSION, time.monotonic() - started)
 
     def handle(self) -> sqlite3.Connection:
         connection = getattr(self.local, "connection", None)

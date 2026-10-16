@@ -1,5 +1,6 @@
 #include "UeNodeNexusBridgeAssetCreateHelpers.h"
 
+#include "Engine/Blueprint.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
 
@@ -29,6 +30,12 @@ bool ReleaseDiscardedAssetObject(const FString& ObjectPath)
         REN_DontCreateRedirectors | REN_ForceNoResetLoaders | REN_NonTransactional | REN_DoNotDirty))
     {
         return false;
+    }
+    if (UBlueprint* Blueprint = Cast<UBlueprint>(Existing))
+    {
+        // PlayLevel iterates every loaded Blueprint, including retired objects.
+        // Preserve the failed graph and status while retiring its PIE identity.
+        Blueprint->bDisplayCompilePIEWarning = false;
     }
     return FindObject<UObject>(nullptr, *ObjectPath) == nullptr;
 }

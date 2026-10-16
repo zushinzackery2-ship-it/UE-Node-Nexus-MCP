@@ -7,6 +7,7 @@ from ...text.lexer import LexError
 from ...raw.nodes import owner_label
 from ...errors import SyncError
 from ...schema.functions import reference as function_reference
+from ...blueprint.delegates import DELEGATE_NODES, reference as delegate_reference
 from ...text.semantic import normalize, value
 
 FUNCTION_NODES = set(("CallFunction", "CallParentFunction", "Message", "Event"))
@@ -24,6 +25,14 @@ def declaration_default(decl, kind, section, class_name):
 
 def positional_values(decl, family, metadata=None, schema=None):
     positional = decl.positional()
+    if family == "k2node" and node_name(decl.type_name) in DELEGATE_NODES and positional:
+        owner, separator, name = positional[0].rpartition(".")
+        config = (metadata if metadata is not None else decl.meta).get("config", dict())
+        native_owner = str(config.get("delegate_owner", ""))
+        same_owner = owner == native_owner or (not owner.startswith("/") and owner == owner_label(native_owner))
+        if separator and config.get("delegate_name") == name and same_owner:
+            owner = "self" if str(config.get("self_context", "")).lower() == "true" else native_owner
+        positional[0] = delegate_reference(schema, owner, name)
     if family == "k2node" and node_name(decl.type_name) in FUNCTION_NODES and positional:
         owner, separator, name = positional[0].rpartition(".")
         if separator:

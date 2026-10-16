@@ -1,6 +1,7 @@
 #include "UeNodeNexusVfxTranscode.h"
 #include "UeNodeNexusCollaboration.h"
 #include "Niagara/Compilation/NexusNiagaraCompilation.h"
+#include "Binding/NexusNiagaraInputBinding.h"
 
 #include "NiagaraSystem.h"
 #include "ScopedTransaction.h"
@@ -42,6 +43,7 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
         return MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), TEXT("Niagara system could not be loaded (emitter assets are read-only in this version)"));
     }
     FApplyContext Context;
+    FInputBindingContext Bindings;
     Context.bDryRun = bDryRun;
     const TSharedPtr<FJsonObject>* Ids = nullptr;
     if (Payload->TryGetObjectField(TEXT("ids"), Ids) && Ids != nullptr)
@@ -68,9 +70,11 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
                 Context.Fail(Index, TEXT("invalid_verb"), TEXT("plan entries must be objects"));
                 continue;
             }
-            ApplyNiagaraVerb(System, Op, Index, Context);
+            ApplyNiagaraVerb(System, Op, Index, Context, Bindings);
         }
     }
+    // Release native stack callbacks before the transaction compiles and saves.
+    Bindings.ViewModel.Reset();
     bool bReady = true;
     if (!bDryRun && bCompile)
     {
@@ -90,6 +94,7 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetNumberField(TEXT("applied"), Plan->Num() - Context.Failures.Num());
     Data->SetBoolField(TEXT("changed"), Context.bChanged);
+    Data->SetArrayField(TEXT("input_bindings"), Bindings.Results);
     TArray<TSharedPtr<FJsonValue>> Failed;
     for (const FApplyFailure& Failure : Context.Failures)
     {

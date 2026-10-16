@@ -34,7 +34,9 @@ def normalize_snapshot(snapshot: dict | None, reference: dict | None = None, sch
     if snapshot is None:
         return None
     reference = reference or snapshot
-    document = to_document(snapshot, include_defaults=True)
+    # A default field is inherited, not a request to write its effective value.
+    # Re-encoding omitted fields resolves the current reflected class defaults.
+    document = to_document(snapshot)
     kind = snapshot["semantic"]["kind"]
     identities = Identities(reference, "normalize", document.header.asset)
     for section in document.sections:

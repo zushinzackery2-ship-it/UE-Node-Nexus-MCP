@@ -95,9 +95,10 @@ TSharedPtr<FJsonObject> ExportBaseline(const FString& Operation, const FString& 
         }
         const FString Copy = Root / Relative;
         IFileManager::Get().MakeDirectory(*FPaths::GetPath(Copy), true);
+        const bool bEmpty = UPackage::IsEmptyPackage(Package);
         const bool bDirty = Package->IsDirty();
         const FString Before = Collaboration::FileHash(Original);
-        const bool bSaved = Transcode::SavePackageTo(Package, nullptr, Copy, true, Error);
+        const bool bSaved = bEmpty || Transcode::SavePackageTo(Package, nullptr, Copy, true, Error);
         Package->SetDirtyFlag(bDirty);
         if (!bSaved || Before != Collaboration::FileHash(Original))
         {
@@ -113,7 +114,8 @@ TSharedPtr<FJsonObject> ExportBaseline(const FString& Operation, const FString& 
             auto Row = MakeShared<FJsonObject>();
             Row->SetStringField(TEXT("relative"), FPaths::ChangeExtension(Relative, Extension));
             Row->SetStringField(TEXT("source"), FPaths::ChangeExtension(Copy, Extension));
-            Row->SetStringField(TEXT("hash"), Collaboration::FileHash(FPaths::ChangeExtension(Copy, Extension)));
+            Row->SetStringField(TEXT("hash"), bEmpty ? TEXT("absent")
+                : Collaboration::FileHash(FPaths::ChangeExtension(Copy, Extension)));
             Files.Add(MakeShared<FJsonValueObject>(Row));
         }
     }

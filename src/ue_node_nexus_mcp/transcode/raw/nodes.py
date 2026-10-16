@@ -23,6 +23,7 @@ from ..text.model import Decl, Link
 from .common import non_default_params, prop_defaults, prop_types, prop_values
 from ..schema.catalog import reference
 from ..schema.functions import reference as function_reference
+from ..blueprint.delegates import reference as delegate_reference
 
 EXEC_CATEGORY = "exec"
 IMPLICIT_ID_NAMES = {"FunctionEntry": "entry", "FunctionResult": "result"}
@@ -47,6 +48,10 @@ _CLASS_POSITIONAL = {
     "InputAxisEvent": "input_axis_name",
     "EnhancedInputAction": "input_action",
     "GetInputActionValue": "input_action",
+    "CallDelegate": "delegate",
+    "AddDelegate": "delegate",
+    "RemoveDelegate": "delegate",
+    "ClearDelegate": "delegate",
 }
 
 
@@ -71,6 +76,11 @@ def positional_args(class_short: str, config: dict[str, Any], pins: list[dict[st
     if kind == "event":
         params = [f"{pin['name']}: {type_text(pin.get('type'))}" for pin in pins if pin.get("dir") == "out" and _is_data_pin(pin)]
         return [str(config.get("event_name", "")), *params]
+    if kind == "delegate":
+        owner = str(config.get("delegate_owner", ""))
+        name = str(config.get("delegate_name", ""))
+        owner = "self" if str(config.get("self_context", "")).lower() == "true" else owner_label(owner)
+        return [delegate_reference(schema, owner, name)]
     if kind == "variable":
         owner = str(config.get("variable_owner", ""))
         name = str(config.get("variable_name", ""))

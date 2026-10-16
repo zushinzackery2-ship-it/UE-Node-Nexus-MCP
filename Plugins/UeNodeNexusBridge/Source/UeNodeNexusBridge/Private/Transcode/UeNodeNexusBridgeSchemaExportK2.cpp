@@ -2,6 +2,8 @@
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "Schema/NexusSchema.h"
 #include "Blueprint/Properties/NexusAnimGetterProperties.h"
+#include "Blueprint/Properties/NexusNodeGeneratedState.h"
+#include "Blueprint/NexusBlueprintPinNames.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraphNode_Comment.h"
@@ -22,6 +24,10 @@ static TSharedPtr<FJsonObject> ClassProps(UClass* Class)
     for (TFieldIterator<FProperty> It(Class); It; ++It)
     {
         const bool bBinding = IsAnimGetterBindingProperty(Cast<UEdGraphNode>(Cdo), *It);
+        if (IsGeneratedNodeProperty(Class, *It))
+        {
+            continue;
+        }
         if (IsEditableProperty(*It) || bBinding)
         {
             const auto Property = PropertySchemaJson(*It, Cdo);
@@ -58,6 +64,17 @@ TSharedPtr<FJsonObject> BuildK2NodeSchema()
         Record->SetObjectField(TEXT("props"), ClassProps(Class));
         Record->SetArrayField(TEXT("pins"), TArray<TSharedPtr<FJsonValue>>());
         Record->SetBoolField(TEXT("dynamic_pins"), true);
+        // Author-friendly spellings of engine-generated pin names; the mirror
+        // canonicalizes them to the real names on both sides of a comparison.
+        if (const TArray<FPinAlias> Aliases = PinAliasesForClass(Class); Aliases.Num() > 0)
+        {
+            TSharedPtr<FJsonObject> AliasJson = MakeShared<FJsonObject>();
+            for (const FPinAlias& Alias : Aliases)
+            {
+                AliasJson->SetStringField(Alias.Alias, Alias.PinName);
+            }
+            Record->SetObjectField(TEXT("pin_aliases"), AliasJson);
+        }
         AddClassMetadata(Class, Record);
         Classes->SetObjectField(Class->GetPathName(), Record);
     }
@@ -78,6 +95,9 @@ TSharedPtr<FJsonObject> BuildFunctionSignatureRecord(UFunction* Function)
         FProperty* Property = *It;
         FEdGraphPinType PinType;
         Schema->ConvertPropertyToPinType(Property, PinType);
+        // A by-reference parameter keeps no literal default in the editor; the
+        // flag has to reach the catalog so lint can refuse one before UE discards it.
+        PinType.bIsReference = Property->HasAnyPropertyFlags(CPF_ReferenceParm);
         TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
         Param->SetStringField(TEXT("name"), Property->GetName());
         Param->SetObjectField(TEXT("type"), PinTypeJson(PinType));

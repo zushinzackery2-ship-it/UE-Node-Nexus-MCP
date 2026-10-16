@@ -35,6 +35,10 @@ K2_ALIASES = {
     "Comment": "EdGraphNode_Comment",
     "Reroute": "K2Node_Knot",
     "CallFunction": "K2Node_CallFunction",
+    "CallDelegate": "K2Node_CallDelegate",
+    "AddDelegate": "K2Node_AddDelegate",
+    "RemoveDelegate": "K2Node_RemoveDelegate",
+    "ClearDelegate": "K2Node_ClearDelegate",
 }
 
 

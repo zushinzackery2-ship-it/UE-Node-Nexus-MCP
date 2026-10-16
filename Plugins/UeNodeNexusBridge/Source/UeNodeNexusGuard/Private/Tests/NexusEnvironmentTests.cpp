@@ -23,7 +23,7 @@ bool FNexusEffectiveConfiguration::RunTest(const FString& Parameters)
     GConfig->SetString(*Section, TEXT("RenderFixture"), TEXT("worker-default"), GEngineIni);
     FString Error;
     TestTrue(TEXT("all effective runtime categories are reproducible"), ValidateConfiguration(Expected, Error));
-    ApplyConfiguration(Expected);
+    ApplyConfiguration(Expected, EConfigurationPhase::Startup);
     FString Actual;
     GConfig->GetString(*Section, TEXT("RenderFixture"), Actual, GEngineIni);
     TestEqual(TEXT("bootstrap reproduces a source generated override"), Actual, FString(TEXT("generated-override")));

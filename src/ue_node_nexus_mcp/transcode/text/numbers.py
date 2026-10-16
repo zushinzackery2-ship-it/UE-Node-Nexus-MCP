@@ -5,9 +5,11 @@ from math import isfinite
 from struct import pack, unpack
 
 
-def decimal_text(text: str) -> str:
+def decimal_text(text: str, *, signed_zero: bool = False) -> str:
     number = Decimal(text)
-    return "0" if number == 0 else format(number.normalize(), "f")
+    if number == 0:
+        return "-0" if signed_zero and number.is_signed() else "0"
+    return format(number.normalize(), "f")
 
 
 def normalize_number(text: str, kind: str) -> str:
@@ -27,10 +29,10 @@ def normalize_number(text: str, kind: str) -> str:
                 except OverflowError:
                     continue
                 if candidate_bits == bits:
-                    return decimal_text(candidate)
+                    return decimal_text(candidate, signed_zero=True)
         if kind in ("double", "doubleproperty", "real"):
             number = float(source)
-            return decimal_text(repr(number)) if isfinite(number) else text
+            return decimal_text(repr(number), signed_zero=True) if isfinite(number) else text
         return decimal_text(source)
     except (InvalidOperation, OverflowError, ValueError):
         return text

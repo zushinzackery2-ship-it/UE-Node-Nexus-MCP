@@ -12,6 +12,7 @@ from ...instances.errors import InstanceError, require
 from ...instances.session.binding import EditorSession
 from ...instances.session.shutdown import close_instance
 from ..capture.status import status as capture_status
+from .builds import module_binary
 
 
 def expected_builds(project: Path, engine: Path) -> dict:
@@ -26,9 +27,10 @@ def expected_builds(project: Path, engine: Path) -> dict:
         metadata = directory / "BuildIdentity.json"
         require(metadata.is_file(), "isolation_identity_missing", "validation requires recorded plugin identities", plugin=name)
         result[name] = dict(json.loads(metadata.read_text(encoding="utf-8-sig")),
-                            binary=str(directory / "Binaries/Win64" / ("UnrealEditor-" + name + ".dll")))
-    result["UeNodeNexusGuard"] = dict(result["UeNodeNexusBridge"], binary=str(
-        Path(result["UeNodeNexusBridge"]["binary"]).with_name("UnrealEditor-UeNodeNexusGuard.dll")))
+                            binary=str(module_binary(directory, name)))
+    bridge = Path(result["UeNodeNexusBridge"]["binary"]).parent.parent.parent
+    result["UeNodeNexusGuard"] = dict(result["UeNodeNexusBridge"],
+        binary=str(module_binary(bridge, "UeNodeNexusGuard")))
     return result
 
 

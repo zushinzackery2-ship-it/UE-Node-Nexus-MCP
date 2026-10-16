@@ -21,9 +21,13 @@ def execution_order(workspace, units, current, documents, required, selected):
                 before[asset] = (kind, document)
             # These are ordering constraints, separate from the revisions read by an apply.
             # A successful earlier deletion has no revision left to put in a read_set.
-            for dependency in document_dependencies(document, kind) & deleted:
+            for dependency in document_dependencies(document, kind, workspace.schema) & deleted:
                 units[dependency].setdefault("deletion_prerequisites", []).append(asset)
-    ordered = order_assets(documents, required)
+    # An asset the editor already holds constrains no creation order unless its
+    # interface changes; that is what lets newly declared object contracts be
+    # referenced before they are republished in full.
+    available = set(current) - set(asset for asset, item in units.items() if item.get("interface_changed"))
+    ordered = order_assets(documents, required, available, workspace.schema)
     ordered.extend(asset for asset in units if asset not in documents and asset not in deleted)
-    ordered.extend(reversed(order_assets(before)))
+    ordered.extend(reversed(order_assets(before, available=available, schema=workspace.schema)))
     return ordered

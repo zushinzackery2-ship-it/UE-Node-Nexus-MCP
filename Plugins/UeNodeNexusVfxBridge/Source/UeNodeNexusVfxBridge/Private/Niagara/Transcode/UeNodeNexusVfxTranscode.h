@@ -53,8 +53,10 @@ struct FApplyContext;
 
 namespace UeNodeNexusBridge::VfxTranscode
 {
+struct FInputBindingContext;
 // Applies one plan verb to a Niagara system (see transcode/plan.py for the verb table).
-void ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Op, int32 Index, Transcode::FApplyContext& Context);
+void ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Op, int32 Index,
+    Transcode::FApplyContext& Context, FInputBindingContext& Bindings);
 // Member helpers shared by the verb applier.
 bool ApplyUserParam(UNiagaraSystem* System, const FString& Verb, const TSharedPtr<FJsonObject>& Op, FString& OutError);
 bool ApplyEmitterProp(UNiagaraSystem* System, int32 Emitter, const FString& Name, const FString& Value, FString& OutError);

@@ -1,6 +1,6 @@
 """Connection identity and cardinality use pin contracts, not text spelling."""
 
-from ...blueprint.pins import canonical_pin, node_pins, pin
+from ...blueprint.pins import canonical_pin, class_pin_aliases, node_pins, pin
 from ...material.pins import canonical_pin as material_pin, output_property
 from ...material.control_flow import is_execution_pin
 from ...errors import SyncError
@@ -26,7 +26,7 @@ def with_contracts(section, aliases, bindings, document, schema) -> dict:
         identifier = aliases[decl.id]
         metadata = bindings.get(identifier, dict()).get("meta", dict())
         pins = node_pins(decl, document, section, schema, metadata)
-        result[identifier] = dict(meta=dict(pins=pins))
+        result[identifier] = dict(meta=dict(pins=pins, pin_aliases=class_pin_aliases(schema, decl.type_name)))
     if section.name == "function":
         result["@entry"] = dict(meta=dict(pins=[pin("then", "out")]))
         result["@result"] = dict(meta=dict(pins=[pin("execute", "in")]))
@@ -52,8 +52,8 @@ def encode_links(section, aliases, bindings, document=None, schema=None, kind="b
             if kind == "material" and dst == "@out":
                 target = output_property(link.dst_pin)
         else:
-            source = canonical_pin(link.src_pin, "out", src_pins)
-            target = canonical_pin(link.dst_pin, "in", dst_pins)
+            source = canonical_pin(link.src_pin, "out", src_pins, known.get(src, dict()).get("meta", dict()).get("pin_aliases"))
+            target = canonical_pin(link.dst_pin, "in", dst_pins, known.get(dst, dict()).get("meta", dict()).get("pin_aliases"))
         record = dict(src=src, dst=dst, src_pin=source, dst_pin=target)
         execution = is_exec_pin(known, src, source, "out") or is_exec_pin(known, dst, target, "in")
         if kind in ("material", "material_function"):

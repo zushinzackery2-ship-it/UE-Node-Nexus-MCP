@@ -6,8 +6,10 @@
 #include "Blueprint/Animation/NexusTransitionGetterBinding.h"
 
 #include "Blueprint/CallHost/NexusCallHostClass.h"
+#include "Blueprint/Delegates/NexusDelegateBinding.h"
 #include "Dom/JsonObject.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_BaseMCDelegate.h"
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
 #include "K2Node_FunctionEntry.h"
@@ -29,6 +31,11 @@ bool ValidateBlueprintNodeCreateConfig(
     const TSharedPtr<FJsonObject>& Payload,
     FString& OutError)
 {
+    if (NodeClass->IsChildOf(UK2Node_BaseMCDelegate::StaticClass()))
+    {
+        return ConfigureDelegateBinding(NodeClass->GetDefaultObject<UK2Node_BaseMCDelegate>(),
+            Blueprint, Payload, true, OutError);
+    }
     if (NodeClass->IsChildOf(UK2Node_FunctionEntry::StaticClass()) || NodeClass->IsChildOf(UK2Node_FunctionResult::StaticClass()))
     {
         OutError = TEXT("implicit_function_node: use the function signature and entry/result links");

@@ -3,9 +3,9 @@
 from ...errors import SyncError
 import math
 
-READ_ACTIONS = set(("status", "workspaces", "diff", "log", "show", "blame", "reflog", "lint", "schema"))
+READ_ACTIONS: set[str] = set(("status", "workspaces", "diff", "log", "show", "blame", "reflog", "lint", "schema"))
 COMMON = set(("workspace_id", "project", "agent_id", "dry_run", "proposal_id"))
-OPTIONS = dict(
+OPTIONS: dict[str, set[str]] = dict(
     checkout=set(("revision", "branch", "scene", "include_stubs")),
     workspaces=set(), status=set(("include_clean", "discover")),
     fetch=set(("discover", "include_stubs", "scene")),
@@ -26,7 +26,7 @@ OPTIONS = dict(
     restore=set(("revision", "destination", "entity", "field_path", "allow_delete")),
     revert=set(("revision", "mainline", "message", "allow_delete")),
     reset=set(("revision", "mode", "allow_delete")),
-    rebase=set(("onto", "steps")), lint=set(("files_root",)),
+    rebase=set(("onto", "steps")), lint=set(("files_root", "delete", "allow_delete")),
     schema=set(("refresh", "category", "query", "details", "function", "target", "context", "limit", "cursor", "revision")),
 )
 OPTIONS["cherry-pick"] = set(OPTIONS["revert"])

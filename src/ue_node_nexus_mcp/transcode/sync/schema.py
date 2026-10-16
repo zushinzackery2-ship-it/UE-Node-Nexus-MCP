@@ -61,6 +61,8 @@ def _collect(bridge, context, staging, progress) -> SchemaLock:
                        engine_version=context.engine_version, schema_key=key)
     functions = EVENT_INDEX if core.get("function_index") == "callable_and_events" else CALLABLE_INDEX
     coverage = dict(core="registered_types", blueprint_pins=CONTEXT_REQUIRED, functions=functions)
+    if core.get("delegate_index") == "multicast_delegates":
+        coverage["delegates"] = "registered_multicast_delegate_index"
     try:
         call_ok(bridge, "vfx_transcode_export", dict(schema_out_dir=str(staging), asset_paths=[]))
         coverage["niagara"] = "provider_loaded"

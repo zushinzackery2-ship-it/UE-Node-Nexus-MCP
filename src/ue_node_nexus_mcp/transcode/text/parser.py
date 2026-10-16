@@ -143,6 +143,9 @@ def _try_parse_decl(line: str, line_no: int) -> Decl | None:
     if pos < len(line) and line[pos] == "(":
         end = read_group(line, pos)
         decl.args = [(key, parse_value(value)) for key, value in parse_kv_list(line[pos + 1:end - 1])]
+        if decl.type_name.rsplit(".", 1)[-1] in ("CustomEvent", "K2Node_CustomEvent"):
+            decl.args = [(None, key + " = " + value) if key and ":" in key else (key, value)
+                         for key, value in decl.args]
         pos = skip_ws(line, end)
     _parse_decl_tail(line, pos, decl)
     return decl

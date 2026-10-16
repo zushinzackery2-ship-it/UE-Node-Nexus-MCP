@@ -22,11 +22,18 @@ def report(rows: list[dict], diagnostics: list, **extra) -> dict:
                 warning_count=sum(item.severity == "warning" for item in diagnostics), **extra)
 
 
-def lint(workspace, paths) -> dict:
-    entries, files, selected = capture_files(workspace, paths)
-    candidates = [workspace.store.objects.data(entries[asset], "snapshot") for asset in selected]
+def lint(workspace, paths, delete=False) -> dict:
+    """Check the selected files; ``delete`` reads registered deletions like stage does.
+
+    A registered deletion has left the index, so it is skipped rather than
+    reported again; an unregistered missing file still raises ``local-deleted``
+    unless ``delete`` reads it as one more registered deletion.
+    """
+    entries, files, selected = capture_files(workspace, paths, delete)
+    present = [asset for asset in selected if asset in entries]
+    candidates = [workspace.store.objects.data(entries[asset], "snapshot") for asset in present]
     with snapshots(candidates):
-        return lint_candidates(workspace, selected, files, candidates)
+        return lint_candidates(workspace, present, files, candidates)
 
 
 def lint_candidates(workspace, selected, files, candidates):

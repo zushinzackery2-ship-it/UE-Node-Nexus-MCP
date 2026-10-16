@@ -2,6 +2,7 @@
 #include "Schema/NexusSchema.h"
 #include "Properties/NexusPropertyText.h"
 #include "Properties/NexusValueSchema.h"
+#include "Blueprint/Properties/NexusNodeGeneratedState.h"
 
 #include "UObject/Class.h"
 #include "UObject/TextProperty.h"
@@ -119,6 +120,10 @@ TArray<TSharedPtr<FJsonValue>> ExportEditableProps(UObject* Object, UObject* Def
         {
             continue;
         }
+        if (IsGeneratedNodeProperty(Object->GetClass(), Property))
+        {
+            continue;
+        }
         TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
         Json->SetStringField(TEXT("name"), Property->GetName());
         Json->SetStringField(TEXT("type"), Property->GetCPPType());
@@ -155,6 +160,13 @@ bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Va
     {
         OutError = FString::Printf(TEXT("%s.%s is reflected but not editable (EditConst, Deprecated or no CPF_Edit)"),
             *Object->GetClass()->GetName(), *Name);
+        return false;
+    }
+    if (IsGeneratedNodeProperty(Object->GetClass(), Property))
+    {
+        OutError = FString::Printf(
+            TEXT("%s is maintained by the node rebuild and cannot be set from text; connect the members you need instead"),
+            *Name);
         return false;
     }
     Object->Modify();

@@ -66,6 +66,14 @@ bool ApplyBlueprintMemberVerb(UBlueprint* Blueprint, const FString& Verb, const 
     }
     if (Context.bDryRun)
     {
+        if (bDispatcher)
+        {
+            const FName Name(*ReadOpString(Op, TEXT("name")));
+            const TSharedPtr<FJsonObject>* Signature = nullptr;
+            const TSharedPtr<FJsonObject> Effective = Verb == TEXT("bp_dispatcher_remove") ? nullptr
+                : Op->TryGetObjectField(TEXT("signature"), Signature) ? *Signature : nullptr;
+            Context.DispatcherSignatures.Add(Name, Effective);
+        }
         return true;
     }
     FString Error;
@@ -179,6 +187,7 @@ static bool DeclaresMember(const FString& Verb)
 
 void ApplyBlueprintPlan(UBlueprint* Blueprint, const TArray<TSharedPtr<FJsonValue>>& Plan, FApplyContext& Context)
 {
+    Context.DispatcherSignatures.Reset();
     if (Blueprint == nullptr)
     {
         Context.Fail(INDEX_NONE, TEXT("invalid_asset"), TEXT("asset is not a Blueprint"));

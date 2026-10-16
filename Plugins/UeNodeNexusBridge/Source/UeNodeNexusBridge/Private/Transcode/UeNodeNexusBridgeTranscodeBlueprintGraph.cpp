@@ -29,6 +29,7 @@ static const TCHAR* GSupportedNodeClasses[] =
     TEXT("K2Node_FunctionEntry"), TEXT("K2Node_FunctionResult"), TEXT("K2Node_SwitchInteger"), TEXT("K2Node_SwitchString"), TEXT("K2Node_SwitchName"),
     TEXT("K2Node_SwitchEnum"), TEXT("K2Node_Literal"),
     TEXT("K2Node_GetInputActionValue"), TEXT("K2Node_InputActionValueAccessor"),
+    TEXT("K2Node_CallDelegate"), TEXT("K2Node_AddDelegate"), TEXT("K2Node_RemoveDelegate"), TEXT("K2Node_ClearDelegate"),
 };
 
 bool IsSupportedNodeClass(const UClass* Class)

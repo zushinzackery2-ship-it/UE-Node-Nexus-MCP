@@ -21,6 +21,10 @@ def schema(tmp_path):
     functions = dict()
     functions["/Script/Engine.Actor.GetOwner"] = dict(pure=True, params=[dict(name="ReturnValue", dir="out", type=dict(category="object"))])
     functions["/Script/Engine.KismetSystemLibrary.PrintString"] = dict(pure=False, params=[dict(name="InString", dir="in", type=dict(category="string"))])
+    functions["/Script/Engine.KismetArrayLibrary.Array_Set"] = dict(pure=False, params=[
+        dict(name="TargetArray", dir="in", type=dict(category="wildcard", is_ref=True)),
+        dict(name="Index", dir="in", type=dict(category="int")),
+        dict(name="Item", dir="in", type=dict(category="int", is_ref=True))])
     assets = dict()
     assets["/Script/Engine.Pawn"] = dict(inheritance="/Script/Engine.Actor")
     directory = tmp_path / "schema"
@@ -120,3 +124,29 @@ def test_dispatcher_signature_changes_are_typed_and_invalid_returns_are_linted(s
     assert verb.args["signature"]["inputs"][0]["type"]["category"] == "int"
     invalid = document("[dispatchers]\nChanged() -> (Result: bool)\n")
     assert "invalid_dispatcher" in [item.code for item in lint_document(invalid, "blueprint", schema).errors()]
+
+
+def test_default_on_a_linked_input_pin_is_flagged(schema):
+    doc = document("[graph EventGraph]\n"
+                   "text : VariableGet(Label)\n"
+                   "print : CallFunction(KismetSystemLibrary.PrintString, InString=\"hi\")\n"
+                   "text -> print.InString\n")
+    items = lint_document(doc, "blueprint", schema).items
+    linked = [item for item in items if item.code == "linked_pin_default_ignored"]
+    assert len(linked) == 1
+    assert "'InString'" in linked[0].message and "print.InString" in linked[0].message
+
+
+def test_reference_input_literal_default_is_rejected(schema):
+    doc = document("[graph EventGraph]\n"
+                   "set : CallFunction(KismetArrayLibrary.Array_Set, Item=-1)\n")
+    errors = [item for item in lint_document(doc, "blueprint", schema).errors() if item.code == "reference_pin_default"]
+    assert len(errors) == 1
+    assert "'Item'" in errors[0].message and "MakeLiteralInt" in errors[0].message
+
+
+def test_plain_input_default_is_not_flagged(schema):
+    doc = document("[graph EventGraph]\n"
+                   "print : CallFunction(KismetSystemLibrary.PrintString, InString=\"hi\")\n")
+    codes = [item.code for item in lint_document(doc, "blueprint", schema).items]
+    assert "reference_pin_default" not in codes

@@ -57,9 +57,13 @@ def push_assets(bridge: BridgeCall, context: ProjectContext, state: SyncState, s
     if not prepared:
         return result
     documents = dict((asset, (item.status.kind, item.document)) for asset, item in prepared.items())
-    dependencies = dict((asset, document_dependencies(item.document, item.status.kind)) for asset, item in prepared.items())
+    dependencies = dict((asset, document_dependencies(item.document, item.status.kind, context.schema)) for asset, item in prepared.items())
     required = set(asset for asset, item in prepared.items() if item.plan.creates_asset or item.status.kind in ("material_function", "material_instance"))
-    order = order_assets(documents, required)
+    # The editor already holds these assets and this publication does not move
+    # their interfaces, so no consumer has to wait for their creation.
+    available = set(asset for asset, item in prepared.items()
+                    if not item.plan.creates_asset and not item.plan.interface_changed and item.status.ue is not None)
+    order = order_assets(documents, required, available, context.schema)
     blocked = set(entry["asset"] for entry in result.rows if entry["action"] in FAILED_ACTIONS)
     missing = _missing_dependencies(bridge, context, set(status.asset_path for status in statuses), dependencies, state)
     for asset in order:
