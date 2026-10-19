@@ -39,7 +39,10 @@ def ue_sync(
     checkout creates a workspace; its absolute files_root is this agent's editable
     copy. Pass options.workspace_id to subsequent actions. stage/commit record
     local history; push merges the committed HEAD with current UE memory and
-    publishes with revision checks and durable receipts. resolve/continue/abort
+    publishes with revision checks and durable receipts. push/continue accept
+    isolation=off|auto|always (default off): off publishes without the isolated
+    project copy, auto copies only for classified-risk units, always copies every
+    unit; assets published without that proof are listed in data.unvalidated. resolve/continue/abort
     manage persistent conflicts. log/show/diff/blame, branch/tag, stash,
     restore/revert/reset/cherry-pick/rebase/amend/reflog operate on local history.
     Mutations default to dry_run=true; execute with dry_run=false and optionally

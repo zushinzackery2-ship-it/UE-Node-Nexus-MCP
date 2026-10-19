@@ -30,8 +30,13 @@ def overlay(snapshot: dict, baseline: dict) -> dict:
         original = Path(row["source"]).absolute()
         require(original == root / relative, "isolation_path_rejected", "baseline source differs from its owned target")
         destination = target / relative
+        for ancestor in (destination.parent, *destination.parent.parents):
+            require(not ancestor.is_symlink(), "isolation_path_rejected",
+                    "baseline target must not resolve through a linked directory", path=str(ancestor))
+            if ancestor == target:
+                break
         if row["hash"] == "absent":
-            if destination.exists():
+            if destination.is_symlink() or destination.exists():
                 destination.unlink()
             continue
         for path in (original, *original.parents):
@@ -41,6 +46,9 @@ def overlay(snapshot: dict, baseline: dict) -> dict:
         require(hashlib.md5(original.read_bytes()).hexdigest() == row["hash"].lower(),
                 "isolation_baseline_changed", "baseline bytes changed after serialization", path=str(original))
         destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.is_symlink():
+            # An overlay link points at the live package: writing through it would edit the source project.
+            destination.unlink()
         shutil.copyfile(original, destination)
         require(hashlib.md5(destination.read_bytes()).hexdigest() == row["hash"].lower(),
                 "isolation_baseline_changed", "copied baseline bytes differ", path=str(destination))

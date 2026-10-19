@@ -120,6 +120,7 @@ void RegisterCoreOperations()
             return HandleProjectContextGet(Op, ReqId);
         });
     RegisterCoreOp(TEXT("diagnostics_get"), HandleDiagnosticsGet);
+    RegisterCoreOp(TEXT("log_messages_get"), HandleLogMessagesGet);
 
     // Completeness guard: every operation reported by GetCoreOperationNames must
     // actually have a registered handler, or capabilities would advertise an

@@ -14,6 +14,7 @@ from ...transcode.collaboration.apply.transactions import actual_snapshot
 from ..isolation.service import validate
 from ..isolation.baselines import BaselineLease
 from .evidence import binding, verify_batch
+from .mode import isolation_mode
 from .risk import reasons
 
 
@@ -21,6 +22,8 @@ LOG = logging.getLogger("ue_node_nexus_mcp.safety.publication")
 
 
 def admit(bridge, context, workspace, item: dict, candidate: str, observation: dict, options: dict) -> dict | None:
+    if isolation_mode(options) == "off":
+        return None
     risks = reasons(item)
     if not risks:
         return None

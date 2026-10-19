@@ -30,9 +30,18 @@ def allocation_unit(path: Path) -> int:
     return values[0].value * values[1].value
 
 
-def estimate(plan: dict, target: Path, factor: float, reserve: int, baseline=None) -> dict:
+def estimate(plan: dict, target: Path, factor: float, reserve: int, baseline=None, subset=None) -> dict:
+    """Size the target volume for the files that will really be written.
+
+    ``subset`` names the project-relative inputs copied for real in an overlay
+    snapshot; every other input is a link and costs no allocation.
+    """
     unit = allocation_unit(target)
-    sizes = [path.stat().st_size for path in plan["files"]]
+    paths = plan["files"]
+    if subset is not None:
+        root = Path(plan["project"]).parent
+        paths = [path for path in paths if path.relative_to(root).as_posix() in subset]
+    sizes = [path.stat().st_size for path in paths]
     if baseline:
         for row in baseline.get("files", []):
             if row.get("hash") == "absent":

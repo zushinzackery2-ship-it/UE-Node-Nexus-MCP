@@ -201,6 +201,16 @@
       "summary": "Read the tail of the current UE project log with optional substring filter."
     },
     {
+      "name": "log_messages_get",
+      "kind": "read",
+      "group": "core",
+      "risk": "low",
+      "hidden": false,
+      "local": false,
+      "default_response": "full",
+      "summary": "Read the editor's UE log messages after a cursor, with optional severity, category and text filters; includes errors and MessageLog listings mirrored into the log."
+    },
+    {
       "name": "asset_compile",
       "kind": "write",
       "group": "core",

@@ -63,7 +63,7 @@ def fixture(monkeypatch):
 
 def test_admission_records_bound_proof_before_main_mutation(monkeypatch):
     bridge, context, workspace, item, observation, _, calls, events = fixture(monkeypatch)
-    receipt = gate.admit(bridge, context, workspace, item, "candidate", observation, dict())
+    receipt = gate.admit(bridge, context, workspace, item, "candidate", observation, dict(isolation="auto"))
     assert receipt["binding"]["candidate"] == "candidate" and receipt["baseline_digest"] == "baseline"
     assert events[0][0] == ("safety_validated",)
     assert all(name != "vfx_transcode_apply" for name, _ in calls)
@@ -73,7 +73,7 @@ def test_failed_worker_prevents_main_mutation(monkeypatch):
     bridge, context, workspace, item, observation, _, calls, events = fixture(monkeypatch)
     monkeypatch.setattr(gate, "validate", lambda *args, **kwargs: dict(ok=False, data=dict(state="failed")))
     with pytest.raises(SyncError, match="failed complete"):
-        gate.admit(bridge, context, workspace, item, "candidate", observation, dict())
+        gate.admit(bridge, context, workspace, item, "candidate", observation, dict(isolation="auto"))
     assert not events and all(name != "vfx_transcode_apply" for name, _ in calls)
 
 
@@ -85,7 +85,7 @@ def test_readback_mismatch_prevents_admission(monkeypatch):
 
     monkeypatch.setattr(gate, "actual_snapshot", mismatch)
     with pytest.raises(SyncError, match="candidate value"):
-        gate.admit(bridge, context, workspace, item, "candidate", observation, dict())
+        gate.admit(bridge, context, workspace, item, "candidate", observation, dict(isolation="auto"))
     assert not events
 
 
@@ -100,19 +100,19 @@ def test_source_build_change_during_validation_prevents_admission(monkeypatch):
 
     monkeypatch.setattr(gate, "validate", validate)
     with pytest.raises(SyncError, match="environment changed"):
-        gate.admit(bridge, context, workspace, item, "candidate", observation, dict())
+        gate.admit(bridge, context, workspace, item, "candidate", observation, dict(isolation="auto"))
     assert not events
 
 
 def test_plain_material_parameter_does_not_start_worker(monkeypatch):
     bridge, context, workspace, item, observation, _, calls, _ = fixture(monkeypatch)
     item.update(kind="material", payload=dict(plan=[dict(op="set_property", name="Roughness", value="0.5")]))
-    assert gate.admit(bridge, context, workspace, item, "candidate", observation, dict()) is None
+    assert gate.admit(bridge, context, workspace, item, "candidate", observation, dict(isolation="auto")) is None
     assert not calls
 
 
 def test_compilation_cannot_be_disabled_for_high_risk(monkeypatch):
     bridge, context, workspace, item, observation, _, calls, _ = fixture(monkeypatch)
     with pytest.raises(SyncError, match="requires compilation"):
-        gate.admit(bridge, context, workspace, item, "candidate", observation, dict(compile=False))
+        gate.admit(bridge, context, workspace, item, "candidate", observation, dict(compile=False, isolation="auto"))
     assert not calls

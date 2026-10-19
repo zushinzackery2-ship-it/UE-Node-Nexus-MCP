@@ -3,6 +3,7 @@
 
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Core/NexusWarningCapture.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeOperations.h"
 #include "HAL/PlatformTime.h"
@@ -94,7 +95,9 @@ FString DispatchParsedRequest(const TSharedPtr<FJsonObject>& RequestJson)
     FBridgeWorkScope Scope(RequestId);
     const double Started = FPlatformTime::Seconds();
     UE_LOG(LogTemp, Display, TEXT("Nexus request=%s operation=%s phase=begin"), *RequestId, *Operation);
+    const int64 WarningCursor = Warnings::Journal().Cursor();
     TSharedPtr<FJsonObject> Response = DispatchOperation(Operation, RequestId, Payload);
+    Warnings::AppendWindow(Response, WarningCursor);
     const TSharedPtr<FJsonObject>* Error = nullptr;
     FString Code;
     if (Response->TryGetObjectField(TEXT("error"), Error))

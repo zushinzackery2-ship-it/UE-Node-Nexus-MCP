@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
+import re
+import shutil
 import time
 
 from ...instances.identity.processes import is_alive
@@ -22,6 +25,7 @@ HOLDING = ".del"
 HEAVY = ("Project",)
 ACTIVE_STATES = frozenset(("copying", "starting", "executing"))
 SWEEP_SECONDS = 3600.0
+IDENTIFIER = re.compile(r"^[0-9a-f]{32}$")
 
 
 def holding_directory(validation_directory: Path) -> Path:
@@ -38,7 +42,15 @@ def _relocate(root: Path, holding: Path) -> list[str]:
     moved = []
     for source in sources:
         destination = target / source.name
-        source.rename(destination)
+        for attempt in range(10):
+            try:
+                source.rename(destination)
+                break
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                # A just-exited worker can still hold the directory for a moment.
+                time.sleep(0.5)
         moved.append(source.name)
     return moved
 
@@ -83,6 +95,33 @@ def retain(validation_directory: Path, root: Path, report: dict) -> dict:
         return dict(retained=False, error=str(error))
     LOG.info("validation=%s retention moved=%s", root.name, ",".join(moved) or "none")
     return dict(retained=True, holding=str(holding / root.name), moved=moved)
+
+
+def keep_count() -> int:
+    """Held copies to keep for inspection; ``UE_NEXUS_VALIDATION_KEEP`` overrides."""
+    raw = os.environ.get("UE_NEXUS_VALIDATION_KEEP", "1")
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 1
+
+
+def prune(validation_directory: Path, keep: int | None = None) -> list[str]:
+    """Delete held copies beyond ``keep``; only identifier-named directories are eligible."""
+    holding = holding_directory(validation_directory)
+    if not holding.is_dir():
+        return []
+    keep = keep_count() if keep is None else max(0, int(keep))
+    copies = [entry for entry in holding.iterdir() if entry.is_dir() and IDENTIFIER.match(entry.name)]
+    copies.sort(key=lambda entry: entry.stat().st_mtime, reverse=True)
+    removed = []
+    for entry in copies[keep:]:
+        try:
+            shutil.rmtree(entry)
+            removed.append(entry.name)
+        except OSError as error:
+            LOG.warning("validation=%s prune failed: %s", entry.name, error)
+    return removed
 
 
 def sweep(validation_directory: Path, *, now: float | None = None, older_than: float = SWEEP_SECONDS) -> list[dict]:

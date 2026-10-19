@@ -6,6 +6,7 @@
 #include "UeNodeNexusBridgeTranscodeWatch.h"
 #include "Level/Instances/NexusInstanceIdentity.h"
 #include "Core/BuildInfo/NexusCoreBuildInfo.h"
+#include "Core/NexusWarningCapture.h"
 #include "UeNodeNexusBridgeBuildInfo.h"
 #include "Lifecycle/EditorLifecycle.h"
 #include "Viewport/Capture/NexusCapture.h"
@@ -20,6 +21,7 @@ void FUeNodeNexusBridgeModule::StartupModule()
 {
     UeNodeNexusBridge::RegisterCoreBuildIdentity();
     UeNodeNexusBridge::Instances::StartupIdentity();
+    UeNodeNexusBridge::Warnings::Startup();
     UeNodeNexusBridge::RuntimeDiagnostics::Start();
     UeNodeNexusBridge::StartupAutoIndex();
     UeNodeNexusBridge::RegisterCoreOperations();
@@ -48,5 +50,6 @@ void FUeNodeNexusBridgeModule::ShutdownModule()
     UeNodeNexusBridge::UnregisterAutoIndexOperations();
     UeNodeNexusBridge::UnregisterCoreOperations();
     UeNodeNexusBridge::ShutdownAutoIndex();
+    UeNodeNexusBridge::Warnings::Shutdown();
     UeNodeNexusBridge::UnregisterBuildIdentity(TEXT("UeNodeNexusBridge"));
 }

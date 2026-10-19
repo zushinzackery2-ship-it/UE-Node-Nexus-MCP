@@ -14,7 +14,7 @@ OPTIONS: dict[str, set[str]] = dict(
     merge=set(("revision", "source", "message")), pull=set(("message", "discover")),
     resolve=set(("merge_id", "conflict_id", "conflict_ids", "choice", "value", "name", "asset", "conflict_type", "layer", "all")),
     abort=set(("merge_id", "rebase_id", "apply_id")),
-    push=set(("revision", "source", "merge_id", "compile", "save", "allow_delete", "stop_on_error", "replace", "force", "safety_allow_low_memory")),
+    push=set(("revision", "source", "merge_id", "compile", "save", "allow_delete", "stop_on_error", "replace", "force", "safety_allow_low_memory", "isolation")),
     recover=set(("apply_id", "projection_id", "restore", "preserve_current", "resolution")), close=set(),
     branch=set(("name", "revision", "delete", "expected")), switch=set(("name",)),
     tag=set(("name", "revision", "message", "expected")),
@@ -30,7 +30,7 @@ OPTIONS: dict[str, set[str]] = dict(
     schema=set(("refresh", "category", "query", "details", "function", "target", "context", "limit", "cursor", "revision")),
 )
 OPTIONS["cherry-pick"] = set(OPTIONS["revert"])
-OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error", "force", "safety_allow_low_memory"))
+OPTIONS["continue"] = set(("merge_id", "rebase_id", "message", "allow_delete", "compile", "save", "stop_on_error", "force", "safety_allow_low_memory", "isolation"))
 BACKGROUND_ACTIONS = frozenset(("checkout", "fetch", "pull", "push", "continue", "recover", "status", "lint", "schema"))
 JOB_ACTIONS = frozenset(("job_status", "job_result", "job_cancel"))
 TRANSPORT_KEYS = frozenset(("background", "wait_seconds", "deadline_seconds", "idempotency_key"))
@@ -52,6 +52,9 @@ def validate(action: str, options: dict) -> None:
 
 
 def validate_values(action: str, options: dict, force_values=("local",)) -> None:
+    if "isolation" in options and options["isolation"] not in ("off", "auto", "always"):
+        raise SyncError("invalid_option", "isolation must be one of off, auto, always",
+                        dict(isolation=options["isolation"]))
     if "force" in options and options["force"] not in force_values:
         raise SyncError("invalid_option", "force must be one of " + ", ".join(force_values))
     if options.get("force") and options.get("merge_id"):

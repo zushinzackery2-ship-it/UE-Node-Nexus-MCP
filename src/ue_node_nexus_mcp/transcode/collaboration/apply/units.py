@@ -44,15 +44,25 @@ def run_units(bridge, context, workspace, source: str, candidate: str, fixed: di
 
 
 def collect_batch(bridge, context, workspace, candidate: str, observation: dict, batch: dict, options: dict) -> dict:
-    """Admit every risky unit of this publication through one isolated worker.
+    """Admit the units this batch validates in an isolated copy, if the caller asked for it.
 
-    Payloads are predicted from the interfaces this batch itself changes; a unit
-    whose applied payload or candidate ends up different keeps its receipt out
-    of reach and is admitted alone at its turn.
+    ``options["isolation"]`` sets the scope: ``off`` copies nothing, ``auto``
+    admits every risky unit with the changed dependencies it compiles with, and
+    ``always`` admits every planned unit. Payloads are predicted from the
+    interfaces this batch itself changes; a unit whose applied payload or
+    candidate ends up different keeps its receipt out of reach and is admitted
+    alone at its turn. A risk classification only names the units that must be
+    validated, not the units whose live memory the worker needs: a changed
+    dependency outside it would still be its old shader there.
     """
     from ....safety.publication.gate import admit_batch
+    from ....safety.publication.mode import isolation_mode, requires_reason
     from ....safety.publication.risk import reasons
-    entries, interfaces = [], set()
+
+    mode = isolation_mode(options)
+    if mode == "off":
+        return dict()
+    planned, roots, interfaces = dict(), [], set()
     for asset in batch["order"]:
         if asset in batch["errors"]:
             continue
@@ -60,11 +70,21 @@ def collect_batch(bridge, context, workspace, candidate: str, observation: dict,
         if item["empty"] or prerequisites(item) & batch["errors"].keys():
             continue
         calls = changed_calls(item["kind"], item["dependencies"], interfaces)
-        planned = refresh.with_calls(item, calls) if calls else item
-        if reasons(planned):
-            entries.append((asset, planned))
+        planned[asset] = refresh.with_calls(item, calls) if calls else item
+        if reasons(planned[asset]):
+            roots.append(asset)
         if item.get("interface_changed"):
             interfaces.add(asset)
+    admitted = set()
+    if requires_reason(mode):
+        for root in roots:
+            closure = changed_closure(planned, batch["errors"], root)
+            if closure is not None:
+                admitted.update(closure)
+    else:
+        # ``always`` validates every planned unit, not only the classified ones.
+        admitted.update(planned)
+    entries = [(asset, planned[asset]) for asset in batch["order"] if asset in admitted]
     if not entries:
         return dict()
     try:
@@ -75,6 +95,28 @@ def collect_batch(bridge, context, workspace, candidate: str, observation: dict,
                                           batch_admission=True)
         return dict()
     return receipts
+
+
+def changed_closure(planned: dict, failures: dict, root: str):
+    """Return every changed unit ``root`` compiles with, or None when one failed.
+
+    Only units this batch already plans are included: unchanged assets stay in
+    the live-memory baseline exactly as before, and a failed unit cannot be
+    reproduced, so its consumer is left to its own admission at its turn.
+    """
+    seen, pending = set(), [root]
+    while pending:
+        asset = pending.pop()
+        if asset in seen:
+            continue
+        if asset in failures:
+            return None
+        item = planned.get(asset)
+        if item is None:
+            continue
+        seen.add(asset)
+        pending.extend(item["dependencies"])
+    return seen
 
 
 def run_unit(bridge, context, workspace, asset: str, source: str, candidate: str, fixed: dict, observation: dict,
@@ -93,12 +135,17 @@ def run_unit(bridge, context, workspace, asset: str, source: str, candidate: str
     if calls:
         item = refresh.with_calls(item, calls)
     from ....safety.publication.gate import admit, receipt_valid
+    from ....safety.publication.risk import reasons
     safety = receipts.get(asset)
     if safety is not None and not receipt_valid(safety, item, batch.get("candidate", candidate),
                                               bridge=bridge, observation=observation, completed=completed):
         safety = None
+    risks = []
     if safety is None:
         safety = admit(bridge, context, workspace, item, batch.get("candidate", candidate), observation, options)
+        if safety is None:
+            # Publication proceeds without the isolated proof; keep the reason visible.
+            risks = reasons(item)
     record = transactions.request(workspace, item, source, batch.get("candidate", candidate), observation["commit"], observation, options)
     if safety is not None:
         record["safety_validation"] = safety
@@ -107,7 +154,8 @@ def run_unit(bridge, context, workspace, asset: str, source: str, candidate: str
     published = publish_verified(bridge, context, workspace, record)
     transactions.adopt(observation, record, published, workspace.history)
     rows = [dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published,
-                 **(dict(safety_validation=safety) if safety is not None else dict()), **refreshed)]
+                 **(dict(safety_validation=safety) if safety is not None else dict()),
+                 **(dict(risk_unvalidated=risks) if risks else dict()), **refreshed)]
     if item.get("interface_changed"):
         snapshot_id = workspace.history.entries(published).get(asset)
         if snapshot_id:

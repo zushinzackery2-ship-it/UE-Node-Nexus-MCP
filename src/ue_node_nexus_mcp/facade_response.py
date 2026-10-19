@@ -38,7 +38,13 @@ def diagnostic_counts(response: dict[str, Any]) -> dict[str, int]:
     error_count = count_diagnostic_errors(diagnostics)
     warning_count = count_diagnostic_warnings(diagnostics)
     if isinstance(warnings, list):
-        warning_count += len(warnings)
+        # The bridge reports both severities in one ordered stream; an import
+        # error must not be counted as a warning.
+        for item in warnings:
+            if isinstance(item, dict) and item.get("severity") == "error":
+                error_count += 1
+            else:
+                warning_count += 1
 
     remaining = response.get("remaining_errors")
     if isinstance(remaining, int):

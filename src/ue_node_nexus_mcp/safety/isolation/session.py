@@ -15,6 +15,9 @@ from ..capture.status import status as capture_status
 from .builds import module_binary
 
 
+TRANSIENT_CLOSE_BLOCKERS = frozenset(("editor_busy", "compiling", "saving"))
+
+
 def expected_builds(project: Path, engine: Path) -> dict:
     result = dict()
     for name in ("UeNodeNexusBridge", "UeNodeNexusVfxBridge"):
@@ -32,6 +35,40 @@ def expected_builds(project: Path, engine: Path) -> dict:
     result["UeNodeNexusGuard"] = dict(result["UeNodeNexusBridge"],
         binary=str(module_binary(bridge, "UeNodeNexusGuard")))
     return result
+
+
+def transient_close_blocker(instance) -> bool:
+    """True while only compiler or save work keeps a validation worker alive.
+
+    The close preview can pass and the actual close still find the editor busy
+    because a shader compile started in between. That race must return to the
+    bounded drain loop; dirty, in-use, unresponsive or unknown blockers must not.
+    """
+    if not isinstance(instance, dict):
+        return False
+    tokens = set(str(token) for token in instance.get("blockers") or ())
+    if instance.get("compiling"):
+        tokens.add("compiling")
+    if instance.get("saving"):
+        tokens.add("saving")
+    if not tokens or not tokens <= TRANSIENT_CLOSE_BLOCKERS:
+        return False
+    return not any((instance.get("pie"), instance.get("dirty_packages"), instance.get("failed_packages"),
+                    instance.get("pending"), instance.get("inflight"), instance.get("users"), instance.get("scopes")))
+
+
+def normal_exit(manager, instance_id: str, deadline: float) -> dict:
+    """Retry the real close while a known transient blocker drains; never force."""
+    while True:
+        try:
+            return close_instance(manager, dict(instance_id=instance_id, dry_run=False))
+        except InstanceError as error:
+            if error.code != "close_blocked" or not transient_close_blocker(error.details.get("instance")):
+                raise
+            require(time.monotonic() < deadline, "isolation_cleanup_failed",
+                    "validation copy kept a transient close blocker past the deadline",
+                    blockers=error.details.get("instance", dict()).get("blockers"))
+            time.sleep(0.25)
 
 
 class ValidationSession:
@@ -136,7 +173,7 @@ class ValidationSession:
                         and time.monotonic() < deadline, "isolation_cleanup_failed",
                         "validation copy could not finish its close prerequisites", blockers=sorted(blockers), instance=preview.get("instance"))
                 time.sleep(0.25)
-            return close_instance(self.manager, dict(instance_id=state["instance_id"], dry_run=False))
+            return normal_exit(self.manager, state["instance_id"], deadline)
         except Exception as error:
             # Failed/stalled validation is cancelled, never resumed in uncertain state.
             # The copied project, inputs, receipts and logs remain available.

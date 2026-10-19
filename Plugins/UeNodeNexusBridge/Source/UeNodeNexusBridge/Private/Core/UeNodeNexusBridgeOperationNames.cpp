@@ -74,6 +74,7 @@ TArray<FString> GetCoreOperationNames()
         TEXT("material_expression_classes_list"),
         TEXT("material_instance_params_set"),
         TEXT("diagnostics_get"),
+        TEXT("log_messages_get"),
         TEXT("asset_compile"),
         TEXT("asset_validate"),
         TEXT("asset_save"),

@@ -89,7 +89,7 @@ def test_batch_failure_is_attributed_without_restarting_workers(monkeypatch):
     monkeypatch.setattr(gate, "admit_batch", reject)
     monkeypatch.setattr(gate, "admit", lambda *args: pytest.fail("batch failure must not start another worker"))
     batch = dict(order=[asset for asset, _ in entries], units=dict(entries), errors={})
-    result = units.run_units(bridge, context, workspace, "source", "candidate", {}, observation, batch, {})
+    result = units.run_units(bridge, context, workspace, "source", "candidate", {}, observation, batch, dict(isolation="auto"))
     assert calls == ["batch"]
     assert len(result) == 2 and all(row["action"] == "failed" for row in result)
     assert all(row["code"] == "safety_worker_exit_failed" for row in result)
