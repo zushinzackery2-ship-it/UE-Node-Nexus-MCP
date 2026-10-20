@@ -83,6 +83,11 @@ class Database:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA synchronous=FULL")
             connection.execute("PRAGMA foreign_keys=ON")
+            # A full temp volume reports SQLITE_FULL even when the database itself
+            # has room; memory temp tables and a capped WAL keep a large commit
+            # from needing both.
+            connection.execute("PRAGMA temp_store=MEMORY")
+            connection.execute("PRAGMA journal_size_limit=67108864")
             self.local.connection = connection
         return connection
 

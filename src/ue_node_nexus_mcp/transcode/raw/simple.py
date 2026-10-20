@@ -18,6 +18,13 @@ from ..text.model import Document, Prop, Section
 from .common import header_from_raw, props_section, require_kind
 
 INSTANCE_SECTIONS = ("scalar", "vector", "texture", "switch", "component_mask", "runtime_virtual_texture", "sparse_volume_texture", "font")
+# The structured sections above are the authority for instance parameters; these
+# reflected arrays are rebuilt from them and must never be compared as authored state.
+DERIVED_PARAMETER_ARRAYS = frozenset((
+    "ScalarParameterValues", "VectorParameterValues", "TextureParameterValues", "FontParameterValues",
+    "RuntimeVirtualTextureParameterValues", "SparseVolumeTextureParameterValues", "StaticSwitchParameterValues",
+    "StaticComponentMaskParameterValues",
+))
 INSTANCE_TYPES = dict(scalar="float", vector="FLinearColor", texture="UTexture", switch="bool",
                       component_mask="FStaticComponentMask", runtime_virtual_texture="URuntimeVirtualTexture",
                       sparse_volume_texture="USparseVolumeTexture", font="FFontParameterValue")
@@ -26,7 +33,8 @@ INSTANCE_TYPES = dict(scalar="float", vector="FLinearColor", texture="UTexture",
 def material_instance_document(raw: dict[str, Any], schema=None) -> Document:
     require_kind(raw, "material_instance")
     document = Document(header=header_from_raw(raw, schema))
-    document.sections.append(props_section(raw.get("props")))
+    props = [item for item in raw.get("props") or [] if item.get("name") not in DERIVED_PARAMETER_ARRAYS]
+    document.sections.append(props_section(props))
     instance = raw.get("instance") or {}
     for name in INSTANCE_SECTIONS:
         items = instance.get(name) or []

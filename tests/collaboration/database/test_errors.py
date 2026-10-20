@@ -8,6 +8,13 @@ from ue_node_nexus_mcp.transcode.collaboration.store.database import Database
 from ue_node_nexus_mcp.transcode.errors import SyncError
 
 
+def test_connections_keep_temp_tables_off_disk_and_cap_the_wal(tmp_path):
+    database = Database(tmp_path / "index.sqlite")
+    with database.connection() as connection:
+        assert connection.execute("PRAGMA temp_store").fetchone()[0] == 2
+        assert connection.execute("PRAGMA journal_size_limit").fetchone()[0] == 67108864
+
+
 def test_real_sqlite_full_is_distinct_from_corruption_and_keeps_history(tmp_path):
     database = Database(tmp_path / "index.sqlite")
     with database.connection(write=True) as connection:

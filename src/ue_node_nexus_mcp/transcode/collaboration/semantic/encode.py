@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from ...blueprint.classes import node_identity
 from ...text.model import Document
-from ...raw.simple import INSTANCE_TYPES
+from ...raw.simple import DERIVED_PARAMETER_ARRAYS, INSTANCE_TYPES
 from ...errors import SyncError
 from .contracts import same_contract
 from .blueprint import declaration_default, positional_values, signature, signature_contracts
@@ -154,9 +154,12 @@ def encode_section(section, scope: str, context: Encoding) -> dict:
         locations[identifier] = decl.line
     section_type = INSTANCE_TYPES.get(section.name) if context.kind == "material_instance" else None
     asset_types = section_types(section, context.document, context.schema, context.evidence)
+    authored = [prop for prop in section.props()
+                if not (context.kind == "material_instance" and section.name == "asset"
+                        and prop.key in DERIVED_PARAMETER_ARRAYS)]
     props = dict((prop.key, value(prop.value, asset_types.get(prop.key) or prop.type_name or section_type or
-                  before.get("props", dict()).get(prop.key, dict()).get("type") or "text")) for prop in section.props())
-    if len(props) != len(section.props()):
+                  before.get("props", dict()).get(prop.key, dict()).get("type") or "text")) for prop in authored)
+    if len(props) != len(authored):
         raise SyncError("duplicate_property", section.header())
     links = encode_links(section, aliases, identities.bindings, context.document, context.schema, context.kind)
     bare = dict()
