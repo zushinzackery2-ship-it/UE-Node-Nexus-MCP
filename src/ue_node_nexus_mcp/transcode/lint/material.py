@@ -174,6 +174,4 @@ def _lint_output_pin(link: Link, decl: Decl, info: ClassInfo | None, calls: dict
         return
     if len(outputs) == 1 and lowered in SINGLE_OUTPUT_ALIASES:
         return
-    if len(outputs) > 1 and lowered in ("rgb", "rgba", "color", "vector"):
-        return
     sink.error("unknown_pin", f"{decl.id} ({decl.type_name}) has no output {pin!r}; outputs: {', '.join(name or str(index) for index, name in enumerate(outputs))}", line=link.line)

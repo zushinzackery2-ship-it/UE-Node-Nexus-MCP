@@ -62,9 +62,11 @@ static bool IsSingleOutputAlias(const FString& TargetName)
         || TargetName.Equals(TEXT("RGBA"), ESearchCase::IgnoreCase);
 }
 
-static bool ResolveVectorOutputAlias(const FString& TargetName, int32 OutputCount, int32& OutIndex)
+static bool ResolveVectorOutputAlias(const FString& TargetName, int32 OutputCount, bool bUnnamedOutputs, int32& OutIndex)
 {
-    if (OutputCount <= 1)
+    // A named vector parameter has RGB/R/G/B/A and no RGBA: aliasing there would
+    // silently read the wrong channel instead of reporting the missing output.
+    if (OutputCount <= 1 || !bUnnamedOutputs)
     {
         return false;
     }
@@ -218,7 +220,8 @@ bool ResolveMaterialOutputPin(UMaterialExpression* Expression, const FString& Pi
             return true;
         }
     }
-    if (ResolveVectorOutputAlias(TargetName, Outputs.Num(), OutIndex))
+    const bool bUnnamedOutputs = Outputs.IsValidIndex(0) && Outputs[0].OutputName.IsNone();
+    if (ResolveVectorOutputAlias(TargetName, Outputs.Num(), bUnnamedOutputs, OutIndex))
     {
         return Outputs.IsValidIndex(OutIndex);
     }
