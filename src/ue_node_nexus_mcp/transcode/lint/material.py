@@ -164,6 +164,10 @@ def _lint_output_pin(link: Link, decl: Decl, info: ClassInfo | None, calls: dict
         return
     pin = link.src_pin
     if pin.isdigit():
+        if decl.id in calls:
+            # The function's interface can change under the number; only a name survives it.
+            sink.error("pin_requires_name", f"{decl.id} calls a material function; name the output instead of #{pin}", line=link.line)
+            return
         if int(pin) >= len(outputs):
             sink.error("unknown_pin", f"{decl.id} has no output #{pin}", line=link.line)
         return

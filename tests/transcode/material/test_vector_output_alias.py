@@ -37,3 +37,33 @@ def test_rgba_is_rejected_on_a_vector_parameter(tmp_path):
     result = lint(tmp_path, DOCUMENT.replace("st.A -> out.Opacity", "st.RGBA -> out.Opacity"))
     assert result.has_errors
     assert any("RGBA" in item.message and item.code == "unknown_pin" for item in result.errors())
+
+
+CALL = """nexus: 1
+asset: /Game/M_Hair
+class: Material
+schema: key
+[graph]
+call : MaterialFunctionCall(MaterialFunction=/Game/MF_Hair)
+call.World -> out.EmissiveColor
+"""
+
+
+def call_schema(tmp_path):
+    publish(tmp_path / "calls", "key", dict(material_expression=dict(
+        MaterialExpressionMaterialFunctionCall=dict(path="/Script/Engine.MaterialExpressionMaterialFunctionCall",
+            props=dict(MaterialFunction=dict(type="object")))),
+        material_functions=dict([("/Game/MF_Hair.MF_Hair", dict(outputs=[dict(name="Tangent"), dict(name="World")], inputs=[]))])))
+    return SchemaLock(tmp_path / "calls", "key")
+
+
+def call_lint(tmp_path, document):
+    parsed, _ = parse(document)
+    return lint_document(parsed, "material", call_schema(tmp_path))
+
+
+def test_a_function_call_output_is_named_not_numbered(tmp_path):
+    assert not call_lint(tmp_path, CALL).has_errors
+    numbered = call_lint(tmp_path, CALL.replace("call.World", "call.1"))
+    assert numbered.has_errors
+    assert any(item.code == "pin_requires_name" for item in numbered.errors())

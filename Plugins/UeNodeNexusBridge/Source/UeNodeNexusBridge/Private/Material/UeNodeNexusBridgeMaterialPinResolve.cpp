@@ -205,6 +205,13 @@ bool ResolveMaterialOutputPin(UMaterialExpression* Expression, const FString& Pi
 
     if (PinId.IsNumeric())
     {
+        // A function call keeps the ports of its last refresh; an ordinal from an
+        // older interface would select a different output after the function
+        // gains a pin, so only a name may address it.
+        if (Expression->IsA<UMaterialExpressionMaterialFunctionCall>())
+        {
+            return false;
+        }
         OutIndex = FCString::Atoi(*PinId);
         return Expression->GetOutputs().IsValidIndex(OutIndex);
     }
