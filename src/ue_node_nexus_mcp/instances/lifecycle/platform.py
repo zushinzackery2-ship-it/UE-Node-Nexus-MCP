@@ -182,6 +182,8 @@ class WindowsPlatform:
                    "-NexusRuntime=" + str(self.root), "-abslog=" + str(logs / (instance["instance_id"] + ".log"))]
         from ...safety.isolation.environment import launch_arguments
         command.extend(launch_arguments(instance["project_path"]))
+        from .recovery import launch_flag
+        command.extend(launch_flag(instance["project_path"]))
         with (logs / (instance["instance_id"] + "-console.log")).open("ab") as output:
             process = subprocess.Popen(command, cwd=str(Path(instance["project_path"]).parent),
                                        stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,

@@ -12,6 +12,8 @@ from functools import lru_cache
 
 DIALOG_CLASS = "#32770"
 EDITOR_CLASS = "UnrealWindow"
+# Slate modals are plain editor windows; only their caption says they block startup.
+SLATE_PROMPTS = frozenset(("Restore Packages",))
 CALLBACK = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
 
@@ -55,6 +57,10 @@ def dialog_text(handle) -> str:
     return "\n".join(parts)
 
 
+def blocking(title: str, kind: str, visible: bool) -> bool:
+    return kind == DIALOG_CLASS or (visible and title in SLATE_PROMPTS)
+
+
 def windows(pid: int) -> list[dict]:
     api = user32()
     found = []
@@ -69,9 +75,9 @@ def windows(pid: int) -> list[dict]:
         kind = class_name(handle)
         visible = bool(api.IsWindowVisible(handle))
         if title and (visible or kind in (DIALOG_CLASS, EDITOR_CLASS)):
-            row = dict(title=title, visible=visible, class_name=kind, dialog=kind == DIALOG_CLASS)
+            row = dict(title=title, visible=visible, class_name=kind, dialog=blocking(title, kind, visible))
             if row["dialog"]:
-                row["message"] = dialog_text(handle)
+                row["message"] = dialog_text(handle) if kind == DIALOG_CLASS else title
             found.append(row)
         return True
 
