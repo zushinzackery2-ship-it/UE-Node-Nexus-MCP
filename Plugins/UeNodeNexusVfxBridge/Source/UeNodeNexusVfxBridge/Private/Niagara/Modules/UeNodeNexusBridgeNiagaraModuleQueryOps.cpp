@@ -1,7 +1,7 @@
 #include "UeNodeNexusNiagaraOps.h"
 
 #include "UeNodeNexusBridgeJson.h"
-#include "Formats/UeNodeNexusBridgeNiagaraIndexedFormat.h"
+#include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
 #include "UeNodeNexusBridgeNiagaraModuleStack.h"
 
@@ -19,18 +19,6 @@ static TSharedPtr<FJsonObject> MakeInvalidFormatResponse(const FString& Operatio
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
     Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_format"), FString::Printf(TEXT("Unsupported Niagara modules format: %s"), *Format)));
     return Response;
-}
-
-static void AddModuleColumns(TSharedPtr<FJsonObject> Data)
-{
-    Data->SetArrayField(TEXT("columns"), {
-        MakeShared<FJsonValueString>(TEXT("emitter_index")),
-        MakeShared<FJsonValueString>(TEXT("usage")),
-        MakeShared<FJsonValueString>(TEXT("module_index")),
-        MakeShared<FJsonValueString>(TEXT("function_name")),
-        MakeShared<FJsonValueString>(TEXT("script_path")),
-        MakeShared<FJsonValueString>(TEXT("enabled"))
-    });
 }
 
 static TSharedPtr<FJsonObject> BuildModulesIndexedData(UNiagaraSystem* System, const TArray<TSharedPtr<FJsonValue>>& CompactItems, bool bIncludeScriptPaths)
@@ -57,8 +45,8 @@ static TSharedPtr<FJsonObject> BuildModulesIndexedData(UNiagaraSystem* System, c
         const FString FunctionName = Row[3]->AsString();
         const bool bEnabled = Row[5]->AsBool();
 
-        const int32 UsageIndex = NiagaraIndexedFormat::DictIndex(UsageDict, Usages, Usage);
-        const int32 FunctionIndex = NiagaraIndexedFormat::DictIndex(FunctionDict, Functions, FunctionName);
+        const int32 UsageIndex = DictIndex(UsageDict, Usages, Usage);
+        const int32 FunctionIndex = DictIndex(FunctionDict, Functions, FunctionName);
         if (bIncludeScriptPaths)
         {
             const FString ScriptPath = Row[4]->AsString();
@@ -68,7 +56,7 @@ static TSharedPtr<FJsonObject> BuildModulesIndexedData(UNiagaraSystem* System, c
                 UsageIndex,
                 ModuleIndex,
                 FunctionIndex,
-                NiagaraIndexedFormat::DictIndex(ScriptDict, Scripts, ScriptPath),
+                DictIndex(ScriptDict, Scripts, ScriptPath),
                 bEnabled ? 1 : 0));
         }
         else
@@ -83,12 +71,12 @@ static TSharedPtr<FJsonObject> BuildModulesIndexedData(UNiagaraSystem* System, c
         }
     }
 
-    FString Text = FString::Printf(TEXT("G:%s|niagara|modules|%d\n"), *NiagaraIndexedFormat::EscapeToken(System ? System->GetPathName() : FString()), Rows.Num());
-    Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("U:"), Usages);
-    Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("F:"), Functions);
+    FString Text = FString::Printf(TEXT("G:%s|niagara|modules|%d\n"), *EscapeIndexedToken(System ? System->GetPathName() : FString()), Rows.Num());
+    Text += JoinDictionaryLine(TEXT("U:"), Usages);
+    Text += JoinDictionaryLine(TEXT("F:"), Functions);
     if (bIncludeScriptPaths)
     {
-        Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("S:"), Scripts);
+        Text += JoinDictionaryLine(TEXT("S:"), Scripts);
     }
     Text += TEXT("M:") + FString::Join(Rows, TEXT("|")) + TEXT("\n");
 
@@ -102,7 +90,7 @@ static TSharedPtr<FJsonObject> BuildModulesIndexedData(UNiagaraSystem* System, c
     {
         Data->SetNumberField(TEXT("script_count"), Scripts.Num());
     }
-    NiagaraIndexedFormat::SetTextPayload(Data, Text);
+    SetTextPayload(Data, Text);
     return Data;
 }
 
@@ -224,7 +212,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModulesList(const FString& Operation, const
     Data->SetStringField(TEXT("format"), bCompact ? TEXT("niagara_modules_compact") : TEXT("full"));
     if (bCompact)
     {
-        AddModuleColumns(Data);
+        SetColumns(Data, { TEXT("emitter_index"), TEXT("usage"), TEXT("module_index"), TEXT("function_name"), TEXT("script_path"), TEXT("enabled") });
     }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());

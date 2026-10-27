@@ -12,8 +12,8 @@ from .completion import complete
 
 
 def run_one(record) -> None:
-    from ..facade_execute import execute_operation
-    from .. import task_queue as owner
+    from ..facade.execute import execute_operation
+    from . import queue as owner
     with capture() as observed:
         run_observed(record, owner, execute_operation, observed)
 
@@ -38,7 +38,7 @@ def run_observed(record, owner, execute_operation, observed) -> None:
 
 
 def worker_loop() -> None:
-    from .. import task_queue as owner
+    from . import queue as owner
     while True:
         task_id = owner._queue.get()
         try:
@@ -63,7 +63,7 @@ def worker_loop() -> None:
 
 
 def ensure_worker() -> None:
-    from .. import task_queue as owner
+    from . import queue as owner
     with owner._lock:
         if owner._closing:
             return

@@ -65,7 +65,8 @@ static TArray<FString> MaterialFunctionOutputLines(UMaterialFunction* Function, 
 TSharedPtr<FJsonObject> BuildMaterialFunctionNodeInterfaceData(UMaterialFunction* Function, UMaterialExpression* Expression, const TSharedPtr<FJsonObject>& Payload, const FString& Prefix)
 {
     const FString Alias = MaterialNodeAlias(Function, Expression);
-    TArray<FString> Header = {
+    TArray<FString> Header =
+    {
         FString::Printf(TEXT("Node.Name = %s"), *Alias),
         FString::Printf(TEXT("Node.Class = %s"), *ShortMaterialExpressionClass(Expression)),
         FString::Printf(TEXT("Node.Id = %s"), *Alias),

@@ -6,6 +6,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialFunction.h"
 #include "Misc/PackageName.h"
+#include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "Runtime/NexusRuntimeDiagnostics.h"
 
@@ -86,27 +87,6 @@ FDiagnosticsRequest ReadDiagnosticsRequest(const TSharedPtr<FJsonObject>& Payloa
         Request.Severity = TEXT("all");
     }
     return Request;
-}
-
-FString NormalizeAssetObjectPath(const FString& AssetPath)
-{
-    if (AssetPath.IsEmpty())
-    {
-        return FString();
-    }
-
-    FText Reason;
-    const int32 LastSlashIndex = AssetPath.Find(TEXT("/"), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
-    const int32 LastDotIndex = AssetPath.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
-    if (LastDotIndex > LastSlashIndex && FPackageName::IsValidObjectPath(AssetPath, &Reason))
-    {
-        return AssetPath;
-    }
-    if (FPackageName::IsValidLongPackageName(AssetPath, false, &Reason))
-    {
-        return AssetPath + TEXT(".") + FPackageName::GetLongPackageAssetName(AssetPath);
-    }
-    return AssetPath;
 }
 
 bool IsSupportedDiagnosticAssetClass(const FAssetData& AssetData)

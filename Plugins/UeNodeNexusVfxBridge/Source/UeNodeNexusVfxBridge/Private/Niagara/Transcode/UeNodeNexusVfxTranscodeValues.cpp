@@ -11,7 +11,8 @@
 
 namespace UeNodeNexusBridge::VfxTranscode
 {
-static const TPair<const TCHAR*, ENiagaraScriptUsage> GGroups[] = {
+static const TPair<const TCHAR*, ENiagaraScriptUsage> GGroups[] =
+{
     { TEXT("EmitterSpawn"), ENiagaraScriptUsage::EmitterSpawnScript },
     { TEXT("EmitterUpdate"), ENiagaraScriptUsage::EmitterUpdateScript },
     { TEXT("ParticleSpawn"), ENiagaraScriptUsage::ParticleSpawnScript },
@@ -50,7 +51,8 @@ struct FTypeAlias
     const TCHAR* Name;
     const FNiagaraTypeDefinition& (*Get)();
 };
-static const FTypeAlias GTypeAliases[] = {
+static const FTypeAlias GTypeAliases[] =
+{
     { TEXT("float"), &FNiagaraTypeDefinition::GetFloatDef },
     { TEXT("int"), &FNiagaraTypeDefinition::GetIntDef },
     { TEXT("bool"), &FNiagaraTypeDefinition::GetBoolDef },

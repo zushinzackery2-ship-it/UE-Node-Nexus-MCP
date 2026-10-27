@@ -16,23 +16,6 @@ FString MaterialExpressionNodeId(UMaterialExpression* Expression)
     return Expression ? Expression->GetMaterialExpressionId().ToString(EGuidFormats::DigitsWithHyphens) : FString();
 }
 
-UMaterialExpression* FindMaterialExpression(UMaterial* Material, const FString& NodeId)
-{
-    for (TObjectPtr<UMaterialExpression> ExpressionPtr : Material->GetExpressions())
-    {
-        UMaterialExpression* Expression = ExpressionPtr.Get();
-        if (Expression == nullptr)
-        {
-            continue;
-        }
-        if (MaterialExpressionNodeId(Expression).Equals(NodeId, ESearchCase::IgnoreCase) || Expression->GetPathName().Equals(NodeId, ESearchCase::IgnoreCase))
-        {
-            return Expression;
-        }
-    }
-    return nullptr;
-}
-
 UClass* ResolveMaterialExpressionClass(const FString& NodeClass)
 {
     // Only path-like names go through LoadClass: a bare "MaterialExpressionMultiply" would

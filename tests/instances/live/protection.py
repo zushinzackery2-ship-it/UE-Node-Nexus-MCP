@@ -9,7 +9,7 @@ import time
 from types import SimpleNamespace
 import uuid
 
-from ue_node_nexus_mcp.bridge import UeBridgeClient
+from ue_node_nexus_mcp.bridge.client import UeBridgeClient
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.errors import InstanceError
 from ue_node_nexus_mcp.instances.identity.processes import is_alive

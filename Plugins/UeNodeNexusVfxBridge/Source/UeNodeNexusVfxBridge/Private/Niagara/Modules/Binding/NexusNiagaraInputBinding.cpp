@@ -1,12 +1,11 @@
 #include "NexusNiagaraInputBinding.h"
+#include "NexusNiagaraInputMetadata.h"
 
-#include "EdGraph/EdGraphPin.h"
-#include "EdGraph/EdGraph.h"
-#include "EdGraph/EdGraphNode.h"
 #include "Internationalization/Regex.h"
 #include "NiagaraEmitterHandle.h"
 #include "NiagaraGraph.h"
 #include "NiagaraNodeFunctionCall.h"
+#include "NiagaraScriptVariable.h"
 #include "NiagaraSystem.h"
 #include "NiagaraUserRedirectionParameterStore.h"
 #include "ViewModels/NiagaraEmitterHandleViewModel.h"
@@ -27,11 +26,13 @@ bool ResolveModuleInput(UNiagaraNodeFunctionCall& Module, const FString& Name,
         Error.Message = TEXT("module called graph is unavailable");
         return false;
     }
+    const FName Requested(*Name);
     const FName Qualified(*((Name.StartsWith(TEXT("Module."))) ? Name : TEXT("Module.") + Name));
     int32 Matches = 0;
     for (const auto& Pair : Graph->GetAllMetaData())
     {
-        if (Pair.Key.GetName() == Qualified)
+        if (IsAuthoredModuleInput(Pair.Key, Pair.Value)
+            && (Pair.Key.GetName() == Requested || Pair.Key.GetName() == Qualified))
         {
             Variable = Pair.Key;
             ++Matches;
@@ -82,36 +83,8 @@ bool ValidateUserParameter(const FNiagaraUserRedirectionParameterStore& Store,
     return true;
 }
 
-bool HasLinkedOverride(UNiagaraNodeFunctionCall& Module, const FNiagaraVariable& Variable)
-{
-    const FNiagaraParameterHandle Alias = FNiagaraParameterHandle::CreateAliasedModuleParameterHandle(
-        FNiagaraParameterHandle(Variable.GetName()), &Module);
-    UEdGraph* Graph = Module.GetGraph();
-    if (!Graph)
-    {
-        return false;
-    }
-    for (UEdGraphNode* Node : Graph->Nodes)
-    {
-        if (!Node)
-        {
-            continue;
-        }
-        for (UEdGraphPin* Pin : Node->Pins)
-        {
-            if (Pin && Pin->Direction == EGPD_Input && Pin->PinName == Alias.GetParameterHandleString()
-                && !Pin->LinkedTo.IsEmpty())
-            {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-UNiagaraStackFunctionInput* FInputBindingContext::Resolve(UNiagaraSystem& System,
-    FNiagaraEmitterHandle& Emitter, UNiagaraNodeFunctionCall& Module,
-    const FNiagaraVariable& Variable, FInputBindingError& Error)
+UNiagaraStackEntry* FInputBindingContext::ResolveRoot(UNiagaraSystem& System,
+    FNiagaraEmitterHandle& Emitter, FInputBindingError& Error)
 {
     if (!ViewModel.IsValid())
     {
@@ -123,7 +96,6 @@ UNiagaraStackFunctionInput* FInputBindingContext::Resolve(UNiagaraSystem& System
         ViewModel = MakeShared<FNiagaraSystemViewModel>();
         ViewModel->Initialize(System, Options);
     }
-    TArray<UNiagaraStackFunctionInput*> Matches;
     for (const TSharedRef<FNiagaraEmitterHandleViewModel>& EmitterVM : ViewModel->GetEmitterHandleViewModels())
     {
         if (EmitterVM->GetEmitterHandle() != &Emitter)
@@ -136,23 +108,46 @@ UNiagaraStackFunctionInput* FInputBindingContext::Resolve(UNiagaraSystem& System
             continue;
         }
         Root->RefreshChildren();
-        TArray<UNiagaraStackFunctionInput*> Inputs;
-        Root->GetUnfilteredChildrenOfType(Inputs, true);
-        for (UNiagaraStackFunctionInput* Input : Inputs)
+        return Root;
+    }
+    Error.Code = TEXT("stack_root_unresolved");
+    Error.Message = TEXT("native emitter stack root is unavailable");
+    return nullptr;
+}
+
+UNiagaraStackFunctionInput* FInputBindingContext::Resolve(UNiagaraSystem& System,
+    FNiagaraEmitterHandle& Emitter, UNiagaraNodeFunctionCall& Module,
+    const FNiagaraVariable& Variable, FInputBindingError& Error)
+{
+    UNiagaraStackEntry* Root = ResolveRoot(System, Emitter, Error);
+    if (!Root)
+    {
+        return nullptr;
+    }
+    TArray<UNiagaraStackFunctionInput*> Matches;
+    TArray<UNiagaraStackFunctionInput*> Inputs;
+    TArray<FString> Candidates;
+    Root->GetUnfilteredChildrenOfType(Inputs, true);
+    for (UNiagaraStackFunctionInput* Input : Inputs)
+    {
+        if (&Input->GetInputFunctionCallNode() == &Module)
         {
-            if (&Input->GetInputFunctionCallNode() == &Module
-                && Input->GetInputParameterHandle().GetParameterHandleString() == Variable.GetName()
-                && Input->GetInputType() == Variable.GetType())
-            {
-                Matches.Add(Input);
-            }
+            Candidates.Add(Input->GetInputParameterHandle().GetParameterHandleString().ToString()
+                + TEXT(":") + Input->GetInputType().GetName());
+        }
+        if (&Input->GetInputFunctionCallNode() == &Module
+            && Input->GetInputParameterHandle().GetParameterHandleString() == Variable.GetName()
+            && Input->GetInputType() == Variable.GetType())
+        {
+            Matches.Add(Input);
         }
     }
     if (Matches.Num() != 1)
     {
         Error.Code = TEXT("stack_input_unresolved");
-        Error.Message = FString::Printf(TEXT("input=%s type=%s native_stack_matches=%d"),
-            *Variable.GetName().ToString(), *Variable.GetType().GetName(), Matches.Num());
+        Error.Message = FString::Printf(TEXT("input=%s type=%s native_stack_matches=%d candidates=%s"),
+            *Variable.GetName().ToString(), *Variable.GetType().GetName(), Matches.Num(),
+            *FString::Join(Candidates, TEXT(",")));
         return nullptr;
     }
     return Matches[0];

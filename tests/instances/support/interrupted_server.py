@@ -5,8 +5,8 @@ import os
 from pathlib import Path
 
 from ue_node_nexus_mcp import runtime, server
-from ue_node_nexus_mcp.bridge import UeBridgeClient
-from ue_node_nexus_mcp.transport import named_pipe_transport
+from ue_node_nexus_mcp.bridge.client import UeBridgeClient
+from ue_node_nexus_mcp.bridge.transport import named_pipe_transport
 
 
 class LostResponses:

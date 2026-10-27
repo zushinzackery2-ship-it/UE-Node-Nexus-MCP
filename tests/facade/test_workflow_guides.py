@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from ue_node_nexus_mcp.tools_facade import ue_execute
-from ue_node_nexus_mcp.facade_capabilities import ue_capability_get, ue_context_get
-from ue_node_nexus_mcp.workflow_guides import GUIDE_INDEX
+from ue_node_nexus_mcp.facade.entry import ue_execute
+from ue_node_nexus_mcp.facade.capabilities import ue_capability_get, ue_context_get
+from ue_node_nexus_mcp.guides.catalog import GUIDE_INDEX
 
 GUIDES_DIR = Path(__file__).resolve().parents[2] / "src/ue_node_nexus_mcp/guides"
 

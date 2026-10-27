@@ -9,7 +9,7 @@ from .state import TERMINAL, update
 def reconcile(store, record):
     if not record.get("task_id") or record["owner"]["pid"] != os.getpid():
         return record
-    from ....task_queue import task_status
+    from ....tasks.queue import task_status
     task = task_status(record["task_id"])
     if not task.get("ok"):
         return record

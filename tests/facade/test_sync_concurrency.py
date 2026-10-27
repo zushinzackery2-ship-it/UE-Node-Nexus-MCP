@@ -3,8 +3,9 @@
 import asyncio
 import threading
 
-from ue_node_nexus_mcp import runtime, tools_sync
-from ue_node_nexus_mcp import facade_capabilities  # Registers the capability facade exercised below.
+from ue_node_nexus_mcp import runtime
+from ue_node_nexus_mcp.facade import sync as tools_sync
+from ue_node_nexus_mcp.facade import capabilities as facade_capabilities  # Registers the capability facade exercised below.
 
 
 def test_registered_sync_does_not_block_polling_or_capability_queries(all_features, monkeypatch):

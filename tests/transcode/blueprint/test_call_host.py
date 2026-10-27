@@ -26,10 +26,11 @@ PRINT = "/Script/Engine.KismetSystemLibrary.PrintString"
 def lock(tmp_path) -> SchemaLock:
     directory = tmp_path / ".nexus" / "schema" / "key"
     k2node = dict((f"/Script/BlueprintGraph.K2Node_{name}", dict(path=f"/Script/BlueprintGraph.K2Node_{name}", props=dict())) for name in HOSTS)
-    functions = {
+    functions = (
+    {
         ARRAY_CLEAR: dict(path=ARRAY_CLEAR, node_class="K2Node_CallArrayFunction", params=[dict(name="TargetArray")]),
         PRINT: dict(path=PRINT, node_class="K2Node_CallFunction", params=[dict(name="InString")]),
-    }
+    })
     publish(directory, "key", dict(k2node=k2node, functions=functions))
     return SchemaLock(directory, "key")
 

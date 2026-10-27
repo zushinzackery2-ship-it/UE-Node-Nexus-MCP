@@ -1,7 +1,7 @@
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-#include "Core/NexusWarningCapture.h"
+#include "Core/Warnings/NexusWarningCapture.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"

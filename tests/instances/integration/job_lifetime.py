@@ -17,6 +17,24 @@ from tests.instances.live.host import ROOT
 from tests.instances.live.stdio import connect
 
 
+def check_outside_mcp_jobs(manager, report):
+    """The shared Broker must run outside the SDK lifetime Job of both MCP processes."""
+    native = api()
+    handle = native.OpenProcess(0x1000, False, manager["pid"])
+    assert handle
+    try:
+        jobs = list(sdk_windows._process_jobs.items())
+        assert len(jobs) == 2, "both real MCP processes must have SDK lifetime Jobs"
+        report["sdk_job_pids"] = [process.pid for process, _ in jobs]
+        for _, sdk_job in jobs:
+            contained = w.BOOL()
+            assert native.IsProcessInJob(handle, int(sdk_job), ctypes.byref(contained))
+            assert not contained.value, "the shared Broker inherited an MCP lifetime Job"
+        report["outside_both_mcp_jobs"] = True
+    finally:
+        native.CloseHandle(handle)
+
+
 async def run(name):
     host = (ROOT / "build" / name).resolve()
     host.relative_to((ROOT / "build").resolve())
@@ -34,20 +52,7 @@ async def run(name):
                 manager = json.loads((root / "manager.json").read_text())["identity"]
                 report["manager"] = manager
                 await remaining.execute("bridge_instance_list")
-                native = api()
-                handle = native.OpenProcess(0x1000, False, manager["pid"])
-                assert handle
-                try:
-                    jobs = list(sdk_windows._process_jobs.items())
-                    assert len(jobs) == 2, "both real MCP processes must have SDK lifetime Jobs"
-                    report["sdk_job_pids"] = [process.pid for process, _ in jobs]
-                    for _, sdk_job in jobs:
-                        contained = w.BOOL()
-                        assert native.IsProcessInJob(handle, int(sdk_job), ctypes.byref(contained))
-                        assert not contained.value, "the shared Broker inherited an MCP lifetime Job"
-                    report["outside_both_mcp_jobs"] = True
-                finally:
-                    native.CloseHandle(handle)
+                check_outside_mcp_jobs(manager, report)
             assert is_alive(manager), "closing the creator's MCP Job terminated the shared Broker"
             await remaining.execute("bridge_instance_list")
             assert json.loads((root / "manager.json").read_text())["identity"] == manager

@@ -91,21 +91,6 @@ static UEdGraphPin* FindParameterMapInputPin(UNiagaraNode* Node)
     return Found ? *Found : nullptr;
 }
 
-static UEdGraphPin* FindParameterMapOutputPin(UNiagaraNode* Node)
-{
-    if (!Node)
-    {
-        return nullptr;
-    }
-    FPinCollectorArray Pins;
-    Node->GetOutputPins(Pins);
-    UEdGraphPin* const* Found = Pins.FindByPredicate([](UEdGraphPin* Pin)
-    {
-        return IsParameterMapPin(Pin);
-    });
-    return Found ? *Found : nullptr;
-}
-
 void GetOrderedModules(UNiagaraNodeOutput* Output, TArray<UNiagaraNodeFunctionCall*>& OutModules)
 {
     TSet<UNiagaraNode*> Visited;
@@ -209,32 +194,4 @@ void MarkSystemEdited(UNiagaraSystem* System)
     }
 }
 
-bool RemoveModulePreservingStack(UNiagaraNodeFunctionCall* Module)
-{
-    UEdGraph* Graph = Module ? Module->GetGraph() : nullptr;
-    UEdGraphPin* Input = Module ? FindParameterMapInputPin(Module) : nullptr;
-    UEdGraphPin* Output = Module ? FindParameterMapOutputPin(Module) : nullptr;
-    if (!Graph || !Input || !Output || Input->LinkedTo.Num() != 1 || Output->LinkedTo.Num() == 0)
-    {
-        return false;
-    }
-
-    UEdGraphPin* PreviousOutput = Input->LinkedTo[0];
-    TArray<UEdGraphPin*> NextInputs = Output->LinkedTo;
-    Graph->Modify();
-    Module->Modify();
-    Input->BreakAllPinLinks();
-    Output->BreakAllPinLinks();
-    for (UEdGraphPin* NextInput : NextInputs)
-    {
-        if (NextInput && PreviousOutput)
-        {
-            NextInput->BreakAllPinLinks();
-            PreviousOutput->MakeLinkTo(NextInput);
-        }
-    }
-    Graph->RemoveNode(Module);
-    Graph->NotifyGraphChanged();
-    return true;
-}
 }

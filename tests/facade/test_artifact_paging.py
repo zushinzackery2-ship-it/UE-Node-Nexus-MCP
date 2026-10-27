@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from ue_node_nexus_mcp import facade_artifact
-from ue_node_nexus_mcp.facade_state import facade_state
+from ue_node_nexus_mcp.facade import artifact as facade_artifact
+from ue_node_nexus_mcp.facade.state import facade_state
 from ue_node_nexus_mcp.server import ue_read
 
 

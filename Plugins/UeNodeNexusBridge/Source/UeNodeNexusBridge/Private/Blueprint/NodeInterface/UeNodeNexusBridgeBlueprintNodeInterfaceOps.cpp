@@ -6,7 +6,7 @@
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
 #include "NodeInterface/UeNodeNexusBridgeBlueprintNodeCompactJson.h"
-#include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
@@ -128,7 +128,8 @@ static TArray<FString> BlueprintParamLines(UEdGraphNode* Node)
 static TSharedPtr<FJsonObject> MakeBlueprintNodeData(UBlueprint* Blueprint, UEdGraph* Graph, UEdGraphNode* Node, const TSharedPtr<FJsonObject>& Payload, const FString& Format)
 {
     const FString Alias = BlueprintNodeAlias(Graph, Node);
-    TArray<FString> Header = {
+    TArray<FString> Header =
+    {
         FString::Printf(TEXT("Node.Name = %s"), *Alias),
         FString::Printf(TEXT("Node.Class = %s"), *ShortBlueprintNodeClass(Node)),
         FString::Printf(TEXT("Node.Id = %s"), *Alias),

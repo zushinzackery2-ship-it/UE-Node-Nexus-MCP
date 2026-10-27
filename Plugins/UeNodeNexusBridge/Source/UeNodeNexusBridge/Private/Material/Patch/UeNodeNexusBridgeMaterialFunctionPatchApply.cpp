@@ -1,7 +1,6 @@
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
 #include "Material/Creation/NexusMaterialExpressionCreate.h"
 #include "Material/ControlFlow/NexusMaterialControlFlow.h"
-#include "Material/ControlFlow/NexusMaterialControlFlow.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -9,7 +8,7 @@
 #include "MaterialExpressionIO.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeMaterialCustomParamApply.h"
+#include "Material/CustomParams/UeNodeNexusBridgeMaterialCustomParamApply.h"
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchContext.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"

@@ -145,7 +145,7 @@ def test_existing_mutually_referencing_blueprints_need_no_creation_order():
     a, _ = _document("/Game/A", "[asset]\nOther=/Game/B.B")
     b, _ = _document("/Game/B", "[asset]\nOther=/Game/A.A")
     documents = {"/Game/A.A": ("blueprint", a), "/Game/B.B": ("blueprint", b)}
-    assert order_assets(documents, required=set()) == ["/Game/A.A", "/Game/B.B"]
+    assert order_assets(documents, available=set(documents)) == ["/Game/A.A", "/Game/B.B"]
 
 
 def test_value_parser_ignores_prose_and_supports_wrapped_references():
@@ -162,7 +162,8 @@ def _typed_schema(tmp_path):
     from ue_node_nexus_mcp.transcode.schema.lock import SchemaLock
 
     directory = tmp_path / ".nexus" / "schema" / "key"
-    publish(directory, "key", dict(functions={
+    publish(directory, "key", dict(functions=
+    {
         "/Script/Engine.KismetStringLibrary.Concat_StrStr": dict(
             path="/Script/Engine.KismetStringLibrary.Concat_StrStr",
             params=[dict(name="A", dir="in", type=dict(category="string")),
@@ -209,11 +210,10 @@ def test_declaration_cycles_are_distinct_from_body_cycles():
     b, _ = _document("/Game/B", "[graph EventGraph]\ncall : CallFunction(/Game/A.A_C.Func)")
     documents: dict = {"/Game/A.A": ("blueprint", a), "/Game/B.B": ("blueprint", b)}
     with pytest.raises(SyncError) as caught:
-        order_assets(documents, required=set(("/Game/A.A", "/Game/B.B")))
+        order_assets(documents)
     assert caught.value.code == "declaration_cycle"
     # An object the editor already holds constrains no creation order.
-    assert order_assets(documents, required=set(("/Game/A.A", "/Game/B.B")),
-                        available={"/Game/B.B"}) == ["/Game/A.A", "/Game/B.B"]
+    assert order_assets(documents, available={"/Game/B.B"}) == ["/Game/A.A", "/Game/B.B"]
 
 
 def test_body_cycles_keep_the_general_rejection():
@@ -221,5 +221,5 @@ def test_body_cycles_keep_the_general_rejection():
     b, _ = _document("/Game/B", "[graph EventGraph]\ny : CallFunction(self.G, Target=/Game/A.A)")
     documents: dict = {"/Game/A.A": ("blueprint", a), "/Game/B.B": ("blueprint", b)}
     with pytest.raises(SyncError) as caught:
-        order_assets(documents, required=set(("/Game/A.A", "/Game/B.B")))
+        order_assets(documents)
     assert caught.value.code == "dependency_cycle"

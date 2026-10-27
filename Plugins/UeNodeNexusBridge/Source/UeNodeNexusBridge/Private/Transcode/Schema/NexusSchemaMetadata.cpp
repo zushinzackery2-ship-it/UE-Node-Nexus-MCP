@@ -9,7 +9,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "Materials/MaterialExpression.h"
 #include "UeNodeNexusBridgeTranscode.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge::Transcode

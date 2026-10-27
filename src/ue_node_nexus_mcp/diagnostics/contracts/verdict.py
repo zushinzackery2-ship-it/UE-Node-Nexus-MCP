@@ -1,6 +1,6 @@
 """Evaluate one completed PIE window without mixing query pages or history."""
 
-from ...diagnostic_counting import coerce_error_count
+from ..counting import coerce_error_count
 from math import isfinite
 
 

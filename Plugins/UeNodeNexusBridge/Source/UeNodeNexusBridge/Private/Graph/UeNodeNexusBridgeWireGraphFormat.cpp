@@ -13,7 +13,8 @@ FString ShortWireGraphTypeName(FString TypeName)
     TypeName.RemoveFromStart(TEXT("K2Node_"));
     TypeName.RemoveFromStart(TEXT("EdGraphNode_"));
 
-    static const TMap<FString, FString> Aliases = {
+    static const TMap<FString, FString> Aliases =
+    {
         {TEXT("ScalarParameter"), TEXT("SP")},
         {TEXT("TextureObjectParameter"), TEXT("TOP")},
         {TEXT("TextureSampleParameter2D"), TEXT("TSP2")},
@@ -78,7 +79,8 @@ FString ShortWireGraphPinName(FString PinName)
     PinName.ReplaceInline(TEXT("(MA)"), TEXT(""));
     PinName.ReplaceInline(TEXT("(V3)"), TEXT(""));
 
-    static const TMap<FString, FString> Aliases = {
+    static const TMap<FString, FString> Aliases =
+    {
         {TEXT("0"), TEXT("o")},
         {TEXT("Output"), TEXT("o")},
         {TEXT("OutputPin"), TEXT("o")},

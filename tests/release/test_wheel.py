@@ -14,8 +14,8 @@ def wheel(tmp_path, monkeypatch, extra=None):
     files = dict((f"transcode/push/{name}.py", b"pass\n")
                  for name in ("prepare", "apply", "commit", "diagnostics", "recovery"))
     files["__init__.py"] = b""
-    files["operations.json"] = json.dumps(dict(files=["operations/instances.json"])).encode()
-    files["operations/instances.json"] = b"{}"
+    files["registry/operations.json"] = json.dumps(dict(files=["operations/instances.json"])).encode()
+    files["registry/operations/instances.json"] = b"{}"
     path = tmp_path / "delivery.whl"
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("ue_node_nexus_mcp-0.6.0.dist-info/METADATA", "Version: 0.6.0\n")

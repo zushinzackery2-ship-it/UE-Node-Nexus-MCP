@@ -124,7 +124,7 @@ def observe(store, action, options):
     if action == "job_cancel" and record["status"] not in TERMINAL:
         record = update(store, identifier, cancel_requested=True)
         if record.get("task_id") and record["owner"]["pid"] == os.getpid():
-            from ....task_queue import task_cancel
+            from ....tasks.queue import task_cancel
 
             task_cancel(record["task_id"])
         record = store.record("sync_job", identifier)

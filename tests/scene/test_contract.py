@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from ue_node_nexus_mcp.build_info.contract import CONTRACT_VERSION, CORE_MODULE, GUARD_MODULE, VERSION, VFX_MODULE, compatibility
-from ue_node_nexus_mcp.payload_schema import payload_schema_for
+from ue_node_nexus_mcp.registry.payloads.schema import payload_schema_for
 
 
 def build_info():

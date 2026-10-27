@@ -2,7 +2,7 @@
 
 #include "InputAction.h"
 #include "K2Node_EnhancedInputAction.h"
-#include "UeNodeNexusBridgeBlueprintNodeCreateFields.h"
+#include "Blueprint/Creation/UeNodeNexusBridgeBlueprintNodeCreateFields.h"
 
 namespace UeNodeNexusBridge
 {

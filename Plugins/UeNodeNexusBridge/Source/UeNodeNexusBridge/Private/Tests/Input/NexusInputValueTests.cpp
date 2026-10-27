@@ -19,8 +19,8 @@
 #include "PackageTools.h"
 #include "Transcode/Commit/NexusPackageFiles.h"
 #include "UeNodeNexusBridgeTranscode.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "UObject/Package.h"
 #include "UObject/UnrealType.h"
 

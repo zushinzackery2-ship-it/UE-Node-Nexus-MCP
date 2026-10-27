@@ -1,8 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
-from ue_node_nexus_mcp import task_queue
-from ue_node_nexus_mcp.tools_facade import ue_execute
+from ue_node_nexus_mcp.tasks import queue as task_queue
+from ue_node_nexus_mcp.facade.entry import ue_execute
 from tests.support.bridges import RecordingBridge
 from tests.support.scopes import Scope
 

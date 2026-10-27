@@ -10,6 +10,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "src/ue_node_nexus_mcp"
+REGISTRY = PACKAGE / "registry"
 CORE = ROOT / "Plugins/UeNodeNexusBridge/Source/UeNodeNexusBridge"
 VFX = ROOT / "Plugins/UeNodeNexusVfxBridge/Source/UeNodeNexusVfxBridge"
 EXCLUDED = set(("__pycache__", "Intermediate", "Binaries"))
@@ -44,12 +45,12 @@ def check_imports(file: Path, tree: ast.AST, errors: list[str]) -> None:
 
 
 def operation_records() -> list[dict]:
-    manifest = json.loads((PACKAGE / "operations.json").read_text(encoding="utf-8"))
+    manifest = json.loads((REGISTRY / "operations.json").read_text(encoding="utf-8"))
     assert manifest["version"] == 2
     result = []
     for relative in manifest["files"]:
-        file = PACKAGE / relative
-        assert file.resolve().is_relative_to((PACKAGE / "operations").resolve())
+        file = REGISTRY / relative
+        assert file.resolve().is_relative_to((REGISTRY / "operations").resolve())
         result.extend(json.loads(file.read_text(encoding="utf-8"))["operations"])
     return result
 
@@ -62,10 +63,10 @@ def check_operations(records: list[dict], errors: list[str]) -> None:
         if row["kind"] not in ("read", "write") or row["risk"] not in ("low", "medium", "high"):
             errors.append(f"invalid operation metadata: {row['name']}")
     pattern = r'TEXT\("([a-z][a-z0-9_]*)"\)'
-    core_names = set(re.findall(pattern, (CORE / "Private/Core/UeNodeNexusBridgeOperationNames.cpp").read_text(encoding="utf-8")))
+    core_names = set(re.findall(pattern, (CORE / "Private/Core/Registry/UeNodeNexusBridgeOperationNames.cpp").read_text(encoding="utf-8")))
     handlers = set(re.findall(r'RegisterCoreOp\(TEXT\("([a-z][a-z0-9_]*)"\)',
-                             (CORE / "Private/Core/UeNodeNexusBridgeCoreOperationsRegistry.cpp").read_text(encoding="utf-8")))
-    auto_index = set(name for name in re.findall(pattern, (CORE / "Private/Core/UeNodeNexusBridgeAutoIndexDispatch.cpp").read_text(encoding="utf-8"))
+                             (CORE / "Private/Core/Registry/UeNodeNexusBridgeCoreOperationsRegistry.cpp").read_text(encoding="utf-8")))
+    auto_index = set(name for name in re.findall(pattern, (CORE / "Private/AutoIndex/UeNodeNexusBridgeAutoIndexDispatch.cpp").read_text(encoding="utf-8"))
                      if name.startswith("auto_index_"))
     vfx = set(re.findall(r'\{\s*TEXT\("([a-z][a-z0-9_]*)"\)', (VFX / "Private/Module/UeNodeNexusVfxBridgeModule.cpp").read_text(encoding="utf-8")))
     registries = dict(core=core_names, auto_index=auto_index, vfx=vfx)
@@ -81,6 +82,13 @@ def check_operations(records: list[dict], errors: list[str]) -> None:
         errors.append("core handlers differ from declared names: " + str(sorted(core_names ^ handlers)))
     if expected != core_names | auto_index | vfx:
         errors.append("Python/C++ operation contract differs: " + str(sorted(expected ^ (core_names | auto_index | vfx))))
+
+
+def thin_tools(tree: ast.AST) -> list[str]:
+    """Names of the functions decorated with thin_tool(...)."""
+    return [node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "thin_tool"
+                    for item in node.decorator_list)]
 
 
 def inspect_sources() -> dict:
@@ -101,10 +109,7 @@ def inspect_sources() -> dict:
                 continue
             python_count += 1
             check_imports(file, tree, errors)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "thin_tool" for item in node.decorator_list):
-                        facade_names.append(node.name)
+            facade_names.extend(thin_tools(tree))
         elif file.suffix in (".json", ".uplugin"):
             json.loads(source)
     expected_facades = set(("ue_context_get", "ue_capability_get", "ue_execute", "ue_read", "ue_diff_get", "ue_plan_validate", "ue_sync"))

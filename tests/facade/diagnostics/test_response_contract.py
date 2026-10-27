@@ -5,7 +5,7 @@ import pytest
 from tests.diagnostics.support.evidence import notice, read_response, response
 from tests.support.bridges import RoutingBridge
 from ue_node_nexus_mcp.server import ue_execute, ue_read
-from ue_node_nexus_mcp.facade_state import facade_state
+from ue_node_nexus_mcp.facade.state import facade_state
 
 ASSET = "/Game/CharacterPure/Runtime/Control/Camera/BPC_CP_Camera.BPC_CP_Camera"
 

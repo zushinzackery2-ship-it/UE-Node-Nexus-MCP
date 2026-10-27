@@ -1,7 +1,7 @@
 """A valid preflight must agree with the executor's field contract."""
 
-from ue_node_nexus_mcp.facade_plan import ue_plan_validate
-from ue_node_nexus_mcp.tools_facade import ue_execute
+from ue_node_nexus_mcp.facade.plan import ue_plan_validate
+from ue_node_nexus_mcp.facade.entry import ue_execute
 
 
 def test_plan_rejects_the_same_unknown_field_as_execute(all_features):

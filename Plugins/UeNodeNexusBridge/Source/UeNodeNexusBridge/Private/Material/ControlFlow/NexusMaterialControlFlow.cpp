@@ -7,7 +7,7 @@
 #include "Materials/MaterialExpressionExecBegin.h"
 #include "Materials/MaterialExpressionExecEnd.h"
 #include "Transcode/UeNodeNexusBridgeTranscode.h"
-#include "Transcode/UeNodeNexusBridgeTranscodeMaterialApply.h"
+#include "Transcode/Material/UeNodeNexusBridgeTranscodeMaterialApply.h"
 
 namespace UeNodeNexusBridge::Transcode
 {

@@ -4,7 +4,7 @@ import uuid
 import pytest
 
 from ue_node_nexus_mcp.coordination.pipe_server import PipeServer
-from ue_node_nexus_mcp.transport import named_pipe_transport
+from ue_node_nexus_mcp.bridge.transport import named_pipe_transport
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows named pipes")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ue_node_nexus_mcp.operation_registry import get_operation_spec, operation_specs
+from ue_node_nexus_mcp.registry.specs import get_operation_spec, operation_specs
 
 
 def test_registry_distinguishes_local_handlers_from_bridge_operations() -> None:

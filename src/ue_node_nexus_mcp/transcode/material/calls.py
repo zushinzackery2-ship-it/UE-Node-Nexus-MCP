@@ -10,11 +10,33 @@ from __future__ import annotations
 
 from ..storage.paths import object_path
 from ..diff.plan import AssetPlan, Verb
+from ..text.model import Section
 from .pins import is_function_call
 
 REFRESH = "refresh_function_calls"
 CONSUMER_KINDS = ("material", "material_function")
 WIRING = ("connect_pins", "disconnect_pins")
+
+
+def rebound_calls(local: Section, base: Section | None) -> frozenset[str]:
+    """Call nodes kept by id whose ``MaterialFunction`` changes.
+
+    Their ports belong to the new function, so the plan cuts every link they
+    carry before the rebind and makes each one again after it, resolved by name
+    on the new interface; an unchanged link text would otherwise keep the old
+    function's output index.
+    """
+    if base is None:
+        return frozenset()
+    before = dict((decl.id, called_function(decl)) for decl in base.decls() if decl.modifier is None
+                  and not decl.opaque and is_function_call(decl))
+    return frozenset(decl.id for decl in local.decls() if decl.modifier is None and not decl.opaque
+                     and is_function_call(decl) and decl.id in before and called_function(decl) != before[decl.id])
+
+
+def called_function(decl) -> str | None:
+    function = decl.keyed().get("MaterialFunction")
+    return object_path(function) if function else None
 
 
 def refresh_ops(functions) -> list[dict]:
@@ -43,8 +65,8 @@ def rebuild_wired_calls(graph, plan: AssetPlan) -> None:
     rolled back leaves it on the old ones, and the caller's own fix could then
     never connect. Rebuilding a node that is already current changes nothing.
     """
-    calls = dict((decl.id, object_path(decl.keyed()["MaterialFunction"])) for decl in graph.decls()
-                 if not decl.opaque and is_function_call(decl) and decl.keyed().get("MaterialFunction"))
+    calls = dict((decl.id, called_function(decl)) for decl in graph.decls()
+                 if not decl.opaque and is_function_call(decl) and called_function(decl))
     functions = set(calls[verb.args[key]] for verb in plan.verbs if verb.op in WIRING
                     for key in ("from", "to") if verb.args.get(key) in calls)
     if functions:

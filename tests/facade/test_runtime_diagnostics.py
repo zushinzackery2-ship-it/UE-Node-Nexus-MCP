@@ -48,7 +48,7 @@ def test_operation_runtime_notice_survives_default_summary(all_features, use_bri
 
 
 def test_large_diagnostic_detail_preserves_counts_and_paged_items(all_features, use_bridge, monkeypatch):
-    from ue_node_nexus_mcp import facade_response
+    from ue_node_nexus_mcp.facade import response as facade_response
 
     monkeypatch.setattr(facade_response, "LARGE_RESPONSE_INLINE_BYTE_LIMIT", 512)
     data = diagnostic_data()

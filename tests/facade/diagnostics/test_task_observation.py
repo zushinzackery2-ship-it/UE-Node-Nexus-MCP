@@ -2,7 +2,7 @@
 
 import pytest
 
-from ue_node_nexus_mcp import task_queue
+from ue_node_nexus_mcp.tasks import queue as task_queue
 from ue_node_nexus_mcp.diagnostics.contracts.observation import record
 from tests.diagnostics.support.evidence import read_response
 

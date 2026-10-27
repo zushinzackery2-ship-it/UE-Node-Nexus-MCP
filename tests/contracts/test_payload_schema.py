@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ue_node_nexus_mcp.contracts import ALL_OPERATIONS
-from ue_node_nexus_mcp.payload_schema import derive_schema, example_payload_for, payload_schema_for
+from ue_node_nexus_mcp.registry.contracts import ALL_OPERATIONS
+from ue_node_nexus_mcp.registry.payloads.schema import derive_schema, example_payload_for, payload_schema_for
 
 
 def sample_wrapper(asset_path: str, dry_run: bool = True) -> None:
@@ -11,14 +11,16 @@ def sample_wrapper(asset_path: str, dry_run: bool = True) -> None:
 def test_derive_schema_preserves_required_fields_and_defaults() -> None:
     schema = derive_schema(sample_wrapper)
 
-    assert schema == {
+    assert schema == (
+    {
         "type": "object",
-        "properties": {
+        "properties":
+        {
             "asset_path": {"type": "string"},
             "dry_run": {"type": "boolean", "default": True},
         },
         "required": ["asset_path"],
-    }
+    })
 
 
 def test_every_operation_exposes_an_object_schema_and_example() -> None:

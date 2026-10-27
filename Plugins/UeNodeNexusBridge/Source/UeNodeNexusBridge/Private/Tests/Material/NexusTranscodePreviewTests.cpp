@@ -8,7 +8,7 @@
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
-#include "Transcode/UeNodeNexusBridgeTranscodeMaterialApply.h"
+#include "Transcode/Material/UeNodeNexusBridgeTranscodeMaterialApply.h"
 #include "UeNodeNexusBridgeOperations.h"
 #include "UeNodeNexusBridgeTranscode.h"
 #include "UObject/StrongObjectPtr.h"

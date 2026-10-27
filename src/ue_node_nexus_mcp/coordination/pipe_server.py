@@ -7,7 +7,7 @@ import struct
 import threading
 
 from ..errors import BridgeError
-from ..transport import _win, decode_body, encode_frame, named_pipe_transport
+from ..bridge.transport import _win, decode_body, encode_frame, named_pipe_transport
 
 LOG = logging.getLogger(__name__)
 MAX_CONTROL_BYTES = 1024 * 1024

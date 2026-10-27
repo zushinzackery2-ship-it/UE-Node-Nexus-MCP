@@ -39,7 +39,7 @@ def test_added_function_in_existing_blueprint_orders_provider_before_consumer():
     assert plan.interface_changed
     documents = dict((("/Game/APawn.APawn", ("blueprint", consumer)),
                       ("/Game/ZMotor.ZMotor", ("blueprint", provider))))
-    assert order_assets(documents, set((plan.asset_path,))) == ["/Game/ZMotor.ZMotor", "/Game/APawn.APawn"]
+    assert order_assets(documents, available=set(("/Game/APawn.APawn",))) == ["/Game/ZMotor.ZMotor", "/Game/APawn.APawn"]
 
 
 def test_default_value_edit_does_not_create_an_api_dependency():

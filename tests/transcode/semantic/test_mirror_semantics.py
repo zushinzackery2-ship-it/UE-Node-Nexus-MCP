@@ -128,7 +128,8 @@ def test_a_data_input_still_takes_one_source():
 def with_cast(raw):
     """A cast whose result pin is wired, so the pin name reaches the link text."""
     graph = raw["blueprint"]["graphs"][0]
-    graph["nodes"].append({
+    graph["nodes"].append(
+    {
         "guid": "N-5", "class": "/Script/BlueprintGraph.K2Node_DynamicCast", "class_short": "DynamicCast",
         "x": 1200, "y": 0, "title": "Cast To Pawn", "enabled": True, "comment": "",
         "config": {"target_type": "/Script/Engine.Pawn"}, "props": [], "supported": True,

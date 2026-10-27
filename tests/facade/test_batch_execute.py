@@ -7,7 +7,7 @@ from typing import Any, Callable
 import pytest
 
 from ue_node_nexus_mcp import runtime
-from ue_node_nexus_mcp.tools_facade import ue_execute
+from ue_node_nexus_mcp.facade.entry import ue_execute
 
 from tests.support.bridges import RecordingBridge, SequencedBridge
 

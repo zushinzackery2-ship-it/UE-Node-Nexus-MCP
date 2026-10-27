@@ -28,7 +28,8 @@ def admitted(monkeypatch, rows):
 
 
 def test_changed_low_risk_dependencies_join_the_batch(monkeypatch):
-    rows = batch({
+    rows = batch(
+    {
         "/Game/MF_Base": unit("/Game/MF_Base"),
         "/Game/MF_Mask": unit("/Game/MF_Mask", ["/Game/MF_Base"]),
         "/Game/M_WPO": unit("/Game/M_WPO", ["/Game/MF_Mask"], rendering=True, kind="material"),
@@ -40,7 +41,8 @@ def test_changed_low_risk_dependencies_join_the_batch(monkeypatch):
 def test_unchanged_and_engine_dependencies_stay_in_the_baseline(monkeypatch):
     unchanged = unit("/Game/MF_Unchanged")
     unchanged["empty"] = True
-    rows = batch({
+    rows = batch(
+    {
         "/Game/MF_Unchanged": unchanged,
         "/Game/M_WPO": unit("/Game/M_WPO", ["/Game/MF_Unchanged", "/Game/MF_Stable",
                                           "/Engine/EngineMaterials/DefaultMaterial"], rendering=True, kind="material"),
@@ -49,14 +51,16 @@ def test_unchanged_and_engine_dependencies_stay_in_the_baseline(monkeypatch):
 
 
 def test_dependencies_outside_the_batch_are_not_admitted(monkeypatch):
-    rows = batch({
+    rows = batch(
+    {
         "/Game/MF_Risky": unit("/Game/MF_Risky", ["/Game/Missing"], rendering=True, kind="material"),
     }, ["/Game/MF_Risky"])
     assert admitted(monkeypatch, rows) == ["/Game/MF_Risky"]
 
 
 def test_batches_without_risk_start_no_worker(monkeypatch):
-    rows = batch({
+    rows = batch(
+    {
         "/Game/MF_Plain": unit("/Game/MF_Plain"),
         "/Game/M_LowRisk": unit("/Game/M_LowRisk", ["/Game/MF_Plain"], kind="material"),
     }, ["/Game/MF_Plain", "/Game/M_LowRisk"])

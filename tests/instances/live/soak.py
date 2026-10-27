@@ -15,7 +15,7 @@ from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from ue_node_nexus_mcp.instances.identity.processes import inspect_process, is_alive
 from ue_node_nexus_mcp.instances.identity.resources import sample
-from ue_node_nexus_mcp.bridge import UeBridgeClient
+from ue_node_nexus_mcp.bridge.client import UeBridgeClient
 import ue_node_nexus_mcp
 from .host import prepare
 from .protection import close_clean

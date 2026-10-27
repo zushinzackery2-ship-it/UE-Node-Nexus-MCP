@@ -7,8 +7,8 @@
 #include "GameFramework/Actor.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "UeNodeNexusBridgeTranscode.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "UObject/Package.h"
 
 using namespace UeNodeNexusBridge;

@@ -3,8 +3,8 @@
 #include "Blueprint/Delegates/NexusDelegateBinding.h"
 #include "K2Node_BaseMCDelegate.h"
 #include "UeNodeNexusBridgeTranscode.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 
 namespace UeNodeNexusBridge::Transcode
 {

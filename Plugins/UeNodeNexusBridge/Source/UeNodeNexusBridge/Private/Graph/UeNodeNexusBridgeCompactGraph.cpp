@@ -9,14 +9,16 @@ namespace UeNodeNexusBridge
 static TSharedPtr<FJsonObject> MakeCompactColumns()
 {
     TSharedPtr<FJsonObject> Columns = MakeShared<FJsonObject>();
-    Columns->SetArrayField(TEXT("nodes"), {
+    Columns->SetArrayField(TEXT("nodes"),
+    {
         MakeShared<FJsonValueString>(TEXT("id")),
         MakeShared<FJsonValueString>(TEXT("class")),
         MakeShared<FJsonValueString>(TEXT("name")),
         MakeShared<FJsonValueString>(TEXT("x")),
         MakeShared<FJsonValueString>(TEXT("y"))
     });
-    Columns->SetArrayField(TEXT("pins"), {
+    Columns->SetArrayField(TEXT("pins"),
+    {
         MakeShared<FJsonValueString>(TEXT("id")),
         MakeShared<FJsonValueString>(TEXT("node")),
         MakeShared<FJsonValueString>(TEXT("dir")),
@@ -24,11 +26,13 @@ static TSharedPtr<FJsonObject> MakeCompactColumns()
         MakeShared<FJsonValueString>(TEXT("type")),
         MakeShared<FJsonValueString>(TEXT("default"))
     });
-    Columns->SetArrayField(TEXT("links"), {
+    Columns->SetArrayField(TEXT("links"),
+    {
         MakeShared<FJsonValueString>(TEXT("from_pin")),
         MakeShared<FJsonValueString>(TEXT("to_pin"))
     });
-    Columns->SetArrayField(TEXT("params"), {
+    Columns->SetArrayField(TEXT("params"),
+    {
         MakeShared<FJsonValueString>(TEXT("node")),
         MakeShared<FJsonValueString>(TEXT("name")),
         MakeShared<FJsonValueString>(TEXT("type")),

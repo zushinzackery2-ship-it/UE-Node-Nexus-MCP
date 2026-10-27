@@ -14,6 +14,8 @@ def nested_value(text, contract):
 def normalize_reflected(text, contract):
     kind = contract.get("kind")
     source = str(text).strip()
+    if kind == "array" and not source:
+        return "()"
     if kind == "object":
         return normalize(source, "object")
     if kind not in ("struct", "array") or not source.startswith("(") or not source.endswith(")"):

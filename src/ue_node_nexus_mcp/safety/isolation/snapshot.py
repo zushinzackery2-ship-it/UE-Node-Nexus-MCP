@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
+import logging
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -11,6 +13,8 @@ import stat
 from ...instances.errors import require
 from ...transcode.storage.io import digest
 from .descriptors import read_descriptor
+
+LOG = logging.getLogger(__name__)
 
 DIRECTORIES = ("Content", "Config", "Plugins", "Source", "Binaries", "Resources", "Shaders", "Tools")
 IGNORED = frozenset(("Saved", "Intermediate", "DerivedDataCache", ".git", "__pycache__", ".auto-index-mcp"))
@@ -101,14 +105,6 @@ def content_candidates(project: Path, entries: list[dict]) -> set[str]:
     return targets
 
 
-LINKED_ROOTS = frozenset(("Content", "Tools", "Shaders", "Resources"))
-
-
-def linkable(relative: str) -> bool:
-    """Only data trees are linked: the editor discovers plugins and project binaries by their real path."""
-    return relative.split("/", 1)[0] in LINKED_ROOTS
-
-
 def overlay_enabled(candidates) -> bool:
     """Links are the default; ``UE_NEXUS_VALIDATION_COPY=full`` forces a real copy."""
     return bool(candidates) and os.environ.get("UE_NEXUS_VALIDATION_COPY", "overlay").lower() != "full"
@@ -125,84 +121,32 @@ def copy_project(plan: dict, target: Path, *, baseline=None, candidates=()) -> d
         ancestor = ancestor.parent
     real_path(ancestor)
     from .capacity import estimate
+    from .copying import apply_layout
+    from .layout import copy_layout
 
     overlay = overlay_enabled(candidates)
-    budget = estimate(plan, target, ALLOCATION_FACTOR, WORKING_BYTES, baseline,
-                      subset=set(candidates) if overlay else None)
-    available = shutil.disk_usage(ancestor).free
-    require(available >= budget["required_bytes"], "isolation_disk_budget",
+    layout = copy_layout(plan, set(candidates) if overlay else None)
+    budget = estimate(plan, target, ALLOCATION_FACTOR, WORKING_BYTES, baseline, layout=layout)
+    LOG.info("snapshot admission target=%s free=%s required=%s copies=%s links=%s measured_at=%s",
+             target, budget["free_bytes"], budget["required_bytes"], budget["copied_files"],
+             budget["linked_files"], budget["measured_at"])
+    require(budget["free_bytes"] >= budget["required_bytes"], "isolation_disk_budget",
             "snapshot requires target-volume allocation, live baseline and 1 GiB working space",
-            available=available, **budget)
+            available=budget["free_bytes"], **budget)
     target.mkdir(parents=True)
-    records, copied_files, copied_bytes, linked_files, linked_directories = [], 0, 0, 0, 0
-    protected, linked = set(), set()
-    if overlay:
-        for key in candidates:
-            parent = PurePosixPath(key).parent
-            while parent.as_posix() not in ("", "."):
-                protected.add(parent.as_posix())
-                parent = parent.parent
-    for path in plan["files"]:
-        real_path(path)
-        before = path.stat()
-        relative = path.relative_to(source)
-        key = relative.as_posix()
-        parent = relative.parent.as_posix() if relative.parent.as_posix() != "." else ""
-        destination = target / relative
-        shadow = None
-        if overlay:
-            shadow = parent if parent in linked else next((name for name in linked if parent.startswith(name + "/")), None)
-        if overlay and key not in candidates and shadow is not None:
-            # Already reachable through a linked directory: never write inside it.
-            records.append(dict(path=key, size=before.st_size, modified_ns=before.st_mtime_ns, sha256=None, link=shadow))
-            linked_files += 1
-            continue
-        if overlay and key not in candidates and linkable(key):
-            source_dir = source / relative.parent
-            destination_dir = destination.parent
-            if parent and parent not in protected and not os.path.lexists(destination_dir):
-                destination_dir.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    os.symlink(source_dir, destination_dir, target_is_directory=True)
-                except OSError:
-                    pass
-                else:
-                    # One link per directory beats one per package; the worker only saves candidates.
-                    linked.add(parent)
-                    linked_directories += 1
-                    records.append(dict(path=key, size=before.st_size, modified_ns=before.st_mtime_ns, sha256=None, link=parent))
-                    linked_files += 1
-                    continue
-            destination_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                os.symlink(path, destination, target_is_directory=False)
-            except OSError:
-                pass
-            else:
-                records.append(dict(path=key, size=before.st_size, modified_ns=before.st_mtime_ns, sha256=None, link=str(path)))
-                linked_files += 1
-                continue
-        require(shadow is None, "isolation_path_rejected",
-                "a copied package must not live under a linked directory", path=str(path))
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        checksum = hashlib.sha256()
-        with path.open("rb") as reader, destination.open("xb") as writer:
-            while chunk := reader.read(1024 * 1024):
-                writer.write(chunk)
-                checksum.update(chunk)
-        after = path.stat()
-        require((before.st_size, before.st_mtime_ns) == (after.st_size, after.st_mtime_ns)
-                and destination.stat().st_size == before.st_size, "isolation_source_changed",
-                "project input changed while copying", path=str(path))
-        records.append(dict(path=key, size=before.st_size, modified_ns=before.st_mtime_ns, sha256=checksum.hexdigest()))
-        copied_files += 1
-        copied_bytes += before.st_size
+    try:
+        summary = apply_layout(layout, source, target)
+    except OSError as error:
+        if error.errno != errno.ENOSPC and getattr(error, "winerror", None) != 112:
+            raise
+        require(False, "isolation_disk_budget", "target volume ran out of space after admission",
+                admission=budget, current_free_bytes=shutil.disk_usage(ancestor).free,
+                target_path=str(target), reason=str(error))
     descriptor = target / Path(plan["project"]).name
     return dict(project=str(descriptor), source=plan["project"], source_root=str(source),
-                files=records, additional=plan.get("additional", []), bytes=copied_bytes,
-                copied_files=copied_files, linked_files=linked_files, linked_directories=linked_directories,
+                **summary, additional=plan.get("additional", []),
                 copy_mode="overlay" if overlay else "full",
-                snapshot_digest=digest(records), disk_budget=budget, baseline="saved_disk")
+                snapshot_digest=digest(summary["files"]), disk_budget=budget, baseline="saved_disk")
 
 
 def unchanged(snapshot: dict) -> bool:

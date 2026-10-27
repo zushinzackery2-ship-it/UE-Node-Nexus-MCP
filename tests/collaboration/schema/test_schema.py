@@ -254,7 +254,8 @@ def test_a_preview_pins_every_schema_record_it_used(project):
 
 def test_module_records_stay_explicit_about_missing_metadata(tmp_path):
     directory = tmp_path / ".nexus" / "schema" / "key"
-    publish(directory, "key", dict(niagara_modules={
+    publish(directory, "key", dict(niagara_modules=
+    {
         "/Game/VFX/Modules/Gravity.Gravity": dict(short="Gravity", inputs=[dict(name="Strength", type="float", default="980")]),
         "/Game/Other/Gravity.Gravity": dict(short="Gravity", inputs=[]),
         "/Game/VFX/Modules/Drag.Drag": dict(short="Drag", inputs=[], conditions=dict(static_switch="bUseDrag")),

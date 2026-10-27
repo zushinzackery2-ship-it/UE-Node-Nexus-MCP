@@ -2,7 +2,7 @@
 
 import json
 
-from ...diagnostic_counting import coerce_error_count
+from ..counting import coerce_error_count
 
 LEVELS = dict(fatal=4, error=3, warning=2, info=1)
 STRING_LIMITS = dict(message=384, asset_path=256, node=128, graph=128, function=128,

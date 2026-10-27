@@ -5,9 +5,9 @@
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
+#include "Blueprint/Graphs/UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialGraphSnapshot.h"
+#include "Material/Graph/UeNodeNexusBridgeMaterialGraphSnapshot.h"
 
 namespace UeNodeNexusBridge
 {

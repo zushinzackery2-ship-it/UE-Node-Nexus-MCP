@@ -4,7 +4,7 @@
 
 #include "Engine/Blueprint.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "UeNodeNexusBridgeAssetCreateHelpers.h"
+#include "Assets/Creation/UeNodeNexusBridgeAssetCreateHelpers.h"
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
 

@@ -6,8 +6,8 @@ from copy import deepcopy
 import re
 
 from ...instances.errors import InstanceError, require
-from ...operation_validation import validate_operation_call
-from ...payload_schema import payload_schema_for
+from ...registry.validation import validate_operation_call
+from ...registry.payloads.schema import payload_schema_for
 
 SUPPORTED = frozenset(("transcode_apply", "vfx_transcode_apply", "scene_apply", "asset_create", "asset_compile",
                        "asset_validate", "asset_save", "graph_patch_apply", "graph_build_apply", "node_create",

@@ -38,8 +38,12 @@ finally:
 Snapshot/history reads synchronize with the render thread. Sample at the
 cadence required by the diagnostic task.
 
-Capture filenames are basenames of at most 100 alphanumeric, underscore or
-hyphen characters. Frame modulo is 0–7 and timeout is 1–120 seconds. Poll the
+Capture filenames are names without directory or extension: 1–100 ASCII
+letters, digits, underscores or hyphens (`^[A-Za-z0-9_-]{1,100}$`). The editor
+writes `Saved/Screenshots/<platform>/<filename>_<capture_id>.png`. Frame modulo
+is 0–7 and timeout is 1–120 seconds; a rejected request names the violated
+field in `error_details.field` (`viewport_capture` returns it in
+`error.details.field`). Poll the
 admitted `receipt_path` until `completed` or `failed`. Success includes verified
 PNG dimensions, byte count, SHA-1, `requested_phase` and exact `render_state`.
 Only one screenshot is admitted. The request uses the target's normal draw.

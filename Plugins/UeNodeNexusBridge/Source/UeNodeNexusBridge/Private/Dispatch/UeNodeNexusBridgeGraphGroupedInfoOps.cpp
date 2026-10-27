@@ -6,19 +6,19 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
-#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
+#include "Blueprint/Graphs/UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "MaterialExpressionIO.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
 #include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
-#include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeGraphIndexedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceShared.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
-#include "UeNodeNexusBridgeMaterialNodeFilter.h"
+#include "Material/Graph/UeNodeNexusBridgeMaterialNodeFilter.h"
 
 namespace UeNodeNexusBridge
 {
@@ -155,7 +155,8 @@ TSharedPtr<FJsonObject> BuildMaterialGraphGroupedData(UMaterial* Material, const
     const TArray<UMaterialExpression*> Expressions = FilterMaterialNodes(Material, AllExpressions, MaxNodes, Payload, MatchedNodes);
     for (UMaterialExpression* Expression : Expressions)
     {
-        TArray<FString> Parts = {
+        TArray<FString> Parts =
+        {
             GroupedParamText(BuildMaterialExpressionParams(Expression), TEXT("value")),
             MaterialGroupedInputs(Material, Expression)
         };
@@ -204,7 +205,8 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionGraphGroupedData(UMaterialFunction*
     const TArray<UMaterialExpression*> Expressions = FilterMaterialNodes(Function, AllExpressions, MaxNodes, Payload, MatchedNodes);
     for (UMaterialExpression* Expression : Expressions)
     {
-        TArray<FString> Parts = {
+        TArray<FString> Parts =
+        {
             GroupedParamText(BuildMaterialExpressionParams(Expression), TEXT("value")),
             MaterialFunctionGroupedInputs(Function, Expression)
         };
@@ -248,7 +250,8 @@ TSharedPtr<FJsonObject> BuildBlueprintGraphGroupedData(UBlueprint* Blueprint, UE
             continue;
         }
 
-        TArray<FString> Parts = {
+        TArray<FString> Parts =
+        {
             GroupedParamText(BuildBlueprintNodeParams(Node), TEXT("default_value")),
             BlueprintGroupedInputs(Graph, Node)
         };

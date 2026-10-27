@@ -2,9 +2,9 @@
 
 #include "EdGraphSchema_K2.h"
 #include "K2Node_EditablePinBase.h"
-#include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 
 namespace UeNodeNexusBridge::Transcode
 {

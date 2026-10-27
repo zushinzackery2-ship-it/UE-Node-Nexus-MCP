@@ -27,14 +27,20 @@ def entity_contract(entity):
 def merged_bindings(semantic, snapshots):
     result = dict()
     for snapshot in snapshots:
-        if not snapshot:
-            continue
-        for scope, section in snapshot["semantic"]["sections"].items():
-            candidates = semantic["sections"].get(scope, dict()).get("entities", dict())
-            for identifier, entity in section["entities"].items():
-                candidate = candidates.get(identifier)
-                if candidate and entity_contract(candidate) == entity_contract(entity):
-                    binding = snapshot.get("bindings", dict()).get(identifier)
-                    if binding is not None:
-                        result[identifier] = binding
+        if snapshot:
+            result.update(kept_bindings(semantic, snapshot))
     return result
+
+
+def kept_bindings(semantic, snapshot):
+    """Bindings of the snapshot's entities whose contract the merged semantic still declares."""
+    kept = dict()
+    bindings = snapshot.get("bindings", dict())
+    for scope, section in snapshot["semantic"]["sections"].items():
+        candidates = semantic["sections"].get(scope, dict()).get("entities", dict())
+        for identifier, entity in section["entities"].items():
+            candidate = candidates.get(identifier)
+            binding = bindings.get(identifier)
+            if candidate and binding is not None and entity_contract(candidate) == entity_contract(entity):
+                kept[identifier] = binding
+    return kept

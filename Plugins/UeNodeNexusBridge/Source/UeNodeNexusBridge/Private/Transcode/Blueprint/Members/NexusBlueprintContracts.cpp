@@ -1,5 +1,5 @@
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
-#include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"

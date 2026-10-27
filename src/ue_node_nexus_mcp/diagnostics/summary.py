@@ -1,6 +1,6 @@
 """Preserve diagnostic evidence through compact MCP responses."""
 
-from ..diagnostic_counting import coerce_error_count
+from .counting import coerce_error_count
 from .contracts.response import attach as attach_contract
 from .contracts.samples import ranked
 

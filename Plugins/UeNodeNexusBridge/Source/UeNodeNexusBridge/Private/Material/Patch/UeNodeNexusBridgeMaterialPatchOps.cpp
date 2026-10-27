@@ -9,7 +9,7 @@
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialBuildSpecNormalize.h"
+#include "Material/BuildSpec/UeNodeNexusBridgeMaterialBuildSpecNormalize.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchApplyOps.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchContext.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
@@ -19,11 +19,6 @@
 
 namespace UeNodeNexusBridge
 {
-bool IsMaterialPatchAsset(UObject* Asset)
-{
-    return Cast<UMaterial>(Asset) != nullptr;
-}
-
 TSharedPtr<FJsonObject> HandleMaterialGraphPatch(const FString& Operation, const FString& RequestId, UMaterial* Material, const TSharedPtr<FJsonObject>& Payload)
 {
     bool bDryRun = true;

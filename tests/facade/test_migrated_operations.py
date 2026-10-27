@@ -7,7 +7,7 @@ from typing import Callable
 
 import pytest
 
-from ue_node_nexus_mcp.tools_facade import ue_execute, ue_read
+from ue_node_nexus_mcp.facade.entry import ue_execute, ue_read
 
 from tests.support.bridges import RecordingBridge
 
@@ -47,7 +47,7 @@ def test_asset_dependencies_reads_through_ue_read(all_features: None, use_bridge
 
 
 def _project_logs(tmp_path: Path, monkeypatch) -> Path:
-    from ue_node_nexus_mcp import tools_system
+    from ue_node_nexus_mcp.tools import system as tools_system
     from ue_node_nexus_mcp.instances.broker.client import BrokerClient
     from ue_node_nexus_mcp.instances.session.binding import EditorSession
 

@@ -14,7 +14,8 @@ from ue_node_nexus_mcp.transcode.text.parser import parse
 @pytest.fixture
 def schema(tmp_path):
     directory = tmp_path / "schema"
-    publish(directory, "key", dict(k2node={
+    publish(directory, "key", dict(k2node=
+    {
         "/Script/BlueprintGraph.K2Node_GetArrayItem": dict(
             path="/Script/BlueprintGraph.K2Node_GetArrayItem", dynamic_pins=True,
             pin_aliases={"TargetArray": "Array", "Index": "Dimension 1", "Item": "Output"}),

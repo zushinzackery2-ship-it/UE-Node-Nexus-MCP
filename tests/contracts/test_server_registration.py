@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from ue_node_nexus_mcp.contracts import THIN_MCP_OPERATIONS
+from ue_node_nexus_mcp.registry.contracts import THIN_MCP_OPERATIONS
 from ue_node_nexus_mcp.server import mcp
 
 

@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-from ue_node_nexus_mcp import task_queue
+from ue_node_nexus_mcp.tasks import queue as task_queue
 from ue_node_nexus_mcp.transcode.collaboration.jobs import service
 from ue_node_nexus_mcp.transcode.collaboration.jobs.state import update
 from ue_node_nexus_mcp.transcode.collaboration.store import Store

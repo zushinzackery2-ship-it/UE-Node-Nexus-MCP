@@ -7,10 +7,10 @@ from pathlib import Path
 import time
 import uuid
 
-from ue_node_nexus_mcp.bridge import UeBridgeClient
+from ue_node_nexus_mcp.bridge.client import UeBridgeClient
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
-from ue_node_nexus_mcp.transport import named_pipe_transport
+from ue_node_nexus_mcp.bridge.transport import named_pipe_transport
 from .host import ROOT
 
 

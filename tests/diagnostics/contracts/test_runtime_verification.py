@@ -2,7 +2,7 @@
 
 import pytest
 
-from ue_node_nexus_mcp.facade_execute import execute_operation
+from ue_node_nexus_mcp.facade.execute import execute_operation
 from ue_node_nexus_mcp.safety.runtime import tools
 from tests.diagnostics.contracts.test_runtime_verdict import runtime_data
 

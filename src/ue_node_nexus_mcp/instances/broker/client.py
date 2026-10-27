@@ -10,7 +10,7 @@ import uuid
 
 from ...errors import BridgeError
 from ...coordination.file_lock import LockBusy
-from ...transport import named_pipe_transport
+from ...bridge.transport import named_pipe_transport
 from ..errors import InstanceError, require
 from ..identity.paths import pipe_address, runtime_root
 from ..identity.processes import inspect_process

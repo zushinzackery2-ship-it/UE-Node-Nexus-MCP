@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ue_node_nexus_mcp.diagnostics_logs import parse_material_log_diagnostics
+from ue_node_nexus_mcp.diagnostics.runtime.enrich import parse_material_log_diagnostics
 
 
 def _compile_line(asset_path: str, second: int) -> str:

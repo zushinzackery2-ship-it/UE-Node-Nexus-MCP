@@ -8,7 +8,7 @@
 #include "ScopedTransaction.h"
 #include "Templates/UniquePtr.h"
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeMaterialFunctionBuildSpecNormalize.h"
+#include "Material/BuildSpec/UeNodeNexusBridgeMaterialFunctionBuildSpecNormalize.h"
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchContext.h"
 #include "Patch/UeNodeNexusBridgeMaterialFunctionPatchShared.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"

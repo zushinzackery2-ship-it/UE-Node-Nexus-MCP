@@ -7,12 +7,12 @@ import time
 import uuid
 
 import ue_node_nexus_mcp
-from ue_node_nexus_mcp.bridge import UeBridgeClient
+from ue_node_nexus_mcp.bridge.client import UeBridgeClient
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.errors import InstanceError
 from ue_node_nexus_mcp.instances.identity.processes import is_alive
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
-from ue_node_nexus_mcp.transport import named_pipe_transport
+from ue_node_nexus_mcp.bridge.transport import named_pipe_transport
 from tests.instances.support.threads import paused_game_thread
 from .host import prepare
 from .protection import close_clean, require, save_asset, wait_state

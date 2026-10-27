@@ -3,7 +3,7 @@
 from pathlib import Path
 import os
 
-from ...task_queue import wait_for_task
+from ...tasks.queue import wait_for_task
 from ..collaboration.jobs.service import submit, observe
 from ..collaboration.store import Store
 from ..collaboration.report.options import JOB_ACTIONS

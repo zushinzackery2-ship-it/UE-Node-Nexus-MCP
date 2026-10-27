@@ -164,10 +164,10 @@ def test_only_a_unit_that_calls_the_function_itself_is_left_to_its_own_apply(mon
         assert operation == "asset_referencers_get" and payload["asset_path"] == FUNCTION
         return dict(ok=True, data=dict(items=registry))
 
-    batch = dict(errors=dict(), selected=[MATERIAL, SECOND], units={
-        MATERIAL: dict(asset=MATERIAL, kind="material", empty=False, dependencies=[FUNCTION]),
-        SECOND: dict(asset=SECOND, kind="", empty=True, dependencies=[]),
-    })
+    units = dict()
+    units[MATERIAL] = dict(asset=MATERIAL, kind="material", empty=False, dependencies=[FUNCTION])
+    units[SECOND] = dict(asset=SECOND, kind="", empty=True, dependencies=[])
+    batch = dict(errors=dict(), selected=[MATERIAL, SECOND], units=units)
 
     failures = refresh.callers(bridge, None, None, FUNCTION, "source", dict(), batch, dict(), set((MATERIAL, SECOND)))
 
@@ -178,12 +178,11 @@ def test_new_output_survives_replanning_against_a_stale_catalog(project):
     ue, env, workspace = project
     ue.referencers[FUNCTION] = [package(MATERIAL)]
     catalog = Path(env["UE_NEXUS_TRANSCODE_DIR"]) / ".nexus/schema" / SCHEMA_KEY
-    publish(catalog, SCHEMA_KEY, dict(material_functions={
-        FUNCTION: dict(inputs=[dict(name="A"), dict(name="B")], outputs=[dict(name="Result")])
-    }, material_expression={"MaterialExpressionFunctionOutput": dict(
-        path="/Script/Engine.MaterialExpressionFunctionOutput", inputs=[""], outputs=[],
-        props=dict(OutputName=dict(type="name", default="Result"), SortPriority=dict(type="number", default="0")))
-    }), incremental=True)
+    functions = {FUNCTION: dict(inputs=[dict(name="A"), dict(name="B")], outputs=[dict(name="Result")])}
+    output = dict(path="/Script/Engine.MaterialExpressionFunctionOutput", inputs=[""], outputs=[],
+                  props=dict(OutputName=dict(type="name", default="Result"), SortPriority=dict(type="number", default="0")))
+    expressions = dict(MaterialExpressionFunctionOutput=output)
+    publish(catalog, SCHEMA_KEY, dict(material_functions=functions, material_expression=expressions), incremental=True)
     file = Path(workspace["file_paths"][FUNCTION])
     file.write_text(file.read_text(encoding="utf-8") + "\nout_skirt : FunctionOutput(OutputName=Skirt, SortPriority=7)\nin_a -> out_skirt\n", encoding="utf-8")
     edit(project, MATERIAL, "constant -> add.B\n", "constant -> add.B\nfn_ws_s.Skirt -> out.Roughness\n")

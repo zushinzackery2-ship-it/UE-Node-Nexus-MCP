@@ -38,5 +38,6 @@ void GetOrderedModules(UNiagaraNodeOutput* Output, TArray<UNiagaraNodeFunctionCa
 TSharedPtr<FJsonObject> ModuleToJson(int32 EmitterIndex, UNiagaraNodeOutput* Output, int32 ModuleIndex, UNiagaraNodeFunctionCall* Module);
 TSharedPtr<FJsonValue> ModuleToRow(int32 EmitterIndex, UNiagaraNodeOutput* Output, int32 ModuleIndex, UNiagaraNodeFunctionCall* Module);
 void MarkSystemEdited(UNiagaraSystem* System);
-bool RemoveModulePreservingStack(UNiagaraNodeFunctionCall* Module);
+bool RemoveModuleFromNativeStack(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
+    UNiagaraNodeFunctionCall& Module, FString& Error);
 }

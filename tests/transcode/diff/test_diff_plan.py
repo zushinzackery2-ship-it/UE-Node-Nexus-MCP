@@ -7,13 +7,14 @@ from ue_node_nexus_mcp.transcode.text.parser import parse
 
 from ..fixtures import blueprint_raw, material_instance_raw, material_raw, material_function_raw, niagara_raw
 
-KINDS = {
+KINDS = (
+{
     material_function_raw: "material_function",
     material_raw: "material",
     material_instance_raw: "material_instance",
     blueprint_raw: "blueprint",
     niagara_raw: "niagara_system",
-}
+})
 
 
 def _base_and_text(factory):
@@ -133,8 +134,6 @@ def test_blueprint_edits_produce_typed_verbs() -> None:
 def test_blueprint_opaque_nodes_can_move_but_not_change() -> None:
     plan = _plan_for(blueprint_raw, lambda text: text.replace("@opaque(/Script/BlueprintGraph.K2Node_Timeline) @ 900,0", "@opaque(/Script/BlueprintGraph.K2Node_Timeline) @ 950,20"))
     assert [verb.to_payload() for verb in plan.verbs] == [{"op": "set_node_position", "id": "timeline", "x": 950, "y": 20, "graph": "EventGraph", "line": plan.verbs[0].line}]
-    plan = _plan_for(blueprint_raw, lambda text: text + "\n[graph EventGraph]\n")
-    assert plan.has_errors or plan.verbs == [] or True
     plan = _plan_for(blueprint_raw, lambda text: text.replace("print_string.then -> timeline.Play\n", "print_string.then -> timeline.Play\nnew_tl : @opaque(/Script/BlueprintGraph.K2Node_Timeline) @ 1,1\n"))
     assert any(item.code == "opaque_create" for item in plan.diagnostics)
 
@@ -160,8 +159,16 @@ def test_niagara_edits() -> None:
     assert not plan.has_errors, [item.format() for item in plan.diagnostics]
 
 
-def test_niagara_linked_input_cannot_be_created_from_text() -> None:
+def test_niagara_user_link_generates_native_binding_verb() -> None:
     plan = _plan_for(niagara_raw, lambda text: text.replace("InitializeParticle(Lifetime=2)", "InitializeParticle(Lifetime=@link(User.Life))"))
+    assert not plan.has_errors, [item.format() for item in plan.diagnostics]
+    links = [verb.args for verb in plan.verbs if verb.op == "ns_module_input_link"]
+    assert links == [dict(emitter="Sparks", group="ParticleSpawn", id="initialize_particle",
+                          input="Lifetime", parameter="User.Life")]
+
+
+def test_niagara_non_user_link_remains_read_only() -> None:
+    plan = _plan_for(niagara_raw, lambda text: text.replace("InitializeParticle(Lifetime=2)", "InitializeParticle(Lifetime=@link(Emitter.Life))"))
     assert any(item.code == "unsupported_edit" for item in plan.diagnostics)
 
 

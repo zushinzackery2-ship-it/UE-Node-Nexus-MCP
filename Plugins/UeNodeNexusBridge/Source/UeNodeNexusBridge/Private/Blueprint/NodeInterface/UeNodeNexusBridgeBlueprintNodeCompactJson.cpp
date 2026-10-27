@@ -5,7 +5,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
-#include "Blueprint/UeNodeNexusBridgeBlueprintPinDefaults.h"
+#include "Blueprint/Nodes/UeNodeNexusBridgeBlueprintPinDefaults.h"
 
 namespace UeNodeNexusBridge
 {

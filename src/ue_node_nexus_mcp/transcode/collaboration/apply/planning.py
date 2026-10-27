@@ -15,7 +15,7 @@ from ..semantic.decode import physical_ids, to_document
 from ..semantic.normalization import normalize_snapshot
 from ..semantic.validation import validate
 from .observe import scene_selector
-from .deletions import execution_order, prerequisites
+from .ordering import execution_order, prerequisites
 
 
 def snapshot(workspace, identifier: str | None) -> dict | None:
@@ -274,8 +274,7 @@ def preflight_candidates(workspace, merged, observation, assets, options):
                 raise SyncError("dependency_not_selected", "select the required new assets", dict(assets=sorted(absent)))
         except SyncError as exc:
             errors[asset] = dict(code=exc.code, message=str(exc), details=exc.details)
-    required = set(asset for asset, item in units.items() if item.get("interface_changed") or asset not in current or item["kind"] == "material")
-    ordered = execution_order(workspace, units, current, documents, required, assets)
+    ordered = execution_order(workspace, units, current, documents, assets)
     for asset in ordered:
         blocked = prerequisites(units[asset]) & errors.keys() if asset in units else set()
         if blocked:

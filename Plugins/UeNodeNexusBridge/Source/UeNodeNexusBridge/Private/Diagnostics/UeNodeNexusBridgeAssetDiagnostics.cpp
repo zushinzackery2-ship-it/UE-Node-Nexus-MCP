@@ -13,7 +13,6 @@
 #include "Material/Preview/NexusFunctionPreview.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceConstant.h"
-#include "RHI.h"
 #include "Misc/UObjectToken.h"
 #include "UeNodeNexusBridgeJson.h"
 
@@ -33,27 +32,6 @@ FString SeverityToString(EMessageSeverity::Type Severity)
     }
     return TEXT("info");
 }
-}
-
-TArray<FString> CollectMaterialCompileErrors(UMaterialInterface* MaterialInterface)
-{
-    TArray<FString> CompileErrors;
-    if (MaterialInterface == nullptr)
-    {
-        return CompileErrors;
-    }
-
-    FMaterialResource* MaterialResource = MaterialInterface->GetMaterialResource(GMaxRHIFeatureLevel);
-    if (MaterialResource == nullptr)
-    {
-        return CompileErrors;
-    }
-
-    for (const FString& CompileError : MaterialResource->GetCompileErrors())
-    {
-        CompileErrors.AddUnique(CompileError);
-    }
-    return CompileErrors;
 }
 
 void AddMaterialCompileDiagnostics(const TArray<FString>& CompileErrors, const FString& AssetPath, TArray<TSharedPtr<FJsonValue>>& Diagnostics)

@@ -40,17 +40,20 @@ def test_call_bridge_does_not_retry_other_errors(use_bridge: Callable) -> None:
 
 
 def test_streaming_suspended_save_preserves_retry_contract(use_bridge: Callable) -> None:
-    failure: dict[str, Any] = {
+    failure: dict[str, Any] = (
+    {
         "ok": False,
-        "error": {
+        "error":
+        {
             "code": "save_blocked_asset_streaming_suspended",
             "message": "asset streaming is suspended",
         },
-        "data": {
+        "data":
+        {
             "save_ready": False,
             "retryable": True,
         },
-    }
+    })
     bridge = use_bridge(SequencedBridge([failure]))
 
     response = runtime.call_bridge("asset_save", {"asset_path": "/Game/A.A"})

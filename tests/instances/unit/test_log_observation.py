@@ -2,7 +2,7 @@
 
 import time
 
-from ue_node_nexus_mcp import tools_system
+from ue_node_nexus_mcp.tools import system as tools_system
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from tests.instances.support.sdk import LocalBroker
 from .test_session import ready

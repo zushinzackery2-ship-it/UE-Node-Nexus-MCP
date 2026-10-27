@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from tests.collaboration.fake_bridge import ProtocolUe
 from tests.diagnostics.support.evidence import notice
 from ue_node_nexus_mcp.diagnostics.contracts.observation import capture, fields, record
-from ue_node_nexus_mcp.tools_sync import _finish
+from ue_node_nexus_mcp.facade.sync import _finish
 from ue_node_nexus_mcp.transcode.collaboration.jobs.service import report
 from ue_node_nexus_mcp.transcode.push.diagnostics import apply_diagnostics
 from ue_node_nexus_mcp.transcode.push.model import PushResult

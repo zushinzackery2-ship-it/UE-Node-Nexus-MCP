@@ -36,8 +36,10 @@ def test_class_aliases_answer_to_path_real_name_and_stripped_form(tmp_path):
     (NiagaraComponent, MaterialExpressionConstant) without their own name.
     """
     directory = tmp_path / ".nexus" / "schema" / "key"
-    publish(directory, "key", {
-        "component": {
+    publish(directory, "key",
+    {
+        "component":
+        {
             "/Script/Niagara.NiagaraComponent": dict(path="/Script/Niagara.NiagaraComponent", props=dict()),
             "/Script/Engine.StaticMeshComponent": dict(path="/Script/Engine.StaticMeshComponent", props=dict()),
         },

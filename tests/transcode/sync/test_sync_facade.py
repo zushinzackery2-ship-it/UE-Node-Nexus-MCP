@@ -6,11 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from ue_node_nexus_mcp import runtime, tools_sync
-from ue_node_nexus_mcp.contracts import DEFAULT_HIDDEN_OPERATIONS, THIN_MCP_OPERATIONS
-from ue_node_nexus_mcp.operation_registry import get_operation_spec
-from ue_node_nexus_mcp.tools_sync import ue_sync
-from ue_node_nexus_mcp.workflow_guides import load_guide, search_guides
+from ue_node_nexus_mcp import runtime
+from ue_node_nexus_mcp.facade import sync as tools_sync
+from ue_node_nexus_mcp.registry.contracts import DEFAULT_HIDDEN_OPERATIONS, THIN_MCP_OPERATIONS
+from ue_node_nexus_mcp.registry.specs import get_operation_spec
+from ue_node_nexus_mcp.facade.sync import ue_sync
+from ue_node_nexus_mcp.guides.catalog import load_guide, search_guides
 from ue_node_nexus_mcp.transcode.sync.lifecycle import instance_manager
 from ue_node_nexus_mcp.instances.errors import InstanceError
 

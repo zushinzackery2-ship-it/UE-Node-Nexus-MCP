@@ -6,7 +6,7 @@ import pytest
 
 from tests.collaboration.support.recovery import MATERIAL, call, edit, lose_publication, project as project
 from tests.diagnostics.support.evidence import notice
-from ue_node_nexus_mcp import task_queue
+from ue_node_nexus_mcp.tasks import queue as task_queue
 from ue_node_nexus_mcp.transcode.collaboration.jobs import service
 from ue_node_nexus_mcp.transcode.collaboration.store import Store
 

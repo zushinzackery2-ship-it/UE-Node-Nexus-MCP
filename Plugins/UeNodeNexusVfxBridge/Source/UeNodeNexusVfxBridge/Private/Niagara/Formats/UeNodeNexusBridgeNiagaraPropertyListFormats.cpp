@@ -1,13 +1,11 @@
 #include "UeNodeNexusBridgeNiagaraPropertyListFormats.h"
 
 #include "UeNodeNexusBridgeJson.h"
-#include "UeNodeNexusBridgeNiagaraIndexedFormat.h"
+#include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
 
 #include "Dom/JsonValue.h"
 #include "UObject/UnrealType.h"
-
-#include <initializer_list>
 
 namespace UeNodeNexusBridge::NiagaraPropertyListFormats
 {
@@ -31,16 +29,6 @@ void AddObjectIdentity(UObject* Object, TSharedPtr<FJsonObject> Data)
     Data->SetStringField(TEXT("object_path"), Object ? Object->GetPathName() : FString());
     Data->SetStringField(TEXT("object_name"), Object ? Object->GetName() : FString());
     Data->SetStringField(TEXT("class_path"), Object && Object->GetClass() ? Object->GetClass()->GetPathName() : FString());
-}
-
-static void AddColumns(TSharedPtr<FJsonObject> Data, std::initializer_list<const TCHAR*> Columns)
-{
-    TArray<TSharedPtr<FJsonValue>> Values;
-    for (const TCHAR* Column : Columns)
-    {
-        Values.Add(MakeShared<FJsonValueString>(FString(Column)));
-    }
-    Data->SetArrayField(TEXT("columns"), Values);
 }
 
 static void CollectPropertyNames(const TSharedPtr<FJsonObject>& Payload, TArray<FString>& OutPropertyNames)
@@ -105,19 +93,19 @@ static TSharedPtr<FJsonObject> BuildIndexedData(UObject* Object, const TArray<TS
         {
             EncodedRows.Add(FString::Printf(
                 TEXT("%s:%d"),
-                *NiagaraIndexedFormat::EscapeToken(Row[0]->AsString()),
-                NiagaraIndexedFormat::DictIndex(TypeDict, Types, Row[1]->AsString())));
+                *EscapeIndexedToken(Row[0]->AsString()),
+                DictIndex(TypeDict, Types, Row[1]->AsString())));
         }
         else
         {
-            EncodedRows.Add(NiagaraIndexedFormat::EscapeToken(Row[0]->AsString()));
+            EncodedRows.Add(EscapeIndexedToken(Row[0]->AsString()));
         }
     }
 
-    FString Text = FString::Printf(TEXT("G:%s|niagara|properties|%d\n"), *NiagaraIndexedFormat::EscapeToken(Object ? Object->GetPathName() : FString()), EncodedRows.Num());
+    FString Text = FString::Printf(TEXT("G:%s|niagara|properties|%d\n"), *EscapeIndexedToken(Object ? Object->GetPathName() : FString()), EncodedRows.Num());
     if (bIncludeTypes)
     {
-        Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("T:"), Types);
+        Text += JoinDictionaryLine(TEXT("T:"), Types);
     }
     Text += TEXT("P:") + FString::Join(EncodedRows, TEXT("|")) + TEXT("\n");
 
@@ -130,7 +118,7 @@ static TSharedPtr<FJsonObject> BuildIndexedData(UObject* Object, const TArray<TS
         Data->SetNumberField(TEXT("type_count"), Types.Num());
     }
     Data->SetBoolField(TEXT("value_omitted"), true);
-    NiagaraIndexedFormat::SetTextPayload(Data, Text);
+    SetTextPayload(Data, Text);
     return Data;
 }
 
@@ -216,7 +204,7 @@ TSharedPtr<FJsonObject> BuildObjectPropertiesData(
     if (!bFull)
     {
         Data->SetStringField(TEXT("format"), CompactFormatName);
-        AddColumns(Data, { TEXT("name"), TEXT("type"), TEXT("value") });
+        SetColumns(Data, { TEXT("name"), TEXT("type"), TEXT("value") });
     }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());

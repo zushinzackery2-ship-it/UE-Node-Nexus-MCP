@@ -4,7 +4,7 @@ from struct import pack
 
 import pytest
 
-from ue_node_nexus_mcp.operation_validation import unknown_field_error
+from ue_node_nexus_mcp.registry.validation import unknown_field_error
 from ue_node_nexus_mcp.transcode.text.numbers import normalize_number
 from ue_node_nexus_mcp.transcode.text.parser import parse
 from ue_node_nexus_mcp.transcode.sync.dependencies import document_dependencies

@@ -2,7 +2,7 @@
 
 #include "NexusBlueprintSignaturePins.h"
 #include "K2Node_CustomEvent.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
 
 namespace UeNodeNexusBridge::Transcode
 {

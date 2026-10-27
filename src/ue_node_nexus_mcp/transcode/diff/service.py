@@ -6,7 +6,7 @@ from .blueprint import diff_blueprint
 from .common import diff_prop_section
 from .graph import diff_graph_section
 from .niagara import diff_niagara
-from ..material.calls import rebuild_wired_calls
+from ..material.calls import rebound_calls, rebuild_wired_calls
 from ..material.custom_inputs import rewire_inputs
 from ..text.model import Document, Section
 from ..storage.paths import object_path
@@ -35,7 +35,7 @@ def build_plan(local: Document, base: Document | None, kind: str, ids: dict[str,
         diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
         local_graph = local.section("graph") or Section(name="graph")
         base_graph = base.section("graph") if base else None
-        diff_graph_section(local_graph, base_graph, plan, kind, schema=schema)
+        diff_graph_section(local_graph, base_graph, plan, kind, schema=schema, rebound=rebound_calls(local_graph, base_graph))
         rebuild_wired_calls(local_graph, plan)
         rewire_inputs(local_graph, plan)
         if kind == "material_function":

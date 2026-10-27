@@ -6,8 +6,8 @@ from typing import Callable
 
 import pytest
 
-from ue_node_nexus_mcp import tools_blueprints, tools_project
-from ue_node_nexus_mcp.tools_facade import ue_execute, ue_read
+from ue_node_nexus_mcp.tools import blueprints as tools_blueprints, project as tools_project
+from ue_node_nexus_mcp.facade.entry import ue_execute, ue_read
 
 from tests.support.bridges import RecordingBridge
 
@@ -33,12 +33,7 @@ def test_input_action_create_wrapper_defaults_to_safe_dry_run(all_features: None
     assert result["ok"] is True
     operation, payload = bridge.calls[0]
     assert operation == "input_action_create"
-    assert payload == {
-        "asset_path": "/Game/Input/IA_Jump",
-        "value_type": "bool",
-        "dry_run": True,
-        "save": False,
-    }
+    assert payload == dict(asset_path="/Game/Input/IA_Jump", value_type="bool", dry_run=True, save=False)
 
 
 def test_mapping_context_reads_through_ue_read(all_features: None, use_bridge: Callable) -> None:

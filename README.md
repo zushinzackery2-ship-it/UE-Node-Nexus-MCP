@@ -53,7 +53,7 @@ UE 材质、蓝图等资产包含大量节点、引脚和属性。传统的 MCP 
 
 隔离副本目录可用 `UE_NEXUS_VALIDATION_DIR` 配置。容量预算包含目标卷实际分配、脏包快照与工作余量；确认结束的工程副本集中到该目录的 `.del`，回执和生命周期日志保留在原验证目录，供检查和手动删除。
 
-七个 MCP 门面保持不变。实例管理通过 `ue_execute` 的 `bridge_instance_*` 操作提供，协作通过 `ue_sync` 扩展动作提供。内部操作默认索引不列出，仍可按名查询 schema 和调用。入口为 [operations.json](src/ue_node_nexus_mcp/operations.json)，具体定义在 [operations/](src/ue_node_nexus_mcp/operations/) 内按能力组维护。
+七个 MCP 门面保持不变。实例管理通过 `ue_execute` 的 `bridge_instance_*` 操作提供，协作通过 `ue_sync` 扩展动作提供。内部操作默认索引不列出，仍可按名查询 schema 和调用。入口为 [registry/operations.json](src/ue_node_nexus_mcp/registry/operations.json)，具体定义在 [registry/operations/](src/ue_node_nexus_mcp/registry/operations/) 内按能力组维护。
 
 ---
 
@@ -235,6 +235,8 @@ UE-Node-Nexus-MCP/
 ├── Plugins/                 Guard、Core、VFX 原生模块
 ├── src/ue_node_nexus_mcp/    门面、实例、诊断、隔离与文本协作
 ├── tests/                   单元、编译、性能与独立 UE 验收
+├── TestProjects/            本地 UE 验收工程（不随仓库）
+├── scripts/                 本机维护与更新脚本（不随仓库）
 ├── skill/                   随包 Agent skill
 └── release/                 身份核验、打包与安装说明
 ```

@@ -4,6 +4,9 @@
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
 #include "UeNodeNexusBridgeSaveResult.h"
 #include "UeNodeNexusBridgeNiagaraModuleStack.h"
+#include "Binding/NexusNiagaraInputBinding.h"
+#include "Binding/NexusNiagaraInputMetadata.h"
+#include "UeNodeNexusVfxTranscode.h"
 
 #include "Dom/JsonValue.h"
 #include "EdGraph/EdGraph.h"
@@ -11,12 +14,12 @@
 #include "EdGraphSchema_Niagara.h"
 #include "NiagaraEmitterHandle.h"
 #include "NiagaraGraph.h"
-#include "NiagaraNode.h"
 #include "NiagaraNodeFunctionCall.h"
+#include "NiagaraNodeOutput.h"
+#include "NiagaraScript.h"
 #include "NiagaraScriptVariable.h"
 #include "NiagaraSystem.h"
 #include "ViewModels/Stack/NiagaraParameterHandle.h"
-#include "ViewModels/Stack/NiagaraStackGraphUtilities.h"
 
 namespace UeNodeNexusBridge
 {
@@ -24,7 +27,6 @@ namespace
 {
 struct FModuleInputRecord
 {
-    FNiagaraVariable Variable;
     FGuid VariableGuid;
     FString Name;
     FString ShortName;
@@ -33,6 +35,7 @@ struct FModuleInputRecord
     FString OverrideValueText;
     bool bHasOverride = false;
     bool bOverrideLinked = false;
+    bool bStatic = false;
 };
 
 FString StripModuleNamespace(const FName Name)
@@ -48,32 +51,8 @@ bool InputNameMatches(const FModuleInputRecord& Input, const FString& Name)
         || Input.ShortName.Equals(Name, ESearchCase::IgnoreCase);
 }
 
-UEdGraphPin* FindOverridePinByName(UNiagaraNodeFunctionCall* Module, const FName PinName)
-{
-    UEdGraph* Graph = Module ? Module->GetGraph() : nullptr;
-    if (!Graph)
-    {
-        return nullptr;
-    }
-
-    for (UEdGraphNode* Node : Graph->Nodes)
-    {
-        if (!Node)
-        {
-            continue;
-        }
-        for (UEdGraphPin* Pin : Node->Pins)
-        {
-            if (Pin && Pin->Direction == EGPD_Input && Pin->PinName.IsEqual(PinName, ENameCase::IgnoreCase))
-            {
-                return Pin;
-            }
-        }
-    }
-    return nullptr;
-}
-
-void GatherModuleInputs(UNiagaraNodeFunctionCall* Module, TArray<FModuleInputRecord>& OutInputs)
+void GatherModuleInputs(FNiagaraEmitterHandle* Emitter, UNiagaraNodeOutput* Output,
+    UNiagaraNodeFunctionCall* Module, TArray<FModuleInputRecord>& OutInputs)
 {
     UNiagaraGraph* CalledGraph = Module ? Module->GetCalledGraph() : nullptr;
     if (!CalledGraph)
@@ -81,38 +60,44 @@ void GatherModuleInputs(UNiagaraNodeFunctionCall* Module, TArray<FModuleInputRec
         return;
     }
 
-    const UEdGraphSchema_Niagara* Schema = GetDefault<UEdGraphSchema_Niagara>();
     for (const TPair<FNiagaraVariable, TObjectPtr<UNiagaraScriptVariable>>& Pair : CalledGraph->GetAllMetaData())
     {
         const FNiagaraVariable& Variable = Pair.Key;
         const FString Name = Variable.GetName().ToString();
-        if (!Name.StartsWith(TEXT("Module.")))
+        if (!VfxTranscode::IsAuthoredModuleInput(Variable, Pair.Value))
         {
             continue;
         }
 
         FModuleInputRecord Record;
-        Record.Variable = Variable;
         Record.Name = Name;
         Record.ShortName = StripModuleNamespace(Variable.GetName());
         Record.TypeName = Variable.GetType().GetName();
+        Record.bStatic = Pair.Value && Pair.Value->GetIsStaticSwitch();
+        Record.DefaultValueText = VfxTranscode::ModuleInputDefaultText(Variable, Pair.Value);
         if (Pair.Value)
         {
             Record.VariableGuid = Pair.Value->Metadata.GetVariableGuid();
-            if (const uint8* DefaultData = Pair.Value->GetDefaultValueData())
-            {
-                FNiagaraVariable DefaultVariable(Variable.GetType(), Variable.GetName());
-                DefaultVariable.SetData(DefaultData);
-                Schema->TryGetPinDefaultValueFromNiagaraVariable(DefaultVariable, Record.DefaultValueText);
-            }
         }
 
         const FNiagaraParameterHandle AliasedHandle = FNiagaraParameterHandle::CreateAliasedModuleParameterHandle(FNiagaraParameterHandle(Variable.GetName()), Module);
-        if (UEdGraphPin* OverridePin = FindOverridePinByName(Module, AliasedHandle.GetParameterHandleString()))
+        if (UEdGraphPin* OverridePin = VfxTranscode::FindModuleOverridePin(*Module, AliasedHandle.GetParameterHandleString()))
         {
             Record.bHasOverride = true;
             Record.bOverrideLinked = OverridePin->LinkedTo.Num() > 0;
             Record.OverrideValueText = OverridePin->DefaultValue;
+        }
+        else if (!Record.bStatic && Emitter && Output)
+        {
+            FNiagaraVariable RapidVariable;
+            UNiagaraScript* Script = nullptr;
+            if (VfxTranscode::ResolveRapidIterationInput(*Emitter, Output->GetUsage(), Output->GetUsageId(),
+                Module, Record.ShortName, RapidVariable, Script)
+                && Script->RapidIterationParameters.IndexOf(RapidVariable) != INDEX_NONE)
+            {
+                Record.bHasOverride = true;
+                Record.OverrideValueText = VfxTranscode::ParameterValueText(Script->RapidIterationParameters, RapidVariable);
+            }
         }
         OutInputs.Add(MoveTemp(Record));
     }
@@ -129,6 +114,7 @@ TSharedPtr<FJsonObject> InputToJson(const FModuleInputRecord& Input)
     Json->SetBoolField(TEXT("has_override"), Input.bHasOverride);
     Json->SetBoolField(TEXT("override_linked"), Input.bOverrideLinked);
     Json->SetStringField(TEXT("override_value_text"), Input.OverrideValueText);
+    Json->SetBoolField(TEXT("static"), Input.bStatic);
     return Json;
 }
 
@@ -175,7 +161,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleInputsGet(const FString& Operation, c
     }
 
     TArray<FModuleInputRecord> Inputs;
-    GatherModuleInputs(Module, Inputs);
+    GatherModuleInputs(Emitter, NiagaraModuleStack::ResolveOutputNode(Emitter, Payload->GetStringField(TEXT("usage"))), Module, Inputs);
 
     TArray<TSharedPtr<FJsonValue>> Items;
     for (const FModuleInputRecord& Input : Inputs)
@@ -218,9 +204,10 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleInputsSet(const FString& Operation, c
     Payload->TryGetBoolField(TEXT("save"), bSave);
 
     TArray<FModuleInputRecord> Inputs;
-    GatherModuleInputs(Module, Inputs);
+    GatherModuleInputs(Emitter, NiagaraModuleStack::ResolveOutputNode(Emitter, Payload->GetStringField(TEXT("usage"))), Module, Inputs);
     TArray<TSharedPtr<FJsonValue>> Items;
     bool bChanged = false;
+    VfxTranscode::FInputBindingContext Bindings;
 
     for (const TSharedPtr<FJsonValue>& Value : *Params)
     {
@@ -246,28 +233,24 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleInputsSet(const FString& Operation, c
             return MakeInvalidInputResponse(Operation, RequestId, FString::Printf(TEXT("module input not found: %s"), *Name));
         }
 
-        const FNiagaraParameterHandle AliasedHandle = FNiagaraParameterHandle::CreateAliasedModuleParameterHandle(FNiagaraParameterHandle(Match->Variable.GetName()), Module);
-        UEdGraphPin* ExistingPin = FindOverridePinByName(Module, AliasedHandle.GetParameterHandleString());
-        const FString Before = ExistingPin ? ExistingPin->DefaultValue : Match->DefaultValueText;
-        if (!bDryRun && Before != ValueText)
+        const FString Before = Match->bHasOverride ? Match->OverrideValueText : Match->DefaultValueText;
+        VfxTranscode::FInputBindingError Error;
+        bool bInputChanged = false;
+        if (!VfxTranscode::ApplyNativeInput(*System, *Emitter, *Module, Name, ValueText,
+            TEXT("ns_module_input_set"), bDryRun, Bindings, bInputChanged, Error))
         {
-            UEdGraphPin& OverridePin = FNiagaraStackGraphUtilities::GetOrCreateStackFunctionInputOverridePin(*Module, AliasedHandle, Match->Variable.GetType(), Match->VariableGuid, FGuid());
-            OverridePin.Modify();
-            OverridePin.DefaultValue = ValueText;
-            if (UNiagaraNode* OwningNode = Cast<UNiagaraNode>(OverridePin.GetOwningNode()))
-            {
-                OwningNode->MarkNodeRequiresSynchronization(TEXT("MCP module input value changed"), true);
-            }
-            NiagaraModuleStack::MarkSystemEdited(System);
-            bChanged = true;
+            TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+            Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(Error.Code, Error.Message));
+            return Response;
         }
+        bChanged |= bInputChanged;
 
         TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
         Item->SetStringField(TEXT("name"), Match->Name);
         Item->SetStringField(TEXT("short_name"), Match->ShortName);
         Item->SetStringField(TEXT("before_value_text"), Before);
         Item->SetStringField(TEXT("after_value_text"), bDryRun ? Before : ValueText);
-        Item->SetBoolField(TEXT("changed"), Before != ValueText);
+        Item->SetBoolField(TEXT("changed"), bInputChanged);
         Items.Add(MakeShared<FJsonValueObject>(Item));
     }
 
@@ -283,6 +266,7 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleInputsSet(const FString& Operation, c
     Data->SetBoolField(TEXT("saved"), bSaved);
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());
+    Data->SetArrayField(TEXT("native_input_results"), Bindings.Results);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);

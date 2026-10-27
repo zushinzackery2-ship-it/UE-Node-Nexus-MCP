@@ -10,9 +10,9 @@
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
-#include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "UeNodeNexusBridgeTranscode.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
 #include "UeNodeNexusBridgeDiagnostics.h"
 
 using namespace UeNodeNexusBridge;

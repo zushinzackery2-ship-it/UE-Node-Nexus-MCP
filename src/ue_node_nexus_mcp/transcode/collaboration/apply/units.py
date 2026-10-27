@@ -6,7 +6,7 @@ from ...material.calls import changed_calls
 from ...material.interfaces import publish_observed
 from ...errors import SyncError
 from . import refresh, transactions
-from .deletions import prerequisites
+from .ordering import prerequisites
 from ..jobs.state import checkpoint
 
 
@@ -102,7 +102,9 @@ def changed_closure(planned: dict, failures: dict, root: str):
 
     Only units this batch already plans are included: unchanged assets stay in
     the live-memory baseline exactly as before, and a failed unit cannot be
-    reproduced, so its consumer is left to its own admission at its turn.
+    reproduced, so its consumer is left to its own admission at its turn. The
+    content sources reach past unchanged assets, such as a function the batch
+    changes behind an instance's unchanged parent.
     """
     seen, pending = set(), [root]
     while pending:
@@ -116,6 +118,7 @@ def changed_closure(planned: dict, failures: dict, root: str):
             continue
         seen.add(asset)
         pending.extend(item["dependencies"])
+        pending.extend(item.get("sources", ()))
     return seen
 
 
@@ -154,6 +157,7 @@ def run_unit(bridge, context, workspace, asset: str, source: str, candidate: str
     published = publish_verified(bridge, context, workspace, record)
     transactions.adopt(observation, record, published, workspace.history)
     rows = [dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published,
+                 **(dict(deleted=True) if item["payload"].get("delete_asset") or item["payload"].get("delete_scene") else dict()),
                  **(dict(safety_validation=safety) if safety is not None else dict()),
                  **(dict(risk_unvalidated=risks) if risks else dict()), **refreshed)]
     if item.get("interface_changed"):

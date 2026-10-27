@@ -1,5 +1,6 @@
 #include "UeNodeNexusVfxTranscode.h"
 #include "UeNodeNexusCollaboration.h"
+#include "Binding/NexusNiagaraInputMetadata.h"
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -70,13 +71,16 @@ TSharedPtr<FJsonObject> BuildModuleSignatures()
         for (const TPair<FNiagaraVariable, TObjectPtr<UNiagaraScriptVariable>>& Pair : Graph->GetAllMetaData())
         {
             FString Name = Pair.Key.GetName().ToString();
-            if (!Name.RemoveFromStart(TEXT("Module.")))
+            if (!IsAuthoredModuleInput(Pair.Key, Pair.Value))
             {
                 continue;
             }
+            Name.RemoveFromStart(TEXT("Module."));
             TSharedPtr<FJsonObject> Input = MakeShared<FJsonObject>();
             Input->SetStringField(TEXT("name"), Name);
             Input->SetStringField(TEXT("type"), FriendlyTypeName(Pair.Key.GetType()));
+            Input->SetBoolField(TEXT("static"), Pair.Value && Pair.Value->GetIsStaticSwitch());
+            Input->SetStringField(TEXT("default"), ModuleInputDefaultText(Pair.Key, Pair.Value));
             Inputs.Add(MakeShared<FJsonValueObject>(Input));
         }
         TSharedPtr<FJsonObject> Record = MakeShared<FJsonObject>();

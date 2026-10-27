@@ -5,8 +5,8 @@ import copy
 import jsonschema
 import pytest
 
-from ue_node_nexus_mcp.contracts import BRIDGE_OPERATIONS
-from ue_node_nexus_mcp.payload_schema import example_payload_for, payload_schema_for
+from ue_node_nexus_mcp.registry.contracts import BRIDGE_OPERATIONS
+from ue_node_nexus_mcp.registry.payloads.schema import example_payload_for, payload_schema_for
 
 
 def test_geometry_discovered_and_example_valid():

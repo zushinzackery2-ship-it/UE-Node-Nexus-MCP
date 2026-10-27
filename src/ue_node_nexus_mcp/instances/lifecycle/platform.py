@@ -12,7 +12,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from ...errors import BridgeError
-from ...transport import named_pipe_transport
+from ...bridge.transport import named_pipe_transport
 from ..errors import InstanceError
 from ..identity.paths import project_identity
 from ..identity.processes import inspect_process, is_alive

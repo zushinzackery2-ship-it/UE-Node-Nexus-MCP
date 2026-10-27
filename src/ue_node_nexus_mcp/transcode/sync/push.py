@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 
 from ..errors import Diagnostic
-from ..storage.paths import display_path
+from ..storage.paths import asset_relative, display_path
 from ..push.apply import accept_unchanged, apply_item
 from ..push.model import Prepared, PushOptions, PushResult, row
 from ..push.prepare import prepare_item
 from .state import SyncState
-from .dependencies import document_dependencies, order_assets
-from .files import mirrored_assets
+from .dependencies import content_sources, document_dependencies, order_assets
+from .files import base_document, load_base, mirrored_assets
 from .project import BridgeCall, ProjectContext, ensure_root_registered
 from ..errors import SyncError
 from .status import AssetStatus, query_ue
@@ -44,6 +44,14 @@ def _missing_dependencies(bridge: BridgeCall, context: ProjectContext, selected:
     return external - set(infos)
 
 
+def _held(context: ProjectContext):
+    """The (kind, document) of the last synced base: what the editor holds outside the batch."""
+    def resolve(asset: str):
+        base = load_base(context.project, asset) if asset_relative(asset) is not None else None
+        return (str(base.get("kind", "")), base_document(base, context.schema)) if base else None
+    return resolve
+
+
 def push_assets(bridge: BridgeCall, context: ProjectContext, state: SyncState, statuses: list[AssetStatus], options: PushOptions) -> PushResult:
     result = PushResult()
     prepared: dict[str, Prepared] = dict()
@@ -58,16 +66,18 @@ def push_assets(bridge: BridgeCall, context: ProjectContext, state: SyncState, s
         return result
     documents = dict((asset, (item.status.kind, item.document)) for asset, item in prepared.items())
     dependencies = dict((asset, document_dependencies(item.document, item.status.kind, context.schema)) for asset, item in prepared.items())
-    required = set(asset for asset, item in prepared.items() if item.plan.creates_asset or item.status.kind in ("material_function", "material_instance"))
+    sources = content_sources(documents, _held(context), context.schema)
     # The editor already holds these assets and this publication does not move
-    # their interfaces, so no consumer has to wait for their creation.
+    # their interfaces, so no consumer has to wait for their creation; a content
+    # source is still applied before what reads it.
     available = set(asset for asset, item in prepared.items()
                     if not item.plan.creates_asset and not item.plan.interface_changed and item.status.ue is not None)
-    order = order_assets(documents, required, available, context.schema)
+    order = order_assets(documents, available, context.schema, sources)
+    prerequisites = dict((asset, dependencies[asset] | sources.get(asset, set())) for asset in prepared)
     blocked = set(entry["asset"] for entry in result.rows if entry["action"] in FAILED_ACTIONS)
     missing = _missing_dependencies(bridge, context, set(status.asset_path for status in statuses), dependencies, state)
     for asset in order:
-        unavailable = sorted(dependencies[asset] & (blocked | missing))
+        unavailable = sorted(prerequisites[asset] & (blocked | missing))
         if unavailable:
             code = "dependency_not_selected" if set(unavailable) & missing else "dependency_failed"
             _failure(context, prepared[asset].status, result, SyncError(code, "blocked by: " + ", ".join(unavailable)), "blocked")
@@ -92,7 +102,7 @@ def push_assets(bridge: BridgeCall, context: ProjectContext, state: SyncState, s
         if result.stopped:
             result.rows.append(row(asset, item.status.kind, item.status.state, "skipped"))
             continue
-        unavailable = sorted(dependencies[asset] & blocked)
+        unavailable = sorted(prerequisites[asset] & blocked)
         if unavailable:
             _failure(context, item.status, result, SyncError("dependency_failed", "blocked by: " + ", ".join(unavailable)), "blocked")
             blocked.add(asset)

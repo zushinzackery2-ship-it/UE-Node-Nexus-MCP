@@ -86,6 +86,7 @@ patches, scene writes, response modes and batching.
 
 Internal viewport screenshots read rendered pixels and do not require an always-on-top window.
 Use `viewport_capture`; avoid helper scripts that call `SetForegroundWindow` or set `HWND_TOPMOST` unless the user requests window activation.
+Its `filename` is a name without directory or extension (1–100 letters, digits, `_` or `-`); the editor appends `_<capture_id>.png` and returns `file_path` and `capture_id`. Invalid input fails with `invalid_request` and `error.details.field`.
 Handle background refresh or minimized-viewport issues through capture scheduling and explicit diagnostics, rather than forcing the editor in front of the user's work.
 Capture acceptance is asynchronous: poll `viewport_capture_status(file_path=..., capture_id=...)` until `state=completed`, `done=true`, `ok=true`. A file without its matching receipt is not completion evidence.
 Choose `target="pie"` for the game's image across asset editor focus changes.

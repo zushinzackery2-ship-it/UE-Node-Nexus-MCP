@@ -10,14 +10,16 @@ from typing import Any
 from ue_node_nexus_mcp.transcode.storage.paths import asset_relative, object_path
 
 SCHEMA_KEY = "5.5.4-abcd1234"
-FUNCTIONS = {
-    "KismetSystemLibrary.PrintString": {
+FUNCTIONS = (
+{
+    "KismetSystemLibrary.PrintString":
+    {
         "path": "/Script/Engine.KismetSystemLibrary.PrintString",
         "params": [{"name": "InString", "type": "string", "dir": "in", "default": "Hello"},
                    {"name": "Duration", "type": "float", "dir": "in", "default": "2.0"}],
         "pure": False,
     },
-}
+})
 
 
 def _prop_schema(kind: str, default: str, **extra: Any) -> dict[str, Any]:
@@ -71,7 +73,8 @@ class FakeUe:
         out = Path(payload["out_dir"])
         out.mkdir(parents=True, exist_ok=True)
         (out / "key.json").write_text(json.dumps({"key": self.schema_key, "engine_version": "5.5.4", "plugins_hash": self.schema_key.rsplit("-", 1)[-1]}), encoding="utf-8")
-        classes = {
+        classes = (
+        {
             "MaterialExpressionAdd": {"path": "/Script/Engine.MaterialExpressionAdd", "props": {"Desc": _prop_schema("string", ""), "ConstA": _prop_schema("number", "0.0"), "ConstB": _prop_schema("number", "1.0")}, "inputs": ["A", "B"], "outputs": [""]},
             "MaterialExpressionSubtract": {"path": "/Script/Engine.MaterialExpressionSubtract", "props": {"Desc": _prop_schema("string", ""), "ConstA": _prop_schema("number", "0.0"), "ConstB": _prop_schema("number", "1.0")}, "inputs": ["A", "B"], "outputs": [""]},
             "MaterialExpressionMultiply": {"path": "/Script/Engine.MaterialExpressionMultiply", "props": {"Desc": _prop_schema("string", ""), "ConstA": _prop_schema("number", "0.0"), "ConstB": _prop_schema("number", "1.0")}, "inputs": ["A", "B"], "outputs": [""]},
@@ -79,13 +82,15 @@ class FakeUe:
             "MaterialExpressionTextureSample": {"path": "/Script/Engine.MaterialExpressionTextureSample", "props": {"Desc": _prop_schema("string", ""), "Texture": _prop_schema("object", "None")}, "inputs": ["UVs", "Tex", "ApplyViewMipBias", "Level"], "outputs": ["", "", "", "", ""]},
             "MaterialExpressionFunctionInput": {"path": "/Script/Engine.MaterialExpressionFunctionInput", "props": {"Desc": _prop_schema("string", ""), "InputName": _prop_schema("name", "In"), "InputType": _prop_schema("enum", "FunctionInput_Vector3", enum_values=["FunctionInput_Scalar", "FunctionInput_Vector2", "FunctionInput_Vector3"]), "SortPriority": _prop_schema("number", "32")}, "inputs": [""], "outputs": [""]},
             "MaterialExpressionFunctionOutput": {"path": "/Script/Engine.MaterialExpressionFunctionOutput", "props": {"Desc": _prop_schema("string", ""), "OutputName": _prop_schema("name", "Result")}, "inputs": [""], "outputs": []},
-        }
+        })
         (out / "classes.material_expression.json").write_text(json.dumps(classes), encoding="utf-8")
         self.material_classes = classes
-        (out / "classes.asset.json").write_text(json.dumps({
+        assets = (
+        {
             "Material": {"path": "/Script/Engine.Material", "props": {"BlendMode": _prop_schema("enum", "BLEND_Opaque", enum_values=["BLEND_Opaque", "BLEND_Translucent"]), "TwoSided": _prop_schema("bool", "False")}},
             "MaterialFunction": {"path": "/Script/Engine.MaterialFunction", "props": {"Description": _prop_schema("string", ""), "bExposeToLibrary": _prop_schema("bool", "False"), "LibraryCategoriesText": _prop_schema("array", "()")}},
-        }), encoding="utf-8")
+        })
+        (out / "classes.asset.json").write_text(json.dumps(assets), encoding="utf-8")
         (out / "classes.k2node.json").write_text(json.dumps({"K2Node_CallFunction": {"path": "/Script/BlueprintGraph.K2Node_CallFunction", "props": {}, "pins": [], "dynamic_pins": True}}), encoding="utf-8")
         (out / "classes.component.json").write_text("{}", encoding="utf-8")
         (out / "classes.niagara_renderer.json").write_text("{}", encoding="utf-8")

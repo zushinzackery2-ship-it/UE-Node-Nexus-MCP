@@ -4,6 +4,7 @@
 #include "Engine/Level.h"
 #include "GameFramework/Actor.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeObjectHelpers.h"
 #include "UObject/UnrealType.h"
 
@@ -159,11 +160,7 @@ TSharedPtr<FJsonObject> HandleObjectPropertiesGet(const FString& Operation, cons
     if (!bFull)
     {
         Data->SetStringField(TEXT("format"), TEXT("object_properties_compact"));
-        Data->SetArrayField(TEXT("columns"), {
-            MakeShared<FJsonValueString>(TEXT("name")),
-            MakeShared<FJsonValueString>(TEXT("type")),
-            MakeShared<FJsonValueString>(TEXT("value"))
-        });
+        SetColumns(Data, { TEXT("name"), TEXT("type"), TEXT("value") });
     }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());

@@ -66,13 +66,11 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
     use_links = overlay_enabled(candidates)
     subset = candidates if use_links else None
     disk_budget = estimate(plan, root, ALLOCATION_FACTOR, WORKING_BYTES, baseline, subset=subset)
-    project_root = Path(plan["project"]).parent
-    written = [path for path in plan["files"] if subset is None or path.relative_to(project_root).as_posix() in subset]
     report = dict(validation_id=identifier, source_project=plan["project"], operations=entries,
                   owner=inspect_process(os.getpid()),
                   validation_root=str(root), dry_run=dry_run, baseline="saved_disk",
-                  copied_bytes=sum(path.stat().st_size for path in written), copied_files=len(written),
-                  linkable_files=len(plan["files"]) - len(written), copy_mode="overlay" if use_links else "full",
+                  copied_bytes=disk_budget["copy_bytes"], copied_files=disk_budget["copied_files"],
+                  linkable_files=disk_budget["linked_files"], copy_mode="overlay" if use_links else "full",
                   disk_estimate_bytes=disk_budget["required_bytes"], disk_budget=disk_budget,
                   state="preview", applied_to_source=False,
                   plugin_mounts=plugin_inputs, operations_digest=digest(entries), allow_low_memory=allow_low_memory)
@@ -98,7 +96,7 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
         snapshot = copy_project(plan, root / "Project", baseline=baseline, candidates=candidates)
         report.update(copied_bytes=snapshot["bytes"], copied_files=snapshot["copied_files"],
                       linked_files=snapshot["linked_files"], linked_directories=snapshot["linked_directories"],
-                      copy_mode=snapshot["copy_mode"])
+                      copy_mode=snapshot["copy_mode"], disk_budget=snapshot["disk_budget"])
         quiet_worker_copy(Path(snapshot["project"]))
         if baseline is not None:
             from .baseline import overlay
@@ -141,6 +139,8 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
         report["state"] = "validated"
     except Exception as error:
         LOG.exception("validation=%s failed", identifier)
+        if isinstance(error, InstanceError) and error.code == "isolation_disk_budget":
+            report["disk_budget"] = error.details.get("admission", error.details)
         report.update(state="failed", error=error.envelope()["error"] if isinstance(error, InstanceError)
                       else dict(code="isolated_validation_failed", message=str(error)))
     finally:

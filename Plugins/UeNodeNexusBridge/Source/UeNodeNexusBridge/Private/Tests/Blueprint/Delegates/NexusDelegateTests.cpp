@@ -3,7 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Blueprint/Delegates/NexusDelegateBinding.h"
-#include "Blueprint/UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
@@ -18,10 +18,10 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Transcode/Schema/NexusDelegateSchema.h"
-#include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
+#include "Blueprint/Creation/UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 #include "UeNodeNexusBridgeTranscode.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "UObject/UnrealType.h"
 
 using namespace UeNodeNexusBridge;

@@ -3,7 +3,7 @@
 #include "Engine/Blueprint.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeBlueprintPatchOps.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchOps.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchOps.h"
 

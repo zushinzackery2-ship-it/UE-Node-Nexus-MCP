@@ -21,6 +21,26 @@ def lower(value: str) -> str:
     return buffer.value
 
 
+def case_sensitive(api, directory: Path, inherited: bool, allow_missing: bool) -> bool:
+    """Whether names inside directory compare case-sensitively; a missing directory keeps inherited."""
+    handle = api.CreateFileW(str(directory), 0, 7, None, 3, 0x02000000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        error = ctypes.get_last_error()
+        if not allow_missing or error not in (2, 3):
+            raise ctypes.WinError(error)
+        return inherited
+    try:
+        flags = w.DWORD()
+        if api.GetFileInformationByHandleEx(handle, 23, ctypes.byref(flags), 4):
+            return bool(flags.value & 1)
+        error = ctypes.get_last_error()
+        if error not in (1, 50, 87):
+            raise ctypes.WinError(error)
+        return False
+    finally:
+        api.CloseHandle(handle)
+
+
 def normalize(value: str, *, allow_missing=False) -> str:
     api = kernel()
     path = Path(value)
@@ -28,23 +48,7 @@ def normalize(value: str, *, allow_missing=False) -> str:
     result = lower(path.anchor).replace("\\", "/")
     sensitive = False
     for name in path.parts[1:]:
-        handle = api.CreateFileW(str(parent), 0, 7, None, 3, 0x02000000, None)
-        if handle == ctypes.c_void_p(-1).value:
-            error = ctypes.get_last_error()
-            if not allow_missing or error not in (2, 3):
-                raise ctypes.WinError(error)
-        else:
-            try:
-                flags = w.DWORD()
-                if api.GetFileInformationByHandleEx(handle, 23, ctypes.byref(flags), 4):
-                    sensitive = bool(flags.value & 1)
-                else:
-                    error = ctypes.get_last_error()
-                    if error not in (1, 50, 87):
-                        raise ctypes.WinError(error)
-                    sensitive = False
-            finally:
-                api.CloseHandle(handle)
+        sensitive = case_sensitive(api, parent, sensitive, allow_missing)
         result = result.rstrip("/") + "/" + (name if sensitive else lower(name))
         parent /= name
     return result

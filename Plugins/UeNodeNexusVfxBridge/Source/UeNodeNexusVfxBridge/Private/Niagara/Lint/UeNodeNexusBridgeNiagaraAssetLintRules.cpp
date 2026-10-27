@@ -79,7 +79,8 @@ void LintRenderer(UNiagaraRendererProperties* Renderer, int32 EmitterIndex, int3
 
 void LintModules(FNiagaraEmitterHandle& Handle, int32 EmitterIndex, TArray<TSharedPtr<FJsonValue>>& Issues)
 {
-    static const TArray<FString> Usages = {
+    static const TArray<FString> Usages =
+    {
         TEXT("EmitterUpdateScript"),
         TEXT("ParticleSpawnScript"),
         TEXT("ParticleUpdateScript")

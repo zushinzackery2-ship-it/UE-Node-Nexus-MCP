@@ -260,8 +260,8 @@ void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJs
             Context.Fail(Index, TEXT("module_not_found"), TEXT("module disappeared before input apply"));
             return;
         }
-        ApplyModuleInput(*System, System->GetEmitterHandles()[Emitter], *Output, *Modules[Module],
-            Usage, Op, Index, Context, Payload, Bindings);
+        ApplyModuleInput(*System, System->GetEmitterHandles()[Emitter], *Modules[Module],
+            Op, Index, Context, Bindings);
     }
     else if (Verb == TEXT("ns_module_move"))
     {

@@ -121,13 +121,13 @@ def _strip_linked_defaults(keyed: dict[str, str], linked_pins: set[str] | None) 
     if not linked_pins:
         return keyed
     result = {}
-    for key, value in keyed.items():
+    for key, text in keyed.items():
         if key == "pins" or key.startswith("prop:"):
-            result[key] = value
+            result[key] = text
             continue
         name = key[4:] if key.startswith("pin:") else key
         if name.casefold() not in linked_pins:
-            result[key] = value
+            result[key] = text
     return result
 
 
@@ -169,7 +169,13 @@ def encode_section(section, scope: str, context: Encoding) -> dict:
             bare[parsed.name] = parsed.text()
         else:
             bare[entry.text] = entry.text
-    args = signature(section.args, section.line, function=True, contracts=context.contracts).text() if section.name == "function" else section.args
+    args = section.args
+    if section.name == "function":
+        parsed = signature(section.args, section.line, function=True, contracts=context.contracts)
+        args = parsed.text()
+        default_edge = dict(src="@entry", dst="@result", src_pin="then", dst_pin="execute")
+        if "Pure" in parsed.flags and links.get("out:@entry:then") == default_edge:
+            links.pop("out:@entry:then")
     item = dict(name=section.name, args=args, props=props, entities=entities, links=links, bare=bare)
     if section.name == "stack":
         item["order"] = list(entities)

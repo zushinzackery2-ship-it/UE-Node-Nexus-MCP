@@ -101,7 +101,7 @@ def verify_wheel(wheel: Path, version: str) -> None:
                                  ("ue-node-nexus-manager", "ue_node_nexus_mcp.instances.broker.main:main")))
         if dict(entries["console_scripts"]) != expected_entries:
             raise RuntimeError("wheel is missing the fixed manager or MCP entry point")
-        operations = json.loads(archive.read("ue_node_nexus_mcp/operations.json"))
+        operations = json.loads(archive.read("ue_node_nexus_mcp/registry/operations.json"))
         if "operations/instances.json" not in operations["files"]:
             raise RuntimeError("wheel does not publish lifecycle operations")
         for module in ("prepare", "apply", "commit", "diagnostics", "recovery"):

@@ -225,7 +225,8 @@ static int32 CountDiffArrayField(const TSharedPtr<FJsonObject>& Diff, const FStr
 
 static TSharedPtr<FJsonObject> MakeCompactDiff(const TSharedPtr<FJsonObject>& Diff)
 {
-    static const FString FieldNames[] = {
+    static const FString FieldNames[] =
+    {
         TEXT("nodes_created"),
         TEXT("nodes_deleted"),
         TEXT("links_added"),

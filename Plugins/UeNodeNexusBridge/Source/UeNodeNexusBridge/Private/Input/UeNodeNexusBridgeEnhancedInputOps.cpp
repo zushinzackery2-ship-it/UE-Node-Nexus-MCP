@@ -8,6 +8,7 @@
 #include "Misc/PackageName.h"
 #include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeSaveResult.h"
 #include "UObject/Package.h"
 
@@ -268,7 +269,7 @@ TSharedPtr<FJsonObject> HandleInputMappingContextGet(const FString& Operation, c
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("asset_path"), Context->GetPathName());
     Data->SetStringField(TEXT("format"), TEXT("input_mapping_context_compact"));
-    Data->SetArrayField(TEXT("columns"), { MakeShared<FJsonValueString>(TEXT("action_path")), MakeShared<FJsonValueString>(TEXT("key")), MakeShared<FJsonValueString>(TEXT("trigger_count")), MakeShared<FJsonValueString>(TEXT("modifier_count")) });
+    SetColumns(Data, { TEXT("action_path"), TEXT("key"), TEXT("trigger_count"), TEXT("modifier_count") });
     Data->SetArrayField(TEXT("mappings"), Rows);
     Data->SetNumberField(TEXT("count"), Rows.Num());
     AddElapsedMs(Data, StartSeconds);

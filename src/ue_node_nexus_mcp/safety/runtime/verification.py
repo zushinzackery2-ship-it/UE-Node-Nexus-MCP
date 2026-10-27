@@ -1,6 +1,6 @@
 """Public acceptance gate for a project-owned, explicitly identified PIE run."""
 
-from ...contracts import require_non_empty_string
+from ...registry.contracts import require_non_empty_string
 from ...diagnostics.contracts.notice import normalize
 from ...diagnostics.contracts.verdict import runtime_verdict
 

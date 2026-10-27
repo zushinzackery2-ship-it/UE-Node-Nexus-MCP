@@ -29,7 +29,8 @@ INPUTS = {CURRENT: ["Lifetime", "Color"], SUPERSEDED: ["Lifetime", "Color"], SPA
 def module_catalog(tmp_path, deprecated: tuple[str, ...] = ()) -> SchemaLock:
     """Catalog shaped the way the plugin writes it: record keys are full UE paths."""
     directory = tmp_path / ".nexus" / "schema" / "key"
-    publish(directory, "key", dict(niagara_modules={
+    publish(directory, "key", dict(niagara_modules=
+    {
         path: dict(path=path, short=path.rsplit(".", 1)[-1], deprecated=path in deprecated,
                    inputs=[dict(name=name, type="float") for name in names])
         for path, names in INPUTS.items()

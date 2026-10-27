@@ -5,7 +5,7 @@
 #include "K2Node_BaseMCDelegate.h"
 #include "K2Node_CallDelegate.h"
 #include "UObject/UnrealType.h"
-#include "UeNodeNexusBridgeBlueprintNodeCreateFields.h"
+#include "Blueprint/Creation/UeNodeNexusBridgeBlueprintNodeCreateFields.h"
 
 namespace UeNodeNexusBridge
 {

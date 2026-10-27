@@ -1,7 +1,7 @@
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-#include "Control/State.h"
+#include "../../Control/State.h"
 #include "Misc/ScopeLock.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusCloseCommitReadiness,

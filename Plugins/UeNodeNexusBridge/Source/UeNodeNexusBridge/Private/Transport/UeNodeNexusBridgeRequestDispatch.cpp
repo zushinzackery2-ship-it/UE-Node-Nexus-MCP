@@ -3,7 +3,7 @@
 
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
-#include "Core/NexusWarningCapture.h"
+#include "Core/Warnings/NexusWarningCapture.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeOperations.h"
 #include "HAL/PlatformTime.h"

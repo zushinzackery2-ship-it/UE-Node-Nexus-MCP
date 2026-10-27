@@ -8,7 +8,7 @@
 #include "Engine/SimpleConstructionScript.h"
 #include "GameFramework/SpectatorPawn.h"
 #include "Kismet2/KismetEditorUtilities.h"
-#include "UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
 
 using namespace UeNodeNexusBridge::Transcode;
 

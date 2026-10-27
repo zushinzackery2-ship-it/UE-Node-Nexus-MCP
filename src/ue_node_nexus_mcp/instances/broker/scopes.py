@@ -152,18 +152,20 @@ class Scopes:
             scopes = list(self.active.values()) + list(self.queue.values())
         for scope in scopes:
             try:
-                with self.operations.hold(scope["scope_id"]):
-                    with service.lock:
-                        instance = service.instances.get(scope["instance_id"])
-                        gone = instance is None or instance["state"] == "EXITED"
-                        if gone:
-                            self._drop(scope)
-                    if gone:
-                        continue
-                    if scope.get("releasing") or not service.platform.alive(scope["identity"]):
-                        self._end(scope, dict(scope_id=scope["scope_id"]))
+                self._sweep_one(scope)
             except (InstanceError, OSError):
                 continue
+
+    def _sweep_one(self, scope: dict) -> None:
+        service = self.service
+        with self.operations.hold(scope["scope_id"]):
+            with service.lock:
+                instance = service.instances.get(scope["instance_id"])
+                if instance is None or instance["state"] == "EXITED":
+                    self._drop(scope)
+                    return
+            if scope.get("releasing") or not service.platform.alive(scope["identity"]):
+                self._end(scope, dict(scope_id=scope["scope_id"]))
 
     def recover(self) -> None:
         service = self.service
@@ -171,21 +173,25 @@ class Scopes:
             scopes = list(self.active.values())
         for scope in scopes:
             try:
-                with self.operations.hold(scope["scope_id"]):
-                    with service.lock:
-                        instance = service.instances.get(scope["instance_id"])
-                        if instance is None or instance["state"] == "EXITED":
-                            self._drop(scope)
-                            continue
-                        if not service.platform.alive(scope["identity"]) or scope.get("releasing"):
-                            scope["releasing"] = True
-                        scope["manager_epoch"] = service.epoch
-                        service.registry.put("scope", scope["scope_id"], scope)
-                    if not scope.get("releasing"):
-                        service.control(instance, "scope_grant", dict(scope))
+                self._recover_one(scope)
             except (InstanceError, OSError):
                 continue
         self.sweep()
+
+    def _recover_one(self, scope: dict) -> None:
+        service = self.service
+        with self.operations.hold(scope["scope_id"]):
+            with service.lock:
+                instance = service.instances.get(scope["instance_id"])
+                if instance is None or instance["state"] == "EXITED":
+                    self._drop(scope)
+                    return
+                if not service.platform.alive(scope["identity"]) or scope.get("releasing"):
+                    scope["releasing"] = True
+                scope["manager_epoch"] = service.epoch
+                service.registry.put("scope", scope["scope_id"], scope)
+            if not scope.get("releasing"):
+                service.control(instance, "scope_grant", dict(scope))
 
     def release_client(self, client: dict) -> None:
         with self.service.lock:

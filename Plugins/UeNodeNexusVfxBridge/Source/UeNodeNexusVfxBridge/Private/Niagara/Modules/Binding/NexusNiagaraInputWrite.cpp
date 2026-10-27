@@ -1,7 +1,9 @@
 #include "NexusNiagaraInputBinding.h"
 
 #include "NiagaraEmitterHandle.h"
+#include "NiagaraGraph.h"
 #include "NiagaraNodeFunctionCall.h"
+#include "NiagaraScriptVariable.h"
 #include "NiagaraParameterStore.h"
 #include "NiagaraSystem.h"
 #include "UObject/StructOnScope.h"
@@ -74,6 +76,13 @@ bool ApplyNativeInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
     {
         return Reject(System, Emitter, Module, Name, Value, Error);
     }
+    const UNiagaraScriptVariable* Metadata = Module.GetCalledGraph()->GetScriptVariable(Variable.GetName());
+    if (bLink && Metadata && Metadata->GetIsStaticSwitch())
+    {
+        Error.Code = TEXT("static_input_link_unsupported");
+        Error.Message = TEXT("compile-time switch requires a local value, not a runtime parameter binding");
+        return Reject(System, Emitter, Module, Name, Value, Error);
+    }
     TSharedPtr<FStructOnScope> Local;
     if (!bLink && !bReset && !ParseLocal(Variable, Value, Local, Error))
     {
@@ -88,6 +97,23 @@ bool ApplyNativeInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
     if (bDryRun)
     {
         Context.Results.Add(MakeShared<FJsonValueObject>(Result));
+        return true;
+    }
+    if (Metadata && Metadata->GetIsStaticSwitch() && Metadata->Metadata.bInlineEditConditionToggle)
+    {
+        if (!ApplyInlineInput(System, Emitter, Module, Variable, Value, bReset, Context, bChanged, Error))
+        {
+            return Reject(System, Emitter, Module, Name, Value, Error);
+        }
+        if (bChanged)
+        {
+            NiagaraModuleStack::MarkSystemEdited(&System);
+        }
+        Result->SetBoolField(TEXT("inline_edit_condition"), true);
+        Result->SetBoolField(TEXT("changed"), bChanged);
+        Context.Results.Add(MakeShared<FJsonValueObject>(Result));
+        UE_LOG(LogNexusNiagaraInputBinding, Display, TEXT("asset=%s emitter=%s module_guid=%s inline_input=%s requested=%s changed=%d"),
+            *System.GetPathName(), *Emitter.GetName().ToString(), *Module.NodeGuid.ToString(), *Name, *Value, bChanged);
         return true;
     }
     UNiagaraStackFunctionInput* Input = Context.Resolve(System, Emitter, Module, Variable, Error);

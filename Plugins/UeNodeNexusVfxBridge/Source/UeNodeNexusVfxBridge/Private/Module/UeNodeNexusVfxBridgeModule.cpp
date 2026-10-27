@@ -24,7 +24,8 @@ struct FVfxOperation
 
 const TArray<FVfxOperation>& VfxOperations()
 {
-    static const TArray<FVfxOperation> Operations = {
+    static const TArray<FVfxOperation> Operations =
+    {
         { TEXT("cascade_system_summary_get"), UeNodeNexusBridge::HandleCascadeSystemSummaryGet },
         { TEXT("niagara_system_create"), UeNodeNexusBridge::HandleNiagaraSystemCreate },
         { TEXT("niagara_system_duplicate"), UeNodeNexusBridge::HandleNiagaraSystemDuplicate },

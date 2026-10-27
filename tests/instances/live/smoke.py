@@ -4,7 +4,7 @@ import argparse
 import json
 import time
 
-from ue_node_nexus_mcp.bridge import UeBridgeClient
+from ue_node_nexus_mcp.bridge.client import UeBridgeClient
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from .host import prepare

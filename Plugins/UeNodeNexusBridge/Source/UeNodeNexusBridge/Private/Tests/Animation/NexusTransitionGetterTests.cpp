@@ -11,7 +11,7 @@
 #include "EdGraph/EdGraph.h"
 #include "EdGraphSchema_K2.h"
 #include "K2Node_TransitionRuleGetter.h"
-#include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
+#include "Blueprint/Creation/UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 
 using namespace UeNodeNexusBridge;
 

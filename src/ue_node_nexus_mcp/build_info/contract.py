@@ -7,7 +7,7 @@ import threading
 import time
 from typing import Any, Callable
 
-from ..contracts import OPERATION_FEATURES, WRITE_OPERATIONS
+from ..registry.contracts import OPERATION_FEATURES, WRITE_OPERATIONS
 from .requirements import VERSION, CONTRACT_VERSION, CORE_MODULE, GUARD_MODULE, VFX_MODULE
 
 

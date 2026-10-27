@@ -2,8 +2,8 @@
 
 import pytest
 
-from ue_node_nexus_mcp.payload_schema import payload_schema_for
-from ue_node_nexus_mcp import tools_viewport
+from ue_node_nexus_mcp.registry.payloads.schema import payload_schema_for
+from ue_node_nexus_mcp.tools import viewport as tools_viewport
 
 
 def test_capture_schema_exposes_explicit_pie():

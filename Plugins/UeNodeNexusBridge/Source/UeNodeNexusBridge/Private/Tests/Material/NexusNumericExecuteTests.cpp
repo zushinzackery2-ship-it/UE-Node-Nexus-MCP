@@ -6,7 +6,7 @@
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionCustom.h"
 #include "Transcode/UeNodeNexusBridgeTranscode.h"
-#include "Transcode/UeNodeNexusBridgeTranscodeMaterialApply.h"
+#include "Transcode/Material/UeNodeNexusBridgeTranscodeMaterialApply.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusNumericExecuteTest,
     "UeNodeNexus.Material.ControlFlowNumericExecute",

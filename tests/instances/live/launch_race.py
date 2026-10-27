@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from ue_node_nexus_mcp.bridge import UeBridgeClient
+from ue_node_nexus_mcp.bridge.client import UeBridgeClient
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.errors import InstanceError
 from ue_node_nexus_mcp.instances.identity.paths import project_identity

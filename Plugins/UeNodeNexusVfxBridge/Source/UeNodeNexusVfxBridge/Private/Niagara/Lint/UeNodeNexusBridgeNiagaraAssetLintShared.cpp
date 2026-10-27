@@ -1,8 +1,8 @@
 #include "Lint/UeNodeNexusBridgeNiagaraAssetLintShared.h"
 
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
-#include "Formats/UeNodeNexusBridgeNiagaraIndexedFormat.h"
 
 #include "Dom/JsonValue.h"
 #include "NiagaraSystem.h"
@@ -196,13 +196,13 @@ TSharedPtr<FJsonObject> BuildLintIndexedData(UNiagaraSystem* System, const TArra
         Rows.Add(FString::Printf(
             TEXT("%s:%d:%s"),
             *ShortSeverity(Severity),
-            NiagaraIndexedFormat::DictIndex(CodeDict, Codes, Code),
-            *NiagaraIndexedFormat::EscapeToken(IssueLocation(Issue))));
+            DictIndex(CodeDict, Codes, Code),
+            *EscapeIndexedToken(IssueLocation(Issue))));
     }
 
     FString Text = FString::Printf(
         TEXT("G:%s|niagara|lint|%d\n"),
-        *NiagaraIndexedFormat::EscapeToken(System ? System->GetPathName() : FString()),
+        *EscapeIndexedToken(System ? System->GetPathName() : FString()),
         Issues.Num());
     Text += FString::Printf(
         TEXT("S:e=%d;w=%d;i=%d;o=%d;block=%d;pass=%d\n"),
@@ -212,13 +212,13 @@ TSharedPtr<FJsonObject> BuildLintIndexedData(UNiagaraSystem* System, const TArra
         SeverityCounts.OtherCount,
         BlockingIssueCount,
         BlockingIssueCount == 0 ? 1 : 0);
-    Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("C:"), Codes);
+    Text += JoinDictionaryLine(TEXT("C:"), Codes);
     Text += TEXT("I:") + FString::Join(Rows, TEXT("|")) + TEXT("\n");
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetStringField(TEXT("format"), TEXT("niagara_asset_lint_indexed"));
     AddLintCounts(Data, SeverityCounts, Issues.Num(), BlockingIssueCount);
-    NiagaraIndexedFormat::SetTextPayload(Data, Text);
+    SetTextPayload(Data, Text);
     return Data;
 }
 

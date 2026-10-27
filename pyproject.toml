@@ -24,7 +24,7 @@ ue-node-nexus-manager = "ue_node_nexus_mcp.instances.broker.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ue_node_nexus_mcp = ["operations.json", "operations/*.json", "guides/*.md"]
+ue_node_nexus_mcp = ["registry/operations.json", "registry/operations/*.json", "guides/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

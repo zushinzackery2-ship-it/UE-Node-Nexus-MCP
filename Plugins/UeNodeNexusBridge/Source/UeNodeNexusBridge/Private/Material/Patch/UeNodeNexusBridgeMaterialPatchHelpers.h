@@ -19,7 +19,6 @@ TArray<EMaterialProperty> MaterialOutputProperties();
 FString MaterialOutputPropertyName(EMaterialProperty Property);
 bool ResolveMaterialOutputProperty(const FString& PinId, EMaterialProperty& OutProperty);
 FExpressionInput* ResolveMaterialOutputInput(UMaterial* Material, const FString& PinId);
-UMaterialExpression* FindMaterialExpression(UMaterial* Material, const FString& NodeId);
 UClass* ResolveMaterialExpressionClass(const FString& NodeClass);
 TArray<TSharedPtr<FJsonValue>> BuildMaterialExpressionParams(UMaterialExpression* Expression);
 TArray<TSharedPtr<FJsonValue>> BuildMaterialOutputParams(UMaterial* Material);
@@ -30,7 +29,6 @@ FExpressionInput* ResolveMaterialInputPin(UMaterialExpression* Expression, const
 bool ResolveMaterialOutputPin(UMaterialExpression* Expression, const FString& PinId, bool& bOutInput, int32& OutIndex);
 FString DescribeMaterialOutputPins(UMaterialExpression* Expression);
 FString FindMaterialInputName(UMaterialExpression* Expression, const FString& PinId);
-FString FindMaterialOutputName(UMaterialExpression* Expression, const FString& PinId);
 bool ReadMaterialPosition(const TSharedPtr<FJsonObject>& Json, int32& OutX, int32& OutY);
 void AppendMaterialDiff(TSharedPtr<FJsonObject> Diff, const FString& Field, const TSharedPtr<FJsonObject>& Item);
 void AddMaterialParamChange(TSharedPtr<FJsonObject> Diff, const FString& NodeId, const FString& Name, const FString& Before, const FString& After);

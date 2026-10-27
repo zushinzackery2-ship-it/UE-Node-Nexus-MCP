@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 
 from ue_node_nexus_mcp.instances.errors import InstanceError
-from ue_node_nexus_mcp.operation_registry import get_operation_spec, operation_schema
+from ue_node_nexus_mcp.registry.specs import get_operation_spec, operation_schema
 from ue_node_nexus_mcp.safety.isolation.inputs import SUPPORTED, validate_operations
 from ue_node_nexus_mcp.safety.isolation.snapshot import copy_project, inventory, unchanged
-from ue_node_nexus_mcp.tools_facade import ue_execute
+from ue_node_nexus_mcp.facade.entry import ue_execute
 
 
 def project(tmp_path):

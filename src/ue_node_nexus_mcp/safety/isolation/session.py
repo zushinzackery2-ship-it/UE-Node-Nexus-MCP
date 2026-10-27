@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import time
 
-from ...bridge import BridgeConfig, UeBridgeClient
+from ...bridge.client import BridgeConfig, UeBridgeClient
 from ...instances.broker.client import BrokerClient
 from ...instances.errors import InstanceError, require
 from ...instances.session.binding import EditorSession

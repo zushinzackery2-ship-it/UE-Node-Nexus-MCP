@@ -2,20 +2,13 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "../../Validation/ConfigurationLayers.h"
+#include "ConfigurationText.h"
 
 namespace
 {
 const TCHAR* StartupSection = TEXT("Nexus.Tests.StartupConsumed");
 const TCHAR* ValuesSection = TEXT("Nexus.Tests.AuthoritativeValues");
 const TCHAR* StaleSection = TEXT("Nexus.Tests.WorkerOnly");
-
-FString ConfigText(FConfigFile File)
-{
-    File.Branch = nullptr;
-    FString Text;
-    File.WriteToString(Text);
-    return Text;
-}
 
 void SeedStartupConsumer(FConfigFile& Runtime)
 {
@@ -63,6 +56,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusConfigurationStartupConsumption,
 bool FNexusConfigurationStartupConsumption::RunTest(const FString& Parameters)
 {
     using namespace NexusLifecycle::Validation;
+    using NexusLifecycle::Tests::ConfigText;
     FConfigFile& Runtime = *GConfig->FindConfigFile(GEngineIni);
     FLayerScope Scope(Runtime);
     SeedStartupConsumer(Runtime);
@@ -92,6 +86,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusConfigurationRuntimeSnapshot,
 bool FNexusConfigurationRuntimeSnapshot::RunTest(const FString& Parameters)
 {
     using namespace NexusLifecycle::Validation;
+    using NexusLifecycle::Tests::ConfigText;
     FConfigFile& Runtime = *GConfig->FindConfigFile(GEngineIni);
     FLayerScope Scope(Runtime);
     const FConfigFile Snapshot = SourceSnapshot(Runtime);

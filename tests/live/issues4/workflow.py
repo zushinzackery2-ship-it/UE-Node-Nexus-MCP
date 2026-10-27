@@ -23,7 +23,8 @@ CALLER = FOLDER + "M_Caller.M_Caller"
 OTHER = FOLDER + "M_Other.M_Other"
 CALL = ("[asset]\nShadingModel = MSM_Unlit\n\n[graph]\nvalue : Constant(R=0.5)\n"
         f"call : MaterialFunctionCall(MaterialFunction={BLEND})\nvalue -> call.A\ncall.Result -> out.EmissiveColor\n")
-SOURCES = {
+SOURCES = (
+{
     GLASS: ("material", "Material", "[asset]\nShadingModel = MSM_Unlit\n\n[graph]\nvalue : Constant(R=0.25)\nvalue -> out.EmissiveColor\n"),
     LAMP: ("blueprint", "Blueprint", "[asset]\nParentClass = /Script/Engine.Actor\n\n[function UserConstructionScript()]\n"
                                      "parent : CallParentFunction(Actor.UserConstructionScript)\nentry.then -> parent.execute\n"),
@@ -31,7 +32,7 @@ SOURCES = {
                                                      "result : FunctionOutput(OutputName=Result)\nin_a -> result\n"),
     CALLER: ("material", "Material", CALL),
     OTHER: ("material", "Material", CALL),
-}
+})
 # ``B`` is required: bUsePreviewValueAsDefault stays false, so a call must connect it.
 # An export omits the pin of a single-input node, so the links are matched as lines.
 REQUIRED_INPUT = (r"in_a -> result(\.\w+)?", "in_b : FunctionInput(InputName=B, InputType=FunctionInput_Scalar, SortPriority=1)\n"

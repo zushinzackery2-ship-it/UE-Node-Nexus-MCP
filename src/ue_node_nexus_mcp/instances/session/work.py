@@ -2,7 +2,7 @@
 
 from contextlib import nullcontext
 
-from ...contracts import BRIDGE_OPERATIONS
+from ...registry.contracts import BRIDGE_OPERATIONS
 from . import instance_manager
 
 

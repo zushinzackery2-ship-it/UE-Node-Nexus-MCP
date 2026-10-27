@@ -5,7 +5,6 @@
 #include "Dom/JsonValue.h"
 
 class UObject;
-class UMaterialInterface;
 
 namespace UeNodeNexusBridge
 {
@@ -44,6 +43,5 @@ FBridgeAssetCompileDiagnostics CollectAssetCompileDiagnostics(UObject* Asset, co
 FBridgeAssetCompileDiagnostics InspectAssetDiagnostics(UObject* Asset, const FString& AssetPath);
 TSharedPtr<FJsonObject> CompileDiagnosticsJson(const FBridgeAssetCompileDiagnostics& Result, bool bRequested);
 FBridgeDiagnosticsResult CollectBridgeDiagnostics(const TSharedPtr<FJsonObject>& Payload);
-TArray<FString> CollectMaterialCompileErrors(UMaterialInterface* MaterialInterface);
 void AddMaterialCompileDiagnostics(const TArray<FString>& CompileErrors, const FString& AssetPath, TArray<TSharedPtr<FJsonValue>>& Diagnostics);
 }

@@ -8,7 +8,7 @@ import time
 
 from ...coordination.file_lock import FileLock, LockBusy
 from ...errors import BridgeError
-from ...transport import named_pipe_transport
+from ...bridge.transport import named_pipe_transport
 from ..errors import InstanceError
 from ..identity.paths import pipe_address
 from ..identity.processes import is_alive

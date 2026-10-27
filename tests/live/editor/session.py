@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 
 from ue_node_nexus_mcp import runtime
-from ue_node_nexus_mcp.bridge import BridgeConfig, UeBridgeClient
+from ue_node_nexus_mcp.bridge.client import BridgeConfig, UeBridgeClient
 from ue_node_nexus_mcp.instances.broker.client import BrokerClient
 from ue_node_nexus_mcp.instances.errors import InstanceError
 from ue_node_nexus_mcp.instances.session.binding import EditorSession as ManagedSession

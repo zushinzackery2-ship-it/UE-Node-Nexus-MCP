@@ -20,6 +20,6 @@ async def lifespan(_server):
     try:
         yield dict()
     finally:
-        from ...task_queue import shutdown
+        from ...tasks.queue import shutdown
         shutdown()
         instance_manager.close()

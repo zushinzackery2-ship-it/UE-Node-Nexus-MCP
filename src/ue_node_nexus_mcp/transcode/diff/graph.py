@@ -40,7 +40,8 @@ def _replacements(local_decls: dict[str, Decl], base_decls: dict[str, Decl], kin
 
 
 def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, kind: str, graph: str | None = None,
-                       schema: SchemaLock | None = None) -> None:
+                       schema: SchemaLock | None = None, rebound: frozenset[str] = frozenset()) -> None:
+    """Plan one graph section; ``rebound`` nodes keep their id but get every link cut and remade."""
     extra: dict[str, Any] = {"graph": graph} if graph else {}
     local_decls = {decl.id: decl for decl in local.decls() if decl.modifier is None}
     base_decls = {decl.id: decl for decl in base.decls() if decl.modifier is None} if base else {}
@@ -62,7 +63,8 @@ def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, ki
     # against a still-linked pin is refused, and a replaced link must not keep
     # rejecting the new independent default.
     for key, link in base_links.items():
-        if key in local_links or link.src in removed_nodes or link.dst in removed_nodes:
+        relinked = link.src in rebound or link.dst in rebound
+        if (key in local_links and not relinked) or link.src in removed_nodes or link.dst in removed_nodes:
             continue
         plan.add("disconnect_pins", **{"from": link.src, "from_pin": link.src_pin, "to": link.dst, "to_pin": link.dst_pin}, **extra)
     for identifier in base_decls:
@@ -84,7 +86,7 @@ def diff_graph_section(local: Section, base: Section | None, plan: AssetPlan, ki
             _create_node(decl, plan, kind, extra)
             continue
         _update_node(decl, before, plan, kind, extra)
-    _diff_connects(local_links, base_links, local_decls, implicit, plan, kind, extra, replaced_nodes)
+    _diff_connects(local_links, base_links, local_decls, implicit, plan, kind, extra, replaced_nodes | rebound)
 
 
 def _create_node(decl: Decl, plan: AssetPlan, kind: str, extra: dict[str, Any]) -> None:
@@ -171,7 +173,7 @@ def _link_key(link: Link, decls: dict[str, Decl], kind: str, aliases: dict[str, 
 
 
 def _diff_connects(local_links: dict, base_links: dict, local_decls: dict, implicit: dict[str, Decl | None],
-                   plan: AssetPlan, kind: str, extra: dict[str, Any], replaced_nodes: set[str]) -> None:
+                   plan: AssetPlan, kind: str, extra: dict[str, Any], remade_nodes: set[str]) -> None:
     connections = local_links.items()
     if kind == "blueprint":
         # Establish array wildcards from their providers before object consumers
@@ -179,7 +181,7 @@ def _diff_connects(local_links: dict, base_links: dict, local_decls: dict, impli
         connections = sorted(connections, key=lambda pair: (pair[1].dst_pin or "").casefold()
                              not in ("array", "targetarray", "sourcearray"))
     for key, link in connections:
-        if key in base_links and link.src not in replaced_nodes and link.dst not in replaced_nodes:
+        if key in base_links and link.src not in remade_nodes and link.dst not in remade_nodes:
             continue
         if link.src not in local_decls and link.src not in implicit:
             continue

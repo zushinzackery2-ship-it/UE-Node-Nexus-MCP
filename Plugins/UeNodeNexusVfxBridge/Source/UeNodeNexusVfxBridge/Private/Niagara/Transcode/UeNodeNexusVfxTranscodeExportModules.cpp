@@ -1,5 +1,7 @@
 #include "UeNodeNexusVfxTranscode.h"
 
+#include "Binding/NexusNiagaraInputBinding.h"
+#include "Binding/NexusNiagaraInputMetadata.h"
 #include "EdGraph/EdGraphPin.h"
 #include "EdGraphSchema_Niagara.h"
 #include "NiagaraEmitter.h"
@@ -14,30 +16,6 @@
 
 namespace UeNodeNexusBridge::VfxTranscode
 {
-static UEdGraphPin* FindOverridePin(UNiagaraNodeFunctionCall* Module, const FName PinName)
-{
-    UEdGraph* Graph = Module->GetGraph();
-    if (Graph == nullptr)
-    {
-        return nullptr;
-    }
-    for (UEdGraphNode* Node : Graph->Nodes)
-    {
-        if (Node == nullptr)
-        {
-            continue;
-        }
-        for (UEdGraphPin* Pin : Node->Pins)
-        {
-            if (Pin && Pin->Direction == EGPD_Input && Pin->PinName.IsEqual(PinName, ENameCase::IgnoreCase))
-            {
-                return Pin;
-            }
-        }
-    }
-    return nullptr;
-}
-
 bool ResolveRapidIterationInput(FNiagaraEmitterHandle& Handle, ENiagaraScriptUsage Usage, const FGuid& UsageId, UNiagaraNodeFunctionCall* Module, const FString& InputName, FNiagaraVariable& OutVariable, UNiagaraScript*& OutScript)
 {
     OutScript = nullptr;
@@ -96,36 +74,29 @@ static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle
     }
     const bool bAssignment = Module->GetClass()->GetName() == TEXT("NiagaraNodeAssignment");
     const TMap<FString, FString> Assigned = bAssignment ? AssignmentDefaults(Module) : TMap<FString, FString>();
-    const UEdGraphSchema_Niagara* Schema = GetDefault<UEdGraphSchema_Niagara>();
     for (const TPair<FNiagaraVariable, TObjectPtr<UNiagaraScriptVariable>>& Pair : CalledGraph->GetAllMetaData())
     {
         const FNiagaraVariable& Variable = Pair.Key;
         FString Name = Variable.GetName().ToString();
-        if (!Name.RemoveFromStart(TEXT("Module.")))
+        if (!IsAuthoredModuleInput(Variable, Pair.Value))
         {
             continue;
         }
+        Name.RemoveFromStart(TEXT("Module."));
+        const bool bStatic = Pair.Value && Pair.Value->GetIsStaticSwitch();
         TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
         Json->SetStringField(TEXT("name"), Name);
         Json->SetStringField(TEXT("type"), FriendlyTypeName(Variable.GetType()));
-        FString DefaultText;
-        if (Pair.Value)
-        {
-            if (const uint8* DefaultData = Pair.Value->GetDefaultValueData())
-            {
-                FNiagaraVariable DefaultVariable(Variable.GetType(), Variable.GetName());
-                DefaultVariable.SetData(DefaultData);
-                Schema->TryGetPinDefaultValueFromNiagaraVariable(DefaultVariable, DefaultText);
-            }
-        }
+        const FString DefaultText = ModuleInputDefaultText(Variable, Pair.Value);
         Json->SetStringField(TEXT("default"), DefaultText);
+        Json->SetBoolField(TEXT("static"), bStatic);
         const FNiagaraParameterHandle Aliased = FNiagaraParameterHandle::CreateAliasedModuleParameterHandle(FNiagaraParameterHandle(Variable.GetName()), Module);
-        UEdGraphPin* Override = FindOverridePin(Module, Aliased.GetParameterHandleString());
+        UEdGraphPin* Override = FindModuleOverridePin(*Module, Aliased.GetParameterHandleString());
         bool bHasOverride = Override != nullptr;
         FString ValueText = Override ? Override->DefaultValue : DefaultText;
         FNiagaraVariable RapidVariable;
         UNiagaraScript* Script = nullptr;
-        if (Override == nullptr && Handle != nullptr && Output != nullptr
+        if (!bStatic && Override == nullptr && Handle != nullptr && Output != nullptr
             && ResolveRapidIterationInput(*Handle, Output->GetUsage(), Output->GetUsageId(), Module, Name, RapidVariable, Script)
             && Script->RapidIterationParameters.IndexOf(RapidVariable) != INDEX_NONE)
         {

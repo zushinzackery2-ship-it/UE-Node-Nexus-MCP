@@ -9,8 +9,8 @@
 #include "Materials/MaterialExpression.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "Patch/UeNodeNexusBridgeMaterialPatchHelpers.h"
-#include "UeNodeNexusBridgeMaterialPropertySchema.h"
-#include "UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
+#include "Material/Properties/UeNodeNexusBridgeMaterialPropertySchema.h"
+#include "Blueprint/Creation/UeNodeNexusBridgeBlueprintNodeCreateConfig.h"
 
 namespace UeNodeNexusBridge
 {

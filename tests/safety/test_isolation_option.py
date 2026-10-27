@@ -31,12 +31,14 @@ def admitted(monkeypatch, rows, options):
     return calls[0] if calls else []
 
 
-RISKY = batch({
+RISKY = batch(
+{
     "/Game/MF_Base": unit("/Game/MF_Base"),
     "/Game/M_WPO": unit("/Game/M_WPO", ["/Game/MF_Base"], rendering=True, kind="material"),
 }, ["/Game/MF_Base", "/Game/M_WPO"])
 
-LOW_RISK = batch({
+LOW_RISK = batch(
+{
     "/Game/MF_Plain": unit("/Game/MF_Plain"),
     "/Game/M_LowRisk": unit("/Game/M_LowRisk", ["/Game/MF_Plain"], kind="material"),
 }, ["/Game/MF_Plain", "/Game/M_LowRisk"])

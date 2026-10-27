@@ -112,7 +112,14 @@ TSharedPtr<FJsonObject> HandleNiagaraModuleRemove(const FString& Operation, cons
     Payload->TryGetBoolField(TEXT("save"), bSave);
 
     const FString FunctionName = Module->GetFunctionName();
-    const bool bRemoved = !bDryRun && NiagaraModuleStack::RemoveModulePreservingStack(Module);
+    FString Error;
+    const bool bRemoved = !bDryRun && NiagaraModuleStack::RemoveModuleFromNativeStack(*System, *Handle, *Module, Error);
+    if (!bDryRun && !bRemoved)
+    {
+        TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
+        Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("native_module_remove_failed"), Error));
+        return Response;
+    }
     if (bRemoved)
     {
         NiagaraModuleStack::MarkSystemEdited(System);

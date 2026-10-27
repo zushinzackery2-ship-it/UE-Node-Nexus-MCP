@@ -10,18 +10,19 @@ try:
 except ModuleNotFoundError:  # MCP 2.x renamed FastMCP to MCPServer.
     from mcp.server import MCPServer as FastMCP
 
-from .bridge import BridgeError, UeBridgeClient
-from .contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
-from .features import consume_feature_args, read_feature_env, resolve_enabled_features
+from .bridge.client import UeBridgeClient
+from .bridge.normalization import normalize_bridge_response
+from .errors import BridgeError
+from .registry.contracts import DEFAULT_HIDDEN_OPERATIONS, FEATURE_GROUPS, OPERATION_FEATURES
+from .settings.features import consume_feature_args, read_feature_env, resolve_enabled_features
 from .instances.session import instance_manager
 from .instances.errors import InstanceError
 from .instances.session.lifespan import lifespan, configure as configure_session
-from .profiles import (
+from .settings.profiles import (
     DEFAULT_RESPONSE_MODE,
     consume_profile_args,
     read_profile_env,
 )
-from .response_normalization import normalize_bridge_response
 
 mcp = FastMCP("UE Node Nexus MCP", lifespan=lifespan)
 bridge = UeBridgeClient()

@@ -8,7 +8,7 @@
 #include "Dom/JsonValue.h"
 #include "EdGraph/EdGraph.h"
 #include "K2Node_AnimGetter.h"
-#include "UeNodeNexusBridgeBlueprintPatchHelpers.h"
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusAnimGetterBindings,
     "Nexus.Issues7.Animation.GetterBindings",

@@ -24,18 +24,28 @@ TSharedPtr<FJsonObject> StructValueSchema(UScriptStruct* Struct)
     FStructOnScope Defaults(Struct);
     for (TFieldIterator<FProperty> It(Struct); It; ++It)
     {
-        auto Field = ValueSchema(*It);
-        FString Text;
-        It->ExportTextItem_Direct(Text, It->ContainerPtrToValuePtr<void>(Defaults.GetStructMemory()), nullptr, nullptr, PPF_None);
-        if (!It->HasMetaData(TEXT("IgnoreForMemberInitializationTest")))
+        for (int32 Index = 0; Index < It->ArrayDim; ++Index)
         {
-            Field->SetStringField(TEXT("default"), Text);
+            auto Field = ValueSchema(*It);
+            FString Text;
+            It->ExportTextItem_Direct(Text, It->ContainerPtrToValuePtr<void>(Defaults.GetStructMemory(), Index), nullptr, nullptr, PPF_None);
+            if (!It->HasMetaData(TEXT("IgnoreForMemberInitializationTest")))
+            {
+                Field->SetStringField(TEXT("default"), Text);
+            }
+            else
+            {
+                Field->SetBoolField(TEXT("generated_default"), true);
+            }
+            FString Name = It->GetName();
+            if (It->ArrayDim > 1)
+            {
+                Name += FString::Printf(TEXT("[%d]"), Index);
+                Field->SetNumberField(TEXT("array_dim"), It->ArrayDim);
+                Field->SetNumberField(TEXT("array_index"), Index);
+            }
+            Fields->SetObjectField(Name, Field);
         }
-        else
-        {
-            Field->SetBoolField(TEXT("generated_default"), true);
-        }
-        Fields->SetObjectField(It->GetName(), Field);
     }
     Result->SetObjectField(TEXT("fields"), Fields);
     ActiveStructs.Remove(Struct);

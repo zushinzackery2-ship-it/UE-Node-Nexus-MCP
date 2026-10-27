@@ -5,13 +5,8 @@
 #include "Dom/JsonValue.h"
 #include "NiagaraEmitterHandle.h"
 #include "NiagaraNodeFunctionCall.h"
-#include "NiagaraNodeOutput.h"
-#include "NiagaraScript.h"
 #include "NiagaraSystem.h"
-#include "UeNodeNexusBridgeNiagaraModuleStack.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
-#include "UeNodeNexusNiagaraOps.h"
-#include "UeNodeNexusVfxTranscode.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogNexusNiagaraInputApply, Log, All);
 
@@ -32,9 +27,9 @@ void RejectInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
 }
 
 void ApplyModuleInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
-    UNiagaraNodeOutput& Output, UNiagaraNodeFunctionCall& Module, ENiagaraScriptUsage Usage,
+    UNiagaraNodeFunctionCall& Module,
     const TSharedPtr<FJsonObject>& Op, int32 Index, Transcode::FApplyContext& Context,
-    const TSharedPtr<FJsonObject>& Payload, FInputBindingContext& Bindings)
+    FInputBindingContext& Bindings)
 {
     FString Verb;
     FString Name;
@@ -51,68 +46,13 @@ void ApplyModuleInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
         RejectInput(System, Emitter, Module, Index, Name, Value, Error, Context);
         return;
     }
-    FNiagaraVariable Variable;
-    if (!ResolveModuleInput(Module, Name, Variable, Error))
+    bool bChanged = false;
+    if (!ApplyNativeInput(System, Emitter, Module, Name, Value, Verb,
+        Context.bDryRun, Bindings, bChanged, Error))
     {
         RejectInput(System, Emitter, Module, Index, Name, Value, Error, Context);
         return;
     }
-    if (bLink || HasLinkedOverride(Module, Variable))
-    {
-        bool bChanged = false;
-        const bool bOk = ApplyNativeInput(System, Emitter, Module, Name, Value, Verb,
-            Context.bDryRun, Bindings, bChanged, Error);
-        Context.bChanged |= bChanged;
-        if (!bOk)
-        {
-            Context.Fail(Index, Error.Code, Error.Message);
-        }
-        return;
-    }
-    FNiagaraVariable RapidVariable;
-    UNiagaraScript* Script = nullptr;
-    if (ResolveRapidIterationInput(Emitter, Usage, Output.GetUsageId(), &Module, Name, RapidVariable, Script)
-        && Script->RapidIterationParameters.IndexOf(RapidVariable) != INDEX_NONE)
-    {
-        Script->Modify();
-        bool bOk = true;
-        if (Verb == TEXT("ns_module_input_reset"))
-        {
-            Script->RapidIterationParameters.RemoveParameter(RapidVariable);
-        }
-        else
-        {
-            bOk = SetParameterValueText(Script->RapidIterationParameters, RapidVariable, Value, false, &Error.Message);
-        }
-        if (!bOk)
-        {
-            Error.Code = TEXT("input_value_invalid");
-            RejectInput(System, Emitter, Module, Index, Name, Value, Error, Context);
-            return;
-        }
-        NiagaraModuleStack::MarkSystemEdited(&System);
-        Context.bChanged = true;
-        return;
-    }
-    TSharedPtr<FJsonObject> Param = MakeShared<FJsonObject>();
-    Param->SetStringField(TEXT("name"), Name);
-    Param->SetStringField(TEXT("value_text"), Value);
-    TArray<TSharedPtr<FJsonValue>> Params;
-    Params.Add(MakeShared<FJsonValueObject>(Param));
-    Payload->SetArrayField(TEXT("params"), Params);
-    Payload->SetBoolField(TEXT("dry_run"), false);
-    Payload->SetBoolField(TEXT("save"), false);
-    const TSharedPtr<FJsonObject> Response = HandleNiagaraModuleInputsSet(TEXT("niagara_module_inputs_set"), TEXT("transcode"), Payload);
-    if (!Response.IsValid() || !Response->GetBoolField(TEXT("ok")))
-    {
-        const TSharedPtr<FJsonObject>* Failure = nullptr;
-        const FString Message = Response.IsValid() && Response->TryGetObjectField(TEXT("error"), Failure)
-            ? (*Failure)->GetStringField(TEXT("message")) : TEXT("module input handler returned no response");
-        Error.Code = TEXT("input_failed");
-        Error.Message = Message;
-        RejectInput(System, Emitter, Module, Index, Name, Value, Error, Context);
-        return;
-    }
-    Context.bChanged = true;
+    Context.bChanged |= bChanged;
 }
 }

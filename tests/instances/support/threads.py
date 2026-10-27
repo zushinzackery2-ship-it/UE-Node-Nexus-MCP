@@ -40,15 +40,9 @@ def game_thread(instance):
         entry.size = ctypes.sizeof(entry)
         present = native.Thread32First(snapshot, ctypes.byref(entry))
         while present:
-            if entry.process == instance["pid"]:
-                handle = native.OpenThread(0x802, False, entry.thread)
-                if handle:
-                    times = [w.FILETIME() for _ in range(4)]
-                    if not native.GetThreadTimes(handle, *[ctypes.byref(value) for value in times]):
-                        native.CloseHandle(handle)
-                        raise ctypes.WinError(ctypes.get_last_error())
-                    created = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
-                    found.append((created, entry.thread, handle))
+            opened = opened_thread(native, entry.thread) if entry.process == instance["pid"] else None
+            if opened:
+                found.append((opened[0], entry.thread, opened[1]))
             present = native.Thread32Next(snapshot, ctypes.byref(entry))
     finally:
         native.CloseHandle(snapshot)
@@ -64,6 +58,18 @@ def game_thread(instance):
         native.CloseHandle(handle)
         raise AssertionError("the initial UE thread could not be verified")
     return native, (identifier, handle)
+
+
+def opened_thread(native, thread_id):
+    """(creation FILETIME, suspend/query handle) of the thread; None when it cannot be opened."""
+    handle = native.OpenThread(0x802, False, thread_id)
+    if not handle:
+        return None
+    times = [w.FILETIME() for _ in range(4)]
+    if not native.GetThreadTimes(handle, *[ctypes.byref(value) for value in times]):
+        native.CloseHandle(handle)
+        raise ctypes.WinError(ctypes.get_last_error())
+    return (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime, handle
 
 
 @contextmanager

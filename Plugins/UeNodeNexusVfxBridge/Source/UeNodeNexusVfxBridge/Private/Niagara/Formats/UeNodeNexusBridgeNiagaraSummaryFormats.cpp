@@ -1,27 +1,15 @@
 #include "UeNodeNexusBridgeNiagaraSummaryFormats.h"
 
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
-#include "UeNodeNexusBridgeNiagaraIndexedFormat.h"
 
 #include "Dom/JsonValue.h"
 #include "NiagaraParameterStore.h"
 #include "NiagaraSystem.h"
 
-#include <initializer_list>
-
 namespace UeNodeNexusBridge::NiagaraSummaryFormats
 {
-static void AddColumns(TSharedPtr<FJsonObject> Data, std::initializer_list<const TCHAR*> Columns)
-{
-    TArray<TSharedPtr<FJsonValue>> Values;
-    for (const TCHAR* Column : Columns)
-    {
-        Values.Add(MakeShared<FJsonValueString>(FString(Column)));
-    }
-    Data->SetArrayField(TEXT("columns"), Values);
-}
-
 bool IsSupportedFormat(const FString& Format)
 {
     return Format.Equals(TEXT("compact"), ESearchCase::IgnoreCase)
@@ -109,7 +97,7 @@ static void EncodeEmitterRows(const TArray<TSharedPtr<FJsonValue>>& Rows, TArray
         OutRows.Add(FString::Printf(
             TEXT("%d:%d:%d:%d"),
             static_cast<int32>(Row[0]->AsNumber()),
-            NiagaraIndexedFormat::DictIndex(NameDict, OutNames, Row[1]->AsString()),
+            DictIndex(NameDict, OutNames, Row[1]->AsString()),
             bEnabled ? 1 : 0,
             RowRendererCount));
     }
@@ -123,8 +111,8 @@ static TSharedPtr<FJsonObject> BuildEmitterIndexedData(UNiagaraSystem* System, c
     int32 RendererCount = 0;
     EncodeEmitterRows(Rows, Names, EncodedRows, EnabledCount, RendererCount);
 
-    FString Text = FString::Printf(TEXT("G:%s|niagara|%s|%d\n"), *NiagaraIndexedFormat::EscapeToken(System ? System->GetPathName() : FString()), *GroupName, EncodedRows.Num());
-    Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("N:"), Names);
+    FString Text = FString::Printf(TEXT("G:%s|niagara|%s|%d\n"), *EscapeIndexedToken(System ? System->GetPathName() : FString()), *GroupName, EncodedRows.Num());
+    Text += JoinDictionaryLine(TEXT("N:"), Names);
     Text += TEXT("E:") + FString::Join(EncodedRows, TEXT("|")) + TEXT("\n");
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -133,7 +121,7 @@ static TSharedPtr<FJsonObject> BuildEmitterIndexedData(UNiagaraSystem* System, c
     Data->SetNumberField(TEXT("enabled_count"), EnabledCount);
     Data->SetNumberField(TEXT("renderer_count"), RendererCount);
     Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
-    NiagaraIndexedFormat::SetTextPayload(Data, Text);
+    SetTextPayload(Data, Text);
     return Data;
 }
 
@@ -183,7 +171,7 @@ static TSharedPtr<FJsonObject> BuildSystemSummaryIndexedData(UNiagaraSystem* Sys
 
     FString Text = FString::Printf(
         TEXT("G:%s|niagara|summary|%d\n"),
-        *NiagaraIndexedFormat::EscapeToken(System ? System->GetPathName() : FString()),
+        *EscapeIndexedToken(System ? System->GetPathName() : FString()),
         EncodedRows.Num());
     Text += FString::Printf(
         TEXT("S:ready=%d;needs_compile=%d;emitters=%d;enabled_emitters=%d;renderers=%d;enabled_renderers=%d;user_params=%d;readiness_issues=%d\n"),
@@ -195,13 +183,13 @@ static TSharedPtr<FJsonObject> BuildSystemSummaryIndexedData(UNiagaraSystem* Sys
         CountEnabledNiagaraRenderers(System),
         CountUserParams(System),
         CountNiagaraReadinessIssues(System));
-    Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("N:"), Names);
+    Text += JoinDictionaryLine(TEXT("N:"), Names);
     Text += TEXT("E:") + FString::Join(EncodedRows, TEXT("|")) + TEXT("\n");
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("format"), TEXT("niagara_system_summary_indexed"));
     AddSummaryCounts(System, Data);
-    NiagaraIndexedFormat::SetTextPayload(Data, Text);
+    SetTextPayload(Data, Text);
     return Data;
 }
 
@@ -229,7 +217,7 @@ TSharedPtr<FJsonObject> BuildSystemSummaryData(UNiagaraSystem* System, const FSt
     AddSummaryCounts(System, Data);
     if (bCompact)
     {
-        AddColumns(Data, { TEXT("index"), TEXT("name"), TEXT("enabled"), TEXT("renderer_count") });
+        SetColumns(Data, { TEXT("index"), TEXT("name"), TEXT("enabled"), TEXT("renderer_count") });
         Data->SetArrayField(TEXT("emitters"), Rows);
     }
     else if (bFull)
@@ -260,7 +248,7 @@ TSharedPtr<FJsonObject> BuildEmittersListData(UNiagaraSystem* System, const FStr
     Data->SetStringField(TEXT("format"), bCompact ? TEXT("niagara_emitters_compact") : TEXT("full"));
     if (bCompact)
     {
-        AddColumns(Data, { TEXT("index"), TEXT("name"), TEXT("enabled"), TEXT("renderer_count") });
+        SetColumns(Data, { TEXT("index"), TEXT("name"), TEXT("enabled"), TEXT("renderer_count") });
         Data->SetArrayField(TEXT("items"), Rows);
     }
     else if (bFull)

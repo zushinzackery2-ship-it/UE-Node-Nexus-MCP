@@ -5,7 +5,8 @@ import inspect
 import logging
 from pathlib import Path
 
-from .... import __version__, task_queue
+from .... import __version__
+from ....tasks import queue as task_queue
 from ...errors import SyncError
 
 LOG = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ def disk_contract():
     module = ast.parse(source.read_text(encoding="utf-8"))
     function = next(node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "submit_callable")
     names = [arg.arg for arg in (*function.args.posonlyargs, *function.args.args, *function.args.kwonlyargs)]
-    package = ast.parse(source.with_name("__init__.py").read_text(encoding="utf-8"))
+    package = ast.parse((source.parents[1] / "__init__.py").read_text(encoding="utf-8"))
     version = next(node.value.value for node in package.body if isinstance(node, ast.Assign)
                    and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets))
     return dict(path=str(source), version=version,

@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "Subsystems/EditorActorSubsystem.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeListFormats.h"
 
 namespace UeNodeNexusBridge
 {
@@ -193,14 +194,7 @@ TSharedPtr<FJsonObject> HandleLevelActorsList(const FString& Operation, const FS
     else if (bCompact)
     {
         Data->SetStringField(TEXT("format"), TEXT("level_actors_compact"));
-        Data->SetArrayField(TEXT("columns"), {
-            MakeShared<FJsonValueString>(TEXT("actor_path")),
-            MakeShared<FJsonValueString>(TEXT("label")),
-            MakeShared<FJsonValueString>(TEXT("class")),
-            MakeShared<FJsonValueString>(TEXT("x")),
-            MakeShared<FJsonValueString>(TEXT("y")),
-            MakeShared<FJsonValueString>(TEXT("z"))
-        });
+        SetColumns(Data, { TEXT("actor_path"), TEXT("label"), TEXT("class"), TEXT("x"), TEXT("y"), TEXT("z") });
     }
     if (!bIndexed)
     {

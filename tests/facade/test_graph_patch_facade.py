@@ -91,7 +91,8 @@ def test_material_graph_patch_does_not_replace_pin_names_that_match_client_ids(a
 
 def test_blueprint_graph_patch_forwards_payload_unchanged(all_features, use_bridge) -> None:
     bridge = use_bridge(RecordingBridge())
-    payload = {
+    payload = (
+    {
         "asset_path": "/Game/BP/BP_Test.BP_Test",
         "graph_kind": "blueprint",
         "graph_name": "EventGraph",
@@ -100,7 +101,7 @@ def test_blueprint_graph_patch_forwards_payload_unchanged(all_features, use_brid
             {"op": "create_node", "client_id": "branch", "node_class": "Branch"},
             {"op": "connect_pins", "from_node_id": "branch", "from_pin": "Then", "to_node_id": "x", "to_pin": "execute"},
         ],
-    }
+    })
 
     response = _patch(payload)
 
@@ -128,14 +129,18 @@ def test_a_field_the_operation_does_not_declare_is_refused_with_the_accepted_lis
 
 def test_graph_patch_nonfatal_material_attribute_pin_integrity_does_not_fail_root(all_features, use_bridge) -> None:
     bridge = use_bridge(RecordingBridge())
-    bridge.response = {
+    bridge.response = (
+    {
         "ok": False,
         "operation": "graph_patch_apply",
-        "data": {
+        "data":
+        {
             "applied": True,
             "changed": True,
-            "post_checks": {
-                "pin_integrity": {
+            "post_checks":
+            {
+                "pin_integrity":
+                {
                     "ok": False,
                     "broken_links": [
                         {
@@ -147,7 +152,8 @@ def test_graph_patch_nonfatal_material_attribute_pin_integrity_does_not_fail_roo
                     ],
                     "missing_pins": [],
                 },
-                "compile": {
+                "compile":
+                {
                     "requested": False,
                     "ran": False,
                     "ok": True,
@@ -157,7 +163,7 @@ def test_graph_patch_nonfatal_material_attribute_pin_integrity_does_not_fail_roo
         },
         "diagnostics": [],
         "warnings": [],
-    }
+    })
 
     original = deepcopy(bridge.response)
     response = _patch(

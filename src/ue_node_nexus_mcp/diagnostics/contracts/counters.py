@@ -1,7 +1,7 @@
 """Map known operation and post-check counters instead of scanning arbitrary JSON."""
 
-from ...contracts import WRITE_OPERATIONS
-from ...diagnostic_counting import coerce_error_count, count_diagnostic_errors, count_diagnostic_warnings
+from ...registry.contracts import WRITE_OPERATIONS
+from ..counting import coerce_error_count, count_diagnostic_errors, count_diagnostic_warnings
 
 
 def operation_counts(response: dict) -> tuple[int, int]:

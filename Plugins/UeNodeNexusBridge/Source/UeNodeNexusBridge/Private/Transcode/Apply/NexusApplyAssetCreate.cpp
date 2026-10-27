@@ -3,8 +3,8 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Dom/JsonObject.h"
 #include "Misc/PackageName.h"
-#include "NexusBlueprintAssetType.h"
-#include "UeNodeNexusBridgeAssetCreateHelpers.h"
+#include "Assets/Creation/NexusBlueprintAssetType.h"
+#include "Assets/Creation/UeNodeNexusBridgeAssetCreateHelpers.h"
 #include "UeNodeNexusBridgeAssetPaths.h"
 #include "UObject/Package.h"
 

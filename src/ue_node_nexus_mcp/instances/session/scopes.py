@@ -6,7 +6,7 @@ import time
 import uuid
 
 from ..errors import InstanceError, require
-from ...transport import make_pipe_name
+from ...bridge.transport import make_pipe_name
 
 LOG = logging.getLogger(__name__)
 

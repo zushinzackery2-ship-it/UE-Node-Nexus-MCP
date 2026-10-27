@@ -86,6 +86,43 @@ static void NormalizePin(const TSharedPtr<FJsonObject>& Pin)
     }
 }
 
+static void NormalizePins(const TSharedPtr<FJsonObject>& Owner, const TCHAR* Field)
+{
+    const TArray<TSharedPtr<FJsonValue>>* Pins = nullptr;
+    if (!Owner->TryGetArrayField(Field, Pins))
+    {
+        return;
+    }
+    for (const auto& Pin : *Pins)
+    {
+        NormalizePin(Pin->AsObject());
+    }
+}
+
+static void NormalizeSignature(const TSharedPtr<FJsonObject>& Graph)
+{
+    const TSharedPtr<FJsonObject>* Signature = nullptr;
+    if (!Graph->TryGetObjectField(TEXT("signature"), Signature))
+    {
+        return;
+    }
+    for (const TCHAR* Direction : { TEXT("inputs"), TEXT("outputs") })
+    {
+        NormalizePins(*Signature, Direction);
+    }
+}
+
+static void NormalizeNode(const TSharedPtr<FJsonObject>& Node)
+{
+    FString Opaque;
+    if (Node->TryGetStringField(TEXT("t3d"), Opaque) && !Opaque.IsEmpty())
+    {
+        Node->SetStringField(TEXT("t3d"), OpaqueRevisionText(Opaque));
+    }
+    SortIdentified(Node, TEXT("pins"), TEXT("guid"));
+    NormalizePins(Node, TEXT("pins"));
+}
+
 TSharedPtr<FJsonObject> BlueprintRevisionState(const TSharedPtr<FJsonObject>& Raw)
 {
     auto Result = CloneValue(MakeShared<FJsonValueObject>(Raw))->AsObject();
@@ -103,21 +140,7 @@ TSharedPtr<FJsonObject> BlueprintRevisionState(const TSharedPtr<FJsonObject>& Ra
     for (const auto& GraphValue : *Graphs)
     {
         auto Graph = GraphValue->AsObject();
-        const TSharedPtr<FJsonObject>* Signature = nullptr;
-        if (Graph->TryGetObjectField(TEXT("signature"), Signature))
-        {
-            for (const TCHAR* Direction : { TEXT("inputs"), TEXT("outputs") })
-            {
-                const TArray<TSharedPtr<FJsonValue>>* Parameters = nullptr;
-                if ((*Signature)->TryGetArrayField(Direction, Parameters))
-                {
-                    for (const auto& Parameter : *Parameters)
-                    {
-                        NormalizePin(Parameter->AsObject());
-                    }
-                }
-            }
-        }
+        NormalizeSignature(Graph);
         SortIdentified(Graph, TEXT("nodes"), TEXT("guid"));
         const TArray<TSharedPtr<FJsonValue>>* Nodes = nullptr;
         if (!Graph->TryGetArrayField(TEXT("nodes"), Nodes))
@@ -126,21 +149,7 @@ TSharedPtr<FJsonObject> BlueprintRevisionState(const TSharedPtr<FJsonObject>& Ra
         }
         for (const auto& NodeValue : *Nodes)
         {
-            auto Node = NodeValue->AsObject();
-            FString Opaque;
-            if (Node->TryGetStringField(TEXT("t3d"), Opaque) && !Opaque.IsEmpty())
-            {
-                Node->SetStringField(TEXT("t3d"), OpaqueRevisionText(Opaque));
-            }
-            SortIdentified(Node, TEXT("pins"), TEXT("guid"));
-            const TArray<TSharedPtr<FJsonValue>>* Pins = nullptr;
-            if (Node->TryGetArrayField(TEXT("pins"), Pins))
-            {
-                for (const auto& Pin : *Pins)
-                {
-                    NormalizePin(Pin->AsObject());
-                }
-            }
+            NormalizeNode(NodeValue->AsObject());
         }
     }
     return Result;

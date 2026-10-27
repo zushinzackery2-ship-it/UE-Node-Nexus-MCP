@@ -8,7 +8,7 @@ from typing import Any, Callable
 import pytest
 
 from ue_node_nexus_mcp import runtime
-from ue_node_nexus_mcp.contracts import FEATURE_GROUPS
+from ue_node_nexus_mcp.registry.contracts import FEATURE_GROUPS
 
 
 def pytest_configure(config: pytest.Config) -> None:

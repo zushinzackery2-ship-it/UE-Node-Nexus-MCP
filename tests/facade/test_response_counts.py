@@ -1,6 +1,6 @@
 """The bridge reports log errors and warnings in one stream; counts keep them apart."""
 
-from ue_node_nexus_mcp.facade_response import diagnostic_counts
+from ue_node_nexus_mcp.facade.response import diagnostic_counts
 
 
 def test_log_errors_are_not_counted_as_warnings():

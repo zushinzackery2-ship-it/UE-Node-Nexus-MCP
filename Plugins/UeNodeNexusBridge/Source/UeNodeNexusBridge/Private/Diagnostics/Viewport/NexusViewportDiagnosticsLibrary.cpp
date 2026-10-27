@@ -105,11 +105,20 @@ static FString CaptureAtPhase(const FString& Filename,
     auto Rejected = MakeShared<FJsonObject>();
     Rejected->SetBoolField(TEXT("requested"), false);
     Rejected->SetStringField(TEXT("state"), TEXT("rejected"));
-    if (!UeNodeNexusBridge::Capture::IsSafeScreenshotName(Filename)
-        || TemporalSample < 0 || FrameMod8 < 0 || FrameMod8 > 7
-        || !FMath::IsFinite(TimeoutSeconds) || TimeoutSeconds < 1 || TimeoutSeconds > 120)
+    FString Message;
+    TSharedPtr<FJsonObject> Violation = UeNodeNexusBridge::Capture::CheckNameAndTimeout(Filename, TimeoutSeconds, Message);
+    if (!Violation.IsValid() && (TemporalSample < 0 || FrameMod8 < 0 || FrameMod8 > 7))
+    {
+        const bool bSample = TemporalSample < 0;
+        Message = bSample ? TEXT("temporal_sample must be non-negative") : TEXT("frame_mod8 must be 0..7");
+        Violation = MakeShared<FJsonObject>();
+        Violation->SetStringField(TEXT("field"), bSample ? TEXT("temporal_sample") : TEXT("frame_mod8"));
+    }
+    if (Violation.IsValid())
     {
         Rejected->SetStringField(TEXT("error_code"), TEXT("invalid_request"));
+        Rejected->SetStringField(TEXT("error_message"), Message);
+        Rejected->SetObjectField(TEXT("error_details"), Violation);
         return UeNodeNexusBridge::SerializeJsonObjectToString(Rejected);
     }
     auto Phase = MakeShared<FJsonObject>();

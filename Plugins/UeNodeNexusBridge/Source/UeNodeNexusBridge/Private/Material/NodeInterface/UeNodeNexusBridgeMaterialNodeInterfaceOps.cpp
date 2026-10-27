@@ -78,7 +78,8 @@ static TArray<FString> MaterialOutputLines(UMaterial* Material, UMaterialExpress
 TSharedPtr<FJsonObject> BuildMaterialNodeInterfaceData(UMaterial* Material, UMaterialExpression* Expression, const TSharedPtr<FJsonObject>& Payload, const FString& Prefix)
 {
     const FString Alias = MaterialNodeAlias(Material, Expression);
-    TArray<FString> Header = {
+    TArray<FString> Header =
+    {
         FString::Printf(TEXT("Node.Name = %s"), *Alias),
         FString::Printf(TEXT("Node.Class = %s"), *ShortMaterialExpressionClass(Expression)),
         FString::Printf(TEXT("Node.Id = %s"), *Alias),

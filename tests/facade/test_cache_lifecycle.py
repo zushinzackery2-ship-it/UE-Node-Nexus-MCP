@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from ue_node_nexus_mcp.facade_state import FacadeState
+from ue_node_nexus_mcp.facade.state import FacadeState
 from ue_node_nexus_mcp.instances.errors import InstanceError
 
 

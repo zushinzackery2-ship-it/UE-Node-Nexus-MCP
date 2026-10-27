@@ -6,12 +6,12 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialExpression.h"
 #include "Materials/MaterialFunction.h"
-#include "UeNodeNexusBridgeBlueprintGraphFilter.h"
+#include "Blueprint/Graphs/UeNodeNexusBridgeBlueprintGraphFilter.h"
 #include "NodeInterface/UeNodeNexusBridgeBlueprintNodeInterfaceOps.h"
 #include "UeNodeNexusBridgeGraphGroupedInfoOps.h"
 #include "UeNodeNexusBridgeJson.h"
 #include "NodeInterface/UeNodeNexusBridgeMaterialNodeInterfaceOps.h"
-#include "UeNodeNexusBridgeMaterialNodeFilter.h"
+#include "Material/Graph/UeNodeNexusBridgeMaterialNodeFilter.h"
 
 namespace UeNodeNexusBridge
 {

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from ...diagnostic_counting import coerce_error_count
+from ..counting import coerce_error_count
 from .samples import compact
 from .verdict import runtime_verdict
 

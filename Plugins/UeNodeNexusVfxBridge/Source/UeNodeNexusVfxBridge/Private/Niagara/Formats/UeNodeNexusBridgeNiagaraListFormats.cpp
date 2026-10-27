@@ -1,16 +1,14 @@
 #include "UeNodeNexusBridgeNiagaraListFormats.h"
 
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
-#include "UeNodeNexusBridgeNiagaraIndexedFormat.h"
 
 #include "Dom/JsonValue.h"
 #include "NiagaraEmitter.h"
 #include "NiagaraEmitterHandle.h"
 #include "NiagaraRendererProperties.h"
 #include "NiagaraSystem.h"
-
-#include <initializer_list>
 
 namespace UeNodeNexusBridge::NiagaraListFormats
 {
@@ -27,16 +25,6 @@ TSharedPtr<FJsonObject> MakeInvalidFormatResponse(const FString& Operation, cons
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, false);
     Response->SetObjectField(TEXT("error"), UeNodeNexusBridge::MakeError(TEXT("invalid_format"), FString::Printf(TEXT("Unsupported Niagara list format: %s"), *Format)));
     return Response;
-}
-
-static void AddColumns(TSharedPtr<FJsonObject> Data, std::initializer_list<const TCHAR*> Columns)
-{
-    TArray<TSharedPtr<FJsonValue>> Values;
-    for (const TCHAR* Column : Columns)
-    {
-        Values.Add(MakeShared<FJsonValueString>(FString(Column)));
-    }
-    Data->SetArrayField(TEXT("columns"), Values);
 }
 
 FString ShortRendererClass(const FString& ClassName)
@@ -90,14 +78,14 @@ static TSharedPtr<FJsonObject> BuildRendererIndexedData(UNiagaraSystem* System, 
             TEXT("%d:%d:%d:%d:%d"),
             static_cast<int32>(Row[0]->AsNumber()),
             static_cast<int32>(Row[1]->AsNumber()),
-            NiagaraIndexedFormat::DictIndex(ClassDict, Classes, Row[2]->AsString()),
+            DictIndex(ClassDict, Classes, Row[2]->AsString()),
             Row[3]->AsBool() ? 1 : 0,
-            NiagaraIndexedFormat::DictIndex(MaterialDict, Materials, Row[4]->AsString())));
+            DictIndex(MaterialDict, Materials, Row[4]->AsString())));
     }
 
-    FString Text = FString::Printf(TEXT("G:%s|niagara|renderers|%d\n"), *NiagaraIndexedFormat::EscapeToken(System ? System->GetPathName() : FString()), EncodedRows.Num());
-    Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("C:"), Classes);
-    Text += NiagaraIndexedFormat::JoinDictionaryLine(TEXT("M:"), Materials);
+    FString Text = FString::Printf(TEXT("G:%s|niagara|renderers|%d\n"), *EscapeIndexedToken(System ? System->GetPathName() : FString()), EncodedRows.Num());
+    Text += JoinDictionaryLine(TEXT("C:"), Classes);
+    Text += JoinDictionaryLine(TEXT("M:"), Materials);
     Text += TEXT("R:") + FString::Join(EncodedRows, TEXT("|")) + TEXT("\n");
 
     TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -105,7 +93,7 @@ static TSharedPtr<FJsonObject> BuildRendererIndexedData(UNiagaraSystem* System, 
     Data->SetNumberField(TEXT("count"), EncodedRows.Num());
     Data->SetNumberField(TEXT("class_count"), Classes.Num());
     Data->SetNumberField(TEXT("material_count"), Materials.Num());
-    NiagaraIndexedFormat::SetTextPayload(Data, Text);
+    SetTextPayload(Data, Text);
     return Data;
 }
 
@@ -184,7 +172,7 @@ TSharedPtr<FJsonObject> BuildRenderersListData(UNiagaraSystem* System, const FSt
     Data->SetStringField(TEXT("format"), bCompact ? TEXT("niagara_renderers_compact") : TEXT("full"));
     if (bCompact)
     {
-        AddColumns(Data, { TEXT("emitter_index"), TEXT("renderer_index"), TEXT("class"), TEXT("enabled"), TEXT("material_path") });
+        SetColumns(Data, { TEXT("emitter_index"), TEXT("renderer_index"), TEXT("class"), TEXT("enabled"), TEXT("material_path") });
     }
     Data->SetArrayField(TEXT("items"), Items);
     Data->SetNumberField(TEXT("count"), Items.Num());

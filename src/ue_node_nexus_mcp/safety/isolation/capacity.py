@@ -1,11 +1,14 @@
 """Account for the target filesystem's real allocation before copying inputs."""
 
 import ctypes
-from ctypes import wintypes
 import os
+import shutil
+import time
+from ctypes import wintypes
 from pathlib import Path
 
 from ...instances.errors import require
+from .layout import copy_layout
 
 
 def allocation_unit(path: Path) -> int:
@@ -30,18 +33,13 @@ def allocation_unit(path: Path) -> int:
     return values[0].value * values[1].value
 
 
-def estimate(plan: dict, target: Path, factor: float, reserve: int, baseline=None, subset=None) -> dict:
-    """Size the target volume for the files that will really be written.
-
-    ``subset`` names the project-relative inputs copied for real in an overlay
-    snapshot; every other input is a link and costs no allocation.
-    """
+def estimate(plan: dict, target: Path, factor: float, reserve: int, baseline=None, subset=None, *, layout=None) -> dict:
+    """Count mandatory real files, each planned link and target allocation units."""
     unit = allocation_unit(target)
-    paths = plan["files"]
-    if subset is not None:
-        root = Path(plan["project"]).parent
-        paths = [path for path in paths if path.relative_to(root).as_posix() in subset]
+    layout = layout if layout is not None else copy_layout(plan, subset)
+    paths = [row["source"] for row in layout["rows"] if row["mode"] == "copy"]
     sizes = [path.stat().st_size for path in paths]
+    copy_bytes = sum(sizes)
     if baseline:
         for row in baseline.get("files", []):
             if row.get("hash") == "absent":
@@ -50,7 +48,20 @@ def estimate(plan: dict, target: Path, factor: float, reserve: int, baseline=Non
             require(source.is_file(), "isolation_baseline_changed", "serialized baseline file is missing", path=str(source))
             sizes.append(source.stat().st_size)
     allocated = sum(((size + unit - 1) // unit) * unit for size in sizes)
-    # Directory entries and newly exported mirrors also consume allocation units.
-    allocated += len(sizes) * unit
+    linked = [row for row in layout["rows"] if row["mode"] == "link"]
+    link_entries = len(layout["linked_directories"]) + sum(not row["link_directory"] for row in linked)
+    allocated += (len(sizes) + len(layout["directories"]) + link_entries) * unit
+    existing = target.absolute()
+    while not existing.exists():
+        existing = existing.parent
+    measured_at = time.time()
+    free = shutil.disk_usage(existing).free
+    source_root = Path(plan["project"]).anchor if plan.get("project") else target.anchor
     return dict(allocation_unit_bytes=unit, input_allocation_bytes=allocated,
-                required_bytes=int(max(sum(sizes), allocated) * factor) + reserve)
+                required_bytes=int(max(sum(sizes), allocated) * factor) + reserve,
+                copy_bytes=copy_bytes, copied_files=len(paths), linked_files=len(linked),
+                linked_directories=len(layout["linked_directories"]), link_entries=link_entries,
+                directory_entries=len(layout["directories"]), cross_volume_copy_bytes=copy_bytes
+                if source_root.casefold() != target.anchor.casefold() else 0,
+                target_path=str(target.absolute()), measured_path=str(existing),
+                measured_at=measured_at, free_bytes=free)

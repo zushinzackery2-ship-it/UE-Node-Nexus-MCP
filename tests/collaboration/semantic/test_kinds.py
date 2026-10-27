@@ -164,11 +164,8 @@ def test_blueprint_class_method_dependency_survives_collaboration_preflight(tmp_
         raw = blueprint_raw()
         raw["blueprint"]["interfaces"] = []
         node = raw["blueprint"]["graphs"][0]["nodes"][2]
-        node["config"] = {
-            "function_owner": "/Game/Blueprints/BP_Door.BP_Door_C",
-            "function_name": "TakeDamage",
-            "self_context": "true",
-        }
+        node["config"] = dict(function_owner="/Game/Blueprints/BP_Door.BP_Door_C", function_name="TakeDamage",
+                              self_context="true")
         mesh = raw["blueprint"]["components"][1]
         mesh["props"] = [prop for prop in mesh["props"] if prop["name"] != "StaticMesh"]
         return raw

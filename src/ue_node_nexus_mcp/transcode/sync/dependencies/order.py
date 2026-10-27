@@ -34,20 +34,20 @@ def _raise_cycle(documents, dependencies, blocked, schema) -> None:
     raise SyncError("dependency_cycle", "cyclic asset dependencies block: " + ", ".join(blocked), details)
 
 
-def order_assets(documents: dict[str, tuple[str, Document]], required: set[str] | None = None,
-                 available: set[str] | None = None, schema=None) -> list[str]:
+def order_assets(documents: dict[str, tuple[str, Document]], available: set[str] | None = None, schema=None,
+                 content: dict[str, set[str]] | None = None) -> list[str]:
     """Kahn ordering in O((V + E) log V); reject cycles before any writes.
 
-    ``required`` restricts edges to assets whose new contents are needed by
-    consumers. A dependency that is already ``available`` in the editor keeps
-    its own content, so it constrains no creation order and its edges are
-    dropped; an interface change simply keeps the asset out of ``available``.
+    A dependency the editor already holds with an unchanged interface
+    (``available``) keeps its own content, so it constrains no creation order
+    and its edges are dropped. ``content`` edges stay regardless: their consumer
+    applies against what the dependency publishes (see ``content_sources``).
     """
     selected = set(documents)
-    required = selected if required is None else required
     available = set() if available is None else set(available)
+    content = dict() if content is None else content
     dependencies = dict(
-        (asset, document_dependencies(document, kind, schema) & selected & required - available)
+        (asset, ((document_dependencies(document, kind, schema) - available) | set(content.get(asset, ()))) & selected)
         for asset, (kind, document) in documents.items()
     )
     consumers: dict[str, list[str]] = defaultdict(list)

@@ -10,13 +10,13 @@ namespace UeNodeNexusBridge
 {
 namespace
 {
-struct FPending
+struct FQueuedRequest
 {
     TSharedPtr<FJsonObject> Request;
     TSharedPtr<TPromise<FString>> Promise;
 };
 FCriticalSection Mutex;
-TArray<FPending> Pending;
+TArray<FQueuedRequest> QueuedRequests;
 FDelegateHandle FrameHandle;
 bool bAccepting = false;
 bool bPumping = false;
@@ -40,9 +40,9 @@ TFuture<FString> EnqueueBridgeRequest(const TSharedPtr<FJsonObject>& Request)
     FString Reason;
     {
         FScopeLock Lock(&Mutex);
-        if (bAccepting && Pending.Num() < 4)
+        if (bAccepting && QueuedRequests.Num() < 4)
         {
-            Pending.Add(
+            QueuedRequests.Add(
                 { Request, Promise });
             return Future;
         }
@@ -59,15 +59,15 @@ void PumpRequestQueue()
     {
         return;
     }
-    FPending Item;
+    FQueuedRequest Item;
     {
         FScopeLock Lock(&Mutex);
-        if (!bAccepting || Pending.IsEmpty())
+        if (!bAccepting || QueuedRequests.IsEmpty())
         {
             return;
         }
-        Item = MoveTemp(Pending[0]);
-        Pending.RemoveAt(0);
+        Item = MoveTemp(QueuedRequests[0]);
+        QueuedRequests.RemoveAt(0);
     }
     // OnBeginFrame runs before world ticking. TaskGraph pumping during a world
     // tick, GC, shader wait or modal dialog cannot execute a queued mutation.
@@ -88,11 +88,11 @@ void StopRequestQueue()
 {
     check(IsInGameThread());
     FCoreDelegates::OnBeginFrame.Remove(FrameHandle);
-    TArray<FPending> Cancelled;
+    TArray<FQueuedRequest> Cancelled;
     {
         FScopeLock Lock(&Mutex);
         bAccepting = false;
-        Cancelled = MoveTemp(Pending);
+        Cancelled = MoveTemp(QueuedRequests);
     }
     for (const auto& Item : Cancelled)
     {

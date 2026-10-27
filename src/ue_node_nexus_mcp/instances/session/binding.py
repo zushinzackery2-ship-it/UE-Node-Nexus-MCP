@@ -11,7 +11,7 @@ import threading
 
 from ..broker.client import BrokerClient
 from ..errors import InstanceError, require
-from ...transport import make_pipe_name
+from ...bridge.transport import make_pipe_name
 from . import startup
 from .config import resolve_project
 

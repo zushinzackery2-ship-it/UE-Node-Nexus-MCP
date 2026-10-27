@@ -15,9 +15,9 @@ import pytest
 from tests.support.bridges import RoutingBridge
 
 from ue_node_nexus_mcp import runtime
-from ue_node_nexus_mcp.contracts import ALL_OPERATIONS
+from ue_node_nexus_mcp.registry.contracts import ALL_OPERATIONS
 from ue_node_nexus_mcp.errors import BridgeError
-from ue_node_nexus_mcp.facade_execute import preflight_execute_request
+from ue_node_nexus_mcp.facade.execute import preflight_execute_request
 from ue_node_nexus_mcp.instances.session.binding import EditorSession
 from ue_node_nexus_mcp.server import ue_capability_get, ue_diff_get, ue_execute, ue_read
 
@@ -91,9 +91,11 @@ def test_ue_execute_trims_verbose_niagara_fields(all_features, use_bridge) -> No
     use_bridge(
         RoutingBridge(
             {
-                "niagara_system_summary_get": {
+                "niagara_system_summary_get":
+                {
                     "ok": True,
-                    "data": {
+                    "data":
+                    {
                         "emitters": ["Fire"],
                         "capabilities": ["long static prose"],
                         "limitations": ["long static prose"],

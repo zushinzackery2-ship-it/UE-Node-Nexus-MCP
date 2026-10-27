@@ -6,8 +6,8 @@
 #include "K2Node_BreakStruct.h"
 #include "K2Node_MakeStruct.h"
 #include "K2Node_SetFieldsInStruct.h"
-#include "Transcode/UeNodeNexusBridgeTranscodeBlueprintApply.h"
-#include "Transcode/UeNodeNexusBridgeTranscodeBlueprintShared.h"
+#include "Transcode/Blueprint/Apply/UeNodeNexusBridgeTranscodeBlueprintApply.h"
+#include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusStructPositional,
     "Nexus.Blueprint.StructPositional",

@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from ue_node_nexus_mcp.diagnostics_logs import read_latest_project_log
+from ue_node_nexus_mcp.diagnostics.runtime.files import read_latest_project_log
 
 
 @pytest.mark.parametrize("syntax", ['-abslog="{path}"', '"-abslog={path}"', '-abslog={path}'])
