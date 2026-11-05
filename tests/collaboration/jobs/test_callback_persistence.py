@@ -42,7 +42,8 @@ def test_durable_task_id_fault_never_transfers_scope_or_executes(tmp_path, monke
     store.db.discard()
 
 
-def test_completion_persistence_fault_is_reconciled_after_database_recovers(tmp_path, monkeypatch, queue):
+@pytest.mark.parametrize("pruned", [False, True])
+def test_completion_persistence_fault_is_reconciled_after_database_recovers(tmp_path, monkeypatch, queue, pruned):
     store = Store(tmp_path / "repository")
     update = service.update
     failed_job = []
@@ -62,8 +63,17 @@ def test_completion_persistence_fault_is_reconciled_after_database_recovers(tmp_
     second = service.submit(store, "pull", None, {}, lambda *_args: dict(status="ok"))
     assert task_queue.wait_for_task(store.record("sync_job", second["job_id"])["task_id"], 3)
     monkeypatch.setattr(service, "update", update)
+    if pruned:
+        monkeypatch.setattr(task_queue, "MAX_FINISHED_TASKS", 0)
+        task_queue._prune_finished()
     observed = service.observe(store, "job_status", dict(job_id=first["job_id"]))
-    assert observed["status"] == "failed" and observed["stage"] == "task_reconciled"
-    assert observed["error"]["code"] == "task_completion_failed"
+    expected = "task_evidence_missing" if pruned else "task_completion_failed"
+    assert observed["status"] == ("interrupted" if pruned else "failed")
+    assert observed["stage"] == "task_reconciled"
+    assert observed["error"]["code"] == expected
+    result = service.observe(store, "job_result", dict(job_id=first["job_id"]))
+    assert result["error"]["code"] == expected
+    assert result["error_count"] == 1
+    assert result["operation_diagnostics"]["status"] == "failed"
     assert service.observe(store, "job_status", dict(job_id=second["job_id"]))["status"] == "succeeded"
     store.db.discard()

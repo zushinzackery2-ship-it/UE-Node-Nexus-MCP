@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Instance/NexusInstanceValues.h"
 
 #include "Engine/Texture.h"
 #include "MaterialEditingLibrary.h"
@@ -21,87 +22,30 @@ FString ReadString(const TSharedPtr<FJsonObject>& Op, const TCHAR* Field)
     return Value;
 }
 
-bool ParseBool(const FString& Text, bool& bOut)
+bool SetParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FMaterialParameterInfo& Info, const FString& Value, FString& OutError)
 {
-    const FString Lower = Text.TrimStartAndEnd().ToLower();
-    if (Lower == TEXT("true") || Lower == TEXT("1"))
-    {
-        bOut = true;
-        return true;
-    }
-    if (Lower == TEXT("false") || Lower == TEXT("0"))
-    {
-        bOut = false;
-        return true;
-    }
-    return false;
-}
-
-bool SetStaticSwitch(UMaterialInstanceConstant* Instance, const FName Name, bool bOverride, bool bValue)
-{
-    FStaticParameterSet Parameters = Instance->GetStaticParameters();
-    FStaticSwitchParameter* Existing = Parameters.StaticSwitchParameters.FindByPredicate([Name](const FStaticSwitchParameter& Item) { return Item.ParameterInfo.Name == Name; });
-    if (Existing == nullptr)
-    {
-        if (!bOverride)
-        {
-            return true;
-        }
-        Existing = &Parameters.StaticSwitchParameters.AddDefaulted_GetRef();
-        Existing->ParameterInfo = FMaterialParameterInfo(Name);
-    }
-    Existing->bOverride = bOverride;
-    Existing->Value = bValue;
-    Instance->UpdateStaticPermutation(Parameters);
-    return true;
-}
-
-bool SetComponentMask(UMaterialInstanceConstant* Instance, const FName Name, bool bOverride, const FString& Text)
-{
-    FStaticParameterSet Parameters = Instance->GetStaticParameters();
-    FStaticComponentMaskParameter* Existing = Parameters.EditorOnly.StaticComponentMaskParameters.FindByPredicate([Name](const FStaticComponentMaskParameter& Item) { return Item.ParameterInfo.Name == Name; });
-    if (Existing == nullptr)
-    {
-        if (!bOverride)
-        {
-            return true;
-        }
-        Existing = &Parameters.EditorOnly.StaticComponentMaskParameters.AddDefaulted_GetRef();
-        Existing->ParameterInfo = FMaterialParameterInfo(Name);
-    }
-    Existing->bOverride = bOverride;
-    if (bOverride)
-    {
-        auto Channel = [&Text](const TCHAR* Key)
-        {
-            FString Value;
-            return FParse::Value(*Text, Key, Value) && Value.StartsWith(TEXT("T"), ESearchCase::IgnoreCase);
-        };
-        Existing->R = Channel(TEXT("R="));
-        Existing->G = Channel(TEXT("G="));
-        Existing->B = Channel(TEXT("B="));
-        Existing->A = Channel(TEXT("A="));
-    }
-    Instance->UpdateStaticPermutation(Parameters);
-    return true;
-}
-
-bool SetParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FString& Name, const FString& Value, FString& OutError)
-{
-    const FName ParameterName(*Name);
+    const FString Name = Info.Name.ToString();
     if (Kind == TEXT("scalar"))
     {
-        return SetInstanceScalar(Instance, ParameterName, FCString::Atof(*Value), OutError);
+        float Number = 0;
+        if (!InstanceFloat(Value, Number))
+        {
+            OutError = Name + TEXT(": expected a complete finite float, got ") + Value;
+            return false;
+        }
+        return SetInstanceScalar(Instance, Info, Number, OutError);
     }
     if (Kind == TEXT("vector"))
     {
         FLinearColor Color;
-        if (!Color.InitFromString(Value))
+        TArray<FString> Channels;
+        if (!InstanceChannels(Value, Channels) || !InstanceFloat(Channels[0], Color.R)
+            || !InstanceFloat(Channels[1], Color.G) || !InstanceFloat(Channels[2], Color.B) || !InstanceFloat(Channels[3], Color.A))
         {
             OutError = FString::Printf(TEXT("%s: expected (R=..,G=..,B=..,A=..), got %s"), *Name, *Value);
             return false;
         }
-        return SetInstanceVector(Instance, ParameterName, Color, OutError);
+        return SetInstanceVector(Instance, Info, Color, OutError);
     }
     if (Kind == TEXT("texture"))
     {
@@ -111,59 +55,70 @@ bool SetParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FS
             OutError = FString::Printf(TEXT("%s: texture not found: %s"), *Name, *Value);
             return false;
         }
-        return SetInstanceTexture(Instance, ParameterName, Texture, OutError);
+        return SetInstanceTexture(Instance, Info, Texture, OutError);
     }
     if (Kind == TEXT("switch"))
     {
         bool bValue = false;
-        if (!ParseBool(Value, bValue))
+        if (!InstanceBool(Value, bValue))
         {
             OutError = FString::Printf(TEXT("%s: expected true/false, got %s"), *Name, *Value);
             return false;
         }
-        return SetStaticSwitch(Instance, ParameterName, true, bValue);
+        return SetInstanceStaticSwitch(Instance, Info, bValue, OutError);
     }
     if (Kind == TEXT("component_mask"))
     {
-        return SetComponentMask(Instance, ParameterName, true, Value);
+        TArray<FString> Channels;
+        bool R = false, G = false, B = false, A = false;
+        if (!InstanceChannels(Value, Channels) || !InstanceBool(Channels[0], R) || !InstanceBool(Channels[1], G)
+            || !InstanceBool(Channels[2], B) || !InstanceBool(Channels[3], A))
+        {
+            OutError = Name + TEXT(": expected four distinct RGBA boolean channels, got ") + Value;
+            return false;
+        }
+        return SetInstanceComponentMask(Instance, Info, R, G, B, A, OutError);
     }
     OutError = FString::Printf(TEXT("unsupported parameter kind: %s"), *Kind);
     return false;
 }
 
 template <typename TValue>
-void RemoveNamed(TArray<TValue>& Values, const FName Name)
+void RemoveParameter(TArray<TValue>& Values, const FMaterialParameterInfo& Info)
 {
-    Values.RemoveAll([Name](const TValue& Item) { return Item.ParameterInfo.Name == Name; });
+    Values.RemoveAll([&Info](const TValue& Item) { return Item.ParameterInfo == Info; });
 }
 
-bool ClearParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FString& Name, FString& OutError)
+bool ClearParam(UMaterialInstanceConstant* Instance, const FString& Kind, const FMaterialParameterInfo& Info, FString& OutError)
 {
-    const FName ParameterName(*Name);
     Instance->Modify();
     if (Kind == TEXT("scalar"))
     {
-        RemoveNamed(Instance->ScalarParameterValues, ParameterName);
+        RemoveParameter(Instance->ScalarParameterValues, Info);
     }
     else if (Kind == TEXT("vector"))
     {
-        RemoveNamed(Instance->VectorParameterValues, ParameterName);
+        RemoveParameter(Instance->VectorParameterValues, Info);
     }
     else if (Kind == TEXT("texture"))
     {
-        RemoveNamed(Instance->TextureParameterValues, ParameterName);
+        RemoveParameter(Instance->TextureParameterValues, Info);
     }
     else if (Kind == TEXT("runtime_virtual_texture"))
     {
-        RemoveNamed(Instance->RuntimeVirtualTextureParameterValues, ParameterName);
+        RemoveParameter(Instance->RuntimeVirtualTextureParameterValues, Info);
     }
     else if (Kind == TEXT("switch"))
     {
-        return SetStaticSwitch(Instance, ParameterName, false, false);
+        FStaticParameterSet Parameters = Instance->GetStaticParameters();
+        RemoveParameter(Parameters.StaticSwitchParameters, Info);
+        Instance->UpdateStaticPermutation(Parameters);
     }
     else if (Kind == TEXT("component_mask"))
     {
-        return SetComponentMask(Instance, ParameterName, false, FString());
+        FStaticParameterSet Parameters = Instance->GetStaticParameters();
+        RemoveParameter(Parameters.EditorOnly.StaticComponentMaskParameters, Info);
+        Instance->UpdateStaticPermutation(Parameters);
     }
     else
     {
@@ -195,6 +150,12 @@ void ApplyMaterialInstancePlan(UMaterialInstanceConstant* Instance, const TArray
             continue;
         }
         FString Error;
+        FMaterialParameterInfo Info;
+        if ((Verb == TEXT("mi_set_param") || Verb == TEXT("mi_clear_param")) && !InstanceParameterInfo(Op, Info, Error))
+        {
+            Context.Fail(Index, TEXT("invalid_parameter_identity"), Error);
+            continue;
+        }
         bool bOk = false;
         if (Verb == TEXT("set_asset_prop"))
         {
@@ -202,7 +163,7 @@ void ApplyMaterialInstancePlan(UMaterialInstanceConstant* Instance, const TArray
         }
         else if (Verb == TEXT("mi_set_param"))
         {
-            bOk = SetParam(Instance, ReadString(Op, TEXT("kind")), ReadString(Op, TEXT("name")), ReadString(Op, TEXT("value")), Error);
+            bOk = SetParam(Instance, ReadString(Op, TEXT("kind")), Info, ReadString(Op, TEXT("value")), Error);
             if (!bOk && Error.IsEmpty())
             {
                 Error = FString::Printf(TEXT("parameter %s could not be set (not exposed by the parent material?)"), *ReadString(Op, TEXT("name")));
@@ -210,7 +171,7 @@ void ApplyMaterialInstancePlan(UMaterialInstanceConstant* Instance, const TArray
         }
         else if (Verb == TEXT("mi_clear_param"))
         {
-            bOk = ClearParam(Instance, ReadString(Op, TEXT("kind")), ReadString(Op, TEXT("name")), Error);
+            bOk = ClearParam(Instance, ReadString(Op, TEXT("kind")), Info, Error);
         }
         else
         {

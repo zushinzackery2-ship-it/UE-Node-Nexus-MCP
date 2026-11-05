@@ -17,6 +17,9 @@ struct FAssetData;
 // exported helpers shared with the Niagara bridge live in UeNodeNexusBridgeTranscodeApi.h.
 namespace UeNodeNexusBridge::Transcode
 {
+// Registered project-local roots share one identity and export policy.
+TArray<FString> ProjectContentRoots();
+
 // --- raw builders ----------------------------------------------------------
 TSharedPtr<FJsonObject> BuildMaterialRaw(UMaterial* Material);
 TSharedPtr<FJsonObject> BuildMaterialFunctionRaw(UMaterialFunction* Function);

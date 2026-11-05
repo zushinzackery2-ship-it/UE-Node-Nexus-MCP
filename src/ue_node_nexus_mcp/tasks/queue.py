@@ -55,6 +55,7 @@ class _TaskRecord:
     on_cancel: Any = None
     on_finish: Any = None
     diagnostic_snapshot: dict[str, Any] = field(default_factory=dict)
+    completion_status: str | None = None
 
 
 _lock = threading.Lock()
@@ -122,7 +123,7 @@ def task_submit(operation: str, payload: dict[str, Any] | None = None) -> dict[s
     with _lock:
         if _closing:
             return _task_error("task_submit", "session_closed", "the MCP task queue is closing")
-        active = sum(1 for record in _tasks.values() if record.status in ("reserving", "queued", "running"))
+        active = sum(1 for record in _tasks.values() if record.status not in _FINISHED_STATUSES)
         if active >= MAX_ACTIVE_TASKS:
             return _task_error(
                 "task_submit",
@@ -150,14 +151,14 @@ def task_submit(operation: str, payload: dict[str, Any] | None = None) -> dict[s
         raise
     with _lock:
         record.work_scope = scope
-        cancelled = _closing or record.status == "cancelled"
+        cancelled = _closing or record.status == "cancelling"
         if not cancelled:
             record.status = "queued"
             _queue.put(task_id)
     if cancelled:
-        if scope:
-            scope.release()
-        return _envelope("task_submit", True, dict(task_id=task_id, operation=operation, status="cancelled"))
+        from .completion import complete
+        complete(record, sys.modules[__name__], cancelled=True)
+        return _envelope("task_submit", True, dict(task_id=task_id, operation=operation, status=record.status))
 
     return _envelope(
         "task_submit",
@@ -215,11 +216,13 @@ def task_cancel(task_id: str) -> dict[str, Any]:
                 f"only queued tasks can be cancelled; task is {record.status}",
                 {"task_id": task_id, "status": record.status},
             )
-        record.status = "cancelled"
-        record.finished_at = time.time()
+        reserving = record.status == "reserving"
+        record.status = "cancelling"
+    if reserving:
+        return _envelope("task_cancel", True, {"task_id": task_id, "status": "cancelling"})
     from .completion import complete
     complete(record, sys.modules[__name__], cancelled=True)
-    return _envelope("task_cancel", True, {"task_id": task_id, "status": "cancelled"})
+    return _envelope("task_cancel", True, {"task_id": task_id, "status": record.status})
 
 
 def wait_for_task(task_id: str, timeout_seconds: float) -> bool:

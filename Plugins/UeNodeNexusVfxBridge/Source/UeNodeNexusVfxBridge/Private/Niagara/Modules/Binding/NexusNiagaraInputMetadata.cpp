@@ -1,43 +1,140 @@
 #include "NexusNiagaraInputMetadata.h"
 
 #include "EdGraphSchema_Niagara.h"
+#include "EdGraph/EdGraphPin.h"
+#include "NiagaraGraph.h"
 #include "NiagaraScriptVariable.h"
+#include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge::VfxTranscode
 {
+namespace
+{
+const UEdGraphPin* ParameterDefaultPin(const UEdGraphPin& Output)
+{
+    const auto* Node = Output.GetOwningNode();
+    const auto* Property = FindFProperty<FMapProperty>(Node->GetClass(), TEXT("PinOutputToPinDefaultPersistentId"));
+    const auto* Key = Property ? CastField<FStructProperty>(Property->KeyProp) : nullptr;
+    const auto* Value = Property ? CastField<FStructProperty>(Property->ValueProp) : nullptr;
+    if (!Key || !Value || Key->Struct != TBaseStructure<FGuid>::Get() || Value->Struct != Key->Struct)
+    {
+        return nullptr;
+    }
+    // UE's private, unexported GetDefaultPin uses this serialized GUID map.
+    const auto* Pairs = Property->ContainerPtrToValuePtr<TMap<FGuid, FGuid>>(Node);
+    const auto* Guid = Pairs->Find(Output.PersistentGuid);
+    if (!Guid)
+    {
+        return nullptr;
+    }
+    const auto* Pin = Node->Pins.FindByPredicate([Guid](const UEdGraphPin* Candidate)
+    {
+        return Candidate && Candidate->Direction == EGPD_Input && Candidate->PersistentGuid == *Guid;
+    });
+    return Pin ? *Pin : nullptr;
+}
+
+FString DefaultPinText(const UEdGraphPin& Pin)
+{
+    if (Pin.LinkedTo.Num() == 1)
+    {
+        const auto* Source = Pin.LinkedTo[0];
+        if (!Source || Source->GetOwningNode()->GetClass()->GetFName() != TEXT("NiagaraNodeParameterMapGet"))
+        {
+            return FString();
+        }
+        const auto* Next = ParameterDefaultPin(*Source);
+        // A single linked default has one meaning. A chain selects a handle
+        // against the caller's available parameters and is context dependent.
+        return !Next || Next->LinkedTo.IsEmpty()
+            ? FString::Printf(TEXT("@link(%s)"), *Source->PinName.ToString()) : FString();
+    }
+    if (!Pin.LinkedTo.IsEmpty())
+    {
+        return FString();
+    }
+    if (Pin.DefaultObject)
+    {
+        return Pin.DefaultObject->GetPathName();
+    }
+    const auto* Schema = GetDefault<UEdGraphSchema_Niagara>();
+    const FNiagaraVariable Value = Schema->PinToNiagaraVariable(&Pin);
+    FString Text;
+    if (Value.IsDataAllocated())
+    {
+        // Repeated definitions can spell the same float with different precision.
+        Schema->TryGetPinDefaultValueFromNiagaraVariable(Value, Text);
+    }
+    return Text;
+}
+}
+
+TArray<const UEdGraphPin*> FindModuleInputDefaultPins(const UNiagaraGraph& Graph, FName VariableName)
+{
+    TArray<const UEdGraphPin*> Result;
+    for (const UEdGraphNode* Node : Graph.Nodes)
+    {
+        if (!Node || Node->GetClass()->GetFName() != TEXT("NiagaraNodeParameterMapGet"))
+        {
+            continue;
+        }
+        const auto* Output = Node->FindPin(VariableName, EGPD_Output);
+        const auto* Pin = Output ? ParameterDefaultPin(*Output) : nullptr;
+        if (Pin)
+        {
+            Result.Add(Pin);
+        }
+    }
+    return Result;
+}
+
 bool IsAuthoredModuleInput(const FNiagaraVariable& Variable, const UNiagaraScriptVariable* Metadata)
 {
     return Variable.GetName().ToString().StartsWith(TEXT("Module."))
         || (Metadata && Metadata->GetIsStaticSwitch());
 }
 
-FString ModuleInputDefaultText(const FNiagaraVariable& Variable, const UNiagaraScriptVariable* Metadata)
+FString ModuleInputDefaultText(const FNiagaraVariable& Variable, const UNiagaraScriptVariable* Metadata,
+    const UNiagaraGraph* Graph)
 {
     if (!Metadata)
     {
         return FString();
     }
-    FNiagaraVariable Default(Variable.GetType(), Variable.GetName());
-    if (Metadata->GetIsStaticSwitch())
+    if (!Metadata->GetIsStaticSwitch())
     {
-        const int32 Value = Metadata->GetStaticSwitchDefaultValue();
-        if (Variable.GetType() == FNiagaraTypeDefinition::GetBoolDef())
+        if (Metadata->DefaultMode == ENiagaraDefaultMode::Binding && Metadata->DefaultBinding.IsValid())
         {
-            const FNiagaraBool Boolean(Value != 0);
-            Default.SetData(reinterpret_cast<const uint8*>(&Boolean));
+            return FString::Printf(TEXT("@link(%s)"), *Metadata->DefaultBinding.GetName().ToString());
         }
-        else
+        if (!Graph)
         {
-            Default.SetData(reinterpret_cast<const uint8*>(&Value));
+            return FString();
         }
+        // Metadata's buffer can be a zero placeholder. Read the defining pins;
+        // retain a default only when every definition has the same typed meaning.
+        TOptional<FString> Literal;
+        for (const auto* Pin : FindModuleInputDefaultPins(*Graph, Variable.GetName()))
+        {
+            const FString Text = DefaultPinText(*Pin);
+            if (Text.IsEmpty() || (Literal.IsSet() && Literal.GetValue() != Text))
+            {
+                return FString();
+            }
+            Literal = Text;
+        }
+        return Literal.Get(FString());
     }
-    else if (const uint8* Data = Metadata->GetDefaultValueData())
+    FNiagaraVariable Default(Variable.GetType(), Variable.GetName());
+    const int32 Value = Metadata->GetStaticSwitchDefaultValue();
+    if (Variable.GetType() == FNiagaraTypeDefinition::GetBoolDef())
     {
-        Default.SetData(Data);
+        const FNiagaraBool Boolean(Value != 0);
+        Default.SetData(reinterpret_cast<const uint8*>(&Boolean));
     }
     else
     {
-        return FString();
+        Default.SetData(reinterpret_cast<const uint8*>(&Value));
     }
     FString Text;
     GetDefault<UEdGraphSchema_Niagara>()->TryGetPinDefaultValueFromNiagaraVariable(Default, Text);

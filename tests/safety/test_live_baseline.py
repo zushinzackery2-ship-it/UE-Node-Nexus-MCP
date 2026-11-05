@@ -1,6 +1,7 @@
 """Unsaved memory is private, byte-verified and confined to the copied project."""
 
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -40,8 +41,21 @@ def test_changed_baseline_bytes_are_refused(tmp_path):
         overlay(snapshot, baseline)
 
 
+def test_project_plugin_relative_baseline_file_is_overlaid(tmp_path):
+    snapshot, baseline, _ = setup(tmp_path)
+    source = Path(baseline["project"]).parent
+    held = Path(baseline["root"]) / "Plugins/Tests/Content/Probe.uasset"
+    held.parent.mkdir(parents=True)
+    held.write_bytes(b"mounted memory")
+    baseline["files"] = [dict(relative="Plugins/Tests/Content/Probe.uasset", source=str(held),
+                              hash=hashlib.md5(held.read_bytes()).hexdigest())]
+    overlay(snapshot, baseline)
+    assert (Path(snapshot["project"]).parent / "Plugins/Tests/Content/Probe.uasset").read_bytes() == b"mounted memory"
+    assert not (source / "Plugins/Tests/Content/Probe.uasset").exists()
+
+
 def test_baseline_cannot_escape_the_copy(tmp_path):
     snapshot, baseline, _ = setup(tmp_path)
     baseline["files"][0]["relative"] = "../User.uasset"
-    with pytest.raises(InstanceError, match="inside copied Content"):
+    with pytest.raises(InstanceError, match="inside the copied project"):
         overlay(snapshot, baseline)

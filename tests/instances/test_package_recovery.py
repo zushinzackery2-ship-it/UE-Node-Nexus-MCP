@@ -21,10 +21,31 @@ def project(tmp_path, enabled=True, malformed=False):
     return root, autosaves
 
 
+def engine_index(autosaves, encoding="utf-16-le"):
+    rows = [dict(PackagePathName="/Game/M_Probe", PackageAssetName="M_Probe", AutoSavePath="AutoSave_M_Probe.uasset")]
+    payload = json.dumps(dict(RestoreEnabled=True, Packages=rows))
+    (autosaves / "PackageRestoreData.json").write_bytes(payload.encode(encoding))
+
+
 def test_pending_lists_the_packages_ue_would_restore(tmp_path):
     root, _ = project(tmp_path)
     rows = recovery.pending(root / "Game.uproject")
     assert [row["package"] for row in rows] == ["/Game/M_Probe"]
+
+
+def test_pending_reads_the_engine_utf16_index(tmp_path):
+    root, autosaves = project(tmp_path)
+    engine_index(autosaves)
+    assert [row["package"] for row in recovery.pending(root / "Game.uproject")] == ["/Game/M_Probe"]
+    engine_index(autosaves, "utf-16")
+    assert [row["package"] for row in recovery.pending(root / "Game.uproject")] == ["/Game/M_Probe"]
+
+
+def test_decline_answers_the_engine_utf16_index(tmp_path, monkeypatch):
+    root, autosaves = project(tmp_path)
+    engine_index(autosaves)
+    monkeypatch.delenv("UE_NEXUS_PACKAGE_RECOVERY", raising=False)
+    assert recovery.launch_flag(root / "Game.uproject") == ["-AutoDeclinePackageRecovery"]
 
 
 def test_a_clean_shutdown_or_broken_index_offers_nothing(tmp_path):

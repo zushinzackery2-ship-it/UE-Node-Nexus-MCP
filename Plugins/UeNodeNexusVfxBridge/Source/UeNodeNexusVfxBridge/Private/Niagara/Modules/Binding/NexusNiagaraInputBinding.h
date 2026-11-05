@@ -10,6 +10,7 @@ class UEdGraphPin;
 class UNiagaraNodeFunctionCall;
 class UNiagaraStackEntry;
 class UNiagaraStackFunctionInput;
+class UNiagaraScript;
 class UNiagaraSystem;
 struct FNiagaraEmitterHandle;
 struct FNiagaraUserRedirectionParameterStore;
@@ -38,6 +39,12 @@ bool ResolveModuleInput(UNiagaraNodeFunctionCall& Module, const FString& Name,
     FNiagaraVariable& Variable, FInputBindingError& Error);
 bool ValidateUserParameter(const FNiagaraUserRedirectionParameterStore& Store,
     const FString& Parameter, const FNiagaraTypeDefinition& Type, FInputBindingError& Error);
+bool ValidateLinkedParameter(const FNiagaraUserRedirectionParameterStore& Store,
+    UNiagaraStackFunctionInput& Input, const FString& Parameter, FInputBindingError& Error);
+bool ResolveNativeConversion(UNiagaraStackFunctionInput& Input, const FString& Parameter,
+    FNiagaraVariable& Source, UNiagaraScript*& Script, FInputBindingError& Error);
+bool MatchesNativeConversion(UNiagaraStackFunctionInput& Input, const FNiagaraVariable& Source, UNiagaraScript* Script);
+FString NativeConversionParameter(const UEdGraphPin& Override, const FNiagaraTypeDefinition& TargetType);
 // Same ownership boundary as Niagara's stack: the function or its immediate Map input.
 UEdGraphPin* FindModuleOverridePin(UNiagaraNodeFunctionCall& Module, const FName PinName);
 

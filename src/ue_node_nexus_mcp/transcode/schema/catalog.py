@@ -17,7 +17,7 @@ LEGACY_FILES = dict(material_expression="classes.material_expression.json", k2no
                     asset="classes.asset.json", component="classes.component.json",
                     niagara_renderer="classes.niagara_renderer.json", material_functions="material_functions.json",
                     niagara_modules="niagara_modules.json", functions="functions.cache.json",
-                    callable_functions="functions.index.json", delegates="delegates.json", types="types.json")
+                    callable_functions="functions.index.json", delegates="delegates.json", macros="macros.json", types="types.json")
 # Families whose records are classes: a short spelling is a class name, not a member.
 CLASS_FAMILIES = frozenset(("material_expression", "k2node", "asset", "component", "niagara_renderer"))
 

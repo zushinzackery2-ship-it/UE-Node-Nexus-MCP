@@ -35,6 +35,7 @@ public class UeNodeNexusVfxBridge : ModuleRules
             "Niagara",
             "NiagaraCore",
             "NiagaraEditor",
+            "Projects",
             "RenderCore",
             "Sequencer",
             "UnrealEd"

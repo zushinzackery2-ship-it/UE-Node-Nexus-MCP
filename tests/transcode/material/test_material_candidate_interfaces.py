@@ -74,7 +74,7 @@ def test_schema_free_candidate_numeric_output_keeps_declared_name():
 def test_immutable_candidate_trees_do_not_inherit_active_workspace(tmp_path):
     from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import capture
     from ue_node_nexus_mcp.transcode.collaboration.store import Store
-    from ue_node_nexus_mcp.transcode.material.interfaces import tree
+    from ue_node_nexus_mcp.transcode.collaboration.semantic.interfaces import tree
 
     store = Store(tmp_path / "repository")
     old = capture(PROVIDER.replace("New", "Old"), None, "old", "material_function")

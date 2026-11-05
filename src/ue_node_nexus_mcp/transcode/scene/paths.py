@@ -6,14 +6,14 @@ import hashlib
 import re
 from pathlib import Path
 
-from ..storage.paths import package_name
+from ..storage.paths import asset_relative, package_name
 from ..errors import SyncError
 
 
 def identity(map_path: str, name: str) -> str:
     level = package_name(map_path)
-    if not level.startswith("/Game/") or any(part in ("", ".", "..") for part in level[6:].split("/")):
-        raise SyncError("invalid_scene_map", "scene map must be a /Game package")
+    if asset_relative(map_path) is None:
+        raise SyncError("invalid_scene_map", "scene map must be a project content package")
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", name):
         raise SyncError("invalid_scene_name", "scene name must be an identifier")
     return f"{level}#{name}"
@@ -22,7 +22,7 @@ def identity(map_path: str, name: str) -> str:
 def scene_path(project: Path, map_path: str, name: str) -> Path:
     key = identity(map_path, name)
     level = key.split("#", 1)[0]
-    result = project / "Scenes" / level[6:] / f"{name}.scene.nexus"
+    result = project / "Scenes" / asset_relative(level) / f"{name}.scene.nexus"
     result.resolve().relative_to(project.resolve())
     return result
 

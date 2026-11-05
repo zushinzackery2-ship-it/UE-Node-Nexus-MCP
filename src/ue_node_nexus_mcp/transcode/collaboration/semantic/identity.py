@@ -8,6 +8,7 @@ from uuid import NAMESPACE_URL, uuid5
 from ...text.model import Decl, Section
 from ...errors import SyncError
 from .contracts import same_contract
+from ...scene.identifiers import canonical_key
 
 
 def stable_id(key: str) -> str:
@@ -37,6 +38,9 @@ class Identities:
         self.bindings = dict()
         self.sections = self.previous.get("semantic", dict()).get("sections", dict())
         self.old_bindings = self.previous.get("bindings", dict())
+        if self.previous.get("semantic", {}).get("kind") == "scene":
+            self.old_bindings = {identifier: dict(binding, physical=canonical_key(binding.get("physical", "")))
+                                for identifier, binding in self.old_bindings.items()}
         self.by_alias = dict()
         self.by_physical = dict()
         self.by_owner = dict()
@@ -57,10 +61,12 @@ class Identities:
         return self.section_aliases.get(name, name)
 
     def entity(self, scope: str, decl: Decl, family: str = "", schema=None) -> tuple[str, dict]:
-        physical = str(decl.meta.get("physical") or decl.meta.get("guid") or "")
+        physical = canonical_key(str(decl.meta.get("physical") or decl.meta.get("guid") or ""))
         owner = str(decl.meta.get("owner") or "")
         alias_match = self.by_alias.get((scope, decl.id))
-        if physical and self.old_bindings.get(alias_match, dict()).get("physical") not in (None, "", physical):
+        old_physical = self.old_bindings.get(alias_match, dict()).get("physical")
+        legacy_match = family == "niagara_renderer" and old_physical == decl.meta.get("legacy_guid")
+        if physical and old_physical not in (None, "", physical) and not legacy_match:
             alias_match = None
         known = self.by_owner.get((owner, physical)) if physical and owner else self.by_physical.get(physical)
         identifier = decl.meta.get("semantic_id") or known or alias_match

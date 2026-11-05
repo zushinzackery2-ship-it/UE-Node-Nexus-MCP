@@ -8,6 +8,7 @@ from .graph import diff_graph_section
 from .niagara import diff_niagara
 from ..material.calls import rebound_calls, rebuild_wired_calls
 from ..material.custom_inputs import rewire_inputs
+from ..material.instance import parameter_identity
 from ..text.model import Document, Section
 from ..storage.paths import object_path
 from .plan import AssetPlan
@@ -44,7 +45,10 @@ def build_plan(local: Document, base: Document | None, kind: str, ids: dict[str,
     elif kind == "material_instance":
         diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
         for name in INSTANCE_SECTIONS:
-            _diff_instance_params(local.section(name), base.section(name) if base else None, name, plan)
+            current = {section.args: section for section in local.sections if section.name == name}
+            previous = {section.args: section for section in base.sections if section.name == name} if base else {}
+            for scope in sorted(current.keys() | previous.keys()):
+                _diff_instance_params(current.get(scope), previous.get(scope), name, plan, scope)
     elif kind == "asset":
         diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
         if local.header.cls.rsplit(".", 1)[-1] == "MaterialParameterCollection":
@@ -64,16 +68,17 @@ def _text_equal(local: Document, base: Document) -> bool:
     return emit(local) == emit(base)
 
 
-def _diff_instance_params(local: Section | None, base: Section | None, kind_name: str, plan: AssetPlan) -> None:
+def _diff_instance_params(local: Section | None, base: Section | None, kind_name: str, plan: AssetPlan, scope: str) -> None:
+    identity = parameter_identity(scope)
     local_props = local.prop_map() if local else {}
     base_props = base.prop_map() if base else {}
     for name, prop in local_props.items():
         before = base_props.get(name)
         if before is None or not values_equal(before.value, prop.value, before.type_name or prop.type_name):
-            plan.add("mi_set_param", line=prop.line, kind=kind_name, name=name, value=prop.value)
+            plan.add("mi_set_param", line=prop.line, kind=kind_name, name=name, value=prop.value, **identity)
     for name in base_props:
         if name not in local_props:
-            plan.add("mi_clear_param", kind=kind_name, name=name)
+            plan.add("mi_clear_param", kind=kind_name, name=name, **identity)
 
 
 def _function_interface_changed(local: Section, base: Section | None) -> bool:

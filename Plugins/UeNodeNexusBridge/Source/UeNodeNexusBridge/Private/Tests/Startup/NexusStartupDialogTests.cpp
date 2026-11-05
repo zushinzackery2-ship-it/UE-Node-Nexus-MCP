@@ -3,6 +3,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/CoreDelegates.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "NexusLifecycle.h"
 
 namespace
@@ -28,9 +30,11 @@ bool FNexusStartupAdvisory::RunTest(const FString& Parameters)
     {
         return false;
     }
-    // The automation host runs without a window (-nullrhi): nobody can see an
-    // advisory it opens, so the Guard is the one that confirms it.
-    TestEqual(TEXT("launch window"), (*Startup)->GetStringField(TEXT("launch_window")), FString(TEXT("offscreen")));
+    const bool bOffscreen = FParse::Param(FCommandLine::Get(), TEXT("RenderOffscreen")) || FParse::Param(FCommandLine::Get(), TEXT("nullrhi"));
+    FString Intent;
+    FParse::Value(FCommandLine::Get(), TEXT("NexusIntent="), Intent);
+    TestEqual(TEXT("launch window matches the requested render surface"), (*Startup)->GetStringField(TEXT("launch_window")),
+        FString(bOffscreen ? TEXT("offscreen") : TEXT("normal")));
     TestEqual(TEXT("phase once the engine loop runs"), (*Startup)->GetStringField(TEXT("phase")), FString(TEXT("loop_init_complete")));
     TestTrue(TEXT("latest log line is tracked"), (*Startup)->HasTypedField<EJson::Object>(TEXT("last_log")));
     if (!TestTrue(TEXT("editor dialog handler is bound"), FCoreDelegates::ModalMessageDialog.IsBound()))
@@ -53,7 +57,8 @@ bool FNexusStartupAdvisory::RunTest(const FString& Parameters)
         return false;
     }
     TestEqual(TEXT("code"), Notice->GetStringField(TEXT("code")), FString(TEXT("low_drive_space")));
-    TestEqual(TEXT("resolution"), Notice->GetStringField(TEXT("resolution")), FString(TEXT("auto_acknowledged")));
+    TestEqual(TEXT("resolution follows managed/hidden advisory policy"), Notice->GetStringField(TEXT("resolution")),
+        FString(bOffscreen || !Intent.IsEmpty() ? TEXT("auto_acknowledged") : TEXT("answered")));
     TestEqual(TEXT("result"), Notice->GetStringField(TEXT("result")), FString(LexToString(EAppReturnType::Ok)));
     TestEqual(TEXT("title"), Notice->GetStringField(TEXT("title")), Title.ToString());
     const TArray<TSharedPtr<FJsonValue>>* Locations = nullptr;

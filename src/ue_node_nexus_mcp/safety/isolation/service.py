@@ -14,6 +14,9 @@ from ...instances.identity.paths import runtime_root
 from ...instances.identity.processes import inspect_process
 from ...transcode.storage.io import atomic_write, canonical, digest
 from .inputs import validate_operations
+from .progress import advance, tracked
+from ...transcode.progress import atomic
+from ...transcode.errors import SyncError
 from .snapshot import (ALLOCATION_FACTOR, WORKING_BYTES, content_candidates, copy_project, inventory, overlay_enabled,
                        quiet_worker_copy, unchanged)
 
@@ -29,16 +32,18 @@ def validation_root(project_path: str) -> Path:
     return project.parent.parent / ".nexus-validation" / project.stem
 
 
+@tracked
 def validate(project_path: str, operations: list[dict], engine_path: str | None, rhi: str,
              timeout_seconds: float, dry_run: bool, *, baseline: dict | None = None,
              allow_low_memory: bool = False) -> dict:
     entered = time.monotonic()
+    advance("preflight", force=True)
     require(rhi in ("d3d12", "d3d11"), "invalid_request", "rhi must be d3d12 or d3d11")
     require(isinstance(timeout_seconds, (int, float)) and not isinstance(timeout_seconds, bool)
             and 30 <= timeout_seconds <= 600, "invalid_request", "timeout_seconds must be 30..600")
     require(isinstance(dry_run, bool), "invalid_request", "dry_run must be a boolean")
     require(isinstance(allow_low_memory, bool), "invalid_request", "allow_low_memory must be a boolean")
-    from .mounts import BASE_MOUNTS, plugin_mounts, requested_mounts
+    from .mounts import BASE_MOUNTS, plugin_mounts, project_mounts, requested_mounts, writable_mounts
     from .environment import validate as validate_environment, verify_worker
     from ...instances.lifecycle.engine import resolve_engine
     plugin_inputs = dict()
@@ -51,14 +56,20 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
         if baseline is not None:
             loaded_mounts = baseline["environment"]["content_mounts"]
             plugin_inputs = dict((name, record) for name, record in plugin_inputs.items() if name in loaded_mounts)
-    entries = validate_operations(operations, BASE_MOUNTS | plugin_inputs.keys())
+    measured_mounts = project_mounts(Path(project_path), baseline["environment"]) if baseline is not None else {}
+    content_directories = [record["relative"] for name, record in measured_mounts.items()
+                           if record["relative"] != "Content" and
+                           record["content"] != plugin_inputs.get(name, {}).get("content")]
+    plugin_inputs.update(measured_mounts)
+    entries = validate_operations(operations, BASE_MOUNTS | set(plugin_inputs), writable_mounts(plugin_inputs))
     scene_files = [item["payload"]["plan_file"].replace("\\", "/") for item in entries if item["operation"] == "scene_apply"]
-    plan = inventory(Path(project_path), scene_files)
-    candidates = content_candidates(Path(project_path), entries)
+    plan = inventory(Path(project_path), scene_files, content_directories=content_directories)
+    candidates = content_candidates(Path(project_path), entries, plugin_inputs)
     if baseline:
         # Baseline packages are overwritten in the copy, so their directories must stay real.
         candidates |= {row["relative"] for row in baseline.get("files", []) if row.get("relative")}
     identifier = uuid4().hex
+    advance("preflight", validation_id=identifier, force=True)
     validation_directory = validation_root(project_path)
     root = validation_directory / identifier
     from .capacity import estimate
@@ -90,8 +101,9 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
     receipt = root / "receipt.json"
     report.update(state="copying", results=[], started_at=time.time(), receipt_path=str(receipt))
     atomic_write(receipt, canonical(report))
-    session, snapshot = None, None
+    session, snapshot, interrupted = None, None, None
     try:
+        advance("copy", force=True, copied_files=0, copied_bytes=0)
         phase_started = time.monotonic()
         snapshot = copy_project(plan, root / "Project", baseline=baseline, candidates=candidates)
         report.update(copied_bytes=snapshot["bytes"], copied_files=snapshot["copied_files"],
@@ -113,12 +125,17 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
         atomic_write(receipt, canonical(report))
         session = ValidationSession(Path(snapshot["project"]), engine, root, rhi, timeout_seconds, allow_low_memory)
         phase_started = time.monotonic()
-        report["worker"] = session.start()
+        advance("startup", force=True)
+        with atomic():
+            report["worker"] = session.start()
+        advance("startup", force=True, ready=True)
         if baseline is not None:
             verify_worker(baseline["environment"], report["worker"])
         report["timings"]["startup_seconds"] = time.monotonic() - phase_started
         phase_started = time.monotonic()
         for index, item in enumerate(entries):
+            advance("execute", force=True, operation_index=index, operation_count=len(entries), operation=item["operation"],
+                    asset=item["payload"].get("asset_path", item["payload"].get("map_path")))
             if item["operation"] == "scene_apply":
                 item = dict(item, payload=dict(item["payload"]))
                 item["payload"]["plan_file"] = str(Path(snapshot["project"]).parent / item["payload"]["plan_file"])
@@ -130,7 +147,8 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
             LOG.info("validation=%s operation=%s phase=begin index=%s", identifier, item["operation"], index)
             report["executing_operation"] = item
             atomic_write(receipt, canonical(report))
-            response = session.execute(item)
+            with atomic():
+                response = session.execute(item)
             report["results"].append(response)
             atomic_write(receipt, canonical(report))
             require(response.get("ok") is True, "isolated_validation_failed", "candidate failed in the isolated editor",
@@ -138,16 +156,23 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
         report["timings"]["execution_seconds"] = time.monotonic() - phase_started
         report["state"] = "validated"
     except Exception as error:
-        LOG.exception("validation=%s failed", identifier)
+        if isinstance(error, SyncError) and error.code in ("sync_job_cancelled", "sync_job_deadline"):
+            interrupted = error
+            LOG.info("validation=%s cancelled code=%s", identifier, error.code)
+        else:
+            LOG.exception("validation=%s failed", identifier)
         if isinstance(error, InstanceError) and error.code == "isolation_disk_budget":
             report["disk_budget"] = error.details.get("admission", error.details)
-        report.update(state="failed", error=error.envelope()["error"] if isinstance(error, InstanceError)
+        report.update(state="cancelled" if interrupted else "failed", error=error.envelope()["error"] if isinstance(error, InstanceError)
+                      else dict(code=error.code, message=str(error), details=error.details) if isinstance(error, SyncError)
                       else dict(code="isolated_validation_failed", message=str(error)))
     finally:
         if session:
             try:
                 close_started = time.monotonic()
-                report["cleanup"] = session.close()
+                with atomic():
+                    advance("exit", force=True)
+                    report["cleanup"] = session.close()
                 report["timings"]["exit_seconds"] = time.monotonic() - close_started
                 require(report["cleanup"].get("exit_confirmed"), "isolation_cleanup_failed", "validation editor exit was not confirmed")
                 if report["cleanup"].get("forced"):
@@ -167,12 +192,22 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
         if snapshot:
             try:
                 check_started = time.monotonic()
-                report["source_unchanged"] = unchanged(snapshot)
+                with atomic():
+                    advance("source_check", force=True)
+                    report["source_unchanged"] = unchanged(snapshot)
                 report["timings"]["source_check_seconds"] = time.monotonic() - check_started
                 if not report["source_unchanged"]:
                     report.update(state="stale", error=dict(code="isolation_source_changed", message="source inputs changed after snapshot"))
             except (OSError, InstanceError) as error:
                 report.update(state="stale", source_unchanged=False, source_check_error=str(error))
+        try:
+            advance("complete", force=True)
+        except SyncError as error:
+            if error.code not in ("sync_job_cancelled", "sync_job_deadline"):
+                raise
+            interrupted = error
+            if report["state"] not in ("failed", "stale"):
+                report.update(state="cancelled", error=dict(code=error.code, message=str(error), details=dict(error.details)))
         report["finished_at"] = time.time()
         if session is None:
             report["cleanup"] = dict(exit_confirmed=True, launched=False)
@@ -183,5 +218,8 @@ def validate(project_path: str, operations: list[dict], engine_path: str | None,
             report["retention"] = dict(retained=False, error=str(error))
         report["pruned"] = report.get("pruned", []) + prune(validation_directory)
         atomic_write(receipt, canonical(report))
+    if interrupted is not None:
+        interrupted.details.update(validation_id=identifier, receipt_path=str(receipt), cleanup=report.get("cleanup"))
+        raise interrupted
     return dict(ok=report["state"] == "validated", operation="safety_validate", data=report,
                 **(dict(error=report["error"]) if report.get("error") else dict()))

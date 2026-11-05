@@ -21,6 +21,12 @@ def build_identity(builds: dict) -> dict:
     return result
 
 
+def request_digest(item: dict) -> str:
+    if item["kind"] == "scene":
+        return digest(dict(payload=item["payload"], scene_plan=item["scene_plan"]))
+    return digest(item["payload"])
+
+
 def binding(item, candidate, observation, builds, rhi, environment):
     if not isinstance(environment, dict) or any(key not in environment for key in
             ("engine_version", "engine_build", "engine_modules", "project_definition", "configuration", "plugins", "content_mounts")):
@@ -30,7 +36,7 @@ def binding(item, candidate, observation, builds, rhi, environment):
     except InstanceError as error:
         raise SyncError(error.code, str(error), error.details) from error
     guarded = sorted(set((item["asset"],)) | set(item["dependencies"]))
-    return dict(candidate=candidate, asset=item["asset"], kind=item["kind"], payload_digest=digest(item["payload"]),
+    return dict(candidate=candidate, asset=item["asset"], kind=item["kind"], payload_digest=request_digest(item),
                 revisions=dict((asset, observation["revisions"].get(asset)) for asset in guarded),
                 builds=build_identity(builds), rhi=rhi, environment=environment)
 
@@ -48,7 +54,14 @@ def verify_batch(report: dict, expected: dict, operations: list[tuple[str, dict,
     cleanup = data.get("cleanup", dict())
     code = cleanup.get("exit_code", cleanup.get("instance", dict()).get("exit_code"))
     if not report.get("ok") or data.get("state") != "validated" or not data.get("source_unchanged"):
-        raise SyncError("safety_validation_failed", "candidate batch failed complete isolated validation", dict(validation=report))
+        # Batch admission keeps this compact context on every blocked asset.
+        # The complete inputs and native response remain in the durable receipt.
+        failure = data.get("error", dict())
+        evidence = {key: data.get(key) for key in ("validation_id", "receipt_path", "validation_root", "state", "operation_index")}
+        evidence.update(error={key: failure.get(key) for key in ("code", "message")},
+                        native_error=failure.get("details", dict()).get("response", dict()).get("error", dict()),
+                        worker_exit={key: cleanup.get(key) for key in ("exit_confirmed", "exit_code", "forced", "pid", "reason")})
+        raise SyncError("safety_validation_failed", "candidate batch failed complete isolated validation", dict(batch_admission=evidence))
     if not cleanup.get("exit_confirmed") or cleanup.get("forced") or code != 0:
         raise SyncError("safety_worker_exit_failed", "candidate batch requires normal worker exit", dict(cleanup=cleanup))
     if data.get("operations_digest") != digest([operation for _, _, operation in operations]):
@@ -63,12 +76,13 @@ def verify_batch(report: dict, expected: dict, operations: list[tuple[str, dict,
     results = data.get("results", [])
     if len(results) != len(operations):
         raise SyncError("safety_validation_incomplete", "validation must return the complete ordered batch")
-    for index, (asset, _item, _operation) in enumerate(operations):
+    for index, (asset, item, _operation) in enumerate(operations):
         result = results[index]
         if not result.get("ok"):
             raise SyncError("safety_validation_failed", "candidate failed in the isolated batch", dict(asset=asset, response=result))
         publication = result.get("data", dict()).get("isolated_publication", dict())
-        if not all(publication.get(key) for key in ("compiled", "saved", "readback_verified")):
+        phases = ("construction_verified", "saved", "readback_verified") if item.get("kind") == "scene" else ("compiled", "saved", "readback_verified")
+        if not all(publication.get(key) for key in phases):
             raise SyncError("safety_validation_incomplete", "validation omitted compile, save or exported readback", dict(asset=asset))
         publications[index] = publication
     return publications

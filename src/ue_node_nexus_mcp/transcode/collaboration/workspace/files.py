@@ -7,10 +7,12 @@ from pathlib import Path
 
 from ...text.parser import parse
 from ...material.interfaces import documents, fingerprint
-from ...storage.paths import iter_text_files, object_path, package_name, parse_text_path, text_path
+from ...storage.paths import content_root, iter_text_files, object_path, package_name, parse_text_path, text_path
 from ...scene.model import scene_name
+from ...scene.paths import scene_path
 from ...errors import SyncError
 from ..semantic.snapshot import capture
+from ..semantic.normalization import normalize_snapshot
 from ...storage.io import byte_hash, confined
 from . import cache
 
@@ -21,7 +23,7 @@ def filename(asset: str, snapshot: dict) -> str:
         return text_path(Path("."), asset, kind).as_posix()
     map_path, _, name = asset.partition("#")
     safe = re.sub(r"[^\w.-]+", "_", name)
-    return f"Scenes/{map_path.removeprefix('/Game/')}/{safe}.scene.nexus"
+    return scene_path(Path("."), map_path, safe).as_posix()
 
 
 def discover(root: Path, registered: dict[str, str]) -> dict[str, str]:
@@ -57,8 +59,10 @@ def select(root: Path, files: dict[str, str], paths: list[str] | None) -> list[s
     if paths is None:
         return sorted(files)
     result: set[str] = set()
+    roots = {content_root(asset.partition("#")[0]) for asset in files}
     for path in paths:
-        if path.startswith("/Game/"):
+        mount = content_root(path.partition("#")[0])
+        if mount is not None and mount in roots:
             if "#" in path:
                 matches = [asset for asset in files if asset == path]
             else:
@@ -152,6 +156,9 @@ def capture_candidates(workspace, paths, delete, registered, selected):
         snapshot = capture(data.decode("utf-8-sig"), prior, f"{state['id']}:{state['head']}", kind, workspace.schema, str(path))
         if kind != "scene" and object_path(snapshot["semantic"]["header"]["asset"]) != asset:
             raise SyncError("asset_identity_changed", "asset header does not match its file path", dict(file=str(path)))
+        if (prior and snapshot["semantic_hash"] != prior["semantic_hash"]
+                and snapshot["schema_key"] == prior["schema_key"]):
+            prior = normalize_snapshot(prior, schema=workspace.schema)
         if (prior and snapshot["semantic_hash"] == prior["semantic_hash"]
                 and snapshot["schema_key"] == prior["schema_key"]):
             entries[asset] = previous_id

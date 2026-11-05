@@ -17,6 +17,7 @@ TArray<FString> GetCoreOperationNames()
         TEXT("asset_get"),
         TEXT("asset_create"),
         TEXT("asset_delete"),
+        TEXT("asset_delete_batch"),
         TEXT("asset_move"),
         TEXT("asset_rename"),
         TEXT("asset_move_batch"),

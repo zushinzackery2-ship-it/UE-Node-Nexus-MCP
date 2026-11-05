@@ -70,7 +70,7 @@ def _lint_module(decl: Decl, schema: SchemaLock | None, sink: DiagnosticSink) ->
         sink.error("unexpected_positional", "module lines take only Input=Value arguments", line=decl.line)
     for key, value in decl.args:
         if key is not None and value.startswith("@") and not is_marker(value):
-            sink.error("invalid_marker", f"{key}={value!r}: markers are @link(Namespace.Name) or @dynamic", line=decl.line)
+            sink.error("invalid_marker", f"{key}={value!r}: markers are @link(Namespace.Name), @convert(Namespace.Name) or @dynamic", line=decl.line)
     if schema is None or decl.type_name == "SetVariables":
         # Set Variables modules own a per-node generated script; their inputs are the assigned variables
         return

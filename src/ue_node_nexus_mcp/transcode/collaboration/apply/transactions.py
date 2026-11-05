@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import time
 from uuid import uuid4
 
 from ...blueprint.node_ids import GRAPH_SECTIONS
@@ -25,6 +26,8 @@ def save(workspace, record: dict) -> None:
 
 
 def request(workspace, item: dict, source: str, candidate: str, target: str, observation: dict, options: dict, *, consume=True) -> dict:
+    from ..jobs.state import current_id
+
     identifier = uuid4().hex
     directory = workspace.store.root / "transactions" / identifier
     payload = deepcopy(item["payload"])
@@ -49,11 +52,13 @@ def request(workspace, item: dict, source: str, candidate: str, target: str, obs
         plan = dict(item["scene_plan"], request_token=identifier)
         plan_file = directory / "plan.json"
         atomic_write(plan_file, canonical(plan))
-        payload.update(plan_file=str(plan_file), out_file=str(directory / "after" / "scene.json"))
+        payload.update(plan_file=str(plan_file), out_file=str(directory / "after" / "scene.json"),
+            scene_plan=plan, selector=dict(plan["selector"], map_path=plan["map_path"]), asset_path=plan["map_path"])
         operation = "scene_apply"
     record = dict(id=identifier, workspace_id=workspace.state["id"], asset=item["asset"], kind=item["kind"], phase="prepared",
                   source=source, candidate=candidate, target=target, request=payload, operation=operation,
-                  request_digest=digest(payload), generation=0, response=None, consume=consume)
+                  request_digest=digest(payload), generation=0, response=None, consume=consume,
+                  job_id=current_id(), requested_at=time.time())
     save(workspace, record)
     return record
 

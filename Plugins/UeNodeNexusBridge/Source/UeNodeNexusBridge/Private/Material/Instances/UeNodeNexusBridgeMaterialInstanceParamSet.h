@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MaterialTypes.h"
 
 class UMaterialInstanceConstant;
 class UTexture;
@@ -17,8 +18,10 @@ namespace UeNodeNexusBridge
 // batch on the first instance parameter because of it. These write through the
 // instance directly and confirm by reading back. A parameter the parent material
 // does not expose is reported as such instead of being stored as a dead override.
-bool SetInstanceScalar(UMaterialInstanceConstant* Instance, FName Name, float Value, FString& OutError);
-bool SetInstanceVector(UMaterialInstanceConstant* Instance, FName Name, const FLinearColor& Value, FString& OutError);
-bool SetInstanceTexture(UMaterialInstanceConstant* Instance, FName Name, UTexture* Texture, FString& OutError);
-bool SetInstanceStaticSwitch(UMaterialInstanceConstant* Instance, FName Name, bool bValue, FString& OutError);
+bool SetInstanceScalar(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, float Value, FString& OutError);
+bool SetInstanceVector(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, const FLinearColor& Value, FString& OutError);
+bool SetInstanceTexture(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, UTexture* Texture, FString& OutError);
+bool SetInstanceStaticSwitch(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, bool bValue, FString& OutError);
+bool SetInstanceComponentMask(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info,
+    bool R, bool G, bool B, bool A, FString& OutError);
 }

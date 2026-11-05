@@ -13,7 +13,7 @@ from ..transcode.sync.options import OPTION_KEYS as _OPTION_KEYS
 from ..transcode.sync.lifecycle import run_managed_sync
 from ..instances.errors import InstanceError
 from ..diagnostics.contracts.response import DIAGNOSTIC_FIELDS
-from ..diagnostics.contracts.workflows import attach_report
+from ..diagnostics.contracts.workflows import attach_report, successful
 
 SyncAction = Literal["init", "checkout", "workspaces", "status", "fetch", "pull", "lint", "push", "schema",
                      "stage", "unstage", "commit", "amend", "merge", "resolve", "continue", "abort", "recover", "close",
@@ -81,7 +81,7 @@ def _bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 def _finish(report: dict[str, Any]) -> dict[str, Any]:
     attach_report(report, str(report.get("action") or "report"))
-    result = {"ok": report.get("error_count", 0) == 0 and not report.get("stopped", False) and report.get("status") not in ("conflict", "stale", "recovery_required", "failed", "cancelled", "interrupted"), "data": report}
+    result = {"ok": successful(report), "data": report}
     if response_payload_bytes(result) <= LARGE_RESPONSE_INLINE_BYTE_LIMIT:
         return result
     artifact = artifact_handle("ue_sync_report", result)

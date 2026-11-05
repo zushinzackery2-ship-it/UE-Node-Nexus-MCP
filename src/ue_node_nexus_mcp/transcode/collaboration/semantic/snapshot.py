@@ -6,6 +6,7 @@ from ...raw.codec import document_from_raw
 from ...text.emitter import emit
 from ...text.parser import parse
 from ...scene.codec import from_raw as scene_from_raw
+from ...scene.model import from_document as scene_from_document
 from ...errors import SyncError
 from ...storage.io import digest
 from .decode import physical_ids, to_document
@@ -21,10 +22,17 @@ def raw_evidence(raw: dict) -> dict:
     return dict((key, plain(value)) for key, value in raw.items() if key not in VOLATILE and key not in ("ids", "order", "aliases"))
 
 
+def scene_aliases(document, previous: dict | None) -> dict:
+    raw = (previous or {}).get("raw", {})
+    base = dict(raw, aliases=physical_ids(previous)) if previous and "map_path" in raw else None
+    _, aliases = scene_from_document(document, base)
+    return aliases
+
+
 def from_raw(raw: dict, previous: dict | None = None, namespace: str = "ue", schema=None) -> dict:
     kind = "scene" if raw.get("scene_version") or ("map_path" in raw and "actors" in raw) else raw["kind"]
     if kind == "scene":
-        prior = physical_ids(previous) if previous else raw.get("aliases", dict())
+        prior = scene_aliases(to_document(previous), previous) if previous else raw.get("aliases", dict())
         document, aliases = scene_from_raw(raw, prior)
         scene_metadata(document, aliases)
     else:
@@ -44,6 +52,8 @@ def capture(text: str, previous: dict | None, namespace: str, kind: str, schema=
         raise SyncError("invalid_document", "\n".join(item.format() for item in diagnostics.errors()))
     if previous and document.header.asset != previous["semantic"]["header"]["asset"]:
         raise SyncError("asset_identity_changed", "file asset header differs from its registered identity")
+    if kind == "scene":
+        scene_metadata(document, scene_aliases(document, previous))
     semantic, bindings, locations = encode(document, kind, previous, namespace, schema)
     return dict(semantic=semantic, semantic_hash=digest(semantic), bindings=bindings,
                 raw=(previous or dict()).get("raw", dict()), schema_key=document.header.schema or (previous or dict()).get("schema_key", ""),

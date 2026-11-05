@@ -58,6 +58,10 @@ GUIDE_INDEX: dict[str, tuple[str, tuple[str, ...]]] = {
         "Materials, instances, node params, lint, compile",
         ("material", "instance", "texture", "lint", "expression", "parameter", "compile", "shader"),
     ),
+    "material_parameters": (
+        "Material instance parameter values, layers and blend scopes",
+        ("material parameters", "layer", "blend", "component mask", "override", "材质参数", "材质层"),
+    ),
     "blueprint_authoring": (
         "Blueprint details, SCS components, event graphs, input",
         ("blueprint", "component", "scs", "event", "variable", "input", "mapping", "k2node", "anim"),

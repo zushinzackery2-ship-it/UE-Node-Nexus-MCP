@@ -65,6 +65,12 @@ def launch_arguments(project):
 
 def verify_worker(expected, worker):
     validate(expected)
+    source_mounts = expected.get("project_content_mounts", {})
+    actual_mounts = (worker.get("environment") or {}).get("project_content_mounts", {})
+    for name in source_mounts.keys() | actual_mounts.keys():
+        require(source_mounts.get(name) == actual_mounts.get(name), "isolation_mount_mismatch",
+                "worker project content registration differs from the measured source",
+                mount=name, expected=source_mounts.get(name), actual=actual_mounts.get(name))
     require(worker.get("environment") == expected, "isolation_identity_mismatch",
             "worker effective configuration, rendering variables or launch options differ from the publishing editor")
     reproduction = worker.get("reproduction", {})

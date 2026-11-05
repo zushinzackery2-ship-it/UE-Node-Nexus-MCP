@@ -22,6 +22,7 @@ void AddClassMetadata(UClass* Class, const TSharedPtr<FJsonObject>& Record)
     Record->SetStringField(TEXT("inheritance"), Class->GetSuperClass() ? Class->GetSuperClass()->GetPathName() : FString());
     Record->SetBoolField(TEXT("engine_available"), true);
     Record->SetBoolField(TEXT("deprecated"), Class->HasAnyClassFlags(CLASS_Deprecated));
+    Record->SetBoolField(TEXT("abstract"), Class->HasAnyClassFlags(CLASS_Abstract));
     const bool bK2 = Class->IsChildOf(UEdGraphNode::StaticClass());
     const bool bNode = Class->IsChildOf(UMaterialExpression::StaticClass());
     const bool bComponent = Class->IsChildOf(UActorComponent::StaticClass());
@@ -36,7 +37,7 @@ void AddClassMetadata(UClass* Class, const TSharedPtr<FJsonObject>& Record)
         || (Kind != TEXT("stub") && Kind != TEXT("niagara_emitter"));
     const auto Bridge = MakeShared<FJsonObject>();
     Bridge->SetBoolField(TEXT("inspect"), true);
-    Bridge->SetBoolField(TEXT("create"), bSupported && Kind != TEXT("niagara_system"));
+    Bridge->SetBoolField(TEXT("create"), bSupported && !Class->HasAnyClassFlags(CLASS_Abstract) && Kind != TEXT("niagara_system"));
     if (bK2 && (Class->GetName() == TEXT("K2Node_FunctionEntry") || Class->GetName() == TEXT("K2Node_FunctionResult")))
     {
         Bridge->SetBoolField(TEXT("create"), false);
@@ -83,12 +84,18 @@ void AddClassMetadata(UClass* Class, const TSharedPtr<FJsonObject>& Record)
     }
 }
 
-void AddPropertyMetadata(FProperty* Property, const TSharedPtr<FJsonObject>& Record)
+void AddPropertyMetadata(FProperty* Property, const TSharedPtr<FJsonObject>& Record, const UClass* OwnerClass)
 {
+    const bool bDerived = IsDerivedProperty(OwnerClass, Property);
     Record->SetStringField(TEXT("tooltip"), Property->GetToolTipText().ToString());
     Record->SetStringField(TEXT("default_source"), Record->HasField(TEXT("default")) ? TEXT("class_default_object") : TEXT("metadata_not_provided"));
     Record->SetBoolField(TEXT("readable"), true);
-    Record->SetBoolField(TEXT("writable"), IsEditableProperty(Property));
+    Record->SetBoolField(TEXT("writable"), IsEditableProperty(Property) && !bDerived);
+    if (bDerived)
+    {
+        Record->SetBoolField(TEXT("derived"), true);
+        Record->SetStringField(TEXT("derived_from"), TEXT("CurrentFocalLength, Filmback"));
+    }
     Record->SetBoolField(TEXT("nullable"), !Property->HasAnyPropertyFlags(CPF_NoClear));
     Record->SetStringField(TEXT("declared_by"), Property->GetOwnerStruct()->GetPathName());
     Record->SetBoolField(TEXT("deprecated"), Property->HasAnyPropertyFlags(CPF_Deprecated));

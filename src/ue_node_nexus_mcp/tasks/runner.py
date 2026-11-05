@@ -26,14 +26,15 @@ def run_observed(record, owner, execute_operation, observed) -> None:
         with owner._lock:
             record.result = response
             record.diagnostic_snapshot = stored_fields(destination(response))
-            record.status = "succeeded" if response.get("ok") else "failed"
-            if record.status == "failed":
+            record.completion_status = "succeeded" if response.get("ok") else "failed"
+            if record.completion_status == "failed":
                 record.error = response.get("error") or dict(code="operation_failed", message="operation failed")
     except Exception as exc:
         with owner._lock:
-            record.status = "failed"
+            record.completion_status = "failed"
             record.error = exc.envelope()["error"] if isinstance(exc, InstanceError) else dict(code="operation_failed", message=str(exc))
             result = finalize(dict(ok=False, error=record.error), record.operation, observed.last)
+            record.result = result
             record.diagnostic_snapshot = stored_fields(result)
 
 
@@ -54,7 +55,7 @@ def worker_loop() -> None:
                 run_one(record)
             except Exception as exc:
                 with owner._lock:
-                    record.status = "failed"
+                    record.completion_status = "failed"
                     record.error = dict(code="task_worker_failed", message=str(exc))
             finally:
                 complete(record, owner)

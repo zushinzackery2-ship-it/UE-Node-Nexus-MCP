@@ -137,7 +137,9 @@ void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJs
     {
         TSharedPtr<FJsonObject> Payload = BasePayload(System, INDEX_NONE);
         const FString Parent = Str(Op, TEXT("parent"));
-        Payload->SetStringField(TEXT("mode"), Parent.IsEmpty() ? TEXT("default") : TEXT("from_asset"));
+        // The text plan authors the stack and renderers; bootstrap modules would
+        // add a second spawn/solver/render path that the document never requested.
+        Payload->SetStringField(TEXT("mode"), Parent.IsEmpty() ? TEXT("empty") : TEXT("from_asset"));
         Payload->SetStringField(TEXT("source_emitter_path"), Parent);
         Payload->SetStringField(TEXT("name"), Str(Op, TEXT("name")));
         Reenter(TEXT("niagara_emitter_create"), &HandleNiagaraEmitterCreate, Payload, Index, Context, Data);
@@ -177,7 +179,7 @@ void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJs
                 FVersionedNiagaraEmitterData* EmitterData = System->GetEmitterHandles()[Emitter].GetEmitterData();
                 if (EmitterData && EmitterData->GetRenderers().Num() > 0)
                 {
-                    const FString Guid = EmitterData->GetRenderers().Last()->GetName();
+                    const FString Guid = EmitterData->GetRenderers().Last()->GetMergeId().ToString(EGuidFormats::DigitsWithHyphens);
                     Context.Ids.Add(Id, Guid);
                     Context.Created.Add(Id, Guid);
                 }
@@ -251,7 +253,8 @@ void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJs
         Payload->SetBoolField(TEXT("enabled"), bEnabled);
         Reenter(TEXT("niagara_module_set_enabled"), &HandleNiagaraModuleSetEnabled, Payload, Index, Context, Data);
     }
-    else if (Verb == TEXT("ns_module_input_set") || Verb == TEXT("ns_module_input_reset") || Verb == TEXT("ns_module_input_link"))
+    else if (Verb == TEXT("ns_module_input_set") || Verb == TEXT("ns_module_input_reset")
+        || Verb == TEXT("ns_module_input_link") || Verb == TEXT("ns_module_input_convert"))
     {
         TArray<UNiagaraNodeFunctionCall*> Modules;
         NiagaraModuleStack::GetOrderedModules(Output, Modules);

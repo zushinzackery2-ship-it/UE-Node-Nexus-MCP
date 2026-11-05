@@ -8,6 +8,8 @@ import re
 from ...instances.errors import InstanceError, require
 from ...registry.validation import validate_operation_call
 from ...registry.payloads.schema import payload_schema_for
+from ...transcode.storage.paths import content_parts
+from .mounts import BASE_MOUNTS
 
 SUPPORTED = frozenset(("transcode_apply", "vfx_transcode_apply", "scene_apply", "asset_create", "asset_compile",
                        "asset_validate", "asset_save", "graph_patch_apply", "graph_build_apply", "node_create",
@@ -17,9 +19,11 @@ PROTOCOL_FIELDS = frozenset(("repository", "apply_id", "collaboration_version", 
                              "output_path", "file_path", "destination_dir", "root_dir", "transcode_dir"))
 
 
-def validate_operations(operations, mounts=None) -> list[dict]:
+def validate_operations(operations, mounts=None, writable=None) -> list[dict]:
     require(isinstance(operations, list) and 1 <= len(operations) <= 100,
             "invalid_request", "operations must contain 1..100 asset operations")
+    mounts = set(BASE_MOUNTS) if mounts is None else set(mounts)
+    writable = mounts if writable is None else set(writable)
     result = []
     for index, item in enumerate(operations):
         require(isinstance(item, dict) and set(item) == set(("operation", "payload")),
@@ -30,13 +34,15 @@ def validate_operations(operations, mounts=None) -> list[dict]:
         error = validate_operation_call(name, payload)
         if error:
             raise InstanceError(error["code"], error["message"], dict(index=index, operation=name))
-        inspect_payload(payload, mounts=mounts)
+        inspect_payload(payload, mounts=mounts, location=f"operations[{index}].payload")
         for field in ("asset_path", "map_path", "level_path", "blueprint_path", "material_path", "system_path", "asset_paths", "package_names", "package_paths"):
             if field not in payload:
                 continue
             targets = payload[field] if isinstance(payload[field], list) else [payload[field]]
-            require(all(isinstance(target, str) and target.startswith("/Game/") and ".." not in target.split("/") for target in targets),
-                    "isolation_target_rejected", "write targets must stay in the copied /Game mount", field=field)
+            for target in targets:
+                parts = content_parts(target) if isinstance(target, str) else None
+                require(parts is not None and parts[0] in writable, "isolation_target_rejected",
+                        "write targets must stay in a copied project content mount", field=field, path=target, index=index)
         require(payload.get("dry_run") is not True, "invalid_request",
                 "isolated validation must execute the supplied operation", index=index)
         admitted = deepcopy(item)
@@ -51,19 +57,20 @@ def validate_operations(operations, mounts=None) -> list[dict]:
     return result
 
 
-def inspect_payload(value, key: str = "", *, mounts=None) -> None:
-    mounts = set(("Game", "Engine", "Script")) if mounts is None else mounts
+def inspect_payload(value, key: str = "", *, mounts=None, location="payload") -> None:
+    mounts = set(BASE_MOUNTS) if mounts is None else set(mounts)
     if isinstance(value, dict):
         for field, child in value.items():
             require(field not in PROTOCOL_FIELDS, "isolation_path_rejected",
                     "publication identity and filesystem targets are owned by the validation copy", field=field)
-            inspect_payload(child, field, mounts=mounts)
+            inspect_payload(child, field, mounts=mounts, location=location + "." + field)
     elif isinstance(value, list):
-        for child in value:
-            inspect_payload(child, key, mounts=mounts)
+        for index, child in enumerate(value):
+            inspect_payload(child, key, mounts=mounts, location=f"{location}[{index}]")
     elif isinstance(value, str):
         require(not re.match(r"^[A-Za-z]:[\\/]", value) and not value.startswith(("\\\\", "file://")),
                 "isolation_path_rejected", "payload cannot address external filesystem paths", field=key)
         if value.startswith("/"):
             require(value.split("/", 2)[1] in mounts and len(value.split("/", 2)) == 3, "isolation_path_rejected",
-                    "object references must use an enabled installed content mount", field=key)
+                    "object references must use an installed or measured project content mount",
+                    field=key, field_path=location, path=value)

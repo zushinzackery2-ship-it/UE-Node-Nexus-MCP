@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..storage.paths import object_path, parse_text_path
+from ..storage.paths import content_root, object_path, parse_text_path
 from ..storage.ignore.policy import IgnorePolicy
 from .state import AssetState, SyncState, UeAssetInfo, classify
 from .files import canonical_hash, mirrored_assets, read_text
@@ -33,8 +33,8 @@ class AssetStatus:
         return [self.asset_path, self.kind, self.state, self.ue.dirty if self.ue else None, saved_changed]
 
 
-def _expand_game_path(text: str, known: set[str]) -> list[str]:
-    """A ``/Game`` path is an asset, a folder of known assets, or both.
+def _expand_content_path(text: str, known: set[str]) -> list[str]:
+    """A mounted path is an asset, a folder of known assets, or both.
 
     ``/Game/ToonShade`` used to be coerced to the object path ``/Game/ToonShade.ToonShade``
     and then reported as one ``unknown`` asset, so a folder selection silently matched
@@ -73,8 +73,8 @@ def resolve_selection(context: ProjectContext, paths: list[str] | None, state: S
         text = item.strip()
         if not text:
             continue
-        if text.startswith("/Game"):
-            selected.extend(_expand_game_path(text, known))
+        if content_root(text) is not None and not Path(text).exists():
+            selected.extend(_expand_content_path(text, known))
             continue
         path = _locate_mirror_path(context, text)
         if path is None:
@@ -98,7 +98,7 @@ def resolve_selection(context: ProjectContext, paths: list[str] | None, state: S
             if policy.ignored(resolved.relative_to(context.project.resolve()).parts):
                 raise SyncError("path_ignored", f"mirror file is ignored: {item}", dict(file=str(path)))
         if parsed is None:
-            raise SyncError("invalid_path", f"not a /Game asset path or a mirror file: {item}")
+            raise SyncError("invalid_path", f"not a project content asset path or a mirror file: {item}")
         selected.append(parsed[0])
     if not selected:
         raise SyncError("no_match", "selection matched no mirrored asset", {"paths": list(paths)})

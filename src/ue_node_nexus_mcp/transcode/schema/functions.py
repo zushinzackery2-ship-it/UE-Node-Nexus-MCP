@@ -3,21 +3,34 @@
 from ..errors import SyncError
 
 
-def reference(lock, owner: str, name: str) -> str:
-    full = owner + "." + name if owner else name
-    if not owner.startswith("/Script/"):
-        return full
-    short_owner = owner.rsplit(".", 1)[-1]
-    short = short_owner + "." + name
-    if lock is None:
-        return full
+def _function(lock, owner: str, name: str) -> dict | None:
     try:
-        record = lock.function(short_owner, name)
+        return lock.function(owner, name)
     except SyncError as exc:
         if exc.code != "schema_ambiguous":
             raise
+        return None
+
+
+def reference(lock, owner: str, name: str) -> str:
+    """One function spelling: its declaring class, with full paths for assets.
+
+    UE binds ``PlayerController.GetViewTarget`` to the UFunction declared on
+    ``Controller`` and exports that owner, so an inherited spelling must reach
+    the same text before authored and observed states are compared.
+    """
+    full = owner + "." + name if owner else name
+    if lock is None or not owner or owner == "self":
         return full
-    return short if record is not None and record["path"] == full else full
+    record = _function(lock, owner, name)
+    if record is None:
+        return full
+    declared = record["path"]
+    if not declared.startswith("/Script/"):
+        return declared
+    short_owner = record["path"].rpartition(".")[0].rsplit(".", 1)[-1]
+    short = _function(lock, short_owner, name)
+    return short_owner + "." + name if short is not None and short["path"] == declared else declared
 
 
 # ``coverage.functions`` of a catalog whose index also holds BlueprintEvent

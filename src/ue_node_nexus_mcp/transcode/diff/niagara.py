@@ -13,7 +13,7 @@ from ..text.semantic import values_equal
 from ..text.values import is_marker
 
 ASSIGNMENT_MODULE = "SetVariables"
-USER_LINK = re.compile(r"@link\((User\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\)")
+PARAMETER_REFERENCE = re.compile(r"@(link|convert)\(([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)\)")
 
 
 def diff_niagara(local: Document, base: Document | None, plan: AssetPlan, kind: str,
@@ -164,13 +164,14 @@ def _diff_stack(local: Section, base: Section | None, plan: AssetPlan, kind: str
 def _add_input(plan: AssetPlan, decl: Decl, identifier: str, key: str, value: str, before: str | None, common: dict[str, str]) -> None:
     if before is not None and values_equal(before, value, field_type(decl, key)):
         return
-    linked = USER_LINK.fullmatch(value)
+    linked = PARAMETER_REFERENCE.fullmatch(value)
     if linked is not None:
-        plan.add("ns_module_input_link", line=decl.line, id=identifier, input=key,
-                 parameter=linked.group(1), **common)
+        verb = "ns_module_input_convert" if linked.group(1) == "convert" else "ns_module_input_link"
+        plan.add(verb, line=decl.line, id=identifier, input=key,
+                 parameter=linked.group(2), **common)
         return
     if is_marker(value) or value.startswith("@"):
-        plan.error("unsupported_edit", f"{identifier}.{key}: new input links require @link(User.Name); dynamic and other namespaces remain read-only", decl.line)
+        plan.error("unsupported_edit", f"{identifier}.{key}: references require @link(Namespace.Name) or @convert(Namespace.Name); opaque dynamic inputs remain read-only", decl.line)
         return
     plan.add("ns_module_input_set", line=decl.line, id=identifier, input=key, value=value, **common)
 

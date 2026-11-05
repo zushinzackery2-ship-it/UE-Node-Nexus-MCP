@@ -28,11 +28,16 @@ TSharedPtr<FJsonObject> ExportBaseline(const FString& Operation, const FString& 
     for (const auto& Value : *Paths)
     {
         FString Path;
-        if (!Value.IsValid() || !Value->TryGetString(Path) || !Path.StartsWith(TEXT("/Game/")))
+        if (!Value.IsValid() || !Value->TryGetString(Path))
         {
-            return MakeOperationError(Operation, RequestId, TEXT("isolation_target_rejected"), TEXT("baseline assets must belong to /Game"));
+            return MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("asset_paths entries must be strings"));
         }
         const FString Package = FPackageName::ObjectPathToPackageName(Path);
+        if (!Transcode::IsProjectContentPackage(Package))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("isolation_target_rejected"),
+                TEXT("baseline assets must belong to a registered project content mount"));
+        }
         if (!FPackageName::IsValidLongPackageName(Package))
         {
             return MakeOperationError(Operation, RequestId, TEXT("invalid_request"), TEXT("invalid package in asset_paths"));
@@ -47,7 +52,7 @@ TSharedPtr<FJsonObject> ExportBaseline(const FString& Operation, const FString& 
         Registry.GetDependencies(Packages[Index], Dependencies, UE::AssetRegistry::EDependencyCategory::Package);
         for (const FName Dependency : Dependencies)
         {
-            if (Dependency.ToString().StartsWith(TEXT("/Game/")) && !Seen.Contains(Dependency))
+            if (Transcode::IsProjectContentPackage(Dependency.ToString()) && !Seen.Contains(Dependency))
             {
                 Seen.Add(Dependency);
                 Packages.Add(Dependency);
@@ -88,10 +93,10 @@ TSharedPtr<FJsonObject> ExportBaseline(const FString& Operation, const FString& 
         const FString Original = Collaboration::PackageFile(Package);
         FString Relative = Original;
         const FString Project = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
-        if (!FPaths::MakePathRelativeTo(Relative, *Project) || !Relative.StartsWith(TEXT("Content/"))
-            || Relative.Contains(TEXT("../")))
+        if (!FPaths::IsUnderDirectory(FPaths::ConvertRelativePathToFull(Original), Project)
+            || !FPaths::MakePathRelativeTo(Relative, *Project) || Relative.Contains(TEXT("../")))
         {
-            return MakeOperationError(Operation, RequestId, TEXT("isolation_path_rejected"), TEXT("package file must remain under project Content"));
+            return MakeOperationError(Operation, RequestId, TEXT("isolation_path_rejected"), TEXT("package file must remain under the project directory"));
         }
         const FString Copy = Root / Relative;
         IFileManager::Get().MakeDirectory(*FPaths::GetPath(Copy), true);

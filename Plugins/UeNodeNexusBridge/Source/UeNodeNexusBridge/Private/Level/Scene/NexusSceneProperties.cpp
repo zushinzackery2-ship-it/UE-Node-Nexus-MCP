@@ -8,7 +8,7 @@
 
 namespace UeNodeNexusBridge::Scene
 {
-bool EditableProperty(const FProperty* Property)
+bool EditableProperty(const UClass* Class, const FProperty* Property)
 {
     static const TSet<FName> Reserved =
     {
@@ -16,7 +16,8 @@ bool EditableProperty(const FProperty* Property)
         TEXT("RelativeLocation"), TEXT("RelativeRotation"), TEXT("RelativeScale3D"),
         TEXT("ActorLabel"), TEXT("FolderPath"), TEXT("AssetUserData"), TEXT("AssetUserDataEditorOnly")
     };
-    return Transcode::IsEditableProperty(Property) && Property->ArrayDim == 1
+    return Transcode::IsEditableProperty(Property) && !Transcode::IsDerivedProperty(Class, Property)
+        && Property->ArrayDim == 1
         && !Property->HasAnyPropertyFlags(CPF_Transient | CPF_InstancedReference | CPF_ContainsInstancedReference | CPF_DisableEditOnInstance)
         && !Reserved.Contains(Property->GetFName());
 }
@@ -30,7 +31,7 @@ void ExportProperties(UObject* Target, FObject& Properties, FObject& Defaults, F
     for (TFieldIterator<FProperty> It(Target->GetClass()); It; ++It)
     {
         FProperty* Property = *It;
-        if (!EditableProperty(Property))
+        if (!EditableProperty(Target->GetClass(), Property))
         {
             continue;
         }
@@ -82,7 +83,7 @@ bool WriteProperties(UObject* Target, const FObject& Properties, bool bApply, FS
     {
         FProperty* Property = Target->GetClass()->FindPropertyByName(FName(*Pair.Key));
         FString Value;
-        if (!EditableProperty(Property) || !Pair.Value->TryGetString(Value))
+        if (!EditableProperty(Target->GetClass(), Property) || !Pair.Value->TryGetString(Value))
         {
             Error = TEXT("property_not_editable: ") + Pair.Key;
             return false;

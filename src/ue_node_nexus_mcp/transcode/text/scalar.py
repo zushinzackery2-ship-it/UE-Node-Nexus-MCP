@@ -11,6 +11,11 @@ INTEGER = re.compile(r"^(?:u?int(?:8|16|32|64)?|byte)$", re.I)
 NUMBER = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[fF]?$")
 STRUCTS = set(("vector", "vector2d", "vector4", "rotator", "quat", "transform", "linearcolor", "color",
                "vector3f", "vector2f", "vector4f", "quat4f", "staticcomponentmask"))
+CSV_COMPONENTS = {"vector": ("X", "Y", "Z"), "vector3f": ("X", "Y", "Z"),
+                  "vector2d": ("X", "Y"), "vector2f": ("X", "Y"),
+                  "vector4": ("X", "Y", "Z", "W"), "vector4f": ("X", "Y", "Z", "W"),
+                  "quat": ("X", "Y", "Z", "W"), "quat4f": ("X", "Y", "Z", "W"),
+                  "linearcolor": ("R", "G", "B", "A"), "color": ("R", "G", "B", "A")}
 
 
 def normalize(text: str, type_name: str) -> str:
@@ -20,6 +25,9 @@ def normalize(text: str, type_name: str) -> str:
     kind = type_name.removeprefix("F").lower()
     if kind.startswith("struct(") and kind.endswith(")"):
         kind = kind[7:-1].rsplit(".", 1)[-1].removeprefix("f")
+    if kind in ("name", "nameproperty"):
+        name = unquote(str(text))
+        return "None" if not name or name.lower() == "none" else name
     if is_string_type(type_name):
         return unquote(str(text))
     if kind == "object" or kind.startswith(("object(", "softobject(", "tobjectptr<", "tsoftobjectptr<")) or type_name.endswith("*"):
@@ -36,6 +44,12 @@ def normalize(text: str, type_name: str) -> str:
         return "1" if text.lower() == "true" else "0"
     if NUMERIC.fullmatch(type_name) and NUMBER.fullmatch(text.strip()):
         return normalize_number(text, kind)
+    components = CSV_COMPONENTS.get(kind)
+    if components:
+        contents = text[1:-1] if text.startswith("(") and text.endswith(")") else text
+        values = split_top_level(contents, ",")
+        if len(values) == len(components) and all(NUMBER.fullmatch(item.strip()) for item in values):
+            text = "(" + ",".join(name + "=" + item.strip() for name, item in zip(components, values)) + ")"
     if kind in STRUCTS and text.startswith("(") and text.endswith(")"):
         values = []
         for item in split_top_level(text[1:-1], ","):

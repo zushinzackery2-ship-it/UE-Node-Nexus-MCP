@@ -36,6 +36,13 @@ def normalize_reflected(text, contract):
     for name in fields.keys() | supplied.keys():
         member = fields.get(name, dict(type="text"))
         value = supplied.get(name, member.get("default"))
+        # Runtime-only defaults describe memory, not an ImportText assignment.
+        # Drop redundant fields from older canonical text as well; an explicit
+        # nondefault remains visible so native validation can reject that write.
+        if member.get("text_importable") is False and (
+                name not in supplied or ("default" in member and normalize_reflected(unquote(value), member)
+                == normalize_reflected(unquote(member["default"]), member))):
+            continue
         if value is not None:
             values[name] = nested_value(unquote(value), member)
     if contract.get("path") == "/Script/Engine.MaterialInstanceBasePropertyOverrides":

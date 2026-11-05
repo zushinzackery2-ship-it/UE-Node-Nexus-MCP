@@ -6,7 +6,7 @@ from ...blueprint.classes import node_name
 from ...blueprint.signature import parse_signature
 from ...blueprint.types import join_type_text, parse_type_text
 from ...errors import SyncError
-from ...storage.paths import object_path
+from ...storage.paths import asset_relative, content_root, object_path
 from ...text.lexer import LexError
 from ...text.model import Document, Section
 from .values import schema_prop_hint, type_hint, type_text_dependencies, value_dependencies
@@ -77,7 +77,7 @@ def _collect_node(decl, document, schema, owner: str, sink: dict[str, set[str]])
     if spelled in _FUNCTION_NODES:
         positional = decl.positional()
         call_owner = positional[0].rpartition(".")[0] if positional else ""
-        if call_owner.startswith("/Game/"):
+        if asset_relative(call_owner) is not None:
             _collect(value_dependencies(call_owner, owner, "reference"), "signature", sink)
     for key, value in decl.args:
         if key is None:
@@ -94,7 +94,7 @@ def _collect_node(decl, document, schema, owner: str, sink: dict[str, set[str]])
         elif key.startswith("prop:"):
             _collect(value_dependencies(value, owner, _node_prop_hint(decl, key[5:], schema)), "body", sink)
         else:
-            name = key[5:] if key.startswith("pin:") else key
+            name = key.removeprefix("pin:")
             _collect(value_dependencies(value, owner, type_hint((params or {}).get(name))), "body", sink)
     for _, value in decl.props:
         _collect(value_dependencies(value, owner), "body", sink)
@@ -160,6 +160,11 @@ def dependency_kinds(document: Document, kind: str, schema=None) -> dict[str, se
         _collect_section(section, kind, owner, document, schema, sink)
     if kind in ("blueprint", "asset", "scene"):
         sink.pop(owner, None)
+    roots = getattr(schema, "project_content_roots", None)
+    if roots is not None:
+        # The native registration distinguishes project plugins from engine plugins;
+        # a virtual root's spelling alone cannot establish publication ownership.
+        sink = {asset: edges for asset, edges in sink.items() if content_root(asset) in roots}
     return sink
 
 

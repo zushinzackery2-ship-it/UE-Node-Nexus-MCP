@@ -5,11 +5,14 @@
 
 #include "NiagaraSystem.h"
 #include "ScopedTransaction.h"
+#include "Misc/PackageName.h"
 #include "Templates/UniquePtr.h"
 #include "UObject/Package.h"
 #include "UeNodeNexusBridgeJson.h"
+#include "UeNodeNexusBridgeAssetPaths.h"
 #include "UeNodeNexusBridgeNiagaraModuleStack.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
+#include "UeNodeNexusNiagaraOps.h"
 
 namespace UeNodeNexusBridge
 {
@@ -32,19 +35,68 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     bool bDryRun = true;
     bool bCompile = true;
     bool bSave = true;
+    bool bCreate = false;
     FString OutDir;
     Payload->TryGetBoolField(TEXT("dry_run"), bDryRun);
     Payload->TryGetBoolField(TEXT("compile"), bCompile);
     Payload->TryGetBoolField(TEXT("save"), bSave);
+    Payload->TryGetBoolField(TEXT("create"), bCreate);
     Payload->TryGetStringField(TEXT("out_dir"), OutDir);
-    UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *AssetPath);
-    if (!IsValid(System) || !System->IsAsset())
+    FString PackageName, AssetName;
+    FText PathError;
+    if (!ParseAssetPath(AssetPath, PackageName, AssetName, PathError))
     {
-        return MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), TEXT("Niagara system could not be loaded (emitter assets are read-only in this version)"));
+        return MakeOperationError(Operation, RequestId, TEXT("invalid_asset_path"), PathError.ToString());
+    }
+    AssetPath = PackageName + TEXT(".") + AssetName;
+    UObject* Asset = FindObject<UObject>(nullptr, *AssetPath);
+    if (Asset == nullptr && FPackageName::DoesPackageExist(PackageName))
+    {
+        Asset = LoadObject<UObject>(nullptr, *AssetPath);
+    }
+    UNiagaraSystem* System = Cast<UNiagaraSystem>(Asset);
+    if (IsValid(Asset) && (!IsValid(System) || !System->IsAsset()))
+    {
+        return MakeOperationError(Operation, RequestId, TEXT("asset_type_mismatch"), TEXT("asset_path must identify a NiagaraSystem asset"));
+    }
+    bool bCreated = false;
+    if (!IsValid(System))
+    {
+        if (!bCreate)
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("asset_not_found"), TEXT("Niagara system could not be loaded"));
+        }
+        // Use the same native initialization and ownership as typed asset creation.
+        // The surrounding collaboration transaction restores absence on failure.
+        auto CreateRequest = MakeShared<FJsonObject>();
+        CreateRequest->SetStringField(TEXT("asset_path"), AssetPath);
+        CreateRequest->SetBoolField(TEXT("create_default_nodes"), true);
+        CreateRequest->SetBoolField(TEXT("dry_run"), bDryRun);
+        CreateRequest->SetBoolField(TEXT("save"), false);
+        auto Created = HandleNiagaraSystemCreate(Operation, RequestId, CreateRequest);
+        if (!Created->GetBoolField(TEXT("ok")))
+        {
+            return Created;
+        }
+        if (bDryRun)
+        {
+            auto Data = Created->GetObjectField(TEXT("data"));
+            Data->SetBoolField(TEXT("would_create"), true);
+            Data->SetNumberField(TEXT("applied"), 0);
+            return Created;
+        }
+        System = LoadObject<UNiagaraSystem>(nullptr, *Created->GetObjectField(TEXT("data"))->GetStringField(TEXT("asset_path")));
+        if (!IsValid(System))
+        {
+            return MakeOperationError(Operation, RequestId, TEXT("asset_create_failed"), TEXT("created Niagara system could not be resolved"));
+        }
+        bCreated = true;
+        UE_LOG(LogTemp, Display, TEXT("Nexus event=niagara_text_create request=%s asset=%s"), *RequestId, *System->GetPathName());
     }
     FApplyContext Context;
     FInputBindingContext Bindings;
     Context.bDryRun = bDryRun;
+    Context.bChanged = bCreated;
     const TSharedPtr<FJsonObject>* Ids = nullptr;
     if (Payload->TryGetObjectField(TEXT("ids"), Ids) && Ids != nullptr)
     {
@@ -76,10 +128,13 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     // Release native stack callbacks before the transaction compiles and saves.
     Bindings.ViewModel.Reset();
     bool bReady = true;
+    bool bCompileRequested = false;
+    bool bCompilationActive = false;
     if (!bDryRun && bCompile)
     {
         NiagaraModuleStack::MarkSystemEdited(System);
-        System->RequestCompile(true);
+        bCompileRequested = NiagaraCompilation::Request(System);
+        bCompilationActive = System->HasActiveCompilations();
         bReady = NiagaraCompilation::Wait(System);
     }
     bool bSaved = false;
@@ -94,6 +149,7 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     Data->SetBoolField(TEXT("dry_run"), bDryRun);
     Data->SetNumberField(TEXT("applied"), Plan->Num() - Context.Failures.Num());
     Data->SetBoolField(TEXT("changed"), Context.bChanged);
+    Data->SetBoolField(TEXT("created"), bCreated);
     Data->SetArrayField(TEXT("input_bindings"), Bindings.Results);
     TArray<TSharedPtr<FJsonValue>> Failed;
     for (const FApplyFailure& Failure : Context.Failures)
@@ -107,6 +163,9 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     Data->SetArrayField(TEXT("failed"), Failed);
     TSharedPtr<FJsonObject> Compile = MakeShared<FJsonObject>();
     Compile->SetBoolField(TEXT("ran"), !bDryRun && bCompile);
+    Compile->SetBoolField(TEXT("requested"), bCompileRequested);
+    Compile->SetBoolField(TEXT("active_after_request"), bCompilationActive);
+    Compile->SetBoolField(TEXT("outstanding_after_wait"), System->HasOutstandingCompilationRequests());
     Compile->SetBoolField(TEXT("ok"), bReady);
     Compile->SetNumberField(TEXT("error_count"), bReady ? 0 : 1);
     if (!bReady)

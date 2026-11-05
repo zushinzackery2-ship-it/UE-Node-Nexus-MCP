@@ -24,7 +24,7 @@ static FCriticalSection GWatchMutex;
 static void OnPackageSavedForWatch(const FString&, UPackage* Package, FObjectPostSaveContext)
 {
     FScopeLock Lock(&GWatchMutex);
-    if (Package && !GWatchOutDir.IsEmpty() && Package->GetName().StartsWith(TEXT("/Game/")))
+    if (Package && !GWatchOutDir.IsEmpty() && IsProjectContentPackage(Package->GetName()))
     {
         GPendingPackages.Add(Package);
     }

@@ -42,6 +42,28 @@ def test_struct_nonzero_native_defaults():
     assert normalize("()", contract) != normalize("(bIgnoreAllPressedKeysUntilRelease=False)", contract)
 
 
+def test_empty_name_matches_native_none_inside_input_mapping_defaults():
+    options = struct(dict(Name=member("FName", "None")))
+    mapping = struct(dict(PlayerMappableOptions=dict(options, default="()")))
+    contract = dict(kind="array", type="TArray<FEnhancedActionKeyMapping>", element=mapping)
+    assert normalize("(())", contract) == normalize('((PlayerMappableOptions=(Name="")))', contract)
+    assert normalize("(())", contract) != normalize('((PlayerMappableOptions=(Name="Jump")))', contract)
+    assert normalize("None", "FString") != normalize("", "FString")
+
+
+def test_runtime_only_defaults_do_not_generate_struct_writes():
+    mapping = struct(dict(Key=member("FName", "None"),
+                          RuntimeFlag=dict(member("bool", "False"), text_importable=False)))
+    contract = dict(kind="array", type="TArray<FMapping>", element=mapping)
+    assert normalize("((Key=F9))", contract) == '((Key="F9"))'
+    assert normalize("((Key=F9,RuntimeFlag=False))", contract) == '((Key="F9"))'
+    assert "RuntimeFlag=true" in normalize("((Key=F9,RuntimeFlag=True))", contract)
+    for type_name, text in (("FName", "None"), ("FString", '""')):
+        generated = struct(dict(Runtime=dict(type=type_name, text_importable=False, generated_default=True)))
+        assert normalize("()", generated) == "()"
+        assert "Runtime=" in normalize("(Runtime=" + text + ")", generated)
+
+
 def test_raw_property_contract_survives_capture_without_shared_schema():
     from ue_node_nexus_mcp.transcode.collaboration.semantic.normalization import normalize_snapshot
     from ue_node_nexus_mcp.transcode.collaboration.semantic.snapshot import capture, from_raw

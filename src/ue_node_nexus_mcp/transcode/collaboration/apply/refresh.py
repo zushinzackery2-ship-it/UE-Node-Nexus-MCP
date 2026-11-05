@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from ...material.calls import CONSUMER_KINDS, changed_calls, refresh_ops, with_refresh
-from ...material.interfaces import tree as interface_tree
+from ..semantic.interfaces import tree as interface_tree
 from ...storage.paths import object_path
 from ...errors import SyncError
 from ...sync.project import call_ok
 from ..merge.trees import merge_trees
 from . import planning, transactions
 from .observe import capture
+from ..jobs.state import STOP_CODES, checkpoint
+from ...progress import atomic
 
 
 def measure(bridge, context, workspace, assets, source: str, observation: dict) -> dict:
@@ -94,12 +96,15 @@ def callers(bridge, context, workspace, function: str, source: str, observation:
     assets -= unselected
     if not assets:
         return []
+    checkpoint(stage="caller_refresh_plan", refresh_assets=sorted(assets))
     measure(bridge, context, workspace, assets, source, observation)
     failures = []
     for asset in sorted(assets):
         try:
             consumer(bridge, context, workspace, asset, set((function,)), source, observation, options)
         except SyncError as exc:
+            if exc.code in STOP_CODES:
+                raise
             failures.append(dict(asset=asset, function=function, code=exc.code, message=str(exc), details=exc.details))
     return failures
 
@@ -115,10 +120,14 @@ def consumer(bridge, context, workspace, asset: str, functions: set[str], source
     kind = current["semantic"]["kind"]
     item = dict(asset=asset, kind=kind, dependencies=sorted(functions),
                 payload=dict(asset_path=asset, kind=kind, plan=refresh_ops(functions), ids=dict()))
-    record = transactions.request(workspace, item, source, observation["commit"], observation["commit"], observation, options, consume=False)
-    transactions.execute(bridge, workspace, record)
-    published = transactions.publish(workspace, record)
-    transactions.adopt(observation, record, published, workspace.history)
+    checkpoint(stage="caller_refresh", asset=asset)
+    with atomic():
+        record = transactions.request(workspace, item, source, observation["commit"], observation["commit"], observation, options, consume=False)
+        transactions.execute(bridge, workspace, record)
+        published = transactions.publish(workspace, record)
+        transactions.adopt(observation, record, published, workspace.history)
+    checkpoint(stage="caller_refreshed", asset=asset, completed=True)
+    checkpoint()
 
 
 def with_calls(item: dict, functions: set[str]) -> dict:

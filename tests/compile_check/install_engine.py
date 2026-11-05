@@ -47,6 +47,20 @@ def verify_plugin(source: Path, built: Path) -> None:
         raise RuntimeError(f"module manifest does not match the descriptor: {name}")
 
 
+def build_id(binary_directory: Path) -> str:
+    value = json.loads((binary_directory / "UnrealEditor.modules").read_text(encoding="utf-8")).get("BuildId")
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"module manifest has no BuildId: {binary_directory}")
+    return value
+
+
+def verify_engine_build(built: Path, engine: Path) -> None:
+    expected = build_id(engine / "Engine/Binaries/Win64")
+    actual = build_id(built / "Binaries/Win64")
+    if actual != expected:
+        raise RuntimeError(f"plugin BuildId {actual} differs from target engine {expected}: {built.name}")
+
+
 def install(host: Path, engine: Path) -> Path:
     host = host.resolve()
     engine = engine.resolve()
@@ -54,11 +68,16 @@ def install(host: Path, engine: Path) -> Path:
     if not (engine / "Engine/Binaries/Win64/UnrealEditor.exe").is_file():
         raise RuntimeError(f"engine directory does not contain UnrealEditor.exe: {engine}")
     require_editor_closed()
+
+    def verify(source, built):
+        verify_plugin(source, built)
+        verify_engine_build(built, engine)
+
     for plugin in PLUGINS:
         source = ROOT / "Plugins" / plugin
         built = host / "Plugins" / plugin
-        verify_plugin(source, built)
-    receipt = install_verified(host, engine, PLUGINS, verify_plugin)
+        verify(source, built)
+    receipt = install_verified(host, engine, PLUGINS, verify)
     print(f"installed {', '.join(PLUGINS)} into {engine / 'Engine/Plugins/Marketplace'}; receipt: {receipt}")
     return receipt
 

@@ -49,7 +49,12 @@ static bool ApplyEmitterField(UNiagaraSystem* System, FNiagaraEmitterHandle* Han
     if (Name.Equals(TEXT("enabled"), ESearchCase::IgnoreCase))
     {
         bool bValue = false;
-        return Param->TryGetBoolField(TEXT("value"), bValue) && Handle->SetIsEnabled(bValue, *System, true);
+        if (!Param->TryGetBoolField(TEXT("value"), bValue))
+        {
+            return false;
+        }
+        Handle->SetIsEnabled(bValue, *System, true);
+        return Handle->GetIsEnabled() == bValue;
     }
     FVersionedNiagaraEmitterData* EmitterData = Handle->GetEmitterData();
     if (EmitterData == nullptr)

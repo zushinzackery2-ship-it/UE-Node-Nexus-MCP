@@ -75,7 +75,7 @@ FString FriendlyTypeName(const FNiagaraTypeDefinition& Type)
     }
     if (Type.GetClass() != nullptr)
     {
-        return Type.GetClass()->GetName();
+        return Type.GetClass()->GetPathName();
     }
     return Type.GetName();
 }
@@ -113,9 +113,11 @@ FNiagaraTypeDefinition TypeFromName(const FString& Name)
     {
         return FNiagaraTypeDefinition(UMaterialInterface::StaticClass());
     }
-    if (UClass* Class = UClass::TryFindTypeSlow<UClass>(Name))
+    TArray<UObject*> Matches;
+    StaticFindAllObjects(Matches, UClass::StaticClass(), *Name);
+    if (Matches.Num() == 1)
     {
-        return FNiagaraTypeDefinition(Class);
+        return FNiagaraTypeDefinition(CastChecked<UClass>(Matches[0]));
     }
     return FNiagaraTypeDefinition();
 }
@@ -164,7 +166,7 @@ bool SetParameterValueText(FNiagaraParameterStore& Store, const FNiagaraVariable
     {
         return Store.SetParameterValue<float>(float(Components[0]), Variable, bAddIfMissing);
     }
-    if (Type == FNiagaraTypeDefinition::GetIntDef())
+    if (Type.IsEnum() || Type == FNiagaraTypeDefinition::GetIntDef())
     {
         return Store.SetParameterValue<int32>(Value.Integer, Variable, bAddIfMissing);
     }

@@ -8,6 +8,12 @@ from .callables import event_signature, local_records
 from .delegates import DELEGATE_NODES, record as delegate_record
 from ..errors import SyncError
 
+# Author spellings for engine-generated execution outputs that the reflected
+# class does not expose as pin names. Native exports record the same aliases.
+STATIC_PIN_ALIASES = {
+    "IfThenElse": {"True": "then", "False": "else"},
+}
+
 
 def pin(name, direction, category="exec", **extra) -> dict:
     return dict(name=name, dir=direction, type=dict(category=category), **extra)
@@ -48,11 +54,36 @@ def variable_pins(decl, document, section) -> list:
     return [dict(name=name, dir="out", type=data_type)]
 
 
+def macro_reference(decl) -> str:
+    """``StandardMacros.ForLoop``: the owner label and macro the positional names."""
+    positional = decl.positional()
+    return positional[0].strip() if positional else ""
+
+
+def macro_pins(decl, schema) -> list | None:
+    """The tunnel pins the macro graph declares, or None when the catalog lacks it."""
+    if schema is None:
+        return None
+    reference = macro_reference(decl)
+    if not reference:
+        return None
+    try:
+        record = schema.macro(reference)
+    except SyncError:
+        return None
+    pins = record.get("pins") if record else None
+    return [dict(item) for item in pins] if pins else None
+
+
 def node_pins(decl, document, section, schema=None, metadata=None) -> list:
     metadata = metadata if metadata is not None else decl.meta
     if metadata.get("pins"):
         return metadata["pins"]
     name = node_name(decl.type_name)
+    if name == "MacroInstance":
+        pins = macro_pins(decl, schema)
+        if pins:
+            return pins
     info = schema.resolve_class("k2node", decl.type_name) if schema and not decl.opaque else None
     if info and info.pins and not info.dynamic_pins:
         return info.pins
@@ -106,13 +137,18 @@ def node_pins(decl, document, section, schema=None, metadata=None) -> list:
 
 def class_pin_aliases(schema, spelling: str) -> dict[str, str]:
     """Author alias -> real pin name for the node class a spelling names."""
-    if schema is None or not spelling:
+    if not spelling:
         return dict()
+    aliases = dict(STATIC_PIN_ALIASES.get(node_name(spelling), dict()))
+    if schema is None:
+        return aliases
     try:
         info = schema.resolve_class("k2node", spelling)
     except SyncError:
-        return dict()
-    return dict(info.pin_aliases) if info is not None else dict()
+        return aliases
+    if info is not None:
+        aliases.update(info.pin_aliases)
+    return aliases
 
 
 def canonical_pin(name, direction, pins, aliases: dict[str, str] | None = None) -> str | None:

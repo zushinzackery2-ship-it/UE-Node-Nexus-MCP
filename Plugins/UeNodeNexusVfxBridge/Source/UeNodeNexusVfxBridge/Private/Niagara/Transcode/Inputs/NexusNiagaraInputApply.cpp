@@ -35,7 +35,7 @@ void ApplyModuleInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
     FString Name;
     Op->TryGetStringField(TEXT("op"), Verb);
     Op->TryGetStringField(TEXT("input"), Name);
-    const bool bLink = Verb == TEXT("ns_module_input_link");
+    const bool bLink = Verb == TEXT("ns_module_input_link") || Verb == TEXT("ns_module_input_convert");
     FString Value;
     FInputBindingError Error;
     if (Name.IsEmpty() || !Op->TryGetStringField(bLink ? TEXT("parameter")

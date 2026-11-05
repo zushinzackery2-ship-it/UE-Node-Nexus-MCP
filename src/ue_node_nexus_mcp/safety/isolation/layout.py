@@ -16,13 +16,18 @@ def parent_directories(key):
 def copy_layout(plan, subset=None):
     source = Path(plan["project"]).parent if plan.get("project") else None
     candidates = set(subset or ())
+    content_directories = plan.get("content_directories", [])
     rows = [dict(source=path, path=path.relative_to(source).as_posix() if source else path.name)
             for path in plan["files"]]
     protected = set()
     for key in candidates:
         protected.update(parent_directories(key))
+    for directory in content_directories:
+        protected.add(directory)
+        protected.update(parent_directories(directory))
     for row in rows:
-        row["mode"] = "copy" if subset is None or row["path"] in candidates or not linkable(row["path"]) else "link"
+        private_mount = any(row["path"].startswith(directory + "/") for directory in content_directories)
+        row["mode"] = "copy" if subset is None or private_mount or row["path"] in candidates or not linkable(row["path"]) else "link"
         if row["mode"] == "copy" and source:
             protected.update(parent_directories(row["path"]))
     directories, linked_directories = set(protected), set()

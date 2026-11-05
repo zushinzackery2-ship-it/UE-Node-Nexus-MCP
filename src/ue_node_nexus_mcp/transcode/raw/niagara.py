@@ -27,6 +27,9 @@ STACK_GROUPS = ("EmitterSpawn", "EmitterUpdate", "ParticleSpawn", "ParticleUpdat
 
 
 def input_value_text(item: dict[str, Any]) -> str:
+    converted = item.get("converted")
+    if converted:
+        return f"@convert({converted})"
     linked = item.get("linked")
     if linked:
         return f"@link({linked})"
@@ -54,7 +57,7 @@ def module_decl(identifier: str, module: dict[str, Any], schema=None) -> Decl:
             "script": script,
             "inputs": inputs,
             "input_types": {str(item.get("name", "")): str(item.get("type", "")) for item in inputs},
-            "input_defaults": {str(item.get("name", "")): str(item.get("default", "")) for item in inputs},
+            "input_defaults": {str(item["name"]): str(item["default"]) for item in inputs if "default" in item},
         },
     )
     if module.get("enabled") is False or str(module.get("enabled", "true")).lower() == "false":
@@ -75,8 +78,9 @@ def renderer_decl(identifier: str, renderer: dict[str, Any], owner: str = "", sc
         props=props,
         meta={
             "guid": str(renderer.get("guid", "")),
-            # Renderer ids are object names, unique per emitter only; semantic identity
-            # scopes them by the owning emitter so multi-emitter systems stay distinct.
+            "legacy_guid": str(renderer.get("legacy_guid", "")),
+            # Merge IDs survive save-time duplication; retain the old object name
+            # only to migrate snapshots recorded before the stable ID was exported.
             "owner": owner,
             "class": str(renderer.get("class", "")),
             "prop_types": prop_types(renderer.get("props")),
@@ -155,6 +159,11 @@ def niagara_document(
 
     emitters = list(niagara.get("emitters") or [])
     known_ids = dict(allocator_for(raw, previous_ids).by_guid)
+    for emitter in emitters:
+        for renderer in emitter.get("renderers") or []:
+            guid, legacy = str(renderer.get("guid", "")), str(renderer.get("legacy_guid", ""))
+            if guid not in known_ids and legacy in known_ids:
+                known_ids[guid] = known_ids[legacy]
     claimed, used = claim_section_ids([guids for emitter in emitters for guids in _section_guids(emitter)], known_ids)
     ids: dict[str, str] = {}
     order: dict[str, list[str]] = {}

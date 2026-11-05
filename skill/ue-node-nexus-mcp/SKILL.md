@@ -21,6 +21,12 @@ ue_execute("bridge_instance_ensure", dict(
 ```
 
 The default launch profile is `interactive`; all new instances open usable
+windows. Use `-RenderOffscreen`, `--offscreen`, or an equivalent hidden launch
+only when the user explicitly requests it for this task. Background work does
+not authorize an invisible editor: keep the normal window available without
+bringing it to the foreground. This rule also applies to project QA scripts and
+direct process launches; inspect their arguments before running them.
+Normal managed launches use
 `UnrealEditor.exe` windows, using `d3d12` (default) or `d3d11`. Supply `engine_path` when EngineAssociation cannot
 resolve the installed engine. `mode="reuse_only"` and `dry_run=True` remain the
 API defaults; a preview is optional when the intended action is already clear.

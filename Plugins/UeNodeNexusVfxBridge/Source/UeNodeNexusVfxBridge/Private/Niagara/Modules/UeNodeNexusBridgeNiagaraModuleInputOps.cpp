@@ -74,7 +74,7 @@ void GatherModuleInputs(FNiagaraEmitterHandle* Emitter, UNiagaraNodeOutput* Outp
         Record.ShortName = StripModuleNamespace(Variable.GetName());
         Record.TypeName = Variable.GetType().GetName();
         Record.bStatic = Pair.Value && Pair.Value->GetIsStaticSwitch();
-        Record.DefaultValueText = VfxTranscode::ModuleInputDefaultText(Variable, Pair.Value);
+        Record.DefaultValueText = VfxTranscode::ModuleInputDefaultText(Variable, Pair.Value, CalledGraph);
         if (Pair.Value)
         {
             Record.VariableGuid = Pair.Value->Metadata.GetVariableGuid();

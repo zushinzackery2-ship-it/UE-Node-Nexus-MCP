@@ -153,5 +153,7 @@ tests/live/issues10/
 tests/live/issues11/
 tests/live/issues12/
 tests/live/issues13/
+tests/live/issues24/
+tests/live/namespace_links.py
 tests/performance/facade_cache.py
 tests/performance/schema_catalog.py

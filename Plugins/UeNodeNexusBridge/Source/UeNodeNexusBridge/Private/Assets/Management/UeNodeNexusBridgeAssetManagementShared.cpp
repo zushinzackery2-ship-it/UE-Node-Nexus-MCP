@@ -106,16 +106,4 @@ TArray<TSharedPtr<FJsonValue>> PackageNamesToJson(const TArray<FName>& PackageNa
     return Items;
 }
 
-void GetAssetReferencers(const FString& AssetPath, TArray<FName>& OutReferencers)
-{
-    FString PackageName;
-    FString PackagePath;
-    FString AssetName;
-    FText Reason;
-    if (SplitAssetObjectPath(AssetPath, PackageName, PackagePath, AssetName, Reason))
-    {
-        FAssetRegistryModule::GetRegistry().GetReferencers(FName(*PackageName), OutReferencers);
-    }
-}
-
 }

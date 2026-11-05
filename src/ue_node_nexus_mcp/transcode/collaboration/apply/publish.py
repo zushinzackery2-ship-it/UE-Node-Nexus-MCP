@@ -107,11 +107,11 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
         measured = dict((asset, value) for asset, value in observation["revisions"].items()
                         if asset in observation["current"] and asset not in refused)
         remember(store, context, target, observation["editor_epoch"], history.entries(target), measured)
-    if session and not batch["errors"]:
+    if session and not batch["errors"] and not batch.get("interruption"):
         session.update(status="completed", result_commit=target)
         Sessions(workspace).save(session)
     workspace_rebase = True
-    if complete and not original_dirty and not batch["errors"]:
+    if complete and not original_dirty and not batch["errors"] and not batch.get("interruption"):
         try:
             with store.lock("workspace-" + original["id"]):
                 workspace.reload()
@@ -122,8 +122,12 @@ def publish_locked(bridge, context, workspace, paths, options: dict, proposal) -
         except (SyncError, OSError):
             workspace_rebase = True
     unvalidated = sorted(row["asset"] for row in rows if row.get("risk_unvalidated"))
-    return dict(action="push", source_commit=source, published_commit=target, status="partial" if batch["errors"] else "published",
-                error_count=len(batch["errors"]), errors=batch["errors"], rows=rows, applied=len([row for row in rows if row["action"] == "pushed"]),
+    applied = len([row for row in rows if row["action"] == "pushed"])
+    interruption = batch.get("interruption")
+    status = ("partial" if applied else "cancelled") if interruption else ("partial" if batch["errors"] else "published")
+    return dict(action="push", source_commit=source, published_commit=target, status=status,
+                error_count=len(batch["errors"]) + bool(interruption), errors=batch["errors"], rows=rows, applied=applied,
+                **(dict(interruption=interruption, error=interruption) if interruption else dict()),
                 unvalidated=unvalidated, unvalidated_count=len(unvalidated),
                 source_integrated=complete, workspace_rebase_required=workspace_rebase, workspace_id=original["id"],
                 deferred_callers=batch.get("deferred_callers", dict()),

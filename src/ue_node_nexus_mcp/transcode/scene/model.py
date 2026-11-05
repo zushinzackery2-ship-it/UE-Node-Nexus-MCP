@@ -13,6 +13,7 @@ from ..text.values import unquote
 from .codec import actor_key, component_key, instance_key
 from .paths import identity
 from .validation import hierarchy, validate_properties, validate_structure
+from .identifiers import canonical_scene
 
 ACTOR_FIELDS = dict(Label="label", Folder="folder", Parent="parent", Level="level_path", Transform="transform")
 COMPONENT_FIELDS = dict(Parent="parent", Transform="transform", CustomDataCount="custom_data_count", InstancesReadOnly="instances_read_only")
@@ -53,6 +54,7 @@ def _fields(decl: Decl, fields: dict[str, str]) -> dict[str, Any]:
 
 
 def from_document(document: Document, base: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, str]]:
+    base = canonical_scene(base) if base else base
     validate_structure(document)
     name = scene_name(document)
     key = identity(document.header.asset, name)

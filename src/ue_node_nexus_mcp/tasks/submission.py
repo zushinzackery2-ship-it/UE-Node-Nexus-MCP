@@ -9,7 +9,7 @@ def submit(owner, operation, executor, work_scope, on_cancel, on_finish, on_subm
     with owner._lock:
         if owner._closing:
             raise InstanceError("session_closed", "the MCP task queue is closing")
-        active = sum(record.status in ("reserving", "queued", "running") for record in owner._tasks.values())
+        active = sum(record.status not in owner._FINISHED_STATUSES for record in owner._tasks.values())
         if active >= owner.MAX_ACTIVE_TASKS:
             raise InstanceError("task_queue_full", "the MCP task queue is full", dict(limit=owner.MAX_ACTIVE_TASKS))
         identifier = f"task-{owner._next_task_number}"
@@ -20,7 +20,7 @@ def submit(owner, operation, executor, work_scope, on_cancel, on_finish, on_subm
     try:
         owner._ensure_worker()
         with owner._lock:
-            if owner._closing or record.status == "cancelled":
+            if owner._closing or record.status == "cancelling":
                 raise InstanceError("session_closed", "the MCP task queue closed during submission")
             if on_submit:
                 on_submit(identifier)

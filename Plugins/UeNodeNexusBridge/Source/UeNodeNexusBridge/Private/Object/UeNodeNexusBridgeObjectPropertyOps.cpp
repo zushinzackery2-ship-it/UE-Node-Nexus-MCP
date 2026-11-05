@@ -24,18 +24,11 @@ static void AddObjectIdentity(UObject* Object, TSharedPtr<FJsonObject> Json)
     Json->SetStringField(TEXT("class_path"), Object && Object->GetClass() ? Object->GetClass()->GetPathName() : FString());
 }
 
-static TSharedPtr<FJsonObject> ComponentToJson(UActorComponent* Component, bool bIncludeProperties)
+static TSharedPtr<FJsonObject> ComponentToJson(UActorComponent* Component)
 {
     TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
     AddObjectIdentity(Component, Json);
     Json->SetStringField(TEXT("component_name"), Component ? Component->GetName() : FString());
-    if (bIncludeProperties)
-    {
-        TSharedPtr<FJsonObject> PropPayload = MakeShared<FJsonObject>();
-        PropPayload->SetStringField(TEXT("object_path"), Component ? Component->GetPathName() : FString());
-        PropPayload->SetBoolField(TEXT("include_non_editable"), false);
-        PropPayload->SetStringField(TEXT("format"), TEXT("compact"));
-    }
     return Json;
 }
 
@@ -56,7 +49,7 @@ static TSharedPtr<FJsonObject> ActorDetailsToJson(AActor* Actor, bool bIncludeCo
         {
             if (Component != nullptr)
             {
-                Components.Add(MakeShared<FJsonValueObject>(ComponentToJson(Component, false)));
+                Components.Add(MakeShared<FJsonValueObject>(ComponentToJson(Component)));
             }
         }
         Json->SetArrayField(TEXT("components"), Components);

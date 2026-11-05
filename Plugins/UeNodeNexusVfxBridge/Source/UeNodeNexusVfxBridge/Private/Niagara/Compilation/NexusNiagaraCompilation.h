@@ -7,6 +7,7 @@ class UNiagaraSystem;
 
 namespace UeNodeNexusBridge::NiagaraCompilation
 {
+bool Request(UNiagaraSystem* System);
 bool Wait(UNiagaraSystem* System);
 TArray<TSharedPtr<FJsonValue>> Diagnostics(UNiagaraSystem* System);
 }

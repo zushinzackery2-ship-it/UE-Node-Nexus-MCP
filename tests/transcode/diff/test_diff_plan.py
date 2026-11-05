@@ -167,9 +167,12 @@ def test_niagara_user_link_generates_native_binding_verb() -> None:
                           input="Lifetime", parameter="User.Life")]
 
 
-def test_niagara_non_user_link_remains_read_only() -> None:
+def test_niagara_namespace_link_generates_native_binding_verb() -> None:
     plan = _plan_for(niagara_raw, lambda text: text.replace("InitializeParticle(Lifetime=2)", "InitializeParticle(Lifetime=@link(Emitter.Life))"))
-    assert any(item.code == "unsupported_edit" for item in plan.diagnostics)
+    assert not plan.has_errors, [item.format() for item in plan.diagnostics]
+    links = [verb.args for verb in plan.verbs if verb.op == "ns_module_input_link"]
+    assert links == [dict(emitter="Sparks", group="ParticleSpawn", id="initialize_particle",
+                          input="Lifetime", parameter="Emitter.Life")]
 
 
 BLUEPRINT_HEADER = "nexus: 1\nasset: /Game/Blueprints/BP_Notation\nclass: Blueprint\nschema: key\n\n"

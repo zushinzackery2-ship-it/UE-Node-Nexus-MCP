@@ -25,12 +25,20 @@ TSharedPtr<FJsonObject> HandleAssetRedirectorsFixup(const FString& Operation, co
 
     const bool bDryRun = ReadAssetBoolField(Payload, TEXT("dry_run"), true);
     FRedirectorFixupProgress Progress = FixRedirectorsUnderFolder(FolderPath, bDryRun);
+    UE_LOG(LogTemp, Display, TEXT("Nexus request=%s phase=redirector_fixup_complete ok=%d dry_run=%d redirector_packages=%d saved_packages=%d deleted_packages=%d incomplete_referencers=%d error=%s"),
+        *RequestId, Progress.Error.IsEmpty(), bDryRun, Progress.RedirectorPackages.Num(), Progress.SavedPackages.Num(),
+        Progress.DeletedPackages.Num(), Progress.IncompleteReferencers.Num(), *Progress.Error);
 
     TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
     Item->SetStringField(TEXT("folder_path"), FolderPath);
     Item->SetNumberField(TEXT("count"), Progress.Count);
     Item->SetArrayField(TEXT("redirectors"), Progress.Redirectors);
+    Item->SetArrayField(TEXT("redirector_packages"), Progress.RedirectorPackages);
+    Item->SetArrayField(TEXT("package_loads"), Progress.PackageLoads);
+    Item->SetArrayField(TEXT("referencers"), Progress.Referencers);
+    Item->SetArrayField(TEXT("incomplete_referencers"), Progress.IncompleteReferencers);
     Item->SetArrayField(TEXT("fixed"), Progress.DeletedRedirectors);
+    Item->SetArrayField(TEXT("deleted_packages"), Progress.DeletedPackages);
     Item->SetArrayField(TEXT("modified_packages"), Progress.ModifiedPackages);
     Item->SetArrayField(TEXT("saved_packages"), Progress.SavedPackages);
     Item->SetArrayField(TEXT("failed_packages"), Progress.FailedPackages);

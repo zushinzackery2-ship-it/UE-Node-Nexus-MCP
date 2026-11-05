@@ -8,10 +8,12 @@ from ...storage.io import digest
 from .decode import to_document
 from .encode import encode, family_for
 from .identity import Identities
+from ...scene.identifiers import canonical_key
 
 
-def matched_entity(identities, scope, decl):
+def matched_entity(identities, scope, decl, family=""):
     physical = decl.meta.get("physical") or decl.meta.get("guid")
+    physical = canonical_key(physical) if physical else physical
     old_id = decl.meta.get("semantic_id")
     entities = identities.sections.get(scope, dict()).get("entities", dict())
     identifier = old_id if old_id in entities else None
@@ -20,7 +22,8 @@ def matched_entity(identities, scope, decl):
         identifier = identities.by_owner.get((owner, physical)) if owner else identities.by_physical.get(physical)
     identifier = identifier or identities.by_alias.get((scope, decl.id))
     binding = identities.old_bindings.get(identifier, dict())
-    if physical and binding.get("physical") not in (None, "", physical):
+    legacy_match = family == "niagara_renderer" and physical == binding.get("meta", dict()).get("legacy_guid")
+    if physical and binding.get("physical") not in (None, "", physical) and not legacy_match:
         return None, None
     return identifier, entities.get(identifier)
 
@@ -47,7 +50,7 @@ def normalize_snapshot(snapshot: dict | None, reference: dict | None = None, sch
             if known:
                 prop.type_name = known.get("type", prop.type_name)
         for decl in section.decls():
-            identifier, entity = matched_entity(identities, scope, decl)
+            identifier, entity = matched_entity(identities, scope, decl, family_for(kind, section.name))
             binding = identities.old_bindings.get(identifier, dict())
             if entity is None or not same_contract(decl, entity, family_for(kind, section.name), schema, binding.get("meta")):
                 continue

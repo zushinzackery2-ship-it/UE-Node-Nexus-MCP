@@ -1,7 +1,7 @@
 #include "UeNodeNexusBridgeMaterialInstanceParamSet.h"
 
 #include "Engine/Texture.h"
-#include "MaterialEditingLibrary.h"
+#include "MaterialEditor/MaterialEditorInstanceConstant.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/MaterialInterface.h"
 
@@ -30,13 +30,13 @@ FString NotExposed(FName Name, const TCHAR* Kind)
 }
 }
 
-bool SetInstanceScalar(UMaterialInstanceConstant* Instance, FName Name, float Value, FString& OutError)
+bool SetInstanceScalar(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, float Value, FString& OutError)
 {
+    const FName Name = Info.Name;
     if (!RequireParent(Instance, Name, OutError))
     {
         return false;
     }
-    const FMaterialParameterInfo Info(Name);
     float ParentDefault = 0.0f;
     if (!Instance->Parent->GetScalarParameterDefaultValue(Info, ParentDefault))
     {
@@ -53,13 +53,13 @@ bool SetInstanceScalar(UMaterialInstanceConstant* Instance, FName Name, float Va
     return true;
 }
 
-bool SetInstanceVector(UMaterialInstanceConstant* Instance, FName Name, const FLinearColor& Value, FString& OutError)
+bool SetInstanceVector(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, const FLinearColor& Value, FString& OutError)
 {
+    const FName Name = Info.Name;
     if (!RequireParent(Instance, Name, OutError))
     {
         return false;
     }
-    const FMaterialParameterInfo Info(Name);
     FLinearColor ParentDefault = FLinearColor::Black;
     if (!Instance->Parent->GetVectorParameterDefaultValue(Info, ParentDefault))
     {
@@ -76,13 +76,13 @@ bool SetInstanceVector(UMaterialInstanceConstant* Instance, FName Name, const FL
     return true;
 }
 
-bool SetInstanceTexture(UMaterialInstanceConstant* Instance, FName Name, UTexture* Texture, FString& OutError)
+bool SetInstanceTexture(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, UTexture* Texture, FString& OutError)
 {
+    const FName Name = Info.Name;
     if (!RequireParent(Instance, Name, OutError))
     {
         return false;
     }
-    const FMaterialParameterInfo Info(Name);
     UTexture* ParentDefault = nullptr;
     if (!Instance->Parent->GetTextureParameterDefaultValue(Info, ParentDefault))
     {
@@ -99,13 +99,13 @@ bool SetInstanceTexture(UMaterialInstanceConstant* Instance, FName Name, UTextur
     return true;
 }
 
-bool SetInstanceStaticSwitch(UMaterialInstanceConstant* Instance, FName Name, bool bValue, FString& OutError)
+bool SetInstanceStaticSwitch(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info, bool bValue, FString& OutError)
 {
+    const FName Name = Info.Name;
     if (!RequireParent(Instance, Name, OutError))
     {
         return false;
     }
-    const FMaterialParameterInfo Info(Name);
     bool bParentDefault = false;
     FGuid ExpressionGuid;
     if (!Instance->Parent->GetStaticSwitchParameterDefaultValue(Info, bParentDefault, ExpressionGuid))
@@ -116,11 +116,54 @@ bool SetInstanceStaticSwitch(UMaterialInstanceConstant* Instance, FName Name, bo
     // The library variant also rebuilds MaterialLayersParameters so the instance
     // editor does not wipe the switch later; keep that side effect, ignore the
     // dead return value, and verify ourselves.
-    UMaterialEditingLibrary::SetMaterialInstanceStaticSwitchParameterValue(Instance, Name, bValue);
+    Instance->SetStaticSwitchParameterValueEditorOnly(Info, bValue);
+    auto* EditorInstance = NewObject<UMaterialEditorInstanceConstant>(GetTransientPackage(), NAME_None, RF_Transactional);
+    EditorInstance->SetSourceInstance(Instance);
     bool bReadBack = false;
     if (!Instance->GetStaticSwitchParameterValue(Info, bReadBack, ExpressionGuid) || bReadBack != bValue)
     {
         OutError = FString::Printf(TEXT("%s: static switch did not read back as %s"), *Name.ToString(), bValue ? TEXT("true") : TEXT("false"));
+        return false;
+    }
+    return true;
+}
+
+bool SetInstanceComponentMask(UMaterialInstanceConstant* Instance, const FMaterialParameterInfo& Info,
+    bool R, bool G, bool B, bool A, FString& OutError)
+{
+    if (!RequireParent(Instance, Info.Name, OutError))
+    {
+        return false;
+    }
+    bool ParentR = false, ParentG = false, ParentB = false, ParentA = false;
+    FGuid Guid;
+    if (!Instance->Parent->GetStaticComponentMaskParameterDefaultValue(Info, ParentR, ParentG, ParentB, ParentA, Guid))
+    {
+        OutError = NotExposed(Info.Name, TEXT("static component mask"));
+        return false;
+    }
+    FStaticParameterSet Parameters = Instance->GetStaticParameters();
+    auto* Existing = Parameters.EditorOnly.StaticComponentMaskParameters.FindByPredicate(
+        [&Info](const FStaticComponentMaskParameter& Item) { return Item.ParameterInfo == Info; });
+    if (Existing == nullptr)
+    {
+        Existing = &Parameters.EditorOnly.StaticComponentMaskParameters.AddDefaulted_GetRef();
+        Existing->ParameterInfo = Info;
+    }
+    Existing->ExpressionGUID = Guid;
+    Existing->bOverride = true;
+    Existing->R = R;
+    Existing->G = G;
+    Existing->B = B;
+    Existing->A = A;
+    Instance->UpdateStaticPermutation(Parameters);
+    // UE 5.5's mask convenience getter queries StaticSwitch by mistake.
+    // Use the typed parameter API so verification reads the mask we wrote.
+    FMaterialParameterMetadata Actual;
+    if (!Instance->GetParameterValue(EMaterialParameterType::StaticComponentMask, Info, Actual)
+        || Actual.Value.Bool[0] != R || Actual.Value.Bool[1] != G || Actual.Value.Bool[2] != B || Actual.Value.Bool[3] != A)
+    {
+        OutError = FString::Printf(TEXT("%s: component mask did not read back its assigned channels"), *Info.Name.ToString());
         return false;
     }
     return true;

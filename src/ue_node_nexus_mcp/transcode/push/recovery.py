@@ -14,7 +14,7 @@ from .model import Prepared
 def recovery_path(project: Path, asset: str) -> Path:
     relative = asset_relative(asset)
     if relative is None:
-        raise ValueError(f"only /Game assets support push recovery: {asset}")
+        raise ValueError(f"invalid project content package for push recovery: {asset}")
     return pending_dir(project).joinpath(*relative.parts).with_suffix(".push.json")
 
 

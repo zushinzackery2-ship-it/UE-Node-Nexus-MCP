@@ -38,6 +38,7 @@ for action in BACKGROUND_ACTIONS:
     OPTIONS[action].update(TRANSPORT_KEYS)
 for action in JOB_ACTIONS:
     OPTIONS[action] = set(("job_id",))
+OPTIONS["job_status"].update(("after_revision", "wait_seconds"))
 READ_ACTIONS.update(("job_status", "job_result"))
 ACTIONS = tuple(OPTIONS)
 BOOL_KEYS = set(("dry_run", "all", "delete", "allow_delete", "include_clean", "discover", "include_stubs", "compile", "save", "stop_on_error", "refresh", "details", "restore", "preserve_current", "background", "safety_allow_low_memory", "pull_all", "auto_export", "refresh_schema"))
@@ -77,7 +78,7 @@ def validate_values(action: str, options: dict, force_values=("local",)) -> None
         value = options[key]
         if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
             raise SyncError("invalid_option", f"{key} must be a list of non-empty strings")
-    for key in ("limit", "cursor", "mainline", "before"):
+    for key in ("limit", "cursor", "mainline", "before", "after_revision"):
         if key in options and key not in ("cursor",) and (type(options[key]) is not int or options[key] < 0):
             raise SyncError("invalid_option", f"{key} must be a nonnegative integer")
     if options.get("delete") and not options.get("allow_delete") and action not in ("branch",):

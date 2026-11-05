@@ -12,7 +12,9 @@ import stat
 
 from ...instances.errors import require
 from ...transcode.storage.io import digest
+from ...transcode.storage.paths import content_parts
 from .descriptors import read_descriptor
+from .progress import advance
 
 LOG = logging.getLogger(__name__)
 
@@ -37,16 +39,28 @@ def quiet_worker_copy(project: Path) -> None:
     settings = Path(project).parent / "Config" / "DefaultEditorPerProjectUserSettings.ini"
     text = settings.read_text(encoding="utf-8") if settings.is_file() else ""
     section = "[/Script/UnrealEd.EditorLoadingSavingSettings]"
-    if "bAutoSaveEnable" in text:
-        text = "\n".join("bAutoSaveEnable=False" if line.strip().startswith("bAutoSaveEnable") else line
-                         for line in text.splitlines())
-    else:
-        text = text.rstrip() + "\n\n" + section + "\nbAutoSaveEnable=False\n"
+    lines, active, found = [], False, False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            if active and not found:
+                lines.append("bAutoSaveEnable=False")
+                found = True
+            active = stripped.casefold() == section.casefold()
+        key, separator, _value = stripped.partition("=")
+        if active and separator and key.strip().casefold() == "bautosaveenable":
+            line, found = "bAutoSaveEnable=False", True
+        lines.append(line)
+    if not found:
+        if not active:
+            lines.extend(["", section])
+        lines.append("bAutoSaveEnable=False")
+    text = "\n".join(lines) + "\n"
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(text, encoding="utf-8")
 
 
-def inventory(project: Path, additional=()) -> dict:
+def inventory(project: Path, additional=(), *, content_directories=()) -> dict:
     additional = tuple(additional)
     project = project.absolute()
     real_path(project)
@@ -56,13 +70,15 @@ def inventory(project: Path, additional=()) -> dict:
     require(not descriptor.get("AdditionalPluginDirectories") and not descriptor.get("AdditionalRootDirectories"),
             "isolation_external_root", "copy external project/plugin roots into the project before isolation")
     files = [project]
-    for name in DIRECTORIES:
+    for name in dict.fromkeys((*DIRECTORIES, *content_directories)):
+        advance(directory=name)
         source = project.parent / name
         if not source.exists():
             continue
         real_path(source)
         for directory, folders, names in os.walk(source, followlinks=False):
-            folders[:] = sorted(folder for folder in folders if folder not in IGNORED)
+            advance(directory=str(directory), files=len(files))
+            folders[:] = sorted(folder for folder in folders if name in content_directories or folder not in IGNORED)
             for folder in folders:
                 real_path(Path(directory) / folder)
             for filename in sorted(names):
@@ -79,26 +95,49 @@ def inventory(project: Path, additional=()) -> dict:
                 break
         if path not in files:
             files.append(path)
-    return dict(project=str(project.resolve()), files=files, additional=list(additional), bytes=sum(path.stat().st_size for path in files))
+    files = list(dict.fromkeys(files))
+    return dict(project=str(project.resolve()), files=files, additional=list(additional),
+                content_directories=list(content_directories), bytes=sum(path.stat().st_size for path in files))
 
 
-def content_candidates(project: Path, entries: list[dict]) -> set[str]:
+def _candidate_base(project_root: Path, parts: tuple[str, ...], mounts: dict) -> Path | None:
+    if parts[0] == "Game":
+        base = project_root / "Content"
+    else:
+        record = mounts.get(parts[0])
+        if not record or not record.get("project_local"):
+            return None
+        base = Path(record["content"])
+    try:
+        return base.resolve().relative_to(project_root.resolve())
+    except ValueError:
+        return None
+
+
+def _candidate_files(project_root: Path, target, mounts: dict) -> set[str]:
+    parts = content_parts(target) if isinstance(target, str) else None
+    if parts is None:
+        return set()
+    base = _candidate_base(project_root, parts, mounts)
+    if base is None:
+        return set()
+    relative = PurePosixPath(*parts[1:]).as_posix()
+    known = [suffix for suffix in (".uasset", ".umap") if (project_root / base / (relative + suffix)).is_file()]
+    # A package the worker will create does not exist yet; its directory must still stay real.
+    return set((base / (relative + suffix)).as_posix() for suffix in known or (".uasset",))
+
+
+def content_candidates(project: Path, entries: list[dict], mounts: dict | None = None) -> set[str]:
     """Project-relative package files the worker may save; every other input can be a link."""
     project_root = project.absolute().parent
+    mounts = dict(mounts or {})
     targets = set()
     for entry in entries:
         payload = entry.get("payload", dict()) if isinstance(entry, dict) else dict()
         for field in CONTENT_FIELDS:
             value = payload.get(field)
             for target in (value if isinstance(value, list) else [value]):
-                if not isinstance(target, str) or not target.startswith("/Game/"):
-                    continue
-                relative = target[len("/Game/"):]
-                known = [suffix for suffix in (".uasset", ".umap")
-                         if (project_root / "Content" / (relative + suffix)).is_file()]
-                # A package the worker will create does not exist yet; its directory must still stay real.
-                for suffix in known or (".uasset",):
-                    targets.add(PurePosixPath("Content", relative + suffix).as_posix())
+                targets |= _candidate_files(project_root, target, mounts)
         plan_file = payload.get("plan_file")
         if isinstance(plan_file, str) and plan_file:
             targets.add(PurePosixPath(plan_file.replace("\\", "/")).as_posix())
@@ -145,19 +184,25 @@ def copy_project(plan: dict, target: Path, *, baseline=None, candidates=()) -> d
     descriptor = target / Path(plan["project"]).name
     return dict(project=str(descriptor), source=plan["project"], source_root=str(source),
                 **summary, additional=plan.get("additional", []),
+                content_directories=plan.get("content_directories", []),
                 copy_mode="overlay" if overlay else "full",
                 snapshot_digest=digest(summary["files"]), disk_budget=budget, baseline="saved_disk")
 
 
 def unchanged(snapshot: dict) -> bool:
     source = Path(snapshot["source_root"])
+    if any(not (source / name).is_dir() for name in snapshot.get("content_directories", [])):
+        return False
     if not Path(snapshot["source"]).is_file() or any(not (source / name).is_file() for name in snapshot.get("additional", [])):
         return False
-    current = inventory(Path(snapshot["source"]), snapshot.get("additional", []))
+    current = inventory(Path(snapshot["source"]), snapshot.get("additional", []),
+                        content_directories=snapshot.get("content_directories", []))
     paths = {path.relative_to(source).as_posix() for path in current["files"]}
     if paths != {item["path"] for item in snapshot["files"]}:
         return False
-    for item in snapshot["files"]:
+    checked_bytes = 0
+    for index, item in enumerate(snapshot["files"]):
+        advance("source_check", files=index, total_files=len(snapshot["files"]), checked_bytes=checked_bytes)
         path = source / item["path"]
         real_path(path)
         if path.stat().st_size != item["size"] or path.stat().st_mtime_ns != item["modified_ns"]:
@@ -169,6 +214,8 @@ def unchanged(snapshot: dict) -> bool:
         with path.open("rb") as stream:
             while chunk := stream.read(1024 * 1024):
                 checksum.update(chunk)
+                checked_bytes += len(chunk)
+                advance(checked_bytes=checked_bytes)
         if checksum.hexdigest() != item["sha256"]:
             return False
     return True

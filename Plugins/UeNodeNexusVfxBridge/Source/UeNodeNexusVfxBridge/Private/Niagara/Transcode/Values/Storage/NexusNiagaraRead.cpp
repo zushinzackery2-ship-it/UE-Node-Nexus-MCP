@@ -17,6 +17,23 @@ static bool Read(const FNiagaraParameterStore& Store, const FNiagaraVariable& Va
 static FString ReadText(const FNiagaraParameterStore& Store, const FNiagaraVariable& Variable, FString& Error)
 {
     const FNiagaraTypeDefinition& Type = Variable.GetType();
+    if (Type.IsEnum())
+    {
+        int32 Value;
+        if (!Read(Store, Variable, Value, Error))
+        {
+            return FString();
+        }
+        const UEnum* Enum = Type.GetEnum();
+        const FString Name = Enum->GetNameStringByValue(Value);
+        if (Name.IsEmpty() || Name.EndsWith(TEXT("_MAX")))
+        {
+            Error = FString::Printf(TEXT("parameter=%s: enum %s contains undefined value %d"),
+                *Variable.GetName().ToString(), *Enum->GetPathName(), Value);
+            return FString();
+        }
+        return Name;
+    }
     if (Type == FNiagaraTypeDefinition::GetFloatDef())
     {
         float Value;

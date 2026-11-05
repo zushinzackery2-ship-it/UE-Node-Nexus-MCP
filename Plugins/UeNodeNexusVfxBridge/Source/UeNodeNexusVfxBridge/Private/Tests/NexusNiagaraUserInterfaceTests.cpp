@@ -78,8 +78,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusNiagaraUserInterfaceApply,
 
 bool FNexusNiagaraUserInterfaceApply::RunTest(const FString& Parameters)
 {
-    // Preserve the captured request's short type names; UE warns on each resolution.
-    AddExpectedError(TEXT("provided for TryFindType. Please convert it to a path name"), EAutomationExpectedErrorFlags::Contains, 6);
+    // Public text accepts an unambiguous short class name without engine warnings.
     auto* System = NewObject<UNiagaraSystem>();
     const TCHAR* Names[] = { TEXT("ProbeIntegers"), TEXT("ProbeFloats"), TEXT("ProbeVectors") };
     const TCHAR* Types[] = { TEXT("NiagaraDataInterfaceArrayInt32"), TEXT("NiagaraDataInterfaceArrayFloat"), TEXT("NiagaraDataInterfaceArrayFloat3") };

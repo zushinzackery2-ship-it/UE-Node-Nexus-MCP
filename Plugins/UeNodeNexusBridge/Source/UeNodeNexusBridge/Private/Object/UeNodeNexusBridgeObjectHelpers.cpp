@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeObjectHelpers.h"
+#include "UeNodeNexusPropertyValue.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -200,8 +201,15 @@ bool ApplyPropertyText(UObject* Object, FProperty* Property, const FString& Valu
     {
         return false;
     }
-    void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Object);
-    return Property->ImportText_Direct(*ValueText, ValuePtr, Object, PPF_None) != nullptr;
+    FPropertyValueBuffer Value(Object, Property);
+    FString Error;
+    if (!Value.ApplyText(ValueText, Error))
+    {
+        UE_LOG(LogTemp, Display, TEXT("Nexus event=property_import_rejected property=%s reason=%s"), *Property->GetName(), *Error);
+        return false;
+    }
+    Value.Commit();
+    return true;
 }
 
 FString JsonValueToImportText(const TSharedPtr<FJsonValue>& Value)

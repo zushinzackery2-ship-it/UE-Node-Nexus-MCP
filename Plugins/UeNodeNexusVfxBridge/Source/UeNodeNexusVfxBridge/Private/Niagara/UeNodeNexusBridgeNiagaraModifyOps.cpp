@@ -178,7 +178,7 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     Payload->TryGetBoolField(TEXT("wait"), bWait);
     Payload->TryGetBoolField(TEXT("save"), bSave);
 
-    const bool bRequested = System->RequestCompile(true);
+    const bool bRequested = NiagaraCompilation::Request(System);
     if (bWait)
     {
         NiagaraCompilation::Wait(System);

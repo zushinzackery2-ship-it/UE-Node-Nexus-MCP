@@ -18,6 +18,9 @@ const FPinAlias GeneratedPinAliases[] =
     { TEXT("K2Node_GetArrayItem"), TEXT("TargetArray"), TEXT("Array"), EGPD_Input },
     { TEXT("K2Node_GetArrayItem"), TEXT("Index"), TEXT("Dimension 1"), EGPD_Input },
     { TEXT("K2Node_GetArrayItem"), TEXT("Item"), TEXT("Output"), EGPD_Output },
+    // Branch authors name the boolean outcomes True/False; the engine pins are then/else.
+    { TEXT("K2Node_IfThenElse"), TEXT("True"), TEXT("then"), EGPD_Output },
+    { TEXT("K2Node_IfThenElse"), TEXT("False"), TEXT("else"), EGPD_Output },
 };
 }
 

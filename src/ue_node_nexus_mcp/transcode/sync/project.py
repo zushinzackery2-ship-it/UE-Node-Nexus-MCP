@@ -30,6 +30,7 @@ class ProjectContext:
     bridge_contacted: bool = True
     schema: SchemaLock | None = None
     warnings: list[str] = field(default_factory=list)
+    project_content_roots: frozenset[str] | None = None
 
     def info(self) -> dict[str, Any]:
         result = dict(root=str(self.root), project=self.project_name, project_dir=str(self.project),
@@ -69,11 +70,17 @@ def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: 
     project_file = ""
     bridge_available = not offline
     warnings: list[str] = []
+    content_roots = None
     if not offline:
         try:
             context = _data(call_ok(bridge, "project_context_get", {}))
             project_name = str(context.get("project_name", ""))
             project_file = str(context.get("project_file_path", ""))
+            if "content_mounts" in context:
+                mounts = context["content_mounts"]
+                if not isinstance(mounts, list) or any(not isinstance(item, dict) or not str(item.get("root", "")).startswith("/") for item in mounts):
+                    raise SyncError("protocol_mismatch", "project content mount registration is malformed")
+                content_roots = frozenset(str(item["root"]).rstrip("/") for item in mounts)
             capabilities = _data(call_ok(bridge, "bridge_capabilities_get", {}))
             schema_key = str(capabilities.get("schema_key", ""))
             engine_version = str(capabilities.get("engine_version", ""))
@@ -93,11 +100,15 @@ def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: 
     project_name = hint or project_name
     project = project_dir(root, project_name)
     stored = _read_project_info(project)
+    if content_roots is None and "project_content_roots" in stored:
+        content_roots = frozenset(stored["project_content_roots"])
     if not schema_key:
         schema_key = str(stored.get("schema_key", ""))
     if not engine_version:
         engine_version = str(stored.get("engine_version", ""))
     schema = load_schema_lock(root, schema_key) if schema_key else None
+    if schema is not None:
+        schema.project_content_roots = content_roots
     if schema is not None and not schema.available and not schema_key:
         schema = None
     return ProjectContext(
@@ -111,6 +122,7 @@ def resolve_context(bridge: BridgeCall, env: dict[str, str] | None = None, cwd: 
         bridge_contacted=not offline,
         schema=schema,
         warnings=warnings,
+        project_content_roots=content_roots,
     )
 
 
@@ -126,6 +138,8 @@ def write_project_info(context: ProjectContext, extra: dict[str, Any] | None = N
     })
     if extra:
         stored.update(extra)
+    if context.project_content_roots is not None:
+        stored["project_content_roots"] = sorted(context.project_content_roots)
     project_info_path(context.project).write_text(json.dumps(stored, indent=1, ensure_ascii=False), encoding="utf-8")
 
 

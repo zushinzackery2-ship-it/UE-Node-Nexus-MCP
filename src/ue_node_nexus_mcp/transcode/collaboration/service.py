@@ -105,7 +105,8 @@ def create_workspace(bridge, context, store, paths, options: dict) -> dict:
         if not enabled(context):
             migrate(store, context)
         revision = options.get("revision")
-        if not revision or revision == "UE":
+        from_editor = not revision or revision == "UE"
+        if from_editor:
             with store.lock("publication", PUBLICATION_WAIT_SECONDS):
                 selectors = dict()
                 scene = options.get("scene")
@@ -118,12 +119,15 @@ def create_workspace(bridge, context, store, paths, options: dict) -> dict:
             revision = observed["commit"]
         if dry_run:
             head = History(store).resolve(revision)
-            return dict(action="checkout", dry_run=True, commit_id=head, assets=list(History(store).entries(head)))
+            assets = selected if from_editor and selected is not None else list(History(store).entries(head))
+            return dict(action="checkout", dry_run=True, commit_id=head, assets=assets)
         from .workspace.files import filename, select
 
         entries = History(store).entries(revision)
         files = dict((asset, filename(asset, store.objects.data(value, "snapshot"))) for asset, value in entries.items())
-        assets = select(context.project, files, paths) if paths else None
+        # A scoped observation retains unrelated history in its commit. Project
+        # the native selection, or retired paths under the same root reappear.
+        assets = selected if from_editor else (select(context.project, files, paths) if paths else None)
         workspace = checkout(store, revision, context.schema, options.get("branch"), options.get("agent_id", ""), assets)
         atomic_write(store.root / "active.json", canonical(dict(format=1, project_id=store.project_id)))
         write_project_info(context, dict(collaboration_format=1, project_id=store.project_id))

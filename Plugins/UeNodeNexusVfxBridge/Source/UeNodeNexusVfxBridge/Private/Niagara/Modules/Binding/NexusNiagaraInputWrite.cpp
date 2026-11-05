@@ -4,6 +4,7 @@
 #include "NiagaraGraph.h"
 #include "NiagaraNodeFunctionCall.h"
 #include "NiagaraScriptVariable.h"
+#include "NiagaraScript.h"
 #include "NiagaraParameterStore.h"
 #include "NiagaraSystem.h"
 #include "UObject/StructOnScope.h"
@@ -69,24 +70,37 @@ bool ApplyNativeInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
 {
     bChanged = false;
     const bool bLink = Verb == TEXT("ns_module_input_link");
+    const bool bConvert = Verb == TEXT("ns_module_input_convert");
+    const bool bReference = bLink || bConvert;
     const bool bReset = Verb == TEXT("ns_module_input_reset");
     FNiagaraVariable Variable;
-    if (!ResolveModuleInput(Module, Name, Variable, Error)
-        || (bLink && !ValidateUserParameter(System.GetExposedParameters(), Value, Variable.GetType(), Error)))
+    if (!ResolveModuleInput(Module, Name, Variable, Error))
     {
         return Reject(System, Emitter, Module, Name, Value, Error);
     }
     const UNiagaraScriptVariable* Metadata = Module.GetCalledGraph()->GetScriptVariable(Variable.GetName());
-    if (bLink && Metadata && Metadata->GetIsStaticSwitch())
+    if (bReference && Metadata && Metadata->GetIsStaticSwitch())
     {
         Error.Code = TEXT("static_input_link_unsupported");
         Error.Message = TEXT("compile-time switch requires a local value, not a runtime parameter binding");
         return Reject(System, Emitter, Module, Name, Value, Error);
     }
     TSharedPtr<FStructOnScope> Local;
-    if (!bLink && !bReset && !ParseLocal(Variable, Value, Local, Error))
+    if (!bReference && !bReset && !ParseLocal(Variable, Value, Local, Error))
     {
         return Reject(System, Emitter, Module, Name, Value, Error);
+    }
+    UNiagaraStackFunctionInput* Input = nullptr;
+    FNiagaraVariable ConversionSource;
+    UNiagaraScript* ConversionScript = nullptr;
+    if (bReference)
+    {
+        Input = Context.Resolve(System, Emitter, Module, Variable, Error);
+        if (!Input || !(bConvert ? ResolveNativeConversion(*Input, Value, ConversionSource, ConversionScript, Error)
+            : ValidateLinkedParameter(System.GetExposedParameters(), *Input, Value, Error)))
+        {
+            return Reject(System, Emitter, Module, Name, Value, Error);
+        }
     }
     TSharedPtr<FJsonObject> Result = MakeShared<FJsonObject>();
     Result->SetStringField(TEXT("module_guid"), Module.NodeGuid.ToString());
@@ -116,7 +130,10 @@ bool ApplyNativeInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
             *System.GetPathName(), *Emitter.GetName().ToString(), *Module.NodeGuid.ToString(), *Name, *Value, bChanged);
         return true;
     }
-    UNiagaraStackFunctionInput* Input = Context.Resolve(System, Emitter, Module, Variable, Error);
+    if (!Input)
+    {
+        Input = Context.Resolve(System, Emitter, Module, Variable, Error);
+    }
     if (!Input)
     {
         return Reject(System, Emitter, Module, Name, Value, Error);
@@ -125,7 +142,17 @@ bool ApplyNativeInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
     const bool bWasLinked = Input->GetValueMode() == EMode::Linked;
     Result->SetStringField(TEXT("before_linked"), bWasLinked ? Input->GetLinkedValueHandle().GetParameterHandleString().ToString() : FString());
     Result->SetNumberField(TEXT("before_mode"), static_cast<int32>(Input->GetValueMode()));
-    if (bLink)
+    if (bConvert)
+    {
+        bChanged = !MatchesNativeConversion(*Input, ConversionSource, ConversionScript);
+        if (bChanged)
+        {
+            Input->SetLinkedInputViaConversionScript(ConversionSource, ConversionScript);
+        }
+        Result->SetStringField(TEXT("conversion_script"), ConversionScript->GetPathName());
+        Result->SetStringField(TEXT("source_type"), ConversionSource.GetType().GetName());
+    }
+    else if (bLink)
     {
         bChanged = !bWasLinked || Input->GetLinkedValueHandle() != Handle;
         if (bChanged)
@@ -154,8 +181,9 @@ bool ApplyNativeInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
     {
         return Reject(System, Emitter, Module, Name, Value, Error);
     }
-    const bool bVerified = bLink ? Input->GetValueMode() == EMode::Linked && Input->GetLinkedValueHandle() == Handle
-        : (bReset ? !Input->CanReset() : LocalEqual(*Input, *Local));
+    const bool bVerified = bConvert ? MatchesNativeConversion(*Input, ConversionSource, ConversionScript)
+        : (bLink ? Input->GetValueMode() == EMode::Linked && Input->GetLinkedValueHandle() == Handle
+            : (bReset ? !Input->CanReset() : LocalEqual(*Input, *Local)));
     if (!bVerified)
     {
         Error.Code = TEXT("input_binding_readback_mismatch");
@@ -167,7 +195,7 @@ bool ApplyNativeInput(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
         NiagaraModuleStack::MarkSystemEdited(&System);
     }
     Result->SetNumberField(TEXT("after_mode"), static_cast<int32>(Input->GetValueMode()));
-    Result->SetStringField(TEXT("after_linked"), bLink ? Value : FString());
+    Result->SetStringField(TEXT("after_linked"), bReference ? Value : FString());
     Result->SetBoolField(TEXT("changed"), bChanged);
     Context.Results.Add(MakeShared<FJsonValueObject>(Result));
     UE_LOG(LogNexusNiagaraInputBinding, Display, TEXT("asset=%s emitter=%s module_guid=%s input=%s type=%s verb=%s requested=%s changed=%d"),

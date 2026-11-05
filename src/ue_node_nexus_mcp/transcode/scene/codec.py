@@ -7,20 +7,21 @@ from typing import Any
 from ..text.ids import sanitize_id
 from ..text.model import Decl, Document, Header, Prop, Section
 from ..text.values import quote
+from .identifiers import canonical_aliases, canonical_guid, canonical_scene
 
 RESERVED_FIELDS = set(("Label", "Folder", "Parent", "Level", "Transform", "CustomDataCount", "InstancesReadOnly"))
 
 
 def actor_key(actor: str) -> str:
-    return f"actor/{actor}"
+    return f"actor/{canonical_guid(actor)}"
 
 
 def component_key(actor: str, component: str) -> str:
-    return f"component/{actor}/{component}"
+    return f"component/{canonical_guid(actor)}/{canonical_guid(component)}"
 
 
 def instance_key(actor: str, component: str, instance: str) -> str:
-    return f"instance/{actor}/{component}/{instance}"
+    return f"instance/{canonical_guid(actor)}/{canonical_guid(component)}/{canonical_guid(instance)}"
 
 
 def _name(key: str, candidate: str, aliases: dict[str, str], used: set[str]) -> str:
@@ -40,7 +41,8 @@ def _properties(row: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def from_raw(raw: dict[str, Any], previous_aliases: dict[str, str] | None = None) -> tuple[Document, dict[str, str]]:
-    aliases = dict(previous_aliases or raw.get("aliases") or dict())
+    raw = canonical_scene(raw)
+    aliases = canonical_aliases(previous_aliases or raw.get("aliases") or dict())
     document = Document(Header(asset=raw["map_path"], cls="World", schema=raw.get("schema_key", "")))
     document.sections.append(Section("scene", entries=[Prop("Name", quote(raw["name"]))]))
     actors = document.ensure_section("actors")

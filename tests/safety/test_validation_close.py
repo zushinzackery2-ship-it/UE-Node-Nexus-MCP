@@ -33,7 +33,8 @@ def test_normal_exit_retries_a_late_shader_compile(monkeypatch):
 
     monkeypatch.setattr(session_module, "close_instance", close)
     monkeypatch.setattr(session_module, "time", SimpleNamespace(monotonic=lambda: 0.0, sleep=lambda seconds: None))
-    assert normal_exit(None, "worker", float("inf")) == dict(exit_confirmed=True, exit_code=0)
+    manager = SimpleNamespace(status=lambda payload: dict(blockers=["editor_busy"], compiling=True))
+    assert normal_exit(manager, "worker", float("inf")) == dict(exit_confirmed=True, exit_code=0)
     assert len(attempts) == 2 and all(attempt["dry_run"] is False for attempt in attempts)
 
 
@@ -45,6 +46,40 @@ def test_unknown_blocker_is_not_retried(monkeypatch):
     with pytest.raises(InstanceError) as error:
         normal_exit(None, "worker", float("inf"))
     assert error.value.code == "close_blocked"
+
+
+def test_late_compile_uses_fresh_transport_counts_after_the_save(monkeypatch):
+    attempts, samples = [], []
+    old = dict(blockers=["editor_busy"], compiling=True, inflight=1)
+    fresh = dict(instance_id="worker", state="READY", blockers=[], compiling=False, inflight=0)
+
+    def close(manager, payload):
+        attempts.append(payload)
+        if len(attempts) == 1:
+            raise InstanceError("close_blocked", "busy", dict(instance=old))
+        return dict(exit_confirmed=True, exit_code=0)
+
+    def status(payload):
+        samples.append(payload)
+        return fresh
+
+    manager = SimpleNamespace(status=status)
+    monkeypatch.setattr(session_module, "close_instance", close)
+    monkeypatch.setattr(session_module, "time", SimpleNamespace(monotonic=lambda: 0.0, sleep=lambda seconds: None))
+    assert normal_exit(manager, "worker", 90) == dict(exit_confirmed=True, exit_code=0)
+    assert samples == [dict(instance_id="worker", fresh=True)]
+    assert len(attempts) == 2
+
+
+def test_fresh_active_work_still_rejects_the_close_retry(monkeypatch):
+    def close(manager, payload):
+        raise InstanceError("close_blocked", "busy", dict(instance=dict(
+            blockers=["editor_busy"], compiling=True, inflight=1)))
+
+    manager = SimpleNamespace(status=lambda payload: dict(blockers=["editor_busy"], compiling=True, inflight=2))
+    monkeypatch.setattr(session_module, "close_instance", close)
+    with pytest.raises(InstanceError, match="busy"):
+        normal_exit(manager, "worker", 90)
 
 
 def test_close_force_stops_when_the_blocker_is_not_transient(monkeypatch):

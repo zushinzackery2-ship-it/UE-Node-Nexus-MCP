@@ -104,6 +104,38 @@ def asset_delete(
     )
 
 
+@default_tool()
+def asset_delete_batch(
+    asset_paths: list[str],
+    dry_run: bool = True,
+    allow_referenced: bool = False,
+    cleanup_after_delete: bool = True,
+) -> dict[str, Any]:
+    """Delete an audited set of Unreal assets as one transaction.
+
+    Every member is loaded while the whole set still exists, then the set is
+    deleted in one call. References between members are expected;
+    ``allow_referenced`` only concerns referencers outside the set. The result
+    records the dependents-first order, each member's load audit, packages left
+    resident after cleanup and loaded referencers outside the set. An incomplete
+    member load refuses the entire set before deletion. Inspect the reported
+    editor state before continuing with compilation or PIE.
+    """
+    if not isinstance(asset_paths, list) or not asset_paths:
+        raise ValueError("asset_paths must be a non-empty list")
+    for index, path in enumerate(asset_paths):
+        require_non_empty_string(path, f"asset_paths[{index}]")
+    return _call(
+        "asset_delete_batch",
+        {
+            "asset_paths": asset_paths,
+            "dry_run": dry_run,
+            "allow_referenced": allow_referenced,
+            "cleanup_after_delete": cleanup_after_delete,
+        },
+    )
+
+
 def _asset_links_payload(asset_path: str, include_soft: bool, include_engine: bool, limit: int, cursor: str | None) -> dict[str, Any]:
     require_non_empty_string(asset_path, "asset_path")
     return dict(asset_path=asset_path, include_soft=include_soft, include_engine=include_engine, limit=limit, cursor=cursor)

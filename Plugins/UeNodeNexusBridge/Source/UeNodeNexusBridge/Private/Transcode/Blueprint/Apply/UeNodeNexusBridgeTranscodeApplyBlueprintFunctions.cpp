@@ -131,7 +131,24 @@ bool ApplyFunctionVerb(UBlueprint* Blueprint, const FString& Verb, const TShared
             FBlueprintEditorUtils::AddUbergraphPage(Blueprint, Graph);
             return true;
         }
-        FBlueprintEditorUtils::AddFunctionGraph<UClass>(Blueprint, Graph, true, nullptr);
+        UFunction* ParentFunction = Blueprint->ParentClass
+            ? Blueprint->ParentClass->FindFunctionByName(FName(*Name)) : nullptr;
+        if (ParentFunction != nullptr)
+        {
+            if (!ParentFunction->HasAnyFunctionFlags(FUNC_BlueprintEvent)
+                || ParentFunction->HasAnyFunctionFlags(FUNC_Final | FUNC_Static))
+            {
+                OutError = TEXT("inherited function cannot be overridden: ") + Name;
+                return false;
+            }
+            // The UFunction overload creates a new user signature. Overrides
+            // must retain the declaring class in both terminator references.
+            FBlueprintEditorUtils::AddFunctionGraph<UClass>(Blueprint, Graph, false, ParentFunction->GetOuterUClass());
+        }
+        else
+        {
+            FBlueprintEditorUtils::AddFunctionGraph<UClass>(Blueprint, Graph, true, nullptr);
+        }
         return Signature == nullptr || ApplyBlueprintFunctionSignature(Graph, *Signature, OutError);
     }
     UEdGraph* Graph = FindBlueprintGraph(Blueprint, Name);

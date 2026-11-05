@@ -36,6 +36,7 @@ void RegisterCoreOperations()
     RegisterCoreOp(TEXT("asset_get"), HandleAssetGet);
     RegisterCoreOp(TEXT("asset_create"), HandleAssetCreate);
     RegisterCoreOp(TEXT("asset_delete"), HandleAssetDelete);
+    RegisterCoreOp(TEXT("asset_delete_batch"), HandleAssetDeleteBatch);
     RegisterCoreOp(TEXT("asset_move"), HandleAssetMove);
     RegisterCoreOp(TEXT("asset_rename"), HandleAssetRename);
     RegisterCoreOp(TEXT("asset_move_batch"), HandleAssetMoveBatch);

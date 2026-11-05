@@ -10,6 +10,7 @@
 #include "NiagaraUserRedirectionParameterStore.h"
 #include "ViewModels/NiagaraEmitterHandleViewModel.h"
 #include "ViewModels/NiagaraSystemViewModel.h"
+#include "ViewModels/Stack/NiagaraParameterHandle.h"
 #include "ViewModels/Stack/NiagaraStackEntry.h"
 #include "ViewModels/Stack/NiagaraStackFunctionInput.h"
 #include "ViewModels/Stack/NiagaraStackViewModel.h"
@@ -81,6 +82,42 @@ bool ValidateUserParameter(const FNiagaraUserRedirectionParameterStore& Store,
         return false;
     }
     return true;
+}
+
+bool ValidateLinkedParameter(const FNiagaraUserRedirectionParameterStore& Store,
+    UNiagaraStackFunctionInput& Input, const FString& Parameter, FInputBindingError& Error)
+{
+    if (Parameter.StartsWith(TEXT("User.")))
+    {
+        return ValidateUserParameter(Store, Parameter, Input.GetInputType(), Error);
+    }
+    static const FRegexPattern Pattern(TEXT("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+"));
+    FRegexMatcher Matcher(Pattern, Parameter);
+    if (!Matcher.FindNext() || Matcher.GetMatchBeginning() != 0 || Matcher.GetMatchEnding() != Parameter.Len())
+    {
+        Error.Code = TEXT("invalid_parameter_link");
+        Error.Message = TEXT("linked input requires a complete Namespace.Name handle");
+        return false;
+    }
+    TArray<FNiagaraParameterHandle> Handles;
+    TMap<FNiagaraVariable, UNiagaraScript*> Conversions;
+    // Niagara filters by assignable type, execution stage and writes preceding this module.
+    Input.GetAvailableParameterHandles(Handles, Conversions, false);
+    const FNiagaraParameterHandle Requested = FNiagaraParameterHandle(FName(*Parameter));
+    if (Handles.Contains(Requested))
+    {
+        return true;
+    }
+    TArray<FString> Available;
+    for (const FNiagaraParameterHandle& Handle : Handles)
+    {
+        Available.AddUnique(Handle.GetParameterHandleString().ToString());
+    }
+    Available.Sort();
+    Error.Code = TEXT("linked_parameter_unavailable");
+    Error.Message = FString::Printf(TEXT("parameter=%s expected_type=%s unavailable before target module; available_handles=%s"),
+        *Parameter, *Input.GetInputType().GetName(), *FString::Join(Available, TEXT(",")));
+    return false;
 }
 
 UNiagaraStackEntry* FInputBindingContext::ResolveRoot(UNiagaraSystem& System,

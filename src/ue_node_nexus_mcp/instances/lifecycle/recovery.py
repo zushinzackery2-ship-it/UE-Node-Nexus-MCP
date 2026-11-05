@@ -23,13 +23,24 @@ def restore_file(project_path: str | Path) -> Path:
     return autosave_dir(project_path) / RESTORE_NAME
 
 
+def index_text(raw: bytes) -> str:
+    """UE writes the index through ``TJsonWriter<TCHAR>``: UTF-16LE without a BOM on Windows."""
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    if len(raw) >= 2 and raw[1] == 0:
+        return raw.decode("utf-16-le")
+    if len(raw) >= 2 and raw[0] == 0:
+        return raw.decode("utf-16-be")
+    return raw.decode("utf-8-sig")
+
+
 def pending(project_path: str | Path) -> list[dict]:
     """Packages UE will offer to restore; empty once a clean shutdown cleared the file."""
     path = restore_file(project_path)
     if not path.is_file():
         return []
     try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        data = json.loads(index_text(path.read_bytes()))
     except (OSError, ValueError):
         return []
     if not data.get("RestoreEnabled"):

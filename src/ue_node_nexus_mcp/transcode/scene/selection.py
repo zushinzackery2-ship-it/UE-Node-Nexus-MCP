@@ -9,6 +9,7 @@ from ..sync.files import mirrored_assets
 from ..sync.project import ProjectContext
 from ..sync.state import SyncState
 from ..storage.ignore.walk import files as discover_files
+from ..storage.paths import content_root, package_from_relative
 from ..errors import SyncError
 from .files import read_base
 from .paths import identity, is_scene_file, scene_path, storage
@@ -44,7 +45,10 @@ def records(context: ProjectContext, state: SceneState) -> list[SceneRecord]:
         if not file.resolve().is_relative_to(context.project.resolve()):
             raise SyncError("invalid_scene_path", f"scene link leaves mirror: {file}")
         relative = file.relative_to(context.project / "Scenes")
-        item = new_record(context, "/Game/" + relative.parent.as_posix(), file.name[:-len(".scene.nexus")], file)
+        map_path = package_from_relative(relative.parent)
+        if map_path is None:
+            raise SyncError("invalid_scene_map", f"invalid scene file location: {file}")
+        item = new_record(context, map_path, file.name[:-len(".scene.nexus")], file)
         if item.key in found:
             raise SyncError("duplicate_scene", f"multiple files claim {item.key}")
         found[item.key] = item
@@ -70,7 +74,7 @@ def select(context: ProjectContext, state: SceneState, paths: list[str] | None,
         return ([], list(selected.values())) if explicit is not None else (None, available)
     assets = []
     for text in paths:
-        if text.startswith("/Game"):
+        if content_root(text) is not None and not Path(text).is_file():
             assets.append(text)
             continue
         file = resolve_file(context, text)

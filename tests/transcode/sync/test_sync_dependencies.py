@@ -4,6 +4,7 @@ import pytest
 from ue_node_nexus_mcp.transcode.text.parser import parse
 from ue_node_nexus_mcp.transcode.sync.service import run_sync
 from ue_node_nexus_mcp.transcode.sync.dependencies import document_dependencies, order_assets
+from ue_node_nexus_mcp.transcode.collaboration.apply.ordering import scene_sources
 from ue_node_nexus_mcp.transcode.errors import SyncError
 
 from ..fake_ue import SCHEMA_KEY
@@ -177,25 +178,27 @@ def _typed_schema(tmp_path):
     return SchemaLock(directory, "key")
 
 
-def test_string_parameters_never_become_asset_dependencies(tmp_path):
+@pytest.mark.parametrize("prefix", ["", "pin:"])
+def test_string_parameters_never_become_asset_dependencies(tmp_path, prefix):
     schema = _typed_schema(tmp_path)
     document, _ = _document(
         "/Game/A",
         '[graph EventGraph]\nconcat : CallFunction(KismetStringLibrary.Concat_StrStr, '
-        'A="/Game/CharacterPure/Runtime/Animation/Clips/Original/", '
-        'B="/Game/CharacterPure/Runtime/Animation/Clips/Original/A_CP_")\n'
+        f'{prefix}A="/Game/CharacterPure/Runtime/Animation/Clips/Original/", '
+        f'{prefix}B="/Game/CharacterPure/Runtime/Animation/Clips/Original/A_CP_")\n'
         '[function Build()]\njoin : CallFunction(KismetStringLibrary.Concat_StrStr, '
-        'A="/Game/Clips/A_CP_Run.A_CP_Run", B="/Plain")\n',
+        f'{prefix}A="/Game/Clips/A_CP_Run.A_CP_Run", {prefix}B="/Plain")\n',
     )
     assert document_dependencies(document, "blueprint", schema) == set()
 
 
-def test_soft_object_parameters_still_name_their_asset(tmp_path):
+@pytest.mark.parametrize("prefix", ["", "pin:"])
+def test_soft_object_parameters_still_name_their_asset(tmp_path, prefix):
     schema = _typed_schema(tmp_path)
     document, _ = _document(
         "/Game/A",
         "[graph EventGraph]\nload : CallFunction(KismetSystemLibrary.LoadAsset, "
-        'Asset="/Game/Clips/A_CP_Run.A_CP_Run")\n',
+        f'{prefix}Asset="/Game/Clips/A_CP_Run.A_CP_Run")\n',
     )
     assert document_dependencies(document, "blueprint", schema) == set(("/Game/Clips/A_CP_Run.A_CP_Run",))
 
@@ -223,3 +226,13 @@ def test_body_cycles_keep_the_general_rejection():
     with pytest.raises(SyncError) as caught:
         order_assets(documents)
     assert caught.value.code == "dependency_cycle"
+
+
+def test_scene_construction_orders_same_batch_blueprint_before_scene():
+    scene, _ = _document("/Game/Maps/L", "[scene]\nName=Group\n[actors]\ncamera : /Game/BP_Camera.BP_Camera", "World")
+    blueprint, _ = _document("/Game/BP_Camera", "[asset]\nParentClass=/Script/Engine.Actor")
+    documents = {"/Game/Maps/L.L": ("scene", scene), "/Game/BP_Camera.BP_Camera": ("blueprint", blueprint)}
+    content = scene_sources(documents)
+    assert content == {"/Game/Maps/L.L": {"/Game/BP_Camera.BP_Camera"}}
+    assert order_assets(documents, available={"/Game/BP_Camera.BP_Camera"}, content=content) == [
+        "/Game/BP_Camera.BP_Camera", "/Game/Maps/L.L"]

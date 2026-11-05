@@ -6,7 +6,7 @@ from ..blueprint.call_host import call_spelling, host_name, required_host
 from ..blueprint.classes import node_name
 from ..blueprint.callables import event_signature
 from ..blueprint.delegates import DELEGATE_NODES, lint as lint_delegate
-from ..blueprint.pins import canonical_pin, node_pins
+from ..blueprint.pins import canonical_pin, class_pin_aliases, macro_pins, node_pins
 from ..blueprint.types import join_type_text, parse_type_text
 from .lookup import AMBIGUOUS, lookup
 from ..errors import DiagnosticSink
@@ -14,6 +14,7 @@ from ..text.lexer import LexError
 from ..text.model import Decl, Section
 from ..schema.functions import callable_record, covers_calls, covers_events, event_record
 from ..schema.lock import ClassInfo, SchemaLock
+from ..storage.paths import asset_relative
 
 POSITIONAL_REQUIRED = {
     "CallFunction": "Owner.Function (or self.Function)",
@@ -56,12 +57,15 @@ def lint_graph(section: Section, member_names: set[str], function_names: set[str
                 sink.error("invalid_type", f"local {decl.id}: {exc}", line=decl.line)
             continue
         infos[decl.id], records[decl.id] = _lint_node(decl, member_names, function_names, schema, sink, parent, document)
+    declared = dict((decl.id, pins) for decl in decls.values()
+                    if (pins := _declared_pins(decl, schema)))
     for link in section.links():
-        for endpoint, pin in ((link.src, link.src_pin), (link.dst, link.dst_pin)):
+        for endpoint, pin, direction in ((link.src, link.src_pin, "out"), (link.dst, link.dst_pin, "in")):
             decl = decls.get(endpoint)
             if decl is None or decl.opaque:
                 continue
-            _lint_pin(decl, infos.get(endpoint), records.get(endpoint), pin, link.line, sink)
+            _lint_pin(decl, infos.get(endpoint), records.get(endpoint), pin, direction, link.line, sink,
+                      declared.get(endpoint), schema)
 
 
 def lint_linked_defaults(section: Section, document, schema: SchemaLock | None, sink: DiagnosticSink) -> None:
@@ -199,7 +203,7 @@ def _lint_function_reference(decl: Decl, spelled: str, reference: str, record, s
     are checked only against a catalog that states it indexed events as well.
     """
     owner, separator, function = reference.rpartition(".")
-    if not separator or owner == "self" or owner.startswith("/Game/") or record is AMBIGUOUS:
+    if not separator or owner == "self" or asset_relative(owner) is not None or record is AMBIGUOUS:
         return
     calls = FUNCTION_REFERENCES[spelled] == "call"
     if not (covers_calls(schema) if calls else covers_events(schema)):
@@ -229,10 +233,36 @@ def _lint_call_host(decl: Decl, record, sink: DiagnosticSink) -> None:
         sink.error("node_class_mismatch", f"{decl.id}: {owner}.{name} is called by {required}, not {spelled}; write CallFunction and the bridge picks it", line=decl.line)
 
 
-def _lint_pin(decl: Decl, info: ClassInfo | None, record, pin: str | None, line: int, sink: DiagnosticSink) -> None:
+def _declared_pins(decl: Decl, schema: SchemaLock | None) -> list | None:
+    """The pins the mirror or the schema states for a node, when either can.
+
+    An exported node carries the pins the editor actually allocated; a macro
+    instance names a macro graph whose tunnel pins the catalog records. Both are
+    the names the apply phase resolves against, so a link has to use one.
+    """
+    if decl.opaque or decl.modifier == "local":
+        return None
+    if decl.meta.get("pins"):
+        return decl.meta["pins"]
+    if node_name(decl.type_name) == "MacroInstance":
+        return macro_pins(decl, schema)
+    if node_name(decl.type_name) == "IfThenElse":
+        return node_pins(decl, None, None, schema)
+    return None
+
+
+def _lint_pin(decl: Decl, info: ClassInfo | None, record, pin: str | None, direction: str, line: int,
+              sink: DiagnosticSink, declared: list | None = None, schema: SchemaLock | None = None) -> None:
     if pin is None:
         # the bridge resolves an omitted pin to the node's single visible data pin and
         # reports pin_not_found otherwise; nothing to check offline
+        return
+    if declared:
+        names = [str(item.get("name", "")) for item in declared if item.get("dir") == direction]
+        target = canonical_pin(pin, direction, declared, class_pin_aliases(schema, decl.type_name))
+        if not any(name.casefold() == str(target).casefold() for name in names):
+            owner = decl.positional()[0] if node_name(decl.type_name) == "MacroInstance" and decl.positional() else decl.type_name
+            sink.error("unknown_pin", f"{decl.id} ({owner}) has no {direction} pin {pin!r}; pins: {', '.join(sorted(names))}", line=line)
         return
     if info is None or pin in EXEC_PINS or pin in IMPLICIT_PINS or pin.startswith("then_"):
         return

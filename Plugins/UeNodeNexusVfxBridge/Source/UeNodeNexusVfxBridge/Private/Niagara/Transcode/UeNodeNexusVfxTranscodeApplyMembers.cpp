@@ -7,6 +7,7 @@
 #include "NiagaraSystem.h"
 #include "UObject/UnrealType.h"
 #include "UeNodeNexusBridgeTranscodeApi.h"
+#include "Values/NexusNiagaraValue.h"
 
 namespace UeNodeNexusBridge::VfxTranscode
 {
@@ -77,6 +78,7 @@ bool ApplyUserParam(UNiagaraSystem* System, const FString& Verb, const TSharedPt
 
 bool ApplyEmitterProp(UNiagaraSystem* System, int32 Emitter, const FString& Name, const FString& Value, FString& OutError)
 {
+    OutError.Reset();
     if (!IsValid(System) || !System->GetEmitterHandles().IsValidIndex(Emitter))
     {
         OutError = TEXT("emitter index does not belong to the Niagara system");
@@ -85,8 +87,14 @@ bool ApplyEmitterProp(UNiagaraSystem* System, int32 Emitter, const FString& Name
     FNiagaraEmitterHandle& Handle = System->GetEmitterHandles()[Emitter];
     if (Name == TEXT("Enabled"))
     {
-        const FString Trimmed = Value.TrimStartAndEnd();
-        return Handle.SetIsEnabled(Trimmed.StartsWith(TEXT("T"), ESearchCase::IgnoreCase) || Trimmed == TEXT("1"), *System, true);
+        FParsedValue Parsed;
+        if (!ParseParameterValue(FNiagaraTypeDefinition::GetBoolDef(), Value, Parsed, OutError))
+        {
+            return false;
+        }
+        // SetIsEnabled reports whether it changed, not whether assignment succeeded.
+        Handle.SetIsEnabled(Parsed.Boolean, *System, true);
+        return Handle.GetIsEnabled() == Parsed.Boolean;
     }
     FVersionedNiagaraEmitterData* Data = Handle.GetEmitterData();
     FProperty* Property = Data ? FVersionedNiagaraEmitterData::StaticStruct()->FindPropertyByName(FName(*Name)) : nullptr;
@@ -125,7 +133,8 @@ UNiagaraRendererProperties* FindRenderer(UNiagaraSystem* System, int32 Emitter, 
     }
     for (UNiagaraRendererProperties* Renderer : Data->GetRenderers())
     {
-        if (Renderer && Renderer->GetName().Equals(Guid, ESearchCase::IgnoreCase))
+        if (Renderer && (Renderer->GetMergeId().ToString(EGuidFormats::DigitsWithHyphens).Equals(Guid, ESearchCase::IgnoreCase)
+            || Renderer->GetName().Equals(Guid, ESearchCase::IgnoreCase)))
         {
             return Renderer;
         }

@@ -83,5 +83,10 @@ def _lint_component(decl: Decl, component_names: set[str], schema: SchemaLock | 
             sink.error("unknown_class", f"unknown component class {class_name!r}", line=decl.line)
         return
     for key, _ in decl.props:
-        if key not in info.props:
+        prop_info = info.prop(key)
+        if prop_info is None:
             sink.error("unknown_property", f"{class_name} has no editable property {key!r}", line=decl.line)
+        elif prop_info.get("derived") or prop_info.get("writable") is False:
+            source = prop_info.get("derived_from") or "its source properties"
+            sink.error("derived_property",
+                       f"{class_name}.{key} is derived; edit {source} instead", line=decl.line)

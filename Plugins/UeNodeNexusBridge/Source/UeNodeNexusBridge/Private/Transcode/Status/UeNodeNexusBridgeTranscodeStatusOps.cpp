@@ -3,6 +3,7 @@
 
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetRegistry/ARFilter.h"
 #include "UObject/ObjectSaveContext.h"
 #include "UObject/Package.h"
 #include "UObject/SoftObjectPath.h"
@@ -85,6 +86,7 @@ TSharedPtr<FJsonObject> HandleTranscodeStatus(const FString& Operation, const FS
     Payload->TryGetBoolField(TEXT("discover"), bDiscover);
     Payload->TryGetBoolField(TEXT("include_stubs"), bIncludeStubs);
     IAssetRegistry& Registry = FAssetRegistryModule::GetRegistry();
+    const TArray<FString> Roots = ProjectContentRoots();
 
     TArray<TSharedPtr<FJsonValue>> Rows;
     TSet<FString> Seen;
@@ -101,7 +103,16 @@ TSharedPtr<FJsonObject> HandleTranscodeStatus(const FString& Operation, const FS
     if (bDiscover)
     {
         TArray<FAssetData> Assets;
-        Registry.GetAssetsByPath(FName(TEXT("/Game")), Assets, true);
+        FARFilter Filter;
+        Filter.bRecursivePaths = true;
+        for (const FString& Root : Roots)
+        {
+            Filter.PackagePaths.Add(FName(*Root));
+        }
+        if (!Filter.PackagePaths.IsEmpty())
+        {
+            Registry.GetAssets(Filter, Assets);
+        }
         for (const FAssetData& AssetData : Assets)
         {
             if (!IsAssetDataCurrent(AssetData) || Seen.Contains(AssetData.GetObjectPathString()))
@@ -122,6 +133,12 @@ TSharedPtr<FJsonObject> HandleTranscodeStatus(const FString& Operation, const FS
     Data->SetArrayField(TEXT("assets"), Rows);
     Data->SetNumberField(TEXT("count"), Rows.Num());
     Data->SetStringField(TEXT("schema_key"), SchemaKey());
+    TArray<TSharedPtr<FJsonValue>> RootValues;
+    for (const FString& Root : Roots)
+    {
+        RootValues.Add(MakeShared<FJsonValueString>(Root));
+    }
+    Data->SetArrayField(TEXT("content_roots"), RootValues);
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);
     Response->SetObjectField(TEXT("data"), Data);
     return Response;

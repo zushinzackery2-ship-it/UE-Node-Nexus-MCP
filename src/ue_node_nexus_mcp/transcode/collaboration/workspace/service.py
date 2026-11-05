@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from ...errors import SyncError
-from ...material.interfaces import tree as interface_tree
+from ..semantic.interfaces import tree as interface_tree
 from ..history import History
 from ..semantic.snapshot import text_of
 from ..semantic.validation import validate

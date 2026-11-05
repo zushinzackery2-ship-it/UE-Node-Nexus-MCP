@@ -35,10 +35,10 @@ static TSharedPtr<FJsonObject> ClassPropsJson(UClass* Class)
     return Props;
 }
 
-static bool IsConcreteClass(UClass* Class)
+static bool IsSchemaClass(UClass* Class)
 {
     return Class != nullptr
-        && !Class->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists)
+        && !Class->HasAnyClassFlags(CLASS_Deprecated | CLASS_NewerVersionExists)
         && !Class->GetName().StartsWith(TEXT("SKEL_"))
         && !Class->GetName().StartsWith(TEXT("REINST_"));
 }
@@ -49,7 +49,7 @@ static TSharedPtr<FJsonObject> MaterialExpressionClasses()
     for (TObjectIterator<UClass> It; It; ++It)
     {
         UClass* Class = *It;
-        if (!IsConcreteClass(Class) || !Class->IsChildOf(UMaterialExpression::StaticClass()))
+        if (!IsSchemaClass(Class) || Class->HasAnyClassFlags(CLASS_Abstract) || !Class->IsChildOf(UMaterialExpression::StaticClass()))
         {
             continue;
         }
@@ -85,7 +85,7 @@ static TSharedPtr<FJsonObject> ClassFamily(TFunctionRef<bool(UClass*)> Filter)
     for (TObjectIterator<UClass> It; It; ++It)
     {
         UClass* Class = *It;
-        if (!IsConcreteClass(Class) || !Filter(Class))
+        if (!IsSchemaClass(Class) || !Filter(Class))
         {
             continue;
         }
@@ -225,6 +225,8 @@ TSharedPtr<FJsonObject> HandleSchemaExport(const FString& Operation, const FStri
     Files.Emplace(TEXT("material_functions.json"), MaterialFunctionSignatures());
     Files.Emplace(TEXT("functions.index.json"), FunctionIndex());
     Files.Emplace(TEXT("delegates.json"), BuildDelegateSchema());
+    // Macro tunnel pins are not reflection: only the graph itself states them.
+    Files.Emplace(TEXT("macros.json"), MacroIndex());
     KeyJson->SetStringField(TEXT("delegate_index"), TEXT("multicast_delegates"));
     // Readers validate Event / CallParentFunction references only against an
     // index that states it holds BlueprintEvent functions too.

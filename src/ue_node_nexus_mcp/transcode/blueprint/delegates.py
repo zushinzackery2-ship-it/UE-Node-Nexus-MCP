@@ -5,6 +5,7 @@ from .members import dispatchers
 from .signature import parse_signature
 from .types import type_text
 from ..errors import DiagnosticSink, SyncError
+from ..storage.paths import asset_relative
 
 
 DELEGATE_NODES = frozenset(("CallDelegate", "AddDelegate", "RemoveDelegate", "ClearDelegate"))
@@ -72,7 +73,7 @@ def lint(decl, document, schema, sink):
         covered = schema and schema.info().get("coverage", dict()).get("delegates") == "registered_multicast_delegate_index"
         asset = document.section("asset") if document else None
         parent = asset.prop_map().get("ParentClass") if asset else None
-        pending = owner.startswith("/Game/") or (owner == "self" and parent and parent.value.startswith("/Game/"))
+        pending = asset_relative(owner) is not None or (owner == "self" and parent and asset_relative(parent.value) is not None)
         if covered and not pending:
             sink.error("unknown_delegate", "multicast dispatcher not found: " + owner + "." + name, line=decl.line)
         else:

@@ -79,3 +79,29 @@ def test_explicit_struct_edit_still_requires_exact_effective_readback():
     correct = deepcopy(native_state())
     component(correct)["props"]["LightingChannels"] = deepcopy(component(desired)["props"]["LightingChannels"])
     assert entity_fields(operation, component(desired), component(correct)) == []
+
+
+def test_inherited_camera_default_uses_live_binding_precision():
+    properties = dict(AspectRatio=dict(type="float", default="1.777778"),
+                      CurrentFocalLength=dict(type="float", default="35"))
+    info = ClassInfo(name="CineCameraComponent", path="/Script/CinematicCamera.CineCameraComponent", props=properties)
+    catalog = SimpleNamespace(key="camera", info=lambda: {},
+        resolve_class=lambda family, name, **kwargs: info if family == "component" else None)
+    text = ("nexus: 1\nasset: /Game/Camera\nclass: Blueprint\n\n[components]\n"
+            "CameraComponent : @inherited(CineCameraComponent) { CurrentFocalLength=24.35761 }\n")
+    candidate = capture(text, None, "author", "blueprint", catalog)
+    raw = dict(asset_path="/Game/Camera.Camera", kind="blueprint", class_short="Blueprint", raw_version=1,
+        props=[], blueprint=dict(blueprint_type="normal", parent_class="/Script/CinematicCamera.CineCameraActor",
+        components=[dict(name="CameraComponent", guid="CAMERA", inherited=True, parent="",
+            class_short="CineCameraComponent", **{"class": info.path}, props=[
+                dict(name="AspectRatio", type="float", value="1.77777779", default="1.77777779"),
+                dict(name="CurrentFocalLength", type="float", value="24.3576107", default="35")])],
+        variables=[], graphs=[], defaults=[]))
+    actual = from_raw(raw, candidate, schema=catalog)
+    desired = normalize_snapshot(candidate, actual, catalog)
+    assert entity_fields(dict(op="bp_component_bind"), component(desired), component(actual)) == []
+    properties["AspectRatio"]["default"] = "1.77777779"
+    explicit = capture(text.replace("CurrentFocalLength=", "AspectRatio=1.777778, CurrentFocalLength="),
+                       None, "author", "blueprint", catalog)
+    desired = normalize_snapshot(explicit, actual, catalog)
+    assert entity_fields(dict(op="bp_component_set_prop", prop="AspectRatio"), component(desired), component(actual))

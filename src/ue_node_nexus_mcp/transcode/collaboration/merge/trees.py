@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ...errors import SyncError
-from ...material.interfaces import tree as interface_tree
+from ..semantic.interfaces import tree as interface_tree
 from ..semantic.validation import validate
 from .findings import finding
 from ..history import History

@@ -8,6 +8,7 @@ from .state import StoredDiff, facade_state
 from ..runtime import response_mode
 from ..diagnostics.summary import attach as attach_diagnostics, counts as data_diagnostic_counts
 from ..diagnostics.contracts.response import attach as attach_contract
+from .changes import evidence as mutation_evidence
 
 LARGE_RESPONSE_INLINE_BYTE_LIMIT = 16 * 1024
 
@@ -58,21 +59,6 @@ def asset_path_from_payload(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def extract_created_ids(data: Any) -> list[str]:
-    if not isinstance(data, dict):
-        return []
-    ids: list[str] = []
-    for key in ("node_id", "asset_path", "emitter_id", "renderer_id"):
-        value = data.get(key)
-        if isinstance(value, str) and value:
-            ids.append(value)
-    for key in ("created_ids", "created_nodes", "affected_ids"):
-        value = data.get(key)
-        if isinstance(value, list):
-            ids.extend(str(item) for item in value if isinstance(item, (str, int)))
-    return sorted(set(ids))
-
-
 def artifact_handle(kind: str, response: dict[str, Any]) -> dict[str, Any]:
     artifact = facade_state.store_artifact(kind, response)
     return dict(id=artifact.artifact_id, kind=kind, expires_in_seconds=facade_state.ttl_seconds, fetch_with="ue_read")
@@ -106,14 +92,12 @@ def estimated_tokens_for_bytes(payload_bytes: int) -> int:
 def diff_changes(diff: StoredDiff) -> list[list[Any]]:
     changes: list[list[Any]] = [["operation", diff.operation]]
     payload = diff.payload
-    response_data = diff.response.get("data")
     for key in ("asset_path", "source_asset_path", "destination_asset_path", "node_id"):
         value = payload.get(key)
         if isinstance(value, str) and value:
             changes.append(["payload", key, value])
-    if isinstance(response_data, dict):
-        for value in extract_created_ids(response_data):
-            changes.append(["id", value])
+    for kind, values in mutation_evidence(payload, diff.response)["changes"].items():
+        changes.extend([kind, value] for value in values)
     counts = diagnostic_counts(diff.response)
     changes.append(["diagnostics", counts["errors"], counts["warnings"]])
     return changes
@@ -130,18 +114,18 @@ def summarize_response(operation: str, payload: dict[str, Any], response: dict[s
 
     if response.get("ok") is False:
         result = dict(ok=False, error=response.get("error", dict(code="operation_failed", message="Operation failed.", details=dict())),
-                      diagnostics=diagnostic_counts(response), artifact=artifact_handle(f"{operation}_error", response))
+                      diagnostics=diagnostic_counts(response), artifact=artifact_handle(f"{operation}_error", response),
+                      data=dict(operation=operation, **mutation_evidence(payload, response, limit=20)))
         attach_diagnostics(result, response, operation, payload)
         return with_optional_remaining_errors(result, response)
 
     diff = facade_state.store_diff(operation, payload, response)
     data = response.get("data")
-    created_ids = extract_created_ids(data)
     diagnostics = diagnostic_counts(response)
-    dry_run = payload.get("dry_run")
-    affected = _affected_from_payload(payload)
-    changed = False if dry_run is True else bool(created_ids or affected["assets"] or affected["nodes"])
-    summary = _summary_for_mode(operation, mode, changed, dry_run, affected, created_ids, diagnostics, diff.diff_token, data)
+    evidence = mutation_evidence(payload, response)
+    summary = _summary_for_mode(operation, mode, evidence["changed"], evidence["dry_run"], evidence["affected"],
+                                evidence["created_ids"], diagnostics, diff.diff_token, data)
+    summary.update(evidence)
 
     asset_path = asset_path_from_payload(payload)
     if asset_path:
@@ -179,6 +163,7 @@ def _artifact_summary_for_large_response(
         "diff_token": diff.diff_token,
         "diagnostics": diagnostic_counts(response),
     }
+    summary.update(mutation_evidence(payload, response, limit=20))
 
     asset_path = asset_path_from_payload(payload)
     if asset_path:
@@ -196,19 +181,6 @@ def _artifact_summary_for_large_response(
     attach_diagnostics(summary, response, operation, payload)
 
     return with_optional_remaining_errors({"ok": response.get("ok", False), "data": summary}, response)
-
-
-def _affected_from_payload(payload: dict[str, Any]) -> dict[str, list[str]]:
-    assets: list[str] = []
-    nodes: list[str] = []
-    for key in ("asset_path", "source_asset_path", "destination_asset_path"):
-        value = payload.get(key)
-        if isinstance(value, str) and value and value not in assets:
-            assets.append(value)
-    node_id = payload.get("node_id")
-    if isinstance(node_id, str) and node_id:
-        nodes.append(node_id)
-    return {"assets": assets, "nodes": nodes}
 
 
 def _summary_for_mode(

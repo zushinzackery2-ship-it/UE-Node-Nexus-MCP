@@ -40,6 +40,24 @@ def test_complete_candidate_evidence_is_accepted():
     assert verify(result, expected, operation)["readback_verified"]
 
 
+def test_failed_batch_keeps_native_cause_and_durable_receipt():
+    _, expected, operation, result = fixture()
+    native = dict(code="apply_rolled_back", message="Native Niagara creation failed", details={})
+    result["ok"] = False
+    result["data"].update(state="failed", validation_id="failed-worker", receipt_path="private/receipt.json",
+                          operation_index=4, error=dict(code="isolated_validation_failed", message="Candidate failed",
+                          details=dict(response=dict(error=native))))
+    result["data"]["cleanup"].update(forced=True, exit_code=88)
+    with pytest.raises(SyncError) as caught:
+        verify(result, expected, operation)
+    evidence = caught.value.details["batch_admission"]
+    assert evidence["receipt_path"] == "private/receipt.json"
+    assert evidence["operation_index"] == 4
+    assert evidence["native_error"] == native
+    assert evidence["worker_exit"]["exit_code"] == 88
+    assert "validation" not in caught.value.details
+
+
 @pytest.mark.parametrize("field", ["compiled", "saved", "readback_verified"])
 def test_omitted_phase_blocks_publication(field):
     _, expected, operation, result = fixture()

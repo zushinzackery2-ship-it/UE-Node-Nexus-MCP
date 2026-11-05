@@ -1,4 +1,5 @@
 #include "UeNodeNexusPropertyValue.h"
+#include "Text/NexusPropertyTextImport.h"
 #include "UObject/UnrealType.h"
 
 namespace UeNodeNexusBridge
@@ -27,12 +28,7 @@ bool FPropertyValueBuffer::ApplyJson(const TSharedPtr<FJsonValue>& Value, FStrin
 
 bool FPropertyValueBuffer::ApplyText(const FString& Text, FString& Error)
 {
-    if (Property->ImportText_Direct(*Text, Storage, Owner, PPF_None) == nullptr)
-    {
-        Error = TEXT("property_import_failed");
-        return false;
-    }
-    return true;
+    return ImportCompletePropertyText(Property, Storage, Owner, Text, Error);
 }
 
 bool FPropertyValueBuffer::Changed() const

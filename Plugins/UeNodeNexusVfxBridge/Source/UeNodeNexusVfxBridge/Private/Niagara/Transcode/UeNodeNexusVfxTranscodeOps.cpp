@@ -80,7 +80,11 @@ TSharedPtr<FJsonObject> BuildModuleSignatures()
             Input->SetStringField(TEXT("name"), Name);
             Input->SetStringField(TEXT("type"), FriendlyTypeName(Pair.Key.GetType()));
             Input->SetBoolField(TEXT("static"), Pair.Value && Pair.Value->GetIsStaticSwitch());
-            Input->SetStringField(TEXT("default"), ModuleInputDefaultText(Pair.Key, Pair.Value));
+            const FString DefaultText = ModuleInputDefaultText(Pair.Key, Pair.Value, Graph);
+            if (!DefaultText.IsEmpty())
+            {
+                Input->SetStringField(TEXT("default"), DefaultText);
+            }
             Inputs.Add(MakeShared<FJsonValueObject>(Input));
         }
         TSharedPtr<FJsonObject> Record = MakeShared<FJsonObject>();
@@ -98,7 +102,7 @@ TSharedPtr<FJsonObject> BuildModuleSignatures()
     {
         const FString Path = Asset.GetObjectPathString();
         const FString Package = Asset.PackageName.ToString();
-        if (Modules->HasField(Path) || !(Package.Contains(TEXT("/Modules/")) || Package.StartsWith(TEXT("/Game/"))))
+        if (Modules->HasField(Path) || !(Package.Contains(TEXT("/Modules/")) || IsProjectContentPackage(Package)))
         {
             continue;
         }

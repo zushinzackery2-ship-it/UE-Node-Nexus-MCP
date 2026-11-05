@@ -4,10 +4,13 @@ from .notice import normalize
 from .response import attach, DIAGNOSTIC_FIELDS
 
 
+def successful(report: dict) -> bool:
+    return not (report.get("error_count") or report.get("conflict_count") or report.get("stopped")) and report.get("status") not in (
+        "failed", "cancelled", "interrupted", "conflict", "base-conflict", "stale", "recovery_required", "blocked", "partial")
+
+
 def attach_report(report: dict, action: str, observed: dict | None = None, *, recorded: bool = False) -> dict:
-    success = not report.get("error_count") and report.get("status") not in (
-        "failed", "cancelled", "interrupted", "conflict", "stale", "recovery_required")
-    source = dict(ok=success, data=report)
+    source = dict(ok=successful(report), data=report)
     notice = report.get("runtime_diagnostics") or observed
     if isinstance(notice, dict):
         source["runtime_diagnostics"] = notice

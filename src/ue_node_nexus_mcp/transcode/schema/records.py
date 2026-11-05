@@ -5,7 +5,8 @@ from __future__ import annotations
 from ..text.ids import short_class_name
 
 FAMILIES = dict(material_expression="material", material_functions="material", k2node="blueprint",
-                functions="blueprint", callable_functions="blueprint", delegates="blueprint", component="scene", asset="asset",
+                functions="blueprint", callable_functions="blueprint", delegates="blueprint", macros="blueprint",
+                component="scene", asset="asset",
                 niagara_renderer="niagara", niagara_modules="niagara", types="common")
 
 
@@ -58,6 +59,9 @@ def syntax(family: str, name: str) -> dict:
     short = short_class_name(name)
     if family == "material_expression":
         return dict(section="graph", declaration=f"node : {short}", parameter="node : Type(Property=value)", link="source.Pin -> destination.Pin")
+    if family == "macros":
+        return dict(section="graph/function/macro", declaration=f"node : MacroInstance({name})",
+                    context="pins are the macro graph's tunnel pins")
     if family in ("k2node", "functions", "callable_functions", "delegates"):
         return dict(section="graph/function/macro", declaration=f"node : {short}",
                     context='pins come from the owning asset: schema(target="/Game/Path/BP_Thing.BP_Thing")')

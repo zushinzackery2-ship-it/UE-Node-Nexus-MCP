@@ -97,12 +97,15 @@ bool ResolveRawFile(const FString& OutDir, const FString& AssetPath, FString& Ou
     {
         Package.LeftInline(DotIndex);
     }
-    if (!Package.StartsWith(TEXT("/Game/")))
+    if (!IsProjectContentPackage(Package))
     {
-        OutError = FString::Printf(TEXT("only /Game assets are mirrored: %s"), *AssetPath);
+        OutError = FString::Printf(TEXT("asset is not in a registered project content mount: %s"), *AssetPath);
         return false;
     }
-    OutFile = NormalizeFile(OutDir / Package.RightChop(6) + TEXT(".json"));
+    // '@' is not a legal package character; mounted roots cannot alias /Game.
+    const FString Relative = Package.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
+        ? Package.RightChop(6) : TEXT("@mounts/") + Package.RightChop(1);
+    OutFile = NormalizeFile(OutDir / Relative + TEXT(".json"));
     if (!IsInsideMirrorRoot(OutFile))
     {
         OutError = FString::Printf(TEXT("out_dir is outside the registered mirror root: %s"), *OutDir);

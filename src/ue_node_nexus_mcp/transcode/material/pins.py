@@ -97,9 +97,26 @@ def canonical_pin(decl, name, direction, metadata, schema=None):
             index = 0
     if index is None:
         return text
+    if is_function and direction == "out":
+        # Native function-call links select output slots. Loading a provider's
+        # named interface must not turn an unchanged default slot into an edit.
+        return None if index == 0 else str(index)
     if index < len(names) and names[index]:
         return names[index]
     return None if index == 0 else str(index)
+
+
+def output_label(decl, name):
+    """Render a semantic call slot with its captured interface's authored name."""
+    if decl is None or not is_function_call(decl):
+        return name
+    if name is not None and not str(name).isdigit():
+        return name
+    names = decl.meta.get("outputs", [])
+    index = 0 if name is None else int(name)
+    if index < len(names) and names[index]:
+        return names[index]
+    return name
 
 
 def lint_previews(graph: Section, infos: dict[str, ClassInfo | None], sink: DiagnosticSink) -> None:

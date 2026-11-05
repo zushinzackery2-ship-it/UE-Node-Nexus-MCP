@@ -1,13 +1,13 @@
 """Verify the values an apply was asked to write before publishing its receipt."""
 
 from ...storage.paths import object_path
-from ...storage.io import confined, read_json
 from ...errors import SyncError
 from ..semantic.normalization import normalize_snapshot
 from ...text.semantic import equivalent, value
 from ...text.writes import write_differences
 from ...material.custom_inputs import layout
 from ..workspace.files import filename
+from ...scene.readback import scene_result
 
 
 def entities(snapshot):
@@ -77,11 +77,13 @@ def entity_fields(operation, expected, actual, input_contract=None):
 
 
 def property_result(operation, actual):
+    from ...material.instance import parameter_scope
     verb, name = operation["op"], operation.get("name", "")
     section = "asset" if verb == "set_asset_prop" else "defaults"
     if verb == "mi_set_param":
         section = operation.get("section", operation.get("kind", ""))
-    fields = actual["semantic"]["sections"].get(section + ":", dict()).get("props", dict())
+    scope = parameter_scope(operation.get("association", "global"), operation.get("index", -1)) if verb == "mi_set_param" else ""
+    fields = actual["semantic"]["sections"].get(section + ":" + scope, dict()).get("props", dict())
     field = fields.get(name)
     rows = actual.get("raw", dict()).get("props", []) if section == "asset" else []
     if section == "defaults":
@@ -130,28 +132,6 @@ def graph_result(graph, desired, actual, checked):
     return rows
 
 
-def scene_result(workspace, desired, actual, record):
-    rows = differences(desired["semantic"], actual["semantic"])
-    actors = dict((actor["id"], actor) for actor in actual.get("raw", dict()).get("actors", []))
-    components = dict()
-    plan = read_json(confined(workspace.store.root, record["request"]["plan_file"]))
-    for operation in plan["ops"]:
-        verb, identifier = operation["op"], operation.get("id")
-        if verb == "delete_actor":
-            found = actors.get(identifier)
-        elif verb == "remove_component":
-            actor_id = operation["actor_id"]
-            if actor_id not in components:
-                components[actor_id] = dict((component["id"], component)
-                                            for component in actors.get(actor_id, dict()).get("components", []))
-            found = components[actor_id].get(identifier)
-        else:
-            continue
-        if found:
-            rows.append(dict(field=[verb, identifier], expected=None, actual=found))
-    return rows
-
-
 def verify_scene_deletion(record, raw):
     actors = raw.get("actors")
     if not isinstance(actors, list):
@@ -190,7 +170,8 @@ def verify_result(workspace, record, expected, actual) -> None:
         if verb in ("set_asset_prop", "bp_default_set", "mi_set_param"):
             rows = property_result(operation, actual)
         elif verb == "mi_clear_param":
-            scope = operation["kind"] + ":"
+            from ...material.instance import parameter_scope
+            scope = operation["kind"] + ":" + parameter_scope(operation.get("association", "global"), operation.get("index", -1))
             field = actual["semantic"]["sections"].get(scope, dict()).get("props", dict()).get(operation["name"])
             rows = differences(None, field, (scope, operation["name"]))
         elif verb.startswith(("bp_interface_", "bp_dispatcher_", "bp_function_")):

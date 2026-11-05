@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ...storage.io import atomic_write, canonical
 
-FORMAT = 5
+FORMAT = 8
 
 
 def location(workspace) -> Path:

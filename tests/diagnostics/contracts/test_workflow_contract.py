@@ -46,7 +46,7 @@ def test_legacy_apply_keeps_runtime_separate_from_compile_failure():
 
 
 def test_job_status_preserves_stored_runtime_evidence():
-    data = report(dict(id="fixture", status="succeeded", result_id="stored",
+    data = report(dict(id="fixture", generation=1, status="succeeded", result_id="stored",
                        runtime_diagnostics=notice(), runtime_observed=True, runtime_verification="not_run"))
     assert data["status"] == "succeeded"
     assert data["runtime_diagnostics"]["error_count"] == 303

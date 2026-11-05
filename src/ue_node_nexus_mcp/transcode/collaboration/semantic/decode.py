@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ...text.model import Bare, Decl, Document, Header, Link, Prop, Section
 from ...text.semantic import render
+from ...material.pins import output_label
 
 
 def to_document(snapshot: dict, *, include_defaults=False) -> Document:
@@ -46,8 +47,14 @@ def to_document(snapshot: dict, *, include_defaults=False) -> Document:
             section.entries.append(Decl(id=entity["alias"], type_name=entity["type"], args=args,
                 default=render(entity["default"]), props=props, pos=tuple(entity["position"]) if entity["position"] else None,
                 flags=list(entity["flags"]), annotations=dict(entity["annotations"]), modifier=entity["modifier"], meta=meta, line=locations.get(identifier, section.line)))
-        section.entries.extend(Link(aliases.get(link["src"], link["src"].removeprefix("@")), link["src_pin"],
-                                    aliases.get(link["dst"], link["dst"].removeprefix("@")), link["dst_pin"], line=section.line) for link in item["links"].values())
+        declarations = section.decl_map()
+        for link in item["links"].values():
+            source = aliases.get(link["src"], link["src"].removeprefix("@"))
+            source_pin = link["src_pin"]
+            if semantic["kind"] in ("material", "material_function"):
+                source_pin = output_label(declarations.get(source), source_pin)
+            section.entries.append(Link(source, source_pin,
+                aliases.get(link["dst"], link["dst"].removeprefix("@")), link["dst_pin"], line=section.line))
         section.entries.extend(Bare(text) for text in item["bare"].values())
         document.sections.append(section)
     if not locations:

@@ -111,10 +111,17 @@ available for a separate publication. `idempotency_key` binds retries to one job
 ```python
 ue_sync("push", options=dict(workspace_id="<id>", dry_run=False, background=True))
 ue_sync("job_status", options=dict(job_id="<job-id>"))
+ue_sync("job_status", options=dict(job_id="<job-id>", after_revision=7, wait_seconds=30))
 ue_sync("job_result", options=dict(job_id="<job-id>"))
 ue_sync("job_cancel", options=dict(job_id="<job-id>"))
 ```
 
+Status includes a monotonic `revision`; `after_revision` waits for a newer state or
+the requested timeout. Reads without a change preserve the revision.
+`validation_progress` identifies baseline, preflight, copy, startup, execute, exit,
+source_check and readback, with validation id, copied files/bytes, operation index
+and last progress time where available. `main_apply` marks the source transaction.
+Cancellation remains visible alongside those fields, without an estimated total percentage.
 Status reports the current stage/asset and completed assets. Schema refresh reports `schema_collection`,
 `schema_migration`, `schema_manifest`, `schema_documentation` and `schema_ready`.
 `schema_progress` includes the schema key, phase, processed/total records, family,
@@ -125,7 +132,12 @@ durable operations before the manifest is committed; the old catalog stays reada
 
 Results live in the repository and can be read from another MCP session. Cancellation and optional
 `deadline_seconds` stop between atomic asset operations; committed receipts stay
-published. An exited worker owner reports `interrupted` with recovery instructions.
+published. `applied_transactions` and `completed_assets` come from durable apply
+records; `unapplied_assets` and `pending_transactions` distinguish untouched targets
+from transactions requiring recovery; `pending_refresh_assets` lists known caller
+refreshes that still need to run. A cancelled job with committed work returns
+`status=partial`, `job_status=cancelled`, and its interruption code. An exited worker
+owner reports `interrupted` with recovery instructions and preserved transaction facts.
 Queued jobs are cancelled when their MCP session closes. Running writes retain
 their normal receipt and recovery protocol. Capability and polling queries remain
 available while the workflow runs.

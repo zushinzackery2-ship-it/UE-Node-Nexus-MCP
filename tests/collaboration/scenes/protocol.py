@@ -45,6 +45,7 @@ class SceneProtocol(ProtocolUe):
             self.receipts[identifier] = receipt
             return dict(__error__=dict(code="apply_rolled_back", message="scene save restored checkpoint"), receipt=receipt)
         raw = json.loads(Path(payload["out_file"]).read_text(encoding="utf-8"))
+        raw.pop("request_token", None)
         after = self.stamped(raw)
         if self.retain_deleted:
             remaining = dict((actor["id"], actor) for actor in after["actors"])
@@ -60,6 +61,6 @@ class SceneProtocol(ProtocolUe):
             after["actors"][0]["label"] = "Unexpected"
             after = self.stamped(after)
         receipt = dict(apply_id=identifier, request=request, request_digest=digest(request), phase="ue_committed",
-                       after=after, response=dict(ok=True, data=deepcopy(data)))
+                       after=after, response_data=deepcopy(data), response=dict(ok=True, data=deepcopy(data)))
         self.receipts[identifier] = receipt
         return dict(data, receipt=deepcopy(receipt))

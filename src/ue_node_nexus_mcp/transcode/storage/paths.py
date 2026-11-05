@@ -35,6 +35,9 @@ KIND_SUFFIX = {
 SUFFIX_KIND = {suffix: kind for kind, suffix in KIND_SUFFIX.items()}
 _SUFFIX_RE = re.compile(r"^(?P<stem>.+)\.(?P<suffix>" + "|".join(sorted(KIND_SUFFIX.values())) + r")\.nexus$")
 _GAME_ROOT = "/Game"
+_MOUNTS_DIRECTORY = "@mounts"
+_EXTERNAL_ROOTS = frozenset(("engine", "script", "temp", "memory", "transient"))
+_PACKAGE_COMPONENT = re.compile(r"^[^\s\\:*?\"<>|',.&!~@#]+$")
 
 
 def resolve_root(env: dict[str, str] | None = None, cwd: Path | None = None) -> Path:
@@ -107,17 +110,60 @@ def object_path(asset_path: str) -> str:
     return f"{package}.{package.rsplit('/', 1)[-1]}"
 
 
-def asset_relative(asset_path: str) -> PurePosixPath | None:
-    package = package_name(asset_path)
-    if not package.startswith(_GAME_ROOT + "/"):
+def content_parts(asset_path: str, *, allow_root: bool = False) -> tuple[str, ...] | None:
+    """Validate virtual package names before any filesystem normalization.
+
+    UE verifies mount registration when observing or publishing. Engine and
+    transient roots remain external to project collaboration dependencies.
+    """
+    text = asset_path.strip()
+    if "'" in text:
+        if text.count("'") != 2:
+            return None
+        text = text.split("'", 2)[1]
+    if allow_root:
+        text = text.removesuffix("/")
+    if not text.startswith("/") or any(part in ("", ".", "..") for part in text[1:].split("/")):
         return None
-    return PurePosixPath(package[len(_GAME_ROOT) + 1:])
+    parts = tuple(package_name(text)[1:].split("/"))
+    if len(parts) < (1 if allow_root else 2) or parts[0].casefold() in _EXTERNAL_ROOTS:
+        return None
+    if any(_PACKAGE_COMPONENT.fullmatch(part) is None for part in parts):
+        return None
+    return parts
+
+
+def content_root(asset_path: str) -> str | None:
+    parts = content_parts(asset_path, allow_root=True)
+    return "/" + parts[0] if parts else None
+
+
+def asset_relative(asset_path: str) -> PurePosixPath | None:
+    parts = content_parts(asset_path)
+    if parts is None:
+        return None
+    # '@' is invalid in UE package names, so this namespace cannot collide
+    # with a legitimate /Game folder. Existing /Game filenames stay stable.
+    return PurePosixPath(*parts[1:]) if parts[0] == "Game" else PurePosixPath(_MOUNTS_DIRECTORY, *parts)
+
+
+def package_from_relative(relative: PurePosixPath) -> str | None:
+    parts = relative.parts
+    if not parts:
+        return None
+    if parts[0] == _MOUNTS_DIRECTORY:
+        if len(parts) < 3 or parts[1].casefold() == "game":
+            return None
+        package = "/" + "/".join(parts[1:])
+    else:
+        package = _GAME_ROOT + "/" + "/".join(parts)
+    return package if content_parts(package) is not None else None
 
 
 def text_path(project: Path, asset_path: str, kind: str) -> Path:
     relative = asset_relative(asset_path)
     if relative is None:
-        raise ValueError(f"only /Game assets are mirrored: {asset_path}")
+        raise ValueError(f"invalid project content package: {asset_path}")
     suffix = KIND_SUFFIX[kind]
     return project.joinpath(*relative.parts[:-1]) / f"{relative.name}.{suffix}.nexus"
 
@@ -125,7 +171,7 @@ def text_path(project: Path, asset_path: str, kind: str) -> Path:
 def base_path(project: Path, asset_path: str) -> Path:
     relative = asset_relative(asset_path)
     if relative is None:
-        raise ValueError(f"only /Game assets are mirrored: {asset_path}")
+        raise ValueError(f"invalid project content package: {asset_path}")
     return nexus_dir(project).joinpath("base", *relative.parts[:-1]) / f"{relative.name}.json"
 
 
@@ -141,7 +187,9 @@ def parse_text_path(project: Path, path: Path) -> tuple[str, str] | None:
     if match is None:
         return None
     stem = match.group("stem")
-    package = "/".join([_GAME_ROOT, *relative.parts[:-1], stem])
+    package = package_from_relative(PurePosixPath(*relative.parts[:-1], stem))
+    if package is None:
+        return None
     return f"{package}.{stem}", SUFFIX_KIND[match.group("suffix")]
 
 

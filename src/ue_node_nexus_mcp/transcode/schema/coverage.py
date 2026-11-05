@@ -16,8 +16,9 @@ CONTEXT_REQUIRED = "context_required"
 # A Blueprint node's pins are not a property of its class: the cast result pin is
 # named after the target class, a call's pins come from the called function's
 # signature, a macro instance's pins come from the macro's tunnels. Reflection
-# over the node class cannot produce them; exporting one asset that uses the node
-# can, and that is what schema(target=...) does.
+# over the node class cannot produce them; the macros family records the tunnel
+# pins of the loaded libraries (the engine standard macros included), and
+# schema(target=...) exports the pins of any other asset.
 BLUEPRINT_PINS_REASON = "a Blueprint node's pins come from the owning asset, not from the node class"
 BLUEPRINT_PINS_RETURNS = "context.definition.blueprint.graphs[].nodes[].pins[] (name, dir, type, default, linked)"
 

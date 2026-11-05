@@ -39,6 +39,32 @@ static TSharedPtr<FJsonObject> ComponentJson(const FString& Name, const FString&
     return Json;
 }
 
+static UActorComponent* ParentNativeComponent(UClass* ParentClass, const FName Name)
+{
+    // A native component's class CDO is not its inherited default: CineCamera
+    // derives FieldOfView in the actor CDO. Use the most specific parent class
+    // CDO that actually owns a component with this name.
+    for (UClass* Type = ParentClass; Type; Type = Type->GetSuperClass())
+    {
+        AActor* Cdo = Cast<AActor>(Type->GetDefaultObject());
+        if (Cdo == nullptr)
+        {
+            continue;
+        }
+        TInlineComponentArray<UActorComponent*> Components;
+        Cdo->GetComponents(Components);
+        for (UActorComponent* Component : Components)
+        {
+            if (Component != nullptr && Component->GetFName() == Name
+                && Component->CreationMethod == EComponentCreationMethod::Native && Component->GetOuter() == Cdo)
+            {
+                return Component;
+            }
+        }
+    }
+    return nullptr;
+}
+
 static TArray<TSharedPtr<FJsonValue>> ComponentsJson(UBlueprint* Blueprint, UBlueprintGeneratedClass* GeneratedClass, UObject* Cdo)
 {
     TArray<TSharedPtr<FJsonValue>> Components;
@@ -61,6 +87,36 @@ static TArray<TSharedPtr<FJsonValue>> ComponentsJson(UBlueprint* Blueprint, UBlu
             Components.Add(MakeShared<FJsonValueObject>(ComponentJson(Name, Node->VariableGuid.ToString(EGuidFormats::DigitsWithHyphens), Template, nullptr, Parent == TEXT("None") ? FString() : Parent, Socket, false)));
         }
     }
+    // Blueprint-authored components are SCS templates, not components on the
+    // CDO. Include the ancestor chain so inherited attachment targets and child
+    // overrides have the same identity in native snapshots and in text.
+    auto* ParentClass = Cast<UBlueprintGeneratedClass>(Blueprint->ParentClass.Get());
+    for (UClass* Owner = Blueprint->ParentClass; Owner; Owner = Owner->GetSuperClass())
+    {
+        auto* Parent = Cast<UBlueprintGeneratedClass>(Owner);
+        USimpleConstructionScript* ParentScs = Parent ? Parent->SimpleConstructionScript.Get() : nullptr;
+        if (!ParentScs)
+        {
+            continue;
+        }
+        for (USCS_Node* Node : ParentScs->GetAllNodes())
+        {
+            if (!Node || Seen.Contains(Node->GetVariableName().ToString()))
+            {
+                continue;
+            }
+            const FString Name = Node->GetVariableName().ToString();
+            USCS_Node* ParentNode = ParentScs->FindParentNode(Node);
+            const FString ParentName = ParentNode ? ParentNode->GetVariableName().ToString() : Node->ParentComponentOrVariableName.ToString();
+            const FString Socket = Node->AttachToName.IsNone() ? FString() : Node->AttachToName.ToString();
+            UActorComponent* Template = Node->GetActualComponentTemplate(GeneratedClass);
+            UActorComponent* Defaults = Node->GetActualComponentTemplate(ParentClass);
+            Seen.Add(Name);
+            Components.Add(MakeShared<FJsonValueObject>(ComponentJson(Name,
+                Node->VariableGuid.ToString(EGuidFormats::DigitsWithHyphens), Template, Defaults,
+                ParentName == TEXT("None") ? FString() : ParentName, Socket, true)));
+        }
+    }
     AActor* ActorCdo = Cast<AActor>(Cdo);
     if (ActorCdo != nullptr)
     {
@@ -73,7 +129,12 @@ static TArray<TSharedPtr<FJsonValue>> ComponentsJson(UBlueprint* Blueprint, UBlu
                 continue;
             }
             Seen.Add(Component->GetName());
-            Components.Add(MakeShared<FJsonValueObject>(ComponentJson(Component->GetName(), FString(), Component, Component->GetArchetype(), FString(), FString(), true)));
+            UActorComponent* Defaults = ParentNativeComponent(Blueprint->ParentClass, Component->GetFName());
+            if (Defaults == nullptr)
+            {
+                Defaults = Cast<UActorComponent>(Component->GetArchetype());
+            }
+            Components.Add(MakeShared<FJsonValueObject>(ComponentJson(Component->GetName(), FString(), Component, Defaults, FString(), FString(), true)));
         }
     }
     return Components;

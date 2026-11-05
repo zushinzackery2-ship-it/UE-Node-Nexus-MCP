@@ -5,11 +5,14 @@
 #include "Dom/JsonValue.h"
 
 class FProperty;
+class UClass;
 struct FAssetData;
 
 // Shared text-mirror (transcode) helpers exported for sibling plugins (Niagara bridge).
 namespace UeNodeNexusBridge::Transcode
 {
+UENODENEXUSBRIDGE_API bool IsProjectContentPackage(const FString& PackageName);
+
 struct FApplyFailure
 {
     int32 Index = INDEX_NONE;
@@ -68,6 +71,7 @@ UENODENEXUSBRIDGE_API TSharedPtr<FJsonObject> MakeRawEnvelope(UObject* Asset, co
 
 // --- reflection props ------------------------------------------------------
 UENODENEXUSBRIDGE_API bool IsEditableProperty(const FProperty* Property);
+UENODENEXUSBRIDGE_API bool IsDerivedProperty(const UClass* Class, const FProperty* Property);
 UENODENEXUSBRIDGE_API FString ExportPropertyValue(const UObject* Object, FProperty* Property);
 UENODENEXUSBRIDGE_API FString ExportFloat(float Value);
 UENODENEXUSBRIDGE_API FString ExportDouble(double Value);

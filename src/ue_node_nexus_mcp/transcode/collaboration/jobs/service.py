@@ -15,10 +15,11 @@ from ..history import History
 from .state import TERMINAL, active, update
 from ....diagnostics.contracts.observation import capture
 from ....diagnostics.contracts.notice import normalize
-from ....diagnostics.contracts.workflows import attach_report, stored_fields
+from ....diagnostics.contracts.workflows import attach_report, stored_fields, successful
 from ....diagnostics.contracts.response import DIAGNOSTIC_FIELDS
 from .queue_contract import submission_callable
 from .reconciliation import reconcile
+from .results import reconcile_result
 
 
 def submit(store, action, paths, options, runner, scope=None, on_submit=None):
@@ -84,25 +85,32 @@ def execute(store, identifier, runner):
         try:
             with active(store, identifier):
                 result = runner(record["operation"], record["paths"], record["options"])
-            status = "failed" if result.get("error_count") or result.get("status") in ("blocked", "partial", "conflict", "stale") else "succeeded"
         except (SyncError, InstanceError) as exc:
             status = "cancelled" if exc.code in ("sync_job_cancelled", "sync_job_deadline") else "failed"
             result = dict(status=status, error_count=1, error=dict(code=exc.code, message=str(exc), details=exc.details))
+            if status == "cancelled":
+                result["interruption"] = result["error"]
         except Exception as exc:
             status = "failed"
             result = dict(status=status, error_count=1, error=dict(code="sync_job_failed", message=str(exc)))
+        result = reconcile_result(store, identifier, result)
+        status = "cancelled" if result.get("interruption") else ("succeeded" if successful(result) else "failed")
         attach_report(result, record["operation"], observed.last, recorded=True)
     result_id = store.objects.put("sync_result", result)
-    update(store, identifier, status=status, result_id=result_id, finished_at=time.time(), **stored_fields(result))
-    store.event("sync_job_finished", job_id=identifier, status=status, result_id=result_id)
+    update(store, identifier, status="completing", result_status=status, result_id=result_id,
+           result_error=result.get("error"), completed_assets=result.get("completed_assets", []), **stored_fields(result))
     return dict(ok=status == "succeeded", data=result, error=result.get("error"))
 
 
 def finish_failed_task(store, identifier, task):
     try:
         record = store.record("sync_job", identifier)
-        if record["status"] not in TERMINAL:
-            update(store, identifier, status="failed", error=task.error, finished_at=time.time())
+        completion_failed = (task.error or {}).get("code") in ("task_completion_failed", "task_worker_failed")
+        status = "failed" if completion_failed else record.get("result_status", task.status)
+        store.event("sync_job_finished", job_id=identifier, status=status, result_id=record.get("result_id"))
+        error = task.error if completion_failed else (record.get("result_error") or task.error)
+        update(store, identifier, status=status, error=error, finished_at=time.time(),
+               **task.diagnostic_snapshot)
     finally:
         store.db.discard()
 
@@ -118,6 +126,11 @@ def observe(store, action, options):
     record = store.record("sync_job", identifier)
     if record is None:
         raise SyncError("job_not_found", identifier)
+    if action == "job_status" and options.get("wait_seconds", 0) and "after_revision" in options:
+        deadline = time.monotonic() + options["wait_seconds"]
+        while record["status"] not in TERMINAL and record["generation"] <= options["after_revision"] and time.monotonic() < deadline:
+            time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+            record = store.record("sync_job", identifier)
     record = reconcile(store, record)
     if record["status"] not in TERMINAL and not is_alive(record["owner"]):
         record = update(store, identifier, status="interrupted", stage="owner_exited", finished_at=time.time())
@@ -127,23 +140,28 @@ def observe(store, action, options):
             from ....tasks.queue import task_cancel
 
             task_cancel(record["task_id"])
-        record = store.record("sync_job", identifier)
+        record = reconcile(store, store.record("sync_job", identifier))
     if action == "job_result":
-        if not record.get("result_id"):
-            if record["status"] in TERMINAL:
-                return dict(report(record), error_count=1)
+        if record["status"] not in TERMINAL:
             raise SyncError("job_not_done", "job has no completed result", report(record))
+        if not record.get("result_id"):
+            result = reconcile_result(store, identifier, dict(report(record), job_status=record["status"], error_count=1))
+            return attach_report(result, record["operation"], recorded=True)
         result = dict(store.objects.data(record["result_id"], "sync_result"), job_id=identifier, job_status=record["status"])
+        if (record.get("error") or {}).get("code") in ("task_completion_failed", "task_worker_failed", "task_evidence_missing"):
+            result.update(status="failed", error_count=max(1, result.get("error_count", 0)), error=record["error"],
+                          **stored_fields(record))
         return attach_report(result, record["operation"], recorded=True)
     return report(record)
 
 
 def report(record):
     keys = ("workspace_id", "operation", "status", "submitted_at", "started_at", "finished_at", "source_commit",
-            "stage", "schema_progress", "updated_at", "current_asset", "completed_assets", "deadline_at", "cancel_requested", "error", *DIAGNOSTIC_FIELDS)
+            "stage", "schema_progress", "validation_progress", "updated_at", "current_asset", "planned_assets", "completed_assets", "deadline_at", "cancel_requested", "cancel_pending", "error", *DIAGNOSTIC_FIELDS)
     result = dict((key, record[key]) for key in keys if key in record)
-    result.update(action="job_status", job_id=record["id"], durable=True,
-                  next=dict(action="job_result" if record.get("result_id") else "job_status", options=dict(job_id=record["id"])))
+    result.update(action="job_status", job_id=record["id"], durable=True, revision=record["generation"],
+                  pending_refresh_assets=sorted(record.get("pending_refresh", {})),
+                  next=dict(action="job_result" if record["status"] in TERMINAL else "job_status", options=dict(job_id=record["id"])))
     if isinstance(result.get("runtime_diagnostics"), dict):
         result["runtime_diagnostics"] = normalize(result["runtime_diagnostics"], recorded=True)
     if record["status"] == "interrupted":

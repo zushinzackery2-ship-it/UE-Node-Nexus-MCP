@@ -9,6 +9,7 @@ import shutil
 from ...instances.errors import require
 from ...transcode.storage.io import digest
 from .snapshot import real_path
+from .progress import advance
 
 
 def overlay(snapshot: dict, baseline: dict) -> dict:
@@ -21,15 +22,17 @@ def overlay(snapshot: dict, baseline: dict) -> dict:
     rows = baseline.get("files", [])
     require(len(rows) <= 4096 * 5, "isolation_baseline_budget", "baseline exceeds the package file budget")
     seen = set()
-    for row in rows:
+    for index, row in enumerate(rows):
+        advance("baseline_overlay", files=index, total_files=len(rows))
         relative = Path(row["relative"])
-        require(not relative.is_absolute() and relative.parts[0] == "Content" and ".." not in relative.parts,
-                "isolation_path_rejected", "baseline files must remain inside copied Content")
+        require(not relative.is_absolute() and bool(relative.parts) and ".." not in relative.parts,
+                "isolation_path_rejected", "baseline files must remain inside the copied project")
         require(relative.as_posix() not in seen, "isolation_baseline_identity", "baseline has duplicate file targets")
         seen.add(relative.as_posix())
         original = Path(row["source"]).absolute()
         require(original == root / relative, "isolation_path_rejected", "baseline source differs from its owned target")
         destination = target / relative
+        require(destination.is_relative_to(target), "isolation_path_rejected", "baseline target escapes the copied project")
         for ancestor in (destination.parent, *destination.parent.parents):
             require(not ancestor.is_symlink(), "isolation_path_rejected",
                     "baseline target must not resolve through a linked directory", path=str(ancestor))

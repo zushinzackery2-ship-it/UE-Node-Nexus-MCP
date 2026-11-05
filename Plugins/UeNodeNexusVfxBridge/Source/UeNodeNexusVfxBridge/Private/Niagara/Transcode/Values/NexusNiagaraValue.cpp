@@ -1,4 +1,5 @@
 #include "NexusNiagaraValue.h"
+#include <cstdlib>
 
 #include "UeNodeNexusBridgeObjectHelpers.h"
 #include "Misc/DefaultValueHelper.h"
@@ -9,8 +10,16 @@ namespace UeNodeNexusBridge::VfxTranscode
 {
 static bool Number(const FString& Text, double& Out)
 {
-    const FString Trimmed = Text.TrimStartAndEnd();
-    return !Trimmed.IsEmpty() && FDefaultValueHelper::ParseDouble(Trimmed, Out) && FMath::IsFinite(Out);
+    FString Trimmed = Text.TrimStartAndEnd();
+    if (Trimmed.EndsWith(TEXT("f"), ESearchCase::IgnoreCase))
+    {
+        Trimmed.LeftChopInline(1);
+    }
+    const FTCHARToUTF8 Utf8(*Trimmed);
+    char* End = nullptr;
+    Out = std::strtod(Utf8.Get(), &End);
+    return End && End != Utf8.Get() && *End == 0 && FMath::IsFinite(Out)
+        && FDefaultValueHelper::IsStringValidFloat(Trimmed);
 }
 
 static bool Components(const FString& Text, int32 Count, bool bColor, double* Out)
@@ -60,7 +69,25 @@ bool ParseParameterValue(const FNiagaraTypeDefinition& Type, const FString& Text
 {
     const FString Trimmed = Text.TrimStartAndEnd();
     bool bOk = false;
-    if (Type == FNiagaraTypeDefinition::GetIntDef())
+    if (Type.IsEnum())
+    {
+        const UEnum* Enum = Type.GetEnum();
+        int32 Index = Enum->GetIndexByNameString(Trimmed);
+        if (Index == INDEX_NONE)
+        {
+            TCHAR* End = nullptr;
+            const int64 Numeric = FCString::Strtoi64(*Trimmed, &End, 10);
+            if (!Trimmed.IsEmpty() && End && *End == 0 && Numeric >= MIN_int32 && Numeric <= MAX_int32)
+            {
+                Index = Enum->GetIndexByValue(Numeric);
+            }
+        }
+        bOk = Index != INDEX_NONE && !Enum->GetNameStringByIndex(Index).EndsWith(TEXT("_MAX"));
+        const int64 Value = bOk ? Enum->GetValueByIndex(Index) : 0;
+        bOk = bOk && Value >= MIN_int32 && Value <= MAX_int32;
+        Out.Integer = bOk ? static_cast<int32>(Value) : 0;
+    }
+    else if (Type == FNiagaraTypeDefinition::GetIntDef())
     {
         TCHAR* End = nullptr;
         const int64 Value = FCString::Strtoi64(*Trimmed, &End, 10);

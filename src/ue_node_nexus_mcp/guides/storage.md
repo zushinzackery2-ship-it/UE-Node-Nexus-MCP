@@ -14,6 +14,7 @@ ensure、checkout 返回的位置为准；顶层 `Content_Transcoded` 可能是�
 | `Saved/Nexus/SafetyBaseline` | 隔离验证导出的相关包内存状态，保留主编辑器未保存修改 | 消费结束后归档到工程 `.del/SafetyBaseline` |
 | `Saved/Nexus/Runtime` | 项目管理器状态、实例身份、仓库绑定、工具及可选验证根 | 运行中的管理器和工具保留 |
 | `Saved/Nexus/Runtime/Validation` | 独立编辑器使用的完整工程副本及结果 | 确认退出后将 Project 移至验证根 `.del` |
+| 隔离项目的 `Saved/Nexus/ValidationPublication/<project>/.nexus/collaboration` | 经 `Store` 初始化的协作数据库、持久项目身份和原生发布回执 | 随隔离副本保留及归档 |
 | `Saved/Nexus/Jobs` | 后台请求、结果及阶段信息 | 查询和排查使用相应任务回执 |
 | `Saved/Nexus/Logs` | 原生阶段日志和错误证据 | 日志遵循各记录器的轮转预算 |
 | `Saved/Nexus/PluginBackups` | 旧安装器保存的完整插件备份 | 依据安装回执归档，保留回滚版本 |
@@ -51,3 +52,21 @@ schema 目录重复出现。旧发布流程还会将整个索引写入 `indexes/
 
 `.del` 是供用户手动删除的归档区。移动只整理路径，实际释放空间发生在删除
 归档内容时。整理回执、正式历史及处于恢复状态的事务应保留在原目录。
+
+## 资产闭包删除与重定向
+
+退役一组相互引用的资产时，使用一次 `asset_delete_batch(asset_paths=[...])`。
+`dry_run=true` 返回引用和删除顺序；执行时先装载整批，再统一删除。循环引用
+成员保持请求顺序，批内引用被允许。`allow_referenced` 仅控制批外引用者；默认
+为 false。任一新装载包缺失导出，整批以 `asset_load_incomplete` 拒绝。
+
+`data.diff.assets_deleted[0]` 记录 `order`、`loads`、`incomplete_packages`、
+`packages_on_disk`、`residual_packages` 和 `loaded_external_referencers`。
+默认 `cleanup_after_delete=true` 在删除后统一卸载和 GC；`memory_released`
+报告这些包是否全部退出内存。后续编译和 PIE 的结果需要独立验证。
+
+`asset_redirectors_fixup` 按包收集 Blueprint、GeneratedClass、CDO 及地图
+重定向，并在保存前审计全部引用者。`dry_run` 也执行装载审计。任一引用者缺失
+导出便返回 `referencer_load_incomplete`，保留原文件；成功路径保存引用者、复扫
+引用关系，再统一删除重定向。`data.diff.redirectors_fixed[0]` 包含 `package_loads`、
+`incomplete_referencers`、`saved_packages`、`remaining_referencers` 和 `deleted_packages`。

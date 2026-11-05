@@ -9,6 +9,7 @@ from ..sync.project import BridgeCall, ProjectContext, call_ok, ensure_root_regi
 from ..errors import SyncError
 from .paths import identity, storage
 from .state import SceneRecord
+from .identifiers import canonical_scene
 
 
 def selector(item: SceneRecord, *snapshots: dict[str, Any] | None, rebind: bool = False) -> dict[str, Any]:
@@ -24,7 +25,7 @@ def validate_snapshot(raw: dict[str, Any] | None, item: SceneRecord) -> dict[str
         raise SyncError("scene_export_invalid", f"unreadable scene snapshot: {item.key}")
     if identity(raw.get("map_path", ""), raw.get("name", "")) != item.key or not raw.get("revision"):
         raise SyncError("scene_export_invalid", f"unexpected scene snapshot: {item.key}")
-    return raw
+    return canonical_scene(raw)
 
 
 def export_scene(bridge: BridgeCall, context: ProjectContext, item: SceneRecord,

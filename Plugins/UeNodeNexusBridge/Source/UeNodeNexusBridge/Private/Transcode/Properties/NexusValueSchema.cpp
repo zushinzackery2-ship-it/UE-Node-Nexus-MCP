@@ -27,6 +27,10 @@ TSharedPtr<FJsonObject> StructValueSchema(UScriptStruct* Struct)
         for (int32 Index = 0; Index < It->ArrayDim; ++Index)
         {
             auto Field = ValueSchema(*It);
+            if (!It->ShouldPort(PPF_None))
+            {
+                Field->SetBoolField(TEXT("text_importable"), false);
+            }
             FString Text;
             It->ExportTextItem_Direct(Text, It->ContainerPtrToValuePtr<void>(Defaults.GetStructMemory(), Index), nullptr, nullptr, PPF_None);
             if (!It->HasMetaData(TEXT("IgnoreForMemberInitializationTest")))

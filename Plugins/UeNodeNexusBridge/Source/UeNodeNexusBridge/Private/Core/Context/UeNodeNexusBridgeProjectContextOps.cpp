@@ -6,6 +6,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Transcode/UeNodeNexusBridgeTranscode.h"
 #include "UeNodeNexusBridgeJson.h"
 
 namespace UeNodeNexusBridge
@@ -91,6 +92,20 @@ TSharedPtr<FJsonObject> HandleProjectContextGet(const FString& Operation, const 
     Data->SetStringField(TEXT("executable_path"), ExecutablePath);
     Data->SetStringField(TEXT("command_line"), FCommandLine::Get());
     Data->SetObjectField(TEXT("mounts"), Mounts);
+    TArray<TSharedPtr<FJsonValue>> ContentMounts;
+    for (const FString& Root : Transcode::ProjectContentRoots())
+    {
+        FString Directory;
+        if (!FPackageName::TryConvertLongPackageNameToFilename(Root, Directory))
+        {
+            continue;
+        }
+        auto Row = MakeShared<FJsonObject>();
+        Row->SetStringField(TEXT("root"), Root);
+        Row->SetStringField(TEXT("directory"), AbsolutePath(Directory));
+        ContentMounts.Add(MakeShared<FJsonValueObject>(Row));
+    }
+    Data->SetArrayField(TEXT("content_mounts"), ContentMounts);
     Data->SetObjectField(TEXT("checks"), Checks);
 
     TSharedPtr<FJsonObject> Response = MakeEnvelope(Operation, RequestId, true);

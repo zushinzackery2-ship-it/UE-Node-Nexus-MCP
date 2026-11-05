@@ -87,8 +87,11 @@ static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle
         TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
         Json->SetStringField(TEXT("name"), Name);
         Json->SetStringField(TEXT("type"), FriendlyTypeName(Variable.GetType()));
-        const FString DefaultText = ModuleInputDefaultText(Variable, Pair.Value);
-        Json->SetStringField(TEXT("default"), DefaultText);
+        const FString DefaultText = ModuleInputDefaultText(Variable, Pair.Value, CalledGraph);
+        if (!DefaultText.IsEmpty())
+        {
+            Json->SetStringField(TEXT("default"), DefaultText);
+        }
         Json->SetBoolField(TEXT("static"), bStatic);
         const FNiagaraParameterHandle Aliased = FNiagaraParameterHandle::CreateAliasedModuleParameterHandle(FNiagaraParameterHandle(Variable.GetName()), Module);
         UEdGraphPin* Override = FindModuleOverridePin(*Module, Aliased.GetParameterHandleString());
@@ -136,6 +139,13 @@ static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle
             else
             {
                 bDynamic = true;
+                const FString Converted = NativeConversionParameter(*Override, Variable.GetType());
+                auto* Conversion = Cast<UNiagaraNodeFunctionCall>(Source);
+                if (!Converted.IsEmpty() && Conversion)
+                {
+                    Json->SetStringField(TEXT("converted"), Converted);
+                    Json->SetStringField(TEXT("conversion_script"), Conversion->FunctionScript->GetPathName());
+                }
             }
         }
         if (Linked.IsEmpty())

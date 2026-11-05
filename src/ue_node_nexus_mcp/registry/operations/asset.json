@@ -41,6 +41,16 @@
       "summary": "Delete one Unreal asset."
     },
     {
+      "name": "asset_delete_batch",
+      "kind": "write",
+      "group": "asset",
+      "risk": "high",
+      "hidden": false,
+      "local": false,
+      "default_response": "delta",
+      "summary": "Delete an audited asset set as one transaction, loading every member before any deletion."
+    },
+    {
       "name": "asset_move",
       "kind": "write",
       "group": "asset",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...blueprint.classes import node_identity
+from ...blueprint.classes import node_identity, node_name
 from ...text.model import Document
 from ...raw.simple import DERIVED_PARAMETER_ARRAYS, INSTANCE_TYPES
 from ...errors import SyncError
@@ -12,9 +12,11 @@ from .contracts import same_contract
 from .blueprint import declaration_default, positional_values, signature, signature_contracts
 from ...blueprint.input_values import input_metadata
 from .identity import Identities
+from .niagara import KINDS as NIAGARA_KINDS, value_type as niagara_value_type
 from .links import encode_links
 from ...text.semantic import field_values, value
 from ...material.custom_inputs import normalize_args
+from ...material import pins as material_pins
 
 # Sections whose declarations carry a property block instead of named arguments.
 PROPERTY_SECTIONS = ("components", "actors", "instances", "renderers")
@@ -56,6 +58,8 @@ def property_metadata(metadata: dict, schema, family: str, class_name: str) -> t
 
 
 def family_for(kind: str, section: str) -> str:
+    if kind in NIAGARA_KINDS and section == "stack":
+        return "niagara_modules"
     if section in ("components", "actors"):
         return "component" if section == "components" else "asset"
     if kind in ("material", "material_function"):
@@ -143,8 +147,16 @@ def encode_section(section, scope: str, context: Encoding) -> dict:
     for decl in section.decls():
         if decl.id in aliases:
             raise SyncError("duplicate_id", decl.id, dict(entity=decl.id, line=decl.line))
+        if context.kind in NIAGARA_KINDS and section.name == "user":
+            decl.type_name = niagara_value_type(decl.type_name)
         family = "" if decl.modifier == "local" else family_for(context.kind, section.name)
         identifier, metadata = identities.entity(scope, decl, family, context.schema)
+        if context.kind in ("material", "material_function") and material_pins.is_function_call(decl):
+            ports = material_pins.function_pins(decl, context.schema)
+            if ports is not None:
+                # Bind the same interface used by slot normalization so later
+                # text reconstruction can name outputs without a live schema.
+                metadata.update(inputs=ports[0], outputs=ports[1])
         aliases[decl.id] = identifier
         try:
             entities[identifier] = entity_state(decl, section.name, metadata, before.get("entities", dict()).get(identifier, dict()),
@@ -186,6 +198,8 @@ def entity_state(decl, section: str, metadata: dict, old: dict, context: Encodin
     family = "" if decl.modifier == "local" else family_for(context.kind, section)
     previous = old if same_contract(decl, old, family, context.schema, metadata) else dict()
     types, defaults = property_metadata(metadata, context.schema, family, decl.type_name)
+    if context.kind in NIAGARA_KINDS and section == "stack":
+        types = dict((name, niagara_value_type(contract)) for name, contract in types.items())
     class_name = node_identity(decl.type_name, context.schema) if family == "k2node" else decl.type_name
     # A declaration's named arguments and property block are different
     # namespaces. Defaults belong to the one used by its adapter.
@@ -200,6 +214,11 @@ def entity_state(decl, section: str, metadata: dict, old: dict, context: Encodin
                   default=declaration_default(decl, context.kind, section, class_name),
                   position=list(decl.pos) if decl.pos else old.get("position"),
                   flags=dict.fromkeys(decl.flags, True), annotations=dict(decl.annotations), modifier=decl.modifier)
+    if family == "k2node" and node_name(decl.type_name) == "InputKey" and decl.positional():
+        # The positional key and the reflected InputKey property are one
+        # contract; raw exports carry both, text may carry only the key.
+        if "InputKey" not in keyed and "prop:InputKey" not in keyed:
+            entity["args"]["InputKey"] = value(decl.positional()[0], types.get("InputKey", "FKey"), "explicit")
     if decl.opaque:
         entity["opaque"] = metadata.get("t3d", previous.get("opaque", ""))
     return entity

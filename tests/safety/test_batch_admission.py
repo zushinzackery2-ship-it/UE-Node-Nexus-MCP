@@ -95,6 +95,42 @@ def test_batch_failure_is_attributed_without_restarting_workers(monkeypatch):
     assert all(row["code"] == "safety_worker_exit_failed" for row in result)
 
 
+def test_batch_failure_is_attributed_to_one_asset_and_blocks_dependents(monkeypatch):
+    bridge, context, workspace, entries, observation, _, _, _, _ = batch_fixture(monkeypatch)
+    first, second = [asset for asset, _ in entries]
+    third = "/Game/Independent.Independent"
+    independent = dict(asset=third, kind="niagara_system", empty=False, dependencies=[],
+                       payload=dict(asset_path=third, kind="niagara_system", plan=[dict(op="ns_module_add")]))
+    batch = dict(order=[first, second, third], units=dict(entries + [(third, independent)]), errors={})
+
+    def reject(*args):
+        raise SyncError("apply_result_mismatch", "readback differs",
+                        dict(asset=first, recover=dict(action="recover", options=dict(apply_id="worker")),
+                             batch_admission=dict(validation_id="worker")))
+
+    monkeypatch.setattr(gate, "admit_batch", reject)
+    units.collect_batch(bridge, context, workspace, "candidate", observation, batch, dict(isolation="always"))
+    assert batch["errors"][first]["details"]["asset"] == first
+    assert batch["errors"][second]["code"] == "dependency_failed"
+    assert third not in batch["errors"]
+
+
+def test_batch_admission_replaces_worker_recover_with_validation_context(monkeypatch):
+    bridge, context, workspace, entries, observation, _, _, _, _ = batch_fixture(monkeypatch)
+
+    def reject(*args):
+        raise SyncError("apply_result_mismatch", "readback differs",
+                        dict(asset=entries[0][0], recover=dict(action="recover", options=dict(apply_id="worker"))))
+
+    monkeypatch.setattr(gate, "actual_snapshot", reject)
+    with pytest.raises(SyncError) as raised:
+        gate.admit_batch(bridge, context, workspace, entries, "candidate", observation, {})
+    details = raised.value.details
+    assert "recover" not in details
+    assert details["batch_admission"]["worker_apply_id"] == "worker-0"
+    assert details["batch_admission"]["validation_id"] == "worker"
+
+
 def test_cached_binding_distinguishes_internal_and_external_revision_changes(monkeypatch):
     bridge, context, workspace, entries, observation, capabilities, _, _, _ = batch_fixture(monkeypatch)
     first, second = [asset for asset, _ in entries]

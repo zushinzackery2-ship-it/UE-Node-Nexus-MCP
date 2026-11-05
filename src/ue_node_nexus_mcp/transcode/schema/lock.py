@@ -39,6 +39,7 @@ class SchemaLock:
         self.directory = directory
         self.key = key
         self.used: dict[tuple[str, str], str] = dict()
+        self.project_content_roots: frozenset[str] | None = None
         self.records: dict[str, dict] = dict()
         self._manifest: dict = dict()
         self._manifest_stamp = None
@@ -103,6 +104,12 @@ class SchemaLock:
         from .catalog import lookup_record
 
         return lookup_record(self, "niagara_modules", name)
+
+    def macro(self, reference: str) -> dict[str, Any] | None:
+        """The macro record ``Owner.Macro`` names, by short owner or full library path."""
+        from .catalog import lookup_record
+
+        return lookup_record(self, "macros", reference)
 
     def function(self, owner: str, name: str) -> dict[str, Any] | None:
         from .functions import resolve

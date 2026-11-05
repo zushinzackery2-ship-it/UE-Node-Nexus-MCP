@@ -3,9 +3,11 @@
 #include "Interfaces/IPluginManager.h"
 #include "Misc/EngineVersion.h"
 #include "Misc/Paths.h"
+#include "Misc/PackageName.h"
 #include "Transcode/Commit/NexusPackageFiles.h"
 #include "Dom/JsonObject.h"
 #include "NexusValidation.h"
+#include "UeNodeNexusBridgeTranscode.h"
 
 namespace UeNodeNexusBridge::Safety
 {
@@ -41,6 +43,27 @@ TSharedPtr<FJsonObject> Environment()
         Values.Add(MakeShared<FJsonValueString>(Mount));
     }
     Result->SetArrayField(TEXT("content_mounts"), Values);
+    auto ProjectMounts = MakeShared<FJsonObject>();
+    const FString Project = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
+    for (FString Root : Transcode::ProjectContentRoots())
+    {
+        FString Directory;
+        if (!FPackageName::TryConvertLongPackageNameToFilename(Root, Directory))
+        {
+            continue;
+        }
+        Directory = FPaths::ConvertRelativePathToFull(Directory);
+        if (!FPaths::MakePathRelativeTo(Directory, *Project))
+        {
+            continue;
+        }
+        FPaths::NormalizeDirectoryName(Directory);
+        Root.RemoveFromStart(TEXT("/"));
+        Root.RemoveFromEnd(TEXT("/"));
+        // Relative targets bind the source and copied project's real registrations.
+        ProjectMounts->SetStringField(Root, Directory);
+    }
+    Result->SetObjectField(TEXT("project_content_mounts"), ProjectMounts);
     return Result;
 }
 }

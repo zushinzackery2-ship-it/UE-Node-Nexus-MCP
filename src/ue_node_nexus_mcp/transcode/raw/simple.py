@@ -16,6 +16,7 @@ from typing import Any
 
 from ..text.model import Document, Prop, Section
 from .common import header_from_raw, props_section, require_kind
+from ..material.instance import parameter_scope
 
 INSTANCE_SECTIONS = ("scalar", "vector", "texture", "switch", "component_mask", "runtime_virtual_texture", "sparse_volume_texture", "font")
 # The structured sections above are the authority for instance parameters; these
@@ -40,10 +41,12 @@ def material_instance_document(raw: dict[str, Any], schema=None) -> Document:
         items = instance.get(name) or []
         if not items:
             continue
-        section = Section(name=name)
+        sections = {}
         for item in items:
+            scope = parameter_scope(item.get("association", "global"), item.get("index", -1))
+            section = sections.setdefault(scope, Section(name=name, args=scope))
             section.entries.append(Prop(key=str(item.get("name", "")), value=str(item.get("value", "")), type_name=item.get("type")))
-        document.sections.append(section)
+        document.sections.extend(sections.values())
     return document
 
 

@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 from ...material.calls import changed_calls
-from ...material.interfaces import publish_observed
+from ..semantic.interfaces import publish_observed
 from ...errors import SyncError
 from . import refresh, transactions
 from .ordering import prerequisites
-from ..jobs.state import checkpoint
+from ..jobs.state import STOP_CODES, checkpoint
+from ...progress import atomic
 
 
 def run_units(bridge, context, workspace, source: str, candidate: str, fixed: dict, observation: dict,
               batch: dict, options: dict) -> list[dict]:
     rows, interfaces, completed = [], set(), set()
     order = batch["order"]
+    checkpoint(stage="batch_admission", planned_assets=order)
     receipts = collect_batch(bridge, context, workspace, candidate, observation, batch, options)
     rows.extend(dict(asset=asset, action="failed", **batch["errors"][asset])
                 for asset in order if asset in batch["errors"] and batch["errors"][asset].get("batch_admission"))
+    if rows and options.get("stop_on_error", True):
+        return rows
     for position, asset in enumerate(order):
         if asset in batch["errors"]:
             continue
@@ -27,12 +31,16 @@ def run_units(bridge, context, workspace, source: str, candidate: str, fixed: di
             continue
         # Units still to come: those calling a function this one changes rebuild the calls themselves.
         ahead = set(later for later in order[position + 1:] if later not in batch["errors"])
-        checkpoint(stage="apply", asset=asset)
         try:
+            checkpoint(stage="apply", asset=asset)
             rows.extend(run_unit(bridge, context, workspace, asset, source, candidate, fixed, observation, batch, options, interfaces, ahead, receipts, completed))
             completed.add(asset)
             checkpoint(stage="asset_completed", asset=asset, completed=True)
         except (SyncError, OSError) as exc:
+            rows.extend(getattr(exc, "details", {}).pop("completed_rows", []))
+            if getattr(exc, "code", None) in STOP_CODES:
+                batch["interruption"] = dict(code=exc.code, message=str(exc), details=exc.details)
+                break
             detail = dict(code=exc.code if isinstance(exc, SyncError) else "publication_io_failed", message=str(exc), details=getattr(exc, "details", dict()))
             detail.update((key, detail["details"][key]) for key in ("function", "functions") if key in detail["details"])
             detail["asset"] = asset
@@ -90,10 +98,27 @@ def collect_batch(bridge, context, workspace, candidate: str, observation: dict,
     try:
         receipts = admit_batch(bridge, context, workspace, entries, batch.get("candidate", candidate), observation, options)
     except SyncError as error:
-        for asset, _ in entries:
-            batch["errors"][asset] = dict(code=error.code, message=str(error), details=error.details,
-                                          batch_admission=True)
-        return dict()
+        if error.code in STOP_CODES:
+            raise
+        details = dict(error.details)
+        failures = getattr(error, "failures", {details.get("asset"): dict(code=error.code, message=str(error), details=details)})
+        attributed = set(failures) & set(planned)
+        for asset in attributed:
+            batch["errors"][asset] = dict(failures[asset], batch_admission=True)
+        for asset in batch["order"]:
+            blocked = prerequisites(batch["units"][asset]) & batch["errors"].keys()
+            if asset not in batch["errors"] and blocked:
+                batch["errors"][asset] = dict(code="dependency_failed",
+                                              message="a required asset failed in the isolated batch",
+                                              assets=sorted(blocked), batch_admission=True)
+        if not attributed:
+            context = details.get("batch_admission")
+            context = dict(batch_admission=context) if isinstance(context, dict) else dict()
+            for asset, _ in entries:
+                if asset not in batch["errors"]:
+                    batch["errors"][asset] = dict(code=error.code, message=str(error), details=context,
+                                                  batch_admission=True)
+        return {asset: receipt for asset, receipt in getattr(error, "receipts", {}).items() if asset not in batch["errors"]}
     return receipts
 
 
@@ -149,25 +174,33 @@ def run_unit(bridge, context, workspace, asset: str, source: str, candidate: str
         if safety is None:
             # Publication proceeds without the isolated proof; keep the reason visible.
             risks = reasons(item)
+    checkpoint(stage="main_apply", asset=asset)
     record = transactions.request(workspace, item, source, batch.get("candidate", candidate), observation["commit"], observation, options)
     if safety is not None:
         record["safety_validation"] = safety
         transactions.save(workspace, record)
-    transactions.execute(bridge, workspace, record)
-    published = publish_verified(bridge, context, workspace, record)
-    transactions.adopt(observation, record, published, workspace.history)
+    with atomic():
+        transactions.execute(bridge, workspace, record)
+        published = publish_verified(bridge, context, workspace, record)
+        transactions.adopt(observation, record, published, workspace.history)
     rows = [dict(asset=asset, action="pushed", apply_id=record["id"], commit_id=published,
                  **(dict(deleted=True) if item["payload"].get("delete_asset") or item["payload"].get("delete_scene") else dict()),
                  **(dict(safety_validation=safety) if safety is not None else dict()),
                  **(dict(risk_unvalidated=risks) if risks else dict()), **refreshed)]
-    if item.get("interface_changed"):
-        snapshot_id = workspace.history.entries(published).get(asset)
-        if snapshot_id:
-            publish_observed(workspace.schema, workspace.store.objects.data(snapshot_id, "snapshot"))
-        interfaces.add(asset)
-        for failure in refresh.callers(bridge, context, workspace, asset, source, observation, batch, options, ahead):
-            batch["errors"][failure["asset"]] = failure
-            rows.append(dict(failure, action="failed"))
+    checkpoint(stage="asset_committed", asset=asset, completed=True)
+    try:
+        checkpoint(stage="post_apply", asset=asset)
+        if item.get("interface_changed"):
+            snapshot_id = workspace.history.entries(published).get(asset)
+            if snapshot_id:
+                publish_observed(workspace.schema, workspace.store.objects.data(snapshot_id, "snapshot"))
+            interfaces.add(asset)
+            for failure in refresh.callers(bridge, context, workspace, asset, source, observation, batch, options, ahead):
+                batch["errors"][failure["asset"]] = failure
+                rows.append(dict(failure, action="failed"))
+    except SyncError as error:
+        error.details["completed_rows"] = rows
+        raise
     return rows
 
 

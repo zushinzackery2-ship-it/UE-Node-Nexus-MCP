@@ -6,10 +6,13 @@ from ..errors import DiagnosticSink, SyncError
 from .blueprint import lint_blueprint
 from .lookup import AMBIGUOUS, lookup
 from .material import lint_material_graph
+from .instance import lint_instance
 from .niagara import lint_niagara
 from ..text.model import Bare, Decl, Document, Link, Prop, Section
 from ..raw.simple import INSTANCE_SECTIONS
+from ..material.instance import parameter_identity
 from ..schema.lock import SchemaLock
+from ..storage.paths import asset_relative
 
 KIND_CLASS = {
     "material": ("Material",),
@@ -55,6 +58,8 @@ def lint_document(document: Document, kind: str, schema: SchemaLock | None, file
         lint_material_graph(document, kind, schema, sink)
     elif kind == "blueprint":
         lint_blueprint(document, schema, sink)
+    elif kind == "material_instance":
+        lint_instance(document, sink)
     elif kind in ("niagara_system", "niagara_emitter"):
         lint_niagara(document, kind, schema, sink)
     elif kind == "asset" and schema is not None:
@@ -66,8 +71,8 @@ def _lint_header(document: Document, kind: str, sink: DiagnosticSink, current_ke
     header = document.header
     if header.nexus != 1:
         sink.error("unsupported_format_version", f"nexus format version {header.nexus} is not supported", line=1)
-    if not header.asset.startswith("/Game/"):
-        sink.error("invalid_asset", f"asset must be a /Game package path, got {header.asset!r}", line=2)
+    if asset_relative(header.asset) is None:
+        sink.error("invalid_asset", f"asset must be a valid project content package path, got {header.asset!r}", line=2)
     if not header.cls:
         sink.error("missing_class", "class header is required", line=3)
     expected = KIND_CLASS.get(kind)
@@ -88,6 +93,11 @@ def _lint_structure(document: Document, kind: str, sink: DiagnosticSink) -> None
         if identity in seen:
             sink.error("duplicate_section", f"duplicate section {section.header()}", line=section.line)
         seen.add(identity)
+        if kind == "material_instance" and section.name in INSTANCE_SECTIONS:
+            try:
+                parameter_identity(section.args)
+            except SyncError as exc:
+                sink.error(exc.code, str(exc), line=section.line)
         _lint_section_entries(section, kind, sink)
 
 

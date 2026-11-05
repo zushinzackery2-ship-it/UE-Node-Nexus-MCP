@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...lint.service import lint_document
-from ...material.interfaces import snapshots
 from ...material.interfaces import documents
 from ...text.parser import parse
 from ...storage.paths import display_path, iter_text_files, parse_text_path
 from ...sync.files import read_text
-from ...errors import SyncError
+from ...errors import Diagnostic, SyncError
 from ..semantic.decode import to_document
+from ..semantic.interfaces import snapshots
 from .files import capture_files
 
 
@@ -29,7 +29,16 @@ def lint(workspace, paths, delete=False) -> dict:
     reported again; an unregistered missing file still raises ``local-deleted``
     unless ``delete`` reads it as one more registered deletion.
     """
-    entries, files, selected = capture_files(workspace, paths, delete)
+    try:
+        entries, files, selected = capture_files(workspace, paths, delete)
+    except SyncError as error:
+        # Scene structure is validated while its aliases are captured; lint
+        # reports that failure instead of turning the whole selection into a
+        # transport error. Other collection failures keep their original code.
+        if not error.code.startswith(("invalid_scene", "unknown_scene", "duplicate_scene")):
+            raise
+        diagnostic = Diagnostic("error", error.code, str(error), error.details.get("file"), error.details.get("line"))
+        return report([], [diagnostic], action="lint")
     present = [asset for asset in selected if asset in entries]
     candidates = [workspace.store.objects.data(entries[asset], "snapshot") for asset in present]
     with snapshots(candidates):

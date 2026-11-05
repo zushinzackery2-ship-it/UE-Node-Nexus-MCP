@@ -53,6 +53,12 @@ bool FNexusNiagaraStaticInput::RunTest(const FString& Parameters)
     TestEqual(TEXT("native static default is false"), ModuleInputDefaultText(Variable, Metadata), FString(TEXT("false")));
     FInputBindingContext Bindings;
     bool bChanged = false;
+    AddExpectedError(TEXT("static_input_link_unsupported"), EAutomationExpectedErrorFlags::Contains, 1);
+    TestFalse(TEXT("compile-time switch rejects runtime handles during dry-run"),
+        ApplyNativeInput(*System, Emitter, *Module, TEXT("UseLoopCountLimit"), TEXT("Engine.DeltaTime"),
+            TEXT("ns_module_input_link"), true, Bindings, bChanged, Error));
+    TestEqual(TEXT("static binding rejection"), Error.Code, FString(TEXT("static_input_link_unsupported")));
+    TestFalse(TEXT("rejected static link never changes input"), bChanged);
     if (!TestTrue(TEXT("static local write uses native stack"),
         ApplyNativeInput(*System, Emitter, *Module, TEXT("UseLoopCountLimit"), TEXT("true"),
             TEXT("ns_module_input_set"), false, Bindings, bChanged, Error)))

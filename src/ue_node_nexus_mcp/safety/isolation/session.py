@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 import time
 
@@ -13,9 +14,12 @@ from ...instances.session.binding import EditorSession
 from ...instances.session.shutdown import close_instance
 from ..capture.status import status as capture_status
 from .builds import module_binary
+from .close import drain_released_scopes, save_dirty_packages
+from .progress import advance
 
 
 TRANSIENT_CLOSE_BLOCKERS = frozenset(("editor_busy", "compiling", "saving"))
+LOG = logging.getLogger(__name__)
 
 
 def expected_builds(project: Path, engine: Path) -> dict:
@@ -63,8 +67,20 @@ def normal_exit(manager, instance_id: str, deadline: float) -> dict:
         try:
             return close_instance(manager, dict(instance_id=instance_id, dry_run=False))
         except InstanceError as error:
-            if error.code != "close_blocked" or not transient_close_blocker(error.details.get("instance")):
+            observed = error.details.get("instance", dict())
+            # Native close supplies fresh editor blockers but the manager may
+            # still carry transport counts from the preceding save response.
+            if error.code != "close_blocked" or not transient_close_blocker(dict(observed, pending=0, inflight=0)):
                 raise
+            current = manager.status(dict(instance_id=instance_id, fresh=True))
+            if current.get("state") == "EXITED":
+                return dict(exit_confirmed=True, exit_code=current.get("exit_code"), instance=current)
+            blockers = sorted(set(observed.get("blockers") or ()) | set(current.get("blockers") or ()))
+            if not transient_close_blocker(dict(current, blockers=blockers)):
+                raise
+            LOG.info("event=isolation_close_resampled instance=%s cached_inflight=%s inflight=%s compiling=%s saving=%s",
+                     instance_id, observed.get("inflight", 0), current.get("inflight", 0),
+                     current.get("compiling", False), current.get("saving", False))
             require(time.monotonic() < deadline, "isolation_cleanup_failed",
                     "validation copy kept a transient close blocker past the deadline",
                     blockers=error.details.get("instance", dict()).get("blockers"))
@@ -79,6 +95,7 @@ class ValidationSession:
         self.bridge = UeBridgeClient(BridgeConfig(timeout_seconds=timeout), instances=self.manager)
         self.expected = expected_builds(project, engine)
         self.requests = root / "requests.jsonl"
+        self.content_mounts = {"/Game": str(project.parent / "Content")}
 
     def call(self, operation: str, payload: dict) -> dict:
         from ...runtime import call_bridge
@@ -88,13 +105,31 @@ class ValidationSession:
         return response
 
     def start(self) -> dict:
+        from ...instances.session import startup
+
         launch = self.manager.ensure(dict(project_path=str(self.project), engine_path=str(self.engine),
-                                          mode="reuse_or_start", rhi=self.rhi, dry_run=False, wait_seconds=self.timeout,
+                                          mode="reuse_or_start", rhi=self.rhi, dry_run=False, wait_seconds=0,
                                           allow_low_memory=self.allow_low_memory))
+        def poll(identifier):
+            row = self.manager.status(dict(instance_id=identifier, fresh=True))
+            advance("startup", instance_id=identifier, state=row.get("state"), startup_progress=row.get("startup_progress"))
+            return row
+
+        launch["instance"], launch["startup"] = startup.hold(poll, launch["instance"], self.timeout)
         require(launch["startup"]["outcome"] == "ready", "isolation_startup_failed", "validation editor did not become ready", startup=launch["startup"])
+        # Closing releases the lease before saving dirty copied packages. Pin
+        # reacquisition to this worker instead of applying the interactive default.
+        self.manager.select(instance_id=launch["instance"]["instance_id"])
         context = self.call("project_context_get", dict())
         require(context.get("ok") and Path(context["data"]["project_file_path"]).resolve() == self.project.resolve(),
                 "isolation_wrong_project", "worker answered for a different project")
+        project_root = self.project.parent.resolve()
+        for row in context["data"].get("content_mounts", []):
+            if not isinstance(row, dict) or not row.get("root") or not row.get("directory"):
+                continue
+            directory = Path(str(row["directory"])).resolve()
+            if directory.is_relative_to(project_root):
+                self.content_mounts[str(row["root"])] = str(directory)
         capabilities = self.call("bridge_capabilities_get", dict())
         require(capabilities.get("ok"), "isolation_identity_mismatch", "worker capabilities were unavailable", response=capabilities)
         builds = capabilities["data"]["build"]
@@ -118,6 +153,9 @@ class ValidationSession:
     def execute(self, item: dict) -> dict:
         if item["operation"] in ("transcode_apply", "vfx_transcode_apply"):
             from .publication import execute
+            return execute(self, item)
+        if item["operation"] == "scene_apply":
+            from .scene import execute
             return execute(self, item)
         response = self.call(item["operation"], item["payload"])
         if response.get("ok") and item["operation"] == "runtime_smoke_start":
@@ -144,36 +182,42 @@ class ValidationSession:
             state = self.manager.status(dict(fresh=True))
             if state["state"] == "EXITED":
                 return dict(exit_confirmed=True, exit_code=state.get("exit_code"), instance=state)
-            for package in state.get("dirty_packages", []):
-                require(package.startswith("/Game/"), "isolation_shared_package_dirty",
-                        "a shared engine/plugin package became dirty; it will not be saved", package=package)
-                saved = self.call("asset_save", dict(asset_path=package))
-                require(saved.get("ok"), "isolation_cleanup_failed", "could not save the copied package before closing", response=saved)
-            self.manager.release()
             deadline = time.monotonic() + max(90, self.timeout)
+            drain_released_scopes(self.manager, deadline)
+            pending = dict(instance=state, blockers=["instance_dirty"]) if state.get("dirty_packages") else None
             while True:
-                preview = close_instance(self.manager, dict(instance_id=state["instance_id"], dry_run=True))
+                preview = pending if pending is not None else close_instance(
+                    self.manager, dict(instance_id=state["instance_id"], dry_run=True))
+                pending = None
                 blockers = set(preview.get("blockers", []))
                 if "instance_dirty" in blockers:
-                    for package in preview.get("instance", dict()).get("dirty_packages", []):
-                        require(package.startswith("/Game/"), "isolation_shared_package_dirty",
-                                "a shared package will not be saved during validation cleanup", package=package)
-                        saved = self.call("asset_save", dict(asset_path=package))
-                        require(saved.get("ok"), "isolation_cleanup_failed", "could not save the copied package", response=saved)
+                    packages = preview.get("instance", dict()).get("dirty_packages", [])
+                    require(bool(packages), "isolation_cleanup_failed", "dirty close state omitted the copied packages", response=preview)
+                    save_dirty_packages(self, packages, deadline)
                     self.manager.release()
                     require(time.monotonic() < deadline, "isolation_cleanup_failed", "copied packages remained dirty")
-                    time.sleep(0.25)
-                    continue
+                    # Saving has an authoritative native receipt. Recheck at
+                    # native close instead of resaving an older preview list.
+                    blockers.remove("instance_dirty")
                 users = preview.get("instance", dict()).get("users", [])
                 if "instance_in_use" in blockers and all(user.get("client_session_id") == self.manager.broker.session_id for user in users):
                     blockers.remove("instance_in_use")
-                if not blockers:
-                    break
-                require(blockers <= set(("recovery_quarantine", "work_in_progress", "editor_busy"))
-                        and time.monotonic() < deadline, "isolation_cleanup_failed",
-                        "validation copy could not finish its close prerequisites", blockers=sorted(blockers), instance=preview.get("instance"))
-                time.sleep(0.25)
-            return normal_exit(self.manager, state["instance_id"], deadline)
+                if blockers:
+                    require(blockers <= set(("recovery_quarantine", "work_in_progress", "editor_busy"))
+                            and time.monotonic() < deadline, "isolation_cleanup_failed",
+                            "validation copy could not finish its close prerequisites", blockers=sorted(blockers), instance=preview.get("instance"))
+                    time.sleep(0.25)
+                    continue
+                drain_released_scopes(self.manager, deadline)
+                try:
+                    return normal_exit(self.manager, state["instance_id"], deadline)
+                except InstanceError as error:
+                    observed = error.details.get("instance", dict())
+                    if error.code != "close_blocked" or "instance_dirty" not in observed.get("blockers", []):
+                        raise
+                    # Native close samples after the manager's preview. Feed its
+                    # newer dirty list into the same save path before rechecking.
+                    pending = dict(instance=observed, blockers=observed["blockers"])
         except Exception as error:
             # Failed/stalled validation is cancelled, never resumed in uncertain state.
             # The copied project, inputs, receipts and logs remain available.

@@ -5,6 +5,7 @@ import logging
 import os
 
 from ...instances.errors import require
+from .progress import advance
 
 LOG = logging.getLogger(__name__)
 
@@ -24,7 +25,10 @@ def apply_layout(layout, source, target):
 
     records, linked = [], set()
     copied_files, copied_bytes, linked_files = 0, 0, 0
-    for row in layout["rows"]:
+    for directory in layout["directories"]:
+        (target / directory).mkdir(parents=True, exist_ok=True)
+    for index, row in enumerate(layout["rows"]):
+        advance("copy", files=index, total_files=len(layout["rows"]), copied_files=copied_files, copied_bytes=copied_bytes)
         path, key = row["source"], row["path"]
         real_path(path)
         before = path.stat()
@@ -44,6 +48,7 @@ def apply_layout(layout, source, target):
             checksum = hashlib.sha256()
             with path.open("rb") as reader, destination.open("xb") as writer:
                 while chunk := reader.read(1024 * 1024):
+                    advance("copy", file=key, copied_bytes=copied_bytes + destination.stat().st_size)
                     writer.write(chunk)
                     checksum.update(chunk)
             after = path.stat()
@@ -54,5 +59,6 @@ def apply_layout(layout, source, target):
             copied_files += 1
             copied_bytes += before.st_size
         records.append(record)
+    advance("copy", force=True, files=len(records), copied_files=copied_files, copied_bytes=copied_bytes)
     return dict(files=records, bytes=copied_bytes, copied_files=copied_files,
                 linked_files=linked_files, linked_directories=len(linked))

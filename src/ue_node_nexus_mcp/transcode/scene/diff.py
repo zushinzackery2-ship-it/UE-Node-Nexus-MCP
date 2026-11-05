@@ -7,6 +7,7 @@ from typing import Any
 from ..errors import SyncError
 from ..text.semantic import values_equal
 from .validation import hierarchy
+from .identifiers import canonical_scene
 
 
 def _index(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -96,6 +97,7 @@ def _component_ops(actor: str, old_actor: dict[str, Any], new_actor: dict[str, A
 
 
 def build_plan(current: dict[str, Any], desired: dict[str, Any], selector: dict[str, Any], allow_delete: bool, rebind: bool = False) -> dict[str, Any]:
+    current, desired = canonical_scene(current), canonical_scene(desired)
     before = _index(current.get("actors", []))
     after = _index(desired["actors"])
     creates, updates, components, deletes = [], [], [], []

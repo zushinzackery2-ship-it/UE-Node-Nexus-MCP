@@ -3,6 +3,7 @@
 #include "Transcode/Blueprint/UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "Blueprint/NexusBlueprintVariableType.h"
 #include "Blueprint/Components/NexusNativeComponentTemplates.h"
+#include "Blueprint/Components/NexusInheritedComponentTemplates.h"
 
 #include "Components/ActorComponent.h"
 #include "Components/SceneComponent.h"
@@ -111,6 +112,16 @@ bool AttachComponentNode(UBlueprint* Blueprint, USCS_Node* Node, const FString& 
         Node->ParentComponentOwnerClassName = NAME_None;
         Scs->AddNode(Node);
     }
+    else if (USCS_Node* Inherited = FindInheritedComponentNode(Blueprint, FName(*Parent)))
+    {
+        if (!Inherited->ComponentClass || !Inherited->ComponentClass->IsChildOf(USceneComponent::StaticClass()))
+        {
+            OutError = FString::Printf(TEXT("inherited parent is not a scene component: %s"), *Parent);
+            return false;
+        }
+        Scs->AddNode(Node);
+        Node->SetParent(Inherited);
+    }
     else
     {
         const auto* Native = Cast<USceneComponent>(FindNativeComponentTemplate(Blueprint, FName(*Parent)));
@@ -120,9 +131,7 @@ bool AttachComponentNode(UBlueprint* Blueprint, USCS_Node* Node, const FString& 
             return false;
         }
         Scs->AddNode(Node);
-        Node->bIsParentComponentNative = true;
-        Node->ParentComponentOrVariableName = Native->GetFName();
-        Node->ParentComponentOwnerClassName = Blueprint->ParentClass ? Blueprint->ParentClass->GetFName() : NAME_None;
+        Node->SetParent(Native);
     }
     Node->AttachToName = Socket.IsEmpty() ? NAME_None : FName(*Socket);
     return true;
@@ -187,11 +196,11 @@ bool ApplyComponentVerb(UBlueprint* Blueprint, const FString& Verb, const TShare
 {
     if (Verb == TEXT("bp_component_bind"))
     {
-        auto* Template = FindNativeComponentTemplate(Blueprint, FName(*ReadOpString(Op, TEXT("name"))));
+        auto* Template = ResolveInheritedComponentTemplate(Blueprint, FName(*ReadOpString(Op, TEXT("name"))));
         UClass* Class = ResolveClassByNameOrPath(ReadOpString(Op, TEXT("class")));
         if (!Template || !Class || !Template->IsA(Class))
         {
-            OutError = TEXT("inherited component declaration does not match the parent CDO: ") + ReadOpString(Op, TEXT("name"));
+            OutError = TEXT("inherited component declaration does not match a native or ancestor SCS template: ") + ReadOpString(Op, TEXT("name"));
             return false;
         }
         return true;
@@ -211,13 +220,32 @@ bool ApplyComponentVerb(UBlueprint* Blueprint, const FString& Verb, const TShare
             OutError = FString::Printf(TEXT("component class not found: %s"), *ReadOpString(Op, TEXT("class")));
             return false;
         }
-        USCS_Node* Node = Scs->CreateNode(Class, FName(*Name));
+        const FName RequestedName(*Name);
+        USCS_Node* DefaultRoot = Scs->GetDefaultSceneRootNode();
+        if (DefaultRoot && DefaultRoot->GetVariableName() == RequestedName)
+        {
+            if (Class == USceneComponent::StaticClass() && Scs->GetRootNodes().Contains(DefaultRoot)
+                && ReadOpString(Op, TEXT("parent")).IsEmpty() && ReadOpString(Op, TEXT("socket")).IsEmpty())
+            {
+                // SCS reserves this name even before the author declares it.
+                // Reuse the implicit root instead of creating DefaultSceneRoot1.
+                return true;
+            }
+            OutError = TEXT("DefaultSceneRoot names the implicit scene root; use a distinct component name");
+            return false;
+        }
+        if (RequestedName.IsNone() || Scs->GenerateNewComponentName(Class, RequestedName) != RequestedName)
+        {
+            OutError = TEXT("component name is empty or already in use: ") + Name;
+            return false;
+        }
+        USCS_Node* Node = Scs->CreateNode(Class, RequestedName);
         return AttachComponentNode(Blueprint, Node, ReadOpString(Op, TEXT("parent")), ReadOpString(Op, TEXT("socket")), OutError);
     }
     USCS_Node* Node = FindComponentNode(Blueprint, Verb == TEXT("bp_component_rename") ? ReadOpString(Op, TEXT("old")) : Name);
     if (Node == nullptr && Verb == TEXT("bp_component_set_prop"))
     {
-        if (UActorComponent* Template = FindNativeComponentTemplate(Blueprint, FName(*Name)))
+        if (UActorComponent* Template = ResolveInheritedComponentTemplate(Blueprint, FName(*Name), true))
         {
             return ImportPropertyValue(Template, ReadOpString(Op, TEXT("prop")), ReadOpString(Op, TEXT("value")), OutError);
         }

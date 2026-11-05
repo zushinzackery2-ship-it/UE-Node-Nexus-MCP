@@ -101,7 +101,7 @@ def restore(workspace, revision: str, paths=None, destination="files", entity: s
             candidate["semantic_hash"] = digest(candidate["semantic"])
             desired = candidate
         current[asset] = workspace.snapshot(desired)
-    from ...material.interfaces import tree as interface_tree
+    from ..semantic.interfaces import tree as interface_tree
 
     with interface_tree(store, current):
         for asset in selected:

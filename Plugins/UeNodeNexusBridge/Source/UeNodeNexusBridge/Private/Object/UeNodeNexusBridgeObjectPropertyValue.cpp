@@ -1,6 +1,7 @@
 #include "UeNodeNexusBridgeObjectHelpers.h"
 #include "UeNodeNexusBridgeObjectPropertyJsonValidation.h"
 #include "UeNodeNexusPropertyValue.h"
+#include "Text/NexusPropertyTextImport.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -224,12 +225,7 @@ bool ConvertPropertyJsonValue(UObject* Object, FProperty* Property, void* Storag
     {
         return false;
     }
-    if (Property->ImportText_Direct(*OutValueText, Storage, Object, PPF_None) == nullptr)
-    {
-        OutError = TEXT("property_import_failed");
-        return false;
-    }
-    return true;
+    return ImportCompletePropertyText(Property, Storage, Object, OutValueText, OutError);
 }
 
 bool ApplyPropertyJsonValue(UObject* Object, FProperty* Property, const TSharedPtr<FJsonValue>& Value, FString& OutValueText, FString& OutError)

@@ -138,14 +138,23 @@ TSharedPtr<FJsonObject> BuildMaterialFunctionRaw(UMaterialFunction* Function)
     return Raw;
 }
 
+static TSharedPtr<FJsonObject> ParameterIdentity(const FMaterialParameterInfo& Info)
+{
+    auto Row = MakeShared<FJsonObject>();
+    Row->SetStringField(TEXT("name"), Info.Name.ToString());
+    Row->SetStringField(TEXT("association"), Info.Association == GlobalParameter ? TEXT("global")
+        : Info.Association == LayerParameter ? TEXT("layer") : TEXT("blend"));
+    Row->SetNumberField(TEXT("index"), Info.Index);
+    return Row;
+}
+
 template <typename TParameterValue>
 static TArray<TSharedPtr<FJsonValue>> ParameterRows(const TArray<TParameterValue>& Values, const TCHAR* TypeName, TFunctionRef<FString(const TParameterValue&)> ValueText)
 {
     TArray<TSharedPtr<FJsonValue>> Rows;
     for (const TParameterValue& Value : Values)
     {
-        TSharedPtr<FJsonObject> Row = MakeShared<FJsonObject>();
-        Row->SetStringField(TEXT("name"), Value.ParameterInfo.Name.ToString());
+        TSharedPtr<FJsonObject> Row = ParameterIdentity(Value.ParameterInfo);
         Row->SetStringField(TEXT("type"), TypeName);
         Row->SetStringField(TEXT("value"), ValueText(Value));
         Rows.Add(MakeShared<FJsonValueObject>(Row));
@@ -190,8 +199,7 @@ TSharedPtr<FJsonObject> BuildMaterialInstanceRaw(UMaterialInstanceConstant* Inst
         {
             continue;
         }
-        TSharedPtr<FJsonObject> Row = MakeShared<FJsonObject>();
-        Row->SetStringField(TEXT("name"), Switch.ParameterInfo.Name.ToString());
+        TSharedPtr<FJsonObject> Row = ParameterIdentity(Switch.ParameterInfo);
         Row->SetStringField(TEXT("type"), TEXT("bool"));
         Row->SetStringField(TEXT("value"), Switch.Value ? TEXT("True") : TEXT("False"));
         Switches.Add(MakeShared<FJsonValueObject>(Row));
@@ -202,8 +210,7 @@ TSharedPtr<FJsonObject> BuildMaterialInstanceRaw(UMaterialInstanceConstant* Inst
         {
             continue;
         }
-        TSharedPtr<FJsonObject> Row = MakeShared<FJsonObject>();
-        Row->SetStringField(TEXT("name"), Mask.ParameterInfo.Name.ToString());
+        TSharedPtr<FJsonObject> Row = ParameterIdentity(Mask.ParameterInfo);
         Row->SetStringField(TEXT("type"), TEXT("FStaticComponentMask"));
         Row->SetStringField(TEXT("value"), FString::Printf(TEXT("(R=%s,G=%s,B=%s,A=%s)"), Mask.R ? TEXT("True") : TEXT("False"), Mask.G ? TEXT("True") : TEXT("False"), Mask.B ? TEXT("True") : TEXT("False"), Mask.A ? TEXT("True") : TEXT("False")));
         Masks.Add(MakeShared<FJsonValueObject>(Row));

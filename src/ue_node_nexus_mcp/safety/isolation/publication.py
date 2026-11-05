@@ -9,19 +9,28 @@ from uuid import uuid4
 
 from ...instances.errors import require
 from ...transcode.storage.paths import object_path
-from ...instances.identity.paths import project_identity
+from ...transcode.collaboration.store.repository import Store
 
 
-def execute(session, item: dict) -> dict:
-    identifier = uuid4().hex
+def bind_repository(session) -> tuple[Path, Path]:
     root = session.project.parent / "Saved/Nexus/ValidationPublication"
     root.mkdir(parents=True, exist_ok=True)
     repository = root / session.project.stem / ".nexus/collaboration"
     repository.mkdir(parents=True, exist_ok=True)
-    identity = project_identity(session.project)
-    bound = session.call("transcode_root_set", dict(root=str(root), collaboration_root=str(repository), project_id=identity["project_key"]))
+    # Broker calls validate UE's persisted binding, including the database and
+    # project file. A directory alone is not a collaboration repository.
+    store = Store(repository, str(session.project))
+    project_id = store.project_id
+    store.db.discard()
+    bound = session.call("transcode_root_set", dict(root=str(root), collaboration_root=str(repository), project_id=project_id))
     require(bound.get("ok") and bound.get("data", dict()).get("collaboration_version") == 1,
             "isolation_protocol_mismatch", "worker could not bind its publication repository", response=bound)
+    return root, repository
+
+
+def execute(session, item: dict) -> dict:
+    identifier = uuid4().hex
+    root, repository = bind_repository(session)
     payload = deepcopy(item["payload"])
     asset = payload["asset_path"]
     kind = payload.get("kind", "niagara_system" if item["operation"] == "vfx_transcode_apply" else "material")

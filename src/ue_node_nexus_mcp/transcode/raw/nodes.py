@@ -158,7 +158,10 @@ def node_decl(identifier: str, node: dict[str, Any], schema=None) -> Decl:
         pin_names = set(meta["pin_names"])
         prop_names = set(meta["prop_types"])
         args.extend(pin_default_params(pins, prop_names))
+        input_key = str(config.get("input_key", ""))
         for key, value in non_default_params(node.get("props")):
+            if class_short == "InputKey" and key in ("InputKey", "prop:InputKey") and value == input_key:
+                continue
             args.append((f"prop:{key}" if key in pin_names else key, value))
         decl.args = args
     if str(node.get("enabled", "true")).lower() == "false" or node.get("enabled") is False:

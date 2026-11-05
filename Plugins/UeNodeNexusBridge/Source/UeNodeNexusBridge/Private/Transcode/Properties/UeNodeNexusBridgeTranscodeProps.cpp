@@ -19,6 +19,19 @@ bool IsEditableProperty(const FProperty* Property)
         && !Property->HasMetaData(TEXT("DeprecatedProperty"));
 }
 
+bool IsDerivedProperty(const UClass* Class, const FProperty* Property)
+{
+    // CineCamera derives its horizontal FOV from focal length and filmback;
+    // writing FieldOfView alone is discarded by the editor. The source
+    // properties stay writable and are read back instead.
+    if (Class == nullptr || Property == nullptr || Property->GetFName() != TEXT("FieldOfView"))
+    {
+        return false;
+    }
+    return Class->FindPropertyByName(TEXT("CurrentFocalLength")) != nullptr
+        && Class->FindPropertyByName(TEXT("Filmback")) != nullptr;
+}
+
 static UEnum* PropertyEnum(FProperty* Property)
 {
     if (FEnumProperty* EnumProperty = CastField<FEnumProperty>(Property))
@@ -120,7 +133,7 @@ TArray<TSharedPtr<FJsonValue>> ExportEditableProps(UObject* Object, UObject* Def
         {
             continue;
         }
-        if (IsGeneratedNodeProperty(Object->GetClass(), Property))
+        if (IsGeneratedNodeProperty(Object->GetClass(), Property) || IsDerivedProperty(Object->GetClass(), Property))
         {
             continue;
         }
@@ -159,6 +172,12 @@ bool ImportPropertyValue(UObject* Object, const FString& Name, const FString& Va
     if (!IsEditableProperty(Property))
     {
         OutError = FString::Printf(TEXT("%s.%s is reflected but not editable (EditConst, Deprecated or no CPF_Edit)"),
+            *Object->GetClass()->GetName(), *Name);
+        return false;
+    }
+    if (IsDerivedProperty(Object->GetClass(), Property))
+    {
+        OutError = FString::Printf(TEXT("%s.%s is derived; edit CurrentFocalLength or Filmback instead"),
             *Object->GetClass()->GetName(), *Name);
         return false;
     }
@@ -249,7 +268,7 @@ TSharedPtr<FJsonObject> PropertySchemaJson(FProperty* Property, UObject* Cdo)
     {
         Json->SetStringField(TEXT("struct_type"), StructProperty->Struct ? StructProperty->Struct->GetPathName() : FString());
     }
-    AddPropertyMetadata(Property, Json);
+    AddPropertyMetadata(Property, Json, Cdo != nullptr ? Cdo->GetClass() : Property->GetOwnerClass());
     return Json;
 }
 }

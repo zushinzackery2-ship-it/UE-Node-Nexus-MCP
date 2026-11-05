@@ -8,18 +8,39 @@
 #include "RenderingThread.h"
 #include "UObject/UnrealType.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNexusNiagaraCompilation, Log, All);
+
 namespace UeNodeNexusBridge::NiagaraCompilation
 {
+bool Request(UNiagaraSystem* System)
+{
+    check(IsInGameThread());
+    const bool bSuperseded = System->HasActiveCompilations();
+    // A superseded request can still prepare shared rapid-iteration parameters
+    // while polling, invalidating the compile IDs captured by the new request.
+    System->KillAllActiveCompilations();
+    const bool bRequested = System->RequestCompile(true);
+    UE_LOG(LogNexusNiagaraCompilation, Log, TEXT("event=request asset=%s superseded=%d requested=%d active=%d"),
+        *System->GetPathName(), bSuperseded, bRequested, System->HasActiveCompilations());
+    return bRequested;
+}
+
 bool Wait(UNiagaraSystem* System)
 {
     check(IsInGameThread());
+    const double Started = FPlatformTime::Seconds();
     // UE collects GPU scripts before integrating CPU results. Integrate first,
     // then dispatch the newly produced GPU queue and wait for its shader maps.
     System->WaitForCompilationComplete(false, false);
     INiagaraModule::Get().ProcessShaderCompilationQueue();
     System->WaitForCompilationComplete(true, false);
     FlushRenderingCommands();
-    return System->IsReadyToRun();
+    const bool bReady = System->IsReadyToRun();
+    UE_LOG(LogNexusNiagaraCompilation, Log, TEXT("event=complete asset=%s ready=%d pending=%d spawn=%d update=%d seconds=%.6f"),
+        *System->GetPathName(), bReady, System->HasOutstandingCompilationRequests(true),
+        static_cast<int32>(System->GetSystemSpawnScript()->GetLastCompileStatus()),
+        static_cast<int32>(System->GetSystemUpdateScript()->GetLastCompileStatus()), FPlatformTime::Seconds() - Started);
+    return bReady;
 }
 
 TArray<TSharedPtr<FJsonValue>> Diagnostics(UNiagaraSystem* System)

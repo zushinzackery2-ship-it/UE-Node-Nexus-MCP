@@ -18,7 +18,7 @@ from ..text.semantic import values_equal
 
 def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, schema: SchemaLock | None = None) -> None:
     plan.ids = existing_node_ids(base, plan.ids)
-    diff_prop_section(local.section("asset"), base.section("asset") if base else None, plan, "set_asset_prop", schema=schema)
+    _diff_asset_properties(local.section("asset"), base.section("asset") if base else None, plan, schema, base is not None)
     _diff_variables(local.section("variables"), base.section("variables") if base else None, plan)
     _diff_components(local.section("components"), base.section("components") if base else None, plan, schema)
     diff_prop_section(local.section("defaults"), base.section("defaults") if base else None, plan, "bp_default_set")
@@ -26,6 +26,24 @@ def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, sche
     _diff_graphs(local, base, plan, schema)
     declarations_first(plan)
     plan.interface_changed = interface_changed(plan)
+
+
+def _diff_asset_properties(local, base, plan, schema, existing):
+    start = len(plan.verbs)
+    diff_prop_section(local, base, plan, "set_asset_prop", schema=schema)
+    if not existing:
+        return
+    before = base.prop_map() if base else {}
+    for verb in list(plan.verbs[start:]):
+        field = verb.args.get("name")
+        if field not in ("ParentClass", "BlueprintType"):
+            continue
+        plan.verbs.remove(verb)
+        prior = before.get(field)
+        if prior is not None and field == "ParentClass" and same_class(schema, "asset", prior.value, verb.args["value"]):
+            continue
+        route = "reparent in the editor" if field == "ParentClass" else "create a Blueprint with the desired type"
+        plan.error("unsupported_edit", f"{field} is fixed for an existing Blueprint; {route}", verb.line)
 
 
 def _variable_payload(decl: Decl) -> dict[str, object]:
@@ -103,6 +121,10 @@ def _diff_components(local: Section | None, base: Section | None, plan: AssetPla
                 continue
             # The class the catalog resolved, so the editor does not look the name up again.
             component_class = class_path(schema, "component", decl.type_name) or decl.type_name
+            if name == "DefaultSceneRoot" and (component_class not in ("SceneComponent", "/Script/Engine.SceneComponent")
+                                               or keyed.get("parent") or keyed.get("socket")):
+                plan.error("unsupported_edit", "DefaultSceneRoot names the implicit SceneComponent root; use a distinct name for another component", decl.line)
+                continue
             plan.add("bp_component_add", line=decl.line, name=name, **{"class": component_class}, parent=keyed.get("parent", ""), socket=keyed.get("socket", ""))
             for key, value in decl.prop_values().items():
                 plan.add("bp_component_set_prop", line=decl.line, name=name, prop=key, value=value)

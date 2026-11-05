@@ -2,7 +2,7 @@
 
 from contextlib import contextmanager
 
-from ...material.interfaces import snapshots
+from ..semantic.interfaces import snapshots
 from ...storage.paths import object_path
 
 

@@ -1,10 +1,11 @@
-"""User input links must produce executable typed verbs, preserving stack identity."""
+"""Namespace input links produce typed verbs and preserve native stack identity."""
 
 import pytest
 
 from ue_node_nexus_mcp.transcode.diff.niagara import diff_niagara
 from ue_node_nexus_mcp.transcode.diff.plan import AssetPlan
 from ue_node_nexus_mcp.transcode.text.parser import parse
+from ue_node_nexus_mcp.transcode.raw.niagara import input_value_text
 
 
 ASSET = "/Game/Weather/NS_Rain"
@@ -73,12 +74,51 @@ def test_user_handle_is_forwarded_without_parsing_as_a_float(parameter):
     assert "value" not in result.verbs[0].args
 
 
-@pytest.mark.parametrize("marker", ["@dynamic", "@link(Emitter.Rate)", "@link(Particles.Rate)",
+@pytest.mark.parametrize("marker", ["@dynamic", "@link(Position)", "@link(Particles..Position)",
                                     "@link(User.)", "@link(User.Rain..Rate)", "@link(User.Rain.)"])
 def test_new_unsupported_or_malformed_marker_never_becomes_a_constant(marker):
     result = plan(document(marker), document())
     assert result.has_errors
     assert not result.verbs
+
+
+@pytest.mark.parametrize("parameter", ["Emitter.Rate", "Particles.Position", "Particles.Velocity",
+                                      "Output.SampleVectorField.SampledVector", "Engine.DeltaTime", "System.Age"])
+def test_native_namespace_link_is_forwarded_for_stack_type_validation(parameter):
+    result = plan(document(f"@link({parameter})"), document())
+    assert not result.has_errors, result.summary()
+    assert [verb.op for verb in result.verbs] == ["ns_module_input_link"]
+    assert result.verbs[0].args["parameter"] == parameter
+
+
+def test_explicit_native_conversion_is_distinct_from_a_direct_link():
+    result = plan(document("@convert(Particles.Position)"), document())
+    assert not result.has_errors, result.summary()
+    assert [verb.op for verb in result.verbs] == ["ns_module_input_convert"]
+    assert result.verbs[0].args["parameter"] == "Particles.Position"
+
+
+def test_conversion_readback_preserves_the_authored_native_cast():
+    raw = dict(converted="Particles.Position", conversion_script=
+               "/Niagara/DynamicInputs/Transforms/ConvertPositionToVector.ConvertPositionToVector",
+               linked=None, dynamic=True, has_override=True, value="")
+    assert input_value_text(raw) == "@convert(Particles.Position)"
+
+
+def test_weather_sampling_adds_the_writer_before_linking_the_consumer():
+    prefix = f"nexus: 1\nasset: {ASSET}\nclass: NiagaraSystem\nschema: test\n[stack Rain/ParticleUpdate]\n"
+    before, before_sink = parse(prefix)
+    after, after_sink = parse(prefix +
+        "sample : /Niagara/VectorFields/SampleVectorField.SampleVectorField(SamplePoint=@link(Particles.Position))\n" +
+        "force : /Niagara/VectorFields/ApplyVectorField.ApplyVectorField(Vector Field Vector=@link(Output.SampleVectorField.SampledVector))\n")
+    assert not before_sink.has_errors and not after_sink.has_errors
+    result = plan(after, before)
+    assert not result.has_errors, result.summary()
+    assert [(verb.op, verb.args["id"]) for verb in result.verbs] == [
+        ("ns_module_add", "sample"), ("ns_module_input_link", "sample"),
+        ("ns_module_add", "force"), ("ns_module_input_link", "force")]
+    assert [verb.args["parameter"] for verb in result.verbs if verb.op == "ns_module_input_link"] == [
+        "Particles.Position", "Output.SampleVectorField.SampledVector"]
 
 
 @pytest.mark.parametrize("marker", ["@dynamic", "@link(Emitter.Rate)"])

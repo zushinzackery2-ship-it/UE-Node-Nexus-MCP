@@ -1,6 +1,9 @@
 """Scene lint, history, native receipt adoption and saved recovery use one public workflow."""
 
 from pathlib import Path
+from copy import deepcopy
+import json
+import re
 
 import pytest
 
@@ -55,6 +58,23 @@ def test_scene_publication_save_readback_and_history_restore(project):
     assert reverted["status"] == "published", reverted
     assert ue.scene.scene_actors[ACTOR]["label"] == "Owner"
     assert len(ue.applied) == 2
+
+
+def test_scene_receipt_matches_the_native_plan_enrichment(project, monkeypatch):
+    ue, _, _ = project
+    original = ue.op_scene_apply
+
+    def native(payload):
+        request = deepcopy(payload)
+        plan = json.loads(Path(request["plan_file"]).read_text(encoding="utf-8"))
+        request.update(scene_plan=plan, selector=dict(plan["selector"], map_path=plan["map_path"]),
+            kind="scene", asset_path=plan["map_path"])
+        return original(request)
+
+    monkeypatch.setattr(ue, "op_scene_apply", native)
+    edit(project, "NativePlan")
+    run(project, "commit", all=True, message="native scene plan")
+    assert run(project, "push")["status"] == "published"
 
 
 def test_scene_save_failure_keeps_candidate_and_retries(project):
@@ -137,3 +157,33 @@ def test_created_actor_accepts_its_native_components_and_is_stable(project):
     assert run(project, "push")["status"] == "published"
     assert set(ue.scene.scene_actors) == identifiers
     assert len(ue.applied) == 1
+
+
+@pytest.mark.parametrize("kind", ["actor", "component", "instance"])
+def test_native_guid_case_preserves_authored_entities_and_repeat_publication(project, monkeypatch, kind):
+    ue, _, workspace = project
+    write = ue.scene._write
+
+    def native_write(path, raw):
+        native = json.loads(re.sub(r"\b[0-9a-f]{32}\b", lambda match: match.group().upper(), json.dumps(raw)))
+        write(path, native)
+
+    monkeypatch.setattr(ue.scene, "_write", native_write)
+    path = Path(workspace["file_paths"][ASSET])
+    document, sink = parse(path.read_text(encoding="utf-8"))
+    assert not sink.has_errors
+    owner = document.section("actors").decls()[0].id
+    if kind == "actor":
+        document.section("actors").entries.append(Decl("new_actor", "/Script/Engine.Actor",
+            props=[("Label", '"DisplayedTitle"')]))
+    elif kind == "component":
+        document.section("components", owner).entries.append(Decl("extra", "/Script/Engine.StaticMeshComponent"))
+    else:
+        section = next(row for row in document.sections if row.name == "instances")
+        section.entries.append(Decl("extra", "Instance", props=[("CustomData", "(7,8)")]))
+    path.write_text(emit(document), encoding="utf-8")
+    run(project, "commit", all=True, message="native GUID formatting")
+    assert run(project, "push")["status"] == "published"
+    applied = len(ue.applied)
+    assert run(project, "push")["status"] == "published"
+    assert len(ue.applied) == applied

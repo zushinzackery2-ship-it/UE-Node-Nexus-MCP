@@ -1,6 +1,7 @@
 """Engine upgrades preserve both plugin versions until all writes verify."""
 
 from pathlib import Path
+import json
 
 import pytest
 
@@ -15,6 +16,7 @@ def staged_install(tmp_path, monkeypatch):
     executable = engine / "Engine/Binaries/Win64/UnrealEditor.exe"
     executable.parent.mkdir(parents=True)
     executable.touch()
+    (executable.parent / "UnrealEditor.modules").write_text(json.dumps(dict(BuildId="target-engine")))
     for name in PLUGINS:
         for parent, marker in ((host / "Plugins", "new"), (engine / "Engine/Plugins/Editor", "old")):
             plugin = parent / name
@@ -22,6 +24,8 @@ def staged_install(tmp_path, monkeypatch):
             (plugin / "Source/marker").write_text(marker)
             (plugin / f"{name}.uplugin").write_text(marker)
             (plugin / "BuildIdentity.json").write_text(marker)
+            (plugin / "Binaries/Win64").mkdir(parents=True)
+            (plugin / "Binaries/Win64/UnrealEditor.modules").write_text(json.dumps(dict(BuildId="target-engine")))
     monkeypatch.setattr(install_engine, "ROOT", tmp_path)
     monkeypatch.setattr(install_engine, "require_editor_closed", lambda: None)
     monkeypatch.setattr(install_engine, "verify_plugin", lambda source, built: None)
@@ -52,6 +56,15 @@ def test_bad_second_plugin_leaves_engine_unchanged(staged_install, monkeypatch):
     assert not (engine / "Engine/Plugins/Marketplace").exists()
     for name in PLUGINS:
         assert (engine / "Engine/Plugins/Editor" / name / "Source/marker").read_text() == "old"
+
+
+def test_wrong_engine_build_rejected_before_installation(staged_install):
+    host, engine = staged_install
+    manifest = host / "Plugins" / PLUGINS[1] / "Binaries/Win64/UnrealEditor.modules"
+    manifest.write_text(json.dumps(dict(BuildId="previous-engine")))
+    with pytest.raises(RuntimeError, match="BuildId"):
+        install_engine.install(host, engine)
+    assert not (engine / "Engine/Plugins/Marketplace").exists()
 
 
 def test_failed_promotion_restores_all_original_plugins(staged_install, monkeypatch):

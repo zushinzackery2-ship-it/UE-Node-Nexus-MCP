@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from ...diff.service import build_plan
-from ...material.interfaces import tree as interface_tree
+from ..semantic.interfaces import tree as interface_tree
 from ...scene.diff import build_plan as scene_plan
 from ...scene.model import from_document as scene_model
 from ...sync.dependencies import document_dependencies

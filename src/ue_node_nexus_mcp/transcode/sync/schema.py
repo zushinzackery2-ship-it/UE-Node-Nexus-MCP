@@ -60,7 +60,8 @@ def _collect(bridge, context, staging, progress) -> SchemaLock:
     environment = dict(core.get("environment", dict()), project_file=context.project_file,
                        engine_version=context.engine_version, schema_key=key)
     functions = EVENT_INDEX if core.get("function_index") == "callable_and_events" else CALLABLE_INDEX
-    coverage = dict(core="registered_types", blueprint_pins=CONTEXT_REQUIRED, functions=functions)
+    coverage = dict(core="registered_types", blueprint_pins=CONTEXT_REQUIRED, functions=functions,
+                    macros="loaded_macro_libraries")
     if core.get("delegate_index") == "multicast_delegates":
         coverage["delegates"] = "registered_multicast_delegate_index"
     try:
@@ -76,6 +77,7 @@ def _collect(bridge, context, staging, progress) -> SchemaLock:
     migrate(target, key, staging, environment, coverage)
     context.schema_key = key
     context.schema = SchemaLock(target, key)
+    context.schema.project_content_roots = context.project_content_roots
     return context.schema
 
 

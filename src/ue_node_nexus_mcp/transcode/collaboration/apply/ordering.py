@@ -14,6 +14,23 @@ def prerequisites(item):
     return set(item["dependencies"]) | set(item.get("sources", ())) | set(item.get("deletion_prerequisites", ()))
 
 
+def scene_sources(documents, schema=None):
+    """Same-batch assets a scene reads while spawning and constructing actors.
+
+    A scene's actor class, components and property references are read from the
+    batch candidate, not from the editor's old memory; they therefore constrain
+    creation order even when the editor already holds the asset.
+    """
+    result = dict()
+    for asset, (kind, document) in documents.items():
+        if kind != "scene":
+            continue
+        dependencies = document_dependencies(document, kind, schema) & set(documents)
+        if dependencies:
+            result[asset] = dependencies
+    return result
+
+
 def execution_order(workspace, units, current, documents, selected):
     decoded = dict()
 
@@ -44,6 +61,8 @@ def execution_order(workspace, units, current, documents, selected):
     # referenced before they are republished in full. Content edges stay.
     available = set(current) - set(asset for asset, item in units.items() if item.get("interface_changed"))
     content = dict((asset, set(item["sources"])) for asset, item in units.items() if item.get("sources"))
+    for asset, dependencies in scene_sources(documents, workspace.schema).items():
+        content.setdefault(asset, set()).update(dependencies)
     ordered = order_assets(documents, available, workspace.schema, content)
     ordered.extend(asset for asset in units if asset not in documents and asset not in deleted)
     # Every deleted object is present now, but its live references still constrain

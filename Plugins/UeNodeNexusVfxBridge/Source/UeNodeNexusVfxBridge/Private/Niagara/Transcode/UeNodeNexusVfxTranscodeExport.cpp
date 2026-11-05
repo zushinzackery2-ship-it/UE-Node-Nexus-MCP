@@ -158,7 +158,8 @@ TSharedPtr<FJsonObject> EmitterJson(FNiagaraEmitterHandle* Handle, UNiagaraEmitt
             continue;
         }
         TSharedPtr<FJsonObject> Item = MakeShared<FJsonObject>();
-        Item->SetStringField(TEXT("guid"), Renderer->GetName());
+        Item->SetStringField(TEXT("guid"), Renderer->GetMergeId().ToString(EGuidFormats::DigitsWithHyphens));
+        Item->SetStringField(TEXT("legacy_guid"), Renderer->GetName());
         Item->SetStringField(TEXT("class"), Renderer->GetClass()->GetPathName());
         Item->SetStringField(TEXT("class_short"), Renderer->GetClass()->GetName());
         TArray<TSharedPtr<FJsonValue>> Props = ExportEditableProps(Renderer);

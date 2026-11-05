@@ -59,7 +59,7 @@ bool GatherPropertyReferences(UObject* Target, const FObject& Properties, TSet<U
     for (const auto& Pair : Properties->Values)
     {
         FProperty* Property = Target->GetClass()->FindPropertyByName(FName(*Pair.Key));
-        if (!EditableProperty(Property))
+        if (!EditableProperty(Target->GetClass(), Property))
         {
             Error = TEXT("property_not_editable: ") + Pair.Key;
             return false;

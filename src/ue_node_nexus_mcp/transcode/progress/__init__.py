@@ -4,6 +4,21 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 _listener = ContextVar("nexus_progress_listener", default=None)
+_deferred = ContextVar("nexus_progress_cancellation_deferred", default=False)
+
+
+@contextmanager
+def atomic():
+    """Report progress while deferring cancellation until a transaction is recorded."""
+    token = _deferred.set(True)
+    try:
+        yield
+    finally:
+        _deferred.reset(token)
+
+
+def cancellation_deferred():
+    return _deferred.get()
 
 
 @contextmanager
