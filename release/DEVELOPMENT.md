@@ -1,5 +1,8 @@
 # 目录与开发
 
+本仓库的维护方法见[项目维护 skill](../.agents/skills/ue-node-nexus-maintenance/SKILL.md)：
+按契约定位产生端、处理同类机制、选择真实跨层验证，并保持检查成本有界。
+
 ```
 UE-Node-Nexus-MCP/
   assets/branding/         项目标识、透明标记和单色 SVG
