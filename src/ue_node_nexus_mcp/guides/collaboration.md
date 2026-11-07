@@ -19,12 +19,17 @@ remain available for offline lint/stage/commit. See the `instances` guide.
 4. `ue_sync("commit", options=dict(workspace_id="<id>", message="Describe intent", dry_run=False))`.
    Commit reads the index. Edits made after stage remain unstaged.
    `commit(all=True)` combines capture, stage and commit.
+   Offline `lint` reports `required_options.allow_delete` and exact removal verbs before live observation.
 5. Preview `ue_sync("push", options=dict(workspace_id="<id>"))`.
 6. Apply with `dry_run=False`, optionally including the returned `proposal_id`.
 
 Mutations default to `dry_run=True`; queries run directly. `push` defaults to
 committed HEAD, or accepts `source`/`revision`. A changed preview input returns
 `stale_proposal`. Uncommitted file changes remain local.
+
+Job status exposes `completed` and `next`; `completing` still writes durable results.
+Follow `next` instead of enumerating state names. Failed applies expose the producing
+`cause` and `receipt_path`; full checkpoints remain in the transaction artifact.
 
 New-file discovery prunes dot-prefixed directories/files and `__pycache__`.
 Put additional rules in `<files_root>/.nexusignore`; they apply to this checkout
@@ -46,14 +51,15 @@ is measured from the editor rather than taken from memory, and measured again
 after an earlier apply of the same push compiled. `stale_target` then means
 another writer; `details.stale` names the asset, its role and both revisions.
 
-High-risk publication first runs complete isolation: Niagara changes, material
+Publication uses `isolation="off"` by default. Choose `auto` for classified
+high-risk changes or `always` for every candidate. `auto` includes Niagara changes, material
 Custom/WPO/depth/interpolator contracts and MaterialFunction interface changes.
 The worker compiles, saves and exports through its own guarded native transaction.
 Admission requires matching candidate and dependencies, live package baseline,
 engine/loaded plugin/configuration identity, measured RHI and normal exit code 0.
 The result row and apply record retain `safety_validation`; failed or stale proof
 prevents the publishing editor's apply. Ordinary material values use the normal
-transaction directly. High-risk publication requires `compile=true`.
+transaction directly. Isolated publication requires `compile=true`.
 
 One immutable push validates all high-risk candidates in dependency order using one
 project copy and one worker. Every result row retains its own bound receipt with a

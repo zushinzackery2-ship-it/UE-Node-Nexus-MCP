@@ -1,6 +1,7 @@
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+#include "Blueprint/Patch/UeNodeNexusBridgeBlueprintPatchHelpers.h"
 #include "EdGraph/EdGraph.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
@@ -37,7 +38,7 @@ bool FNexusNativeFunctionOverride::RunTest(const FString& Parameters)
         AddError(Error);
         return false;
     }
-    UEdGraph* Graph = FindBlueprintGraph(Blueprint, TEXT("CanJumpInternal"));
+    UEdGraph* Graph = UeNodeNexusBridge::FindBlueprintGraph(Blueprint, TEXT("CanJumpInternal"));
     if (!TestNotNull(TEXT("override graph exists"), Graph))
     {
         return false;

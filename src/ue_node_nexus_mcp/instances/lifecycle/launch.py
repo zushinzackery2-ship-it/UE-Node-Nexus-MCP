@@ -24,8 +24,15 @@ def ensure(editors, client: dict, payload: dict) -> dict:
     repository = resolve_repository(project, service.root, payload.get("mirror_root"))
     with service.lock:
         known = candidates(service, project["project_key"])
+    # Sweeps cache descriptive state. A lease must never reuse an already-dead
+    # process just because its last READY sample is still within that cache TTL.
+    if any(item.get("pid") and not service.platform.alive(item) for item in known):
+        editors.refresh()
+        with service.lock:
+            known = candidates(service, project["project_key"])
     if not known:
         observed = service.platform.discover(project["project_key"])
+        observed = [item for item in observed if item.get("pid") and service.platform.alive(item)]
         with service.lock:
             editors.ingest(observed)
     cancel = None

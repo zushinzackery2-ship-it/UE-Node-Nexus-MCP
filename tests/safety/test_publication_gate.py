@@ -38,6 +38,7 @@ def fixture(monkeypatch):
             results=[dict(ok=True, data=dict(isolated_publication=publication))]))
 
     monkeypatch.setattr(gate, "validate", validate)
+    monkeypatch.setattr(gate, "verify_source_identity", lambda *args: None)
     monkeypatch.setattr(gate, "actual_snapshot", lambda *args: dict())
     class Lease:
         journal = "private/lease.json"

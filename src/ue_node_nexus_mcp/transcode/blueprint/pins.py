@@ -1,10 +1,11 @@
 """Pin contracts for authored nodes before an export supplies physical bindings."""
 
-from .types import join_type_text, parse_type_text
+from .types import join_type_text, parse_type_text, type_text
 from ..text.lexer import LexError
 from ..raw.nodes import single_visible_pin
 from .classes import node_name
 from .callables import event_signature, local_records
+from .interfaces import records as candidate_records
 from .delegates import DELEGATE_NODES, record as delegate_record
 from ..errors import SyncError
 
@@ -36,6 +37,33 @@ def function_record(decl, document, schema) -> dict | None:
             return declared[name]
         owner = parent_class(document)
     return schema.function(owner, name) if schema and owner else None
+
+
+def candidate_function(decl, document, schema=None):
+    if node_name(decl.type_name) not in ("CallFunction", "Message") or not decl.positional():
+        return None
+    owner, _, name = decl.positional()[0].rpartition(".")
+    records = local_records(document) if owner == "self" and document else candidate_records(owner)
+    if records is None or (owner == "self" and name not in records):
+        return None
+    if name in records:
+        return records[name]
+    inherited = schema.function(owner, name) if schema else None
+    return inherited or dict(missing=True, path=owner + "." + name, params=[])
+
+
+def function_pins(record, physical=()):
+    desired = [dict(item) for item in record.get("params", [])]
+    if not record.get("pure", False):
+        desired.extend([pin("execute", "in"), pin("then", "out")])
+    desired.extend(dict(item) for item in physical if item.get("name") == "self")
+    previous = {(item.get("name"), item.get("dir")): item for item in physical}
+    result = []
+    for item in desired:
+        old = previous.get((item["name"], item.get("dir")), {})
+        binding = old if type_text(old.get("type")) == type_text(item.get("type")) else {}
+        result.append(dict(binding, **item))
+    return result
 
 
 def variable_pins(decl, document, section) -> list:
@@ -77,6 +105,9 @@ def macro_pins(decl, schema) -> list | None:
 
 def node_pins(decl, document, section, schema=None, metadata=None) -> list:
     metadata = metadata if metadata is not None else decl.meta
+    candidate = candidate_function(decl, document, schema)
+    if candidate is not None:
+        return function_pins(candidate, metadata.get("pins", []))
     if metadata.get("pins"):
         return metadata["pins"]
     name = node_name(decl.type_name)
@@ -103,10 +134,7 @@ def node_pins(decl, document, section, schema=None, metadata=None) -> list:
     if name in ("CallFunction", "CallParentFunction", "Message"):
         record = function_record(decl, document, schema)
         if record is not None:
-            pins = [dict(item) for item in record.get("params", [])]
-            if not record.get("pure", False):
-                pins.extend([pin("execute", "in"), pin("then", "out")])
-            return pins
+            return function_pins(record)
     if name in ("VariableGet", "VariableSet"):
         pins = variable_pins(decl, document, section)
         if pins:

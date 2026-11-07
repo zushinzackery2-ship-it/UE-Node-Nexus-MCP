@@ -1,4 +1,4 @@
-"""Material function interfaces carried by stored snapshots.
+"""Candidate interfaces carried by stored snapshots.
 
 The material layer derives signatures from documents; snapshots are a
 collaboration artifact, so decoding them into documents happens here.
@@ -6,7 +6,8 @@ collaboration artifact, so decoding them into documents happens here.
 
 from contextlib import contextmanager
 
-from ...material.interfaces import documents, signatures
+from ...interfaces import documents
+from ...material.interfaces import signatures
 from ...schema.catalog import publish
 from ...storage.paths import object_path
 from .decode import to_document
@@ -15,7 +16,7 @@ from .decode import to_document
 @contextmanager
 def snapshots(items):
     with documents((item["semantic"]["kind"], to_document(item, include_defaults=True)) for item in items
-                   if item and item["semantic"]["kind"] == "material_function"):
+                   if item and item["semantic"]["kind"] in ("material_function", "blueprint")):
         yield
 
 

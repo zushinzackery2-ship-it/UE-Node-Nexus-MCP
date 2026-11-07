@@ -56,6 +56,12 @@ static void Finish(const FString& Code)
     {
         Failure = TEXT("capture_invalid_image");
     }
+    if (Failure.IsEmpty() && !Active->bShowUi
+        && (Width != Active->Receipt->GetIntegerField(TEXT("requested_width"))
+            || Height != Active->Receipt->GetIntegerField(TEXT("requested_height"))))
+    {
+        Failure = TEXT("capture_size_mismatch");
+    }
     Active->Receipt->SetStringField(TEXT("state"), Failure.IsEmpty() ? TEXT("completed") : TEXT("failed"));
     Active->Receipt->SetStringField(TEXT("error_code"), Failure);
     Active->Receipt->SetStringField(TEXT("finished_at"), FDateTime::UtcNow().ToIso8601());
@@ -118,6 +124,11 @@ static void OnRendered(FViewport* Viewport)
     const FString Path = Active->Receipt->GetStringField(TEXT("file_path"));
     Active->Receipt->SetStringField(TEXT("state"), TEXT("rendering"));
     Active->Receipt->SetNumberField(TEXT("engine_frame"), GFrameCounter);
+    const FIntPoint Size = Viewport->GetRenderTargetTextureSizeXY();
+    Active->Receipt->SetNumberField(TEXT("requested_width"), Size.X);
+    Active->Receipt->SetNumberField(TEXT("requested_height"), Size.Y);
+    Active->Receipt->SetNumberField(TEXT("previous_crop_width"), GScreenshotResolutionX);
+    Active->Receipt->SetNumberField(TEXT("previous_crop_height"), GScreenshotResolutionY);
     // Freeze the actual producing view at submission. Reading it on a later
     // completion tick can accidentally bind the image to a newer rendered frame.
     if (!Diagnostics::AppendViewportRenderReceipt(Active->Receipt))
@@ -143,6 +154,10 @@ static void OnRendered(FViewport* Viewport)
         }
     });
     FScreenshotRequest::RequestScreenshot(Path, Active->bShowUi, false);
+    // Match UGameViewportClient::HandleScreenshotCommand: normal screenshots also
+    // use these globals as a crop rectangle, including after a viewport resize.
+    GScreenshotResolutionX = Size.X;
+    GScreenshotResolutionY = Size.Y;
 }
 
 static bool Tick(float Delta)

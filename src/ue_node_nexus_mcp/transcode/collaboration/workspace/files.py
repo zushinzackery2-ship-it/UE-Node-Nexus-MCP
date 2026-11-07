@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from ...text.parser import parse
-from ...material.interfaces import documents, fingerprint
+from ...interfaces import documents, fingerprint
 from ...storage.paths import content_root, iter_text_files, object_path, package_name, parse_text_path, text_path
 from ...scene.model import scene_name
 from ...scene.paths import scene_path
@@ -101,11 +101,11 @@ def capture_files(workspace, paths: list[str] | None = None, delete: bool = Fals
     providers = []
     for asset in selected:
         path = confined(workspace.root, registered[asset])
-        if path.name.endswith(".mf.nexus") and path.is_file():
+        if path.name.endswith((".mf.nexus", ".bp.nexus")) and path.is_file():
             document, sink = parse(path.read_text(encoding="utf-8-sig"), file=str(path))
             if sink.has_errors:
                 raise SyncError("invalid_document", "\n".join(item.format() for item in sink.errors()))
-            providers.append(("material_function", document))
+            providers.append(("material_function" if path.name.endswith(".mf.nexus") else "blueprint", document))
     with documents(providers):
         return capture_candidates(workspace, paths, delete, registered, selected)
 

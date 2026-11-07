@@ -166,6 +166,9 @@ def test_blueprint_class_method_dependency_survives_collaboration_preflight(tmp_
         node = raw["blueprint"]["graphs"][0]["nodes"][2]
         node["config"] = dict(function_owner="/Game/Blueprints/BP_Door.BP_Door_C", function_name="TakeDamage",
                               self_context="true")
+        # Retargeting the fixture must also use TakeDamage's physical signature.
+        node["pins"] = [pin for pin in node["pins"] if pin["name"] in ("execute", "then", "Duration")]
+        next(pin for pin in node["pins"] if pin["name"] == "Duration")["name"] = "Amount"
         mesh = raw["blueprint"]["components"][1]
         mesh["props"] = [prop for prop in mesh["props"] if prop["name"] != "StaticMesh"]
         return raw

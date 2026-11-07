@@ -141,7 +141,7 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     FString SaveError;
     const bool bSaveRequired = !bDryRun && bSave
         && (Context.bChanged || System->GetOutermost()->IsDirty());
-    if (bSaveRequired)
+    if (bSaveRequired && bReady && Context.Failures.IsEmpty())
     {
         bSaved = SavePackageDirect(System, SaveError);
     }
@@ -167,6 +167,7 @@ static TSharedPtr<FJsonObject> ApplySystem(const FString& Operation, const FStri
     Compile->SetBoolField(TEXT("active_after_request"), bCompilationActive);
     Compile->SetBoolField(TEXT("outstanding_after_wait"), System->HasOutstandingCompilationRequests());
     Compile->SetBoolField(TEXT("ok"), bReady);
+    NiagaraCompilation::AppendStatus(System, Compile);
     Compile->SetNumberField(TEXT("error_count"), bReady ? 0 : 1);
     if (!bReady)
     {

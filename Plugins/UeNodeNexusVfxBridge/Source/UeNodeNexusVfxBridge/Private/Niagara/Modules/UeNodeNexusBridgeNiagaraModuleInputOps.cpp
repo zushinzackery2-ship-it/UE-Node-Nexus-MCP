@@ -85,9 +85,10 @@ void GatherModuleInputs(FNiagaraEmitterHandle* Emitter, UNiagaraNodeOutput* Outp
         {
             Record.bHasOverride = true;
             Record.bOverrideLinked = OverridePin->LinkedTo.Num() > 0;
-            Record.OverrideValueText = OverridePin->DefaultValue;
+            Record.OverrideValueText = VfxTranscode::ModuleInputPinValueText(*OverridePin);
         }
-        else if (!Record.bStatic && Emitter && Output)
+        else if (VfxTranscode::CanUseRapidIterationValue(Variable.GetType(), Record.bStatic, Record.DefaultValueText)
+            && Emitter && Output)
         {
             FNiagaraVariable RapidVariable;
             UNiagaraScript* Script = nullptr;

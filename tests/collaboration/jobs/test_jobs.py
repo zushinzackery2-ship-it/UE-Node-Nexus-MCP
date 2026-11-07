@@ -19,6 +19,15 @@ MATERIAL = "/Game/Materials/M_Glass.M_Glass"
 SECOND = "/Game/Materials/M_Second.M_Second"
 
 
+@pytest.mark.parametrize("status", ["queued", "running", "completing", "completed", "failed", "cancelled", "interrupted"])
+def test_job_completion_contract_does_not_require_client_state_enumeration(status):
+    from ue_node_nexus_mcp.transcode.collaboration.jobs.state import TERMINAL
+
+    report = service.report(dict(id="job", generation=1, status=status))
+    assert report["completed"] == (status in TERMINAL)
+    assert report["next"]["action"] == ("job_result" if report["completed"] else "job_status")
+
+
 @pytest.mark.parametrize("boundary", ["observe", "worker_start"])
 def test_accepted_job_keeps_scope_when_submission_response_fails(project, monkeypatch, boundary):
     from ue_node_nexus_mcp.transcode.sync import background

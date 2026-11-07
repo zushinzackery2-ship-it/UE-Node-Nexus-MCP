@@ -128,7 +128,7 @@ bool SetParameterValueText(FNiagaraParameterStore& Store, const FNiagaraVariable
     {
         OutError->Reset();
     }
-    const FNiagaraTypeDefinition& Type = Variable.GetType();
+    const FNiagaraTypeDefinition Type = Variable.GetType().RemoveStaticDef();
     FString Error;
     FParsedValue Value;
     if (Variable.GetName().IsNone() || !Type.IsValid()

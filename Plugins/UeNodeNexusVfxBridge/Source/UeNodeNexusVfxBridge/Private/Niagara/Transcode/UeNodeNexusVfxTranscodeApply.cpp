@@ -268,7 +268,27 @@ void VfxTranscode::ApplyNiagaraVerb(UNiagaraSystem* System, const TSharedPtr<FJs
     }
     else if (Verb == TEXT("ns_module_move"))
     {
-        Context.Fail(Index, TEXT("unsupported_verb"), TEXT("module reordering is not supported in this version; remove and re-add the module"));
+        int32 TargetIndex = INDEX_NONE;
+        if (!NiagaraModuleStack::ReadIndex(Op, TEXT("index"), TargetIndex))
+        {
+            Context.Fail(Index, TEXT("invalid_module_index"), TEXT("module movement requires an integer final index"));
+            return;
+        }
+        TArray<UNiagaraNodeFunctionCall*> Modules;
+        NiagaraModuleStack::GetOrderedModules(Output, Modules);
+        if (!Modules.IsValidIndex(Module))
+        {
+            Context.Fail(Index, TEXT("module_not_found"), TEXT("module disappeared before movement"));
+            return;
+        }
+        bool bChanged = false;
+        if (!NiagaraModuleStack::MoveModuleInNativeStack(*System, System->GetEmitterHandles()[Emitter],
+            *Output, *Modules[Module], TargetIndex, Bindings, bChanged, Error))
+        {
+            Context.Fail(Index, TEXT("module_move_failed"), Error);
+            return;
+        }
+        Context.bChanged |= bChanged;
     }
     else
     {

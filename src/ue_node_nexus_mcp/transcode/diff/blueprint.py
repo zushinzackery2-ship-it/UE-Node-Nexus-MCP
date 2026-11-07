@@ -7,6 +7,7 @@ from ..blueprint.types import join_type_text, parse_type_text
 from ..blueprint.component_order import ordered_components
 from ..blueprint.members import declarations_first, diff_members, interface_changed
 from ..blueprint.node_ids import existing_node_ids
+from ..blueprint.calls import refresh_calls
 from .common import class_path, diff_brace_props, diff_prop_section, match_renamed, same_class
 from .graph import diff_graph_section
 from ..text.lexer import LexError
@@ -24,6 +25,7 @@ def diff_blueprint(local: Document, base: Document | None, plan: AssetPlan, sche
     diff_prop_section(local.section("defaults"), base.section("defaults") if base else None, plan, "bp_default_set")
     diff_members(local, base, plan)
     _diff_graphs(local, base, plan, schema)
+    refresh_calls(local, base, plan, schema)
     declarations_first(plan)
     plan.interface_changed = interface_changed(plan)
 

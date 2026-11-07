@@ -13,6 +13,7 @@ from ...transcode.storage.paths import content_parts
 from ...transcode.sync.project import apply_operation, call_ok
 from ...transcode.collaboration.apply.transactions import actual_snapshot
 from ..isolation.service import validate
+from ..isolation.identity import source as verify_source_identity
 from ..isolation.baselines import BaselineLease
 from .evidence import binding, request_digest, verify_batch
 from .mode import isolation_mode
@@ -75,6 +76,7 @@ def admit_batch(bridge, context, workspace, entries: list[tuple[str, dict]], can
     started = time.monotonic()
     LOG.info("assets=%d candidate=%s phase=isolated_batch_validation", len(entries), candidate)
     try:
+        verify_source_identity(context.project_file, capabilities)
         with BaselineLease(context.project_file) as lease:
             emit("isolation_baseline", dict(phase="baseline", assets=baseline_assets))
             baseline = lease.export(bridge, baseline_assets)

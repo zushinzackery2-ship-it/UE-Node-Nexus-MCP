@@ -3,6 +3,7 @@
 #include "UeNodeNexusBridgeJson.h"
 #include "UeNodeNexusBridgeListFormats.h"
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "Niagara/Compilation/NexusNiagaraCompilation.h"
 
 #include "Dom/JsonValue.h"
 #include "NiagaraParameterStore.h"
@@ -71,8 +72,7 @@ static void AddSummaryCounts(UNiagaraSystem* System, TSharedPtr<FJsonObject> Dat
     Data->SetNumberField(TEXT("enabled_renderer_count"), CountEnabledNiagaraRenderers(System));
     Data->SetNumberField(TEXT("user_param_count"), CountUserParams(System));
     Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
-    Data->SetBoolField(TEXT("ready_to_run"), System ? System->IsReadyToRun() : false);
-    Data->SetBoolField(TEXT("needs_compile"), System ? System->NeedsRequestCompile() : false);
+    NiagaraCompilation::AppendStatus(System, Data);
     Data->SetNumberField(TEXT("readiness_issue_count"), CountNiagaraReadinessIssues(System));
 }
 

@@ -16,6 +16,7 @@ from ..capture.status import status as capture_status
 from .builds import module_binary
 from .close import drain_released_scopes, save_dirty_packages
 from .progress import advance
+from .identity import verify as verify_identities
 
 
 TRANSIENT_CLOSE_BLOCKERS = frozenset(("editor_busy", "compiling", "saving"))
@@ -133,6 +134,7 @@ class ValidationSession:
         capabilities = self.call("bridge_capabilities_get", dict())
         require(capabilities.get("ok"), "isolation_identity_mismatch", "worker capabilities were unavailable", response=capabilities)
         builds = capabilities["data"]["build"]
+        verify_identities(builds, self.expected, phase="worker_start")
         require(len(set(builds.get(name, dict()).get("build_id") for name in self.expected)) == 1,
                 "isolation_identity_mismatch", "worker module BuildIds differ")
         for name, expected in self.expected.items():
@@ -140,9 +142,6 @@ class ValidationSession:
             loaded = (self.engine / "Engine/Binaries/Win64" / live.get("module_path", "")).resolve()
             require(live.get("loaded") and live.get("build_id") and loaded == Path(expected["binary"]).resolve(),
                     "isolation_identity_mismatch", "worker loaded an unexpected module binary", plugin=name)
-            for key in ("source_fingerprint", "source_commit", "version", "contract_version", "source_dirty"):
-                require(live.get(key) == expected.get(key), "isolation_identity_mismatch",
-                        "worker plugin differs from the copied input", plugin=name, field=key)
         measured_rhi = capabilities["data"].get("rhi", "").lower()
         require(measured_rhi == self.rhi, "isolation_identity_mismatch",
                 "worker RHI differs from the requested renderer", requested=self.rhi, actual=measured_rhi)

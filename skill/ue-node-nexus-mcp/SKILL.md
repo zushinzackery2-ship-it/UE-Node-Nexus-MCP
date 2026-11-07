@@ -98,7 +98,7 @@ Capture acceptance is asynchronous: poll `viewport_capture_status(file_path=...,
 Choose `target="pie"` for the game's image across asset editor focus changes.
 Check `producer_view.world`, `viewport_type` and its `engine_frame` against the
 receipt's frame. The producer is captured when the target submits the screenshot.
-Checkout publication automatically isolates high-risk Niagara, material rendering and function-interface changes. Inspect the result row's `safety_validation`: exact candidate/dependency binding, `baseline=live_memory`, engine/plugins/configuration, actual RHI, compile/save/exported readback and worker exit code 0. Dirty flags and original disk bytes survive baseline serialization. Explicit `safety_validate` uses `baseline=saved_disk`; transcode operations execute complete worker-owned publication. Legacy high-risk push requires checkout. Normal material values use the publishing transaction directly. Resource admission stays enabled; after explicit user authorization, `safety_allow_low_memory=true` on one push/continue or `allow_low_memory=true` on explicit validation permits that invocation's private workers to start below the memory threshold.
+Publication defaults to isolation="off". Select isolation="auto" for classified Niagara, material rendering and function-interface changes, or "always" for all candidates. Inspect the result row's `safety_validation`: exact candidate/dependency binding, `baseline=live_memory`, engine/plugins/configuration, actual RHI, compile/save/exported readback and worker exit code 0. Dirty flags and original disk bytes survive baseline serialization. Explicit `safety_validate` uses `baseline=saved_disk`; transcode operations execute complete worker-owned publication. Legacy high-risk push requires checkout. Normal material values use the publishing transaction directly. Resource admission stays enabled; after explicit user authorization, `safety_allow_low_memory=true` on one push/continue or `allow_low_memory=true` on explicit validation permits that invocation's private workers to start below the memory threshold.
 Inspect validation receipt `copied_bytes` and `timings` for project-specific copy/startup/execution/exit cost. Niagara storage failures include the parameter name, type and category/range reason; preserve those details when reporting failed export or publication.
 Commit and push a related asset batch together: its high-risk candidates share one
 copy and worker, with individual bound receipts and a shared `validation_id`.
@@ -128,7 +128,7 @@ the object pool and historical catalogs together when organizing a mirror.
 
 Editor workflows wait up to 30 seconds by default, then return a durable `job_id`
 and `next` call. `background=True` returns immediately; `wait_seconds=0..60`
-controls the wait. Poll `job_status`, read `job_result`, or request `job_cancel`
+controls the wait. Use `job_status.completed` and its `next` call; queued/running/completing are nonterminal. Read `job_result` after completion, or request `job_cancel`
 through `ue_sync`. Cancellation/deadlines take effect between atomic applies;
 completed results and native receipts remain in the repository. A queued push
 holds the source commit it accepted. `workspaces` returns lightweight metadata;

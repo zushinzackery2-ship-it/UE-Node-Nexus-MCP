@@ -14,6 +14,7 @@ from ..semantic.snapshot import from_raw
 from ...storage.io import atomic_write, canonical, digest
 from ..store.refs import move_ref
 from .receipt import verify_request
+from .failure import describe as describe_failure
 from ....diagnostics.contracts.workflows import retain_record, stored_fields
 
 
@@ -140,7 +141,7 @@ def execute(bridge, workspace, record: dict) -> dict:
             if len(functions) == 1:
                 origin["function"] = functions[0]
         raise SyncError(error.get("code", "recovery_required"), error.get("message", "execution did not produce a committed receipt"),
-                        dict(apply_id=record["id"], phase=record["phase"], receipt=receipt,
+                        dict(apply_id=record["id"], phase=record["phase"], **describe_failure(workspace, record, response),
                              stale=(response.get("data") or dict()).get("stale"), diagnostics=diagnostics(response, receipt), **origin,
                              **stored_fields(record)))
     return record

@@ -21,6 +21,8 @@ struct FPackageLoadAudit
     bool bAudited = false;
     int32 Exports = 0;
     TArray<FString> FailedExports;
+    TArray<FString> FailedExportPaths;
+    TArray<FString> RegeneratedExports;
     FString Error;
 
     bool IsComplete() const

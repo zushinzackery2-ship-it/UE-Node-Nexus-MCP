@@ -34,7 +34,7 @@ const UEdGraphPin* ParameterDefaultPin(const UEdGraphPin& Output)
     return Pin ? *Pin : nullptr;
 }
 
-FString DefaultPinText(const UEdGraphPin& Pin)
+FString DefaultPinText(const UEdGraphPin& Pin, bool bNeedsValue)
 {
     if (Pin.LinkedTo.Num() == 1)
     {
@@ -58,7 +58,12 @@ FString DefaultPinText(const UEdGraphPin& Pin)
         return Pin.DefaultObject->GetPathName();
     }
     const auto* Schema = GetDefault<UEdGraphSchema_Niagara>();
-    const FNiagaraVariable Value = Schema->PinToNiagaraVariable(&Pin);
+    const FNiagaraTypeDefinition Type = Schema->PinToTypeDefinition(&Pin);
+    if (Type.IsDataInterface() || Type.IsUObject())
+    {
+        return FString();
+    }
+    const FNiagaraVariable Value = Schema->PinToNiagaraVariable(&Pin, bNeedsValue);
     FString Text;
     if (Value.IsDataAllocated())
     {
@@ -67,6 +72,13 @@ FString DefaultPinText(const UEdGraphPin& Pin)
     }
     return Text;
 }
+}
+
+FString ModuleInputPinValueText(const UEdGraphPin& Pin)
+{
+    // UE can serialize a false NiagaraBool pin as "()". Its typed value is
+    // authoritative; comparing that spelling directly to "false" rejects a no-op.
+    return Pin.LinkedTo.IsEmpty() ? DefaultPinText(Pin, false) : Pin.DefaultValue;
 }
 
 TArray<const UEdGraphPin*> FindModuleInputDefaultPins(const UNiagaraGraph& Graph, FName VariableName)
@@ -94,6 +106,15 @@ bool IsAuthoredModuleInput(const FNiagaraVariable& Variable, const UNiagaraScrip
         || (Metadata && Metadata->GetIsStaticSwitch());
 }
 
+bool CanUseRapidIterationValue(const FNiagaraTypeDefinition& Type, bool bStatic, const FString& DefaultText)
+{
+    // Niagara's stack and compiler use RI only for a non-static local default.
+    // Linked/default-function inputs can retain stale storage that is never executed.
+    return !bStatic && Type.IsValid() && !Type.IsDataInterface() && !Type.IsUObject() && !Type.IsEnum()
+        && Type != FNiagaraTypeDefinition::GetBoolDef() && Type != FNiagaraTypeDefinition::GetParameterMapDef()
+        && !DefaultText.IsEmpty() && !DefaultText.StartsWith(TEXT("@link("));
+}
+
 FString ModuleInputDefaultText(const FNiagaraVariable& Variable, const UNiagaraScriptVariable* Metadata,
     const UNiagaraGraph* Graph)
 {
@@ -116,7 +137,9 @@ FString ModuleInputDefaultText(const FNiagaraVariable& Variable, const UNiagaraS
         TOptional<FString> Literal;
         for (const auto* Pin : FindModuleInputDefaultPins(*Graph, Variable.GetName()))
         {
-            const FString Text = DefaultPinText(*Pin);
+            // A defining empty pin has Niagara's type default; an empty override
+            // has no readable local value and uses the strict path above.
+            const FString Text = DefaultPinText(*Pin, true);
             if (Text.IsEmpty() || (Literal.IsSet() && Literal.GetValue() != Text))
             {
                 return FString();

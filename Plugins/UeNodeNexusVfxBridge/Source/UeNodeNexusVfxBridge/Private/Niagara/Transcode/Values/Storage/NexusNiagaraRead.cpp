@@ -16,7 +16,7 @@ static bool Read(const FNiagaraParameterStore& Store, const FNiagaraVariable& Va
 
 static FString ReadText(const FNiagaraParameterStore& Store, const FNiagaraVariable& Variable, FString& Error)
 {
-    const FNiagaraTypeDefinition& Type = Variable.GetType();
+    const FNiagaraTypeDefinition Type = Variable.GetType().RemoveStaticDef();
     if (Type.IsEnum())
     {
         int32 Value;

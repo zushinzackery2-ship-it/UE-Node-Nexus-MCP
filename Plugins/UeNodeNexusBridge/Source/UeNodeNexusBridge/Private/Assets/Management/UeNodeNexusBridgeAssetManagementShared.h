@@ -36,4 +36,5 @@ struct FRedirectorFixupProgress
 // all redirector packages and referencers are loaded and verified before any
 // referencer is saved, and nothing is deleted until no referencer remains.
 FRedirectorFixupProgress FixRedirectorsUnderFolder(const FString& FolderPath, bool bDryRun);
+FRedirectorFixupProgress FixRedirectorPackages(const TArray<FString>& PackageNames, bool bDryRun);
 }

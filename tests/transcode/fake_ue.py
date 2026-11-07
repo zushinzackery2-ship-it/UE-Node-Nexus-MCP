@@ -158,7 +158,7 @@ class FakeUe:
             applied += 1
         raw["saved_hash"] = f"h-{len(self.applied)}"
         file = self._write_raw(payload["out_dir"], raw) if payload.get("out_dir") else ""
-        return dict(applied=applied, failed=failed, diagnostics=[], compile=dict(ran=True, ok=not failed, error_count=0),
+        return dict(applied=applied, failed=failed, diagnostics=[], compile=dict(ran=True, ok=not failed, error_count=len(failed)),
                     saved=True, file=file, saved_hash=raw["saved_hash"], dirty=False, id_map=id_map)
 
     op_vfx_transcode_apply = op_transcode_apply
@@ -229,6 +229,8 @@ class FakeUe:
         elif op == "refresh_function_calls":
             raw.setdefault("refreshed", []).append(verb["function"])
             self._rebuild_calls(graph, verb["function"])
+        else:
+            raise AssertionError(f"FakeUe does not model {op!r}; use a domain fixture or a real UE contract test")
 
     def _rebuild_calls(self, graph: dict[str, Any], function: str) -> None:
         """Call nodes take the function's current inputs and outputs, as the editor's refresh does."""

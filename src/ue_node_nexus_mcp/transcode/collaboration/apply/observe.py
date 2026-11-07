@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from uuid import uuid4
+from time import monotonic
 
 from ...storage.paths import object_path
 from ...errors import SyncError
@@ -23,13 +24,14 @@ def bind(bridge, context, store) -> dict:
 
 
 def remembered(store, context, epoch: str) -> dict:
-    """Which snapshot each asset's memory revision was measured against.
+    """Saved descriptions survive a restart; write preconditions never reuse them.
 
-    An editor restart or a schema change invalidates every measurement at once;
-    anything finer is decided per asset against the snapshot it names.
+    Each revision keeps the editor epoch that actually measured it. ``capture``
+    never adds carried descriptions to ``measured``; prepare exports every
+    guarded target and dependency before building a write request.
     """
     record = store.record("memory", "observed")
-    if not record or record["editor_epoch"] != epoch or record["schema_key"] != context.schema_key:
+    if not record or record["schema_key"] != context.schema_key:
         return dict()
     return record["entries"]
 
@@ -119,6 +121,7 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
     ``measured`` names the assets this call read from UE itself: exported, or
     confirmed absent. Only those revisions may become preconditions.
     """
+    started = monotonic()
     binding = bind(bridge, context, store)
     history = History(store)
     previous = store.ref("refs/ue/observed")
@@ -131,7 +134,9 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
     if assets is None:
         selected.update(identities)
     core_paths = [asset for asset in selected if "#" not in asset]
+    status_started = monotonic()
     infos, known = query_ue(bridge, context, core_paths, discover=discover, include_stubs=True)
+    status_seconds = monotonic() - status_started
     if not known:
         raise SyncError("observation_failed", "editor did not return a complete asset status")
     if discover:
@@ -139,6 +144,7 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
     identifier = uuid4().hex
     directory = store.root / "observations" / identifier
     memory = remembered(store, context, binding["editor_epoch"])
+    export_started = monotonic()
     groups, raw_by_asset, revisions, absent = dict(), dict(), dict(), set()
     for asset in sorted(selected):
         if "#" in asset:
@@ -161,6 +167,8 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
         absent.update(deleted)
     for asset in absent:
         entries.pop(asset, None)
+    export_seconds = monotonic() - export_started
+    encode_started = monotonic()
     # One transaction registers the whole export: a project-sized observation
     # otherwise pays a separate durable commit for every asset it recorded.
     with store.db.connection(write=True):
@@ -180,11 +188,14 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
             revisions[asset] = dict(revision=raw["live_revision"], editor_epoch=raw["editor_epoch"], dirty=raw.get("dirty", False),
                                     saved_hash=raw.get("saved_hash", ""), content_revision=raw.get("content_revision"))
     tree = history.tree(entries)
+    encode_seconds = monotonic() - encode_started
     commit = previous
     if not previous or history.commit(previous)["tree"] != tree:
         commit = history.create(tree, [previous] if previous else [], "Observe current UE memory", "UE", "external_ue", observed=True, saved=all(not item["dirty"] for item in revisions.values()))
     record = dict(id=identifier, commit=commit, tree=tree, revisions=revisions, assets=sorted(selected),
                   measured=sorted(absent | raw_by_asset.keys()), editor_epoch=binding["editor_epoch"], previous=previous,
+                  carried=sorted(set(revisions) - raw_by_asset.keys()),
+                  timings=dict(status_seconds=status_seconds, export_seconds=export_seconds, encode_seconds=encode_seconds),
                   raw_files=str(directory), generation=0)
     atomic_write(directory / "observation.json", canonical(record))
     if persist:
@@ -192,5 +203,7 @@ def capture(bridge, context, store, assets: list[str] | None = None, *,
         if previous != commit:
             store.move("refs/ue/observed", commit, previous, "UE", "fetch")
         remember(store, context, commit, binding["editor_epoch"], entries, revisions)
-    store.event("observation", observation_id=identifier, commit_id=commit, assets=len(selected), exports=len(raw_by_asset), absent=len(absent), persisted=persist)
+    store.event("observation", observation_id=identifier, commit_id=commit, assets=len(selected), exports=len(raw_by_asset),
+                carried=len(record["carried"]), absent=len(absent), persisted=persist,
+                elapsed_seconds=monotonic() - started, **record["timings"])
     return dict(record, raw=raw_by_asset)

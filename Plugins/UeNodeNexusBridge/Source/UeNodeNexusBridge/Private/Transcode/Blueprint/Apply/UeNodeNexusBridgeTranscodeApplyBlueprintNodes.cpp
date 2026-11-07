@@ -7,6 +7,7 @@
 #include "EdGraph/EdGraphSchema.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
+#include "K2Node_CallFunction.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 
 namespace UeNodeNexusBridge::Transcode
@@ -121,7 +122,18 @@ void ApplyBlueprintGraphVerb(UBlueprint* Blueprint, UEdGraph* Graph, const TShar
         return;
     }
     FString Error;
-    if (Verb == TEXT("delete_node"))
+    if (Verb == TEXT("refresh_function_call"))
+    {
+        auto* Call = Cast<UK2Node_CallFunction>(Node);
+        if (!Call || !Call->GetTargetFunction())
+        {
+            Context.Fail(Index, TEXT("function_not_found"), FString::Printf(TEXT("caller cannot resolve its updated function: %s"), *Id));
+            return;
+        }
+        Call->Modify();
+        Call->ReconstructNode();
+    }
+    else if (Verb == TEXT("delete_node"))
     {
         FBlueprintEditorUtils::RemoveNode(Blueprint, Node, true);
     }

@@ -7,7 +7,9 @@ from typing import Any
 
 from ..errors import Diagnostic
 
-RISKY_VERBS = {"delete_node", "bp_variable_remove", "bp_component_remove", "bp_function_remove", "ns_emitter_remove", "ns_module_remove", "ns_renderer_remove"}
+RISKY_VERBS = {"delete_node", "bp_variable_remove", "bp_component_remove", "bp_function_remove",
+               "bp_interface_remove", "bp_dispatcher_remove", "bp_local_variable_remove",
+               "ns_emitter_remove", "ns_module_remove", "ns_renderer_remove", "ns_user_param_remove"}
 
 
 @dataclass

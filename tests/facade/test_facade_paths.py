@@ -232,14 +232,14 @@ def test_inconclusive_vfx_probe_is_not_cached(clean_feature_state, monkeypatch: 
     assert "vfx" not in runtime.enabled_features()
     assert runtime._enabled_features is None  # probe failure must not stick
 
-    runtime.instance_manager.binding["vfx_available"] = True
+    runtime.instance_manager.binding.update(state="READY", vfx_available=True)
     assert "vfx" in runtime.enabled_features()
     assert runtime._enabled_features is not None
 
 
 def test_editor_without_vfx_module_is_cached(clean_feature_state, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runtime, "bridge", _UnreachableBridge())
-    monkeypatch.setattr(runtime.instance_manager, "binding", dict(vfx_available=False))
+    monkeypatch.setattr(runtime.instance_manager, "binding", dict(state="READY", vfx_available=False))
     assert "vfx" not in runtime.enabled_features()
     assert runtime._enabled_features is not None  # definitive editor answer sticks
 

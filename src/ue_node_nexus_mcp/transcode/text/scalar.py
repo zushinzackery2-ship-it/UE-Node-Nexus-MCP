@@ -38,7 +38,7 @@ def normalize(text: str, type_name: str) -> str:
             reference = reference.split("'", 2)[1]
         return reference
     text = normalize_display(str(text))
-    if kind in ("bool", "boolean", "boolproperty") and text.lower() in ("true", "false", "1", "0"):
+    if kind in ("bool", "boolean", "boolproperty", "niagarabool") and text.lower() in ("true", "false", "1", "0"):
         return "true" if text.lower() in ("true", "1") else "false"
     if INTEGER.fullmatch(type_name) and text.lower() in ("true", "false"):
         return "1" if text.lower() == "true" else "0"

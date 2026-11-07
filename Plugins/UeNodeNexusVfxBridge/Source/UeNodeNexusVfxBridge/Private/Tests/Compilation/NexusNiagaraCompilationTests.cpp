@@ -5,6 +5,7 @@
 #include "NiagaraEditorUtilities.h"
 #include "NiagaraEmitter.h"
 #include "NiagaraEmitterHandle.h"
+#include "NiagaraScript.h"
 #include "NiagaraSystem.h"
 #include "NiagaraSystemFactoryNew.h"
 #include "UeNodeNexusNiagaraOps.h"
@@ -45,6 +46,23 @@ bool FNexusNiagaraGpuCompilation::RunTest(const FString& Parameters)
     const auto Result = Response->GetObjectField(TEXT("data"));
     TestTrue(TEXT("public synchronous compile is ready"), Result->GetBoolField(TEXT("ready_to_run")));
     TestEqual(TEXT("public compile state is explicit"), Result->GetStringField(TEXT("compile_state")), FString(TEXT("ready")));
+    // A finished script with failed executable data is not runnable. GPU
+    // emitter CPU bytecode is deliberately not used as this oracle.
+    auto& Executable = System->GetSystemUpdateScript()->GetVMExecutableData();
+    Executable.ByteCode.Reset();
+    Executable.OptimizedByteCode.Reset();
+#if VECTORVM_SUPPORTS_EXPERIMENTAL
+    Executable.ExperimentalContextData.Reset();
+#endif
+    Executable.LastCompileStatus = ENiagaraScriptCompileStatus::NCS_Error;
+    Executable.ErrorMsg = TEXT("Nexus fixture: finished compilation failed");
+    TestTrue(TEXT("engine readiness alone still reports completion"), System->IsReadyToRun());
+    TestFalse(TEXT("engine validity rejects failed executable"), System->IsValid());
+    TestFalse(TEXT("Nexus readiness includes actual validity"), NiagaraCompilation::Runnable(System));
+    auto Status = MakeShared<FJsonObject>();
+    NiagaraCompilation::AppendStatus(System, Status);
+    TestFalse(TEXT("summary rejects the invalid finished system"), Status->GetBoolField(TEXT("ready_to_run")));
+    TestTrue(TEXT("failure retains script diagnostics"), Status->GetArrayField(TEXT("compile_scripts")).Num() > 0);
     return true;
 }
 #endif

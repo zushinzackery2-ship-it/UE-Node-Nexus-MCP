@@ -39,7 +39,11 @@ def _bridge_vfx_available() -> bool | None:
     was inconclusive (no editor reachable yet); inconclusive results must not
     be cached so a later-started editor can still enable the vfx group.
     """
-    return instance_manager.current().get("vfx_available")
+    instance = instance_manager.current()
+    # Startup snapshots precede optional-module registration and cannot establish absence.
+    if instance.get("state") != "READY":
+        return None
+    return instance.get("vfx_available")
 
 
 def consume_cli_arguments() -> None:

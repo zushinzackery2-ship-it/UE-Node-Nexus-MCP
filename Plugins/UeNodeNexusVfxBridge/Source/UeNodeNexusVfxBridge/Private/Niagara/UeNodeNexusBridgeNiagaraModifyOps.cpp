@@ -183,15 +183,14 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     {
         NiagaraCompilation::Wait(System);
     }
-    const bool bReady = System->IsReadyToRun();
+    const bool bReady = NiagaraCompilation::Runnable(System);
     const auto Save = SaveAssetWrite(System, bSave && bReady, false, bReady);
     const bool bSaved = Save.bSaved;
 
     TSharedPtr<FJsonObject> Data = MakeNiagaraAssetSummaryData(System);
     Data->SetBoolField(TEXT("requested"), bRequested);
     Data->SetBoolField(TEXT("waited"), bWait);
-    Data->SetBoolField(TEXT("ready_to_run"), System->IsReadyToRun());
-    Data->SetBoolField(TEXT("needs_compile"), System->NeedsRequestCompile());
+    NiagaraCompilation::AppendStatus(System, Data);
     Data->SetBoolField(TEXT("has_emitter_stack"), NiagaraSystemHasEmitterStack(System));
     Data->SetNumberField(TEXT("emitter_count"), System->GetEmitterHandles().Num());
     Data->SetNumberField(TEXT("enabled_emitter_count"), CountEnabledNiagaraEmitters(System));
@@ -211,7 +210,7 @@ TSharedPtr<FJsonObject> HandleNiagaraCompile(const FString& Operation, const FSt
     }
     TArray<TSharedPtr<FJsonValue>> Warnings;
     AppendNiagaraEmptySystemWarning(System, Warnings);
-    if (!System->IsReadyToRun())
+    if (!bReady)
     {
         Data->SetArrayField(TEXT("compile_scripts"), NiagaraCompilation::Diagnostics(System));
         Warnings.Add(MakeShared<FJsonValueObject>(MakeNiagaraBoundaryWarning(

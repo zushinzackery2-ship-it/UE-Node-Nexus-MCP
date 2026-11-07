@@ -160,6 +160,7 @@ def report(record):
             "stage", "schema_progress", "validation_progress", "updated_at", "current_asset", "planned_assets", "completed_assets", "deadline_at", "cancel_requested", "cancel_pending", "error", *DIAGNOSTIC_FIELDS)
     result = dict((key, record[key]) for key in keys if key in record)
     result.update(action="job_status", job_id=record["id"], durable=True, revision=record["generation"],
+                  completed=record["status"] in TERMINAL,
                   pending_refresh_assets=sorted(record.get("pending_refresh", {})),
                   next=dict(action="job_result" if record["status"] in TERMINAL else "job_status", options=dict(job_id=record["id"])))
     if isinstance(result.get("runtime_diagnostics"), dict):

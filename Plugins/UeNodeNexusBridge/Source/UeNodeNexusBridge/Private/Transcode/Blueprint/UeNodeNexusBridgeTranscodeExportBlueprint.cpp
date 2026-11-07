@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "Transcode/Properties/NexusValueSchema.h"
 #include "UeNodeNexusBridgeTranscodeBlueprintShared.h"
 #include "Assets/Creation/NexusBlueprintAssetType.h"
 #include "Blueprint/Components/NexusNativeComponentTemplates.h"
@@ -162,6 +163,7 @@ static TArray<TSharedPtr<FJsonValue>> DefaultsJson(UBlueprintGeneratedClass* Gen
         TSharedPtr<FJsonObject> Json = MakeShared<FJsonObject>();
         Json->SetStringField(TEXT("name"), Property->GetName());
         Json->SetStringField(TEXT("type"), Property->GetCPPType());
+        Json->SetObjectField(TEXT("value_schema"), ValueSchema(Property));
         Json->SetStringField(TEXT("value"), ExportPropertyValue(Cdo, Property));
         Json->SetStringField(TEXT("default"), ExportPropertyValue(ParentCdo, Property));
         Defaults.Add(MakeShared<FJsonValueObject>(Json));

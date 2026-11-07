@@ -12,6 +12,24 @@ DEFINE_LOG_CATEGORY_STATIC(LogNexusNiagaraCompilation, Log, All);
 
 namespace UeNodeNexusBridge::NiagaraCompilation
 {
+bool Runnable(UNiagaraSystem* System)
+{
+    return System && System->IsValid() && System->IsReadyToRun()
+        && !System->HasOutstandingCompilationRequests(true) && !System->NeedsRequestCompile();
+}
+
+void AppendStatus(UNiagaraSystem* System, const TSharedPtr<FJsonObject>& Data)
+{
+    Data->SetBoolField(TEXT("asset_valid"), System && System->IsValid());
+    Data->SetBoolField(TEXT("compilation_finished"), System && !System->HasOutstandingCompilationRequests(true));
+    Data->SetBoolField(TEXT("ready_to_run"), Runnable(System));
+    Data->SetBoolField(TEXT("needs_compile"), System && System->NeedsRequestCompile());
+    if (System && !Runnable(System))
+    {
+        Data->SetArrayField(TEXT("compile_scripts"), Diagnostics(System));
+    }
+}
+
 bool Request(UNiagaraSystem* System)
 {
     check(IsInGameThread());
@@ -35,7 +53,7 @@ bool Wait(UNiagaraSystem* System)
     INiagaraModule::Get().ProcessShaderCompilationQueue();
     System->WaitForCompilationComplete(true, false);
     FlushRenderingCommands();
-    const bool bReady = System->IsReadyToRun();
+    const bool bReady = Runnable(System);
     UE_LOG(LogNexusNiagaraCompilation, Log, TEXT("event=complete asset=%s ready=%d pending=%d spawn=%d update=%d seconds=%.6f"),
         *System->GetPathName(), bReady, System->HasOutstandingCompilationRequests(true),
         static_cast<int32>(System->GetSystemSpawnScript()->GetLastCompileStatus()),

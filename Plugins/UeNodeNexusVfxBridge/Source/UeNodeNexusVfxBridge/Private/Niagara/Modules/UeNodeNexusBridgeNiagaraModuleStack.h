@@ -11,6 +11,11 @@ class UNiagaraNodeOutput;
 class UNiagaraSystem;
 struct FNiagaraEmitterHandle;
 
+namespace UeNodeNexusBridge::VfxTranscode
+{
+struct FInputBindingContext;
+}
+
 namespace UeNodeNexusBridge::NiagaraModuleStack
 {
 bool ReadIndex(const TSharedPtr<FJsonObject>& Payload, const TCHAR* Field, int32& OutValue);
@@ -40,4 +45,7 @@ TSharedPtr<FJsonValue> ModuleToRow(int32 EmitterIndex, UNiagaraNodeOutput* Outpu
 void MarkSystemEdited(UNiagaraSystem* System);
 bool RemoveModuleFromNativeStack(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
     UNiagaraNodeFunctionCall& Module, FString& Error);
+bool MoveModuleInNativeStack(UNiagaraSystem& System, FNiagaraEmitterHandle& Emitter,
+    UNiagaraNodeOutput& Output, UNiagaraNodeFunctionCall& Module, int32 TargetIndex,
+    VfxTranscode::FInputBindingContext& Bindings, bool& bChanged, FString& Error);
 }

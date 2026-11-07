@@ -6,7 +6,7 @@ from ..blueprint.call_host import call_spelling, host_name, required_host
 from ..blueprint.classes import node_name
 from ..blueprint.callables import event_signature
 from ..blueprint.delegates import DELEGATE_NODES, lint as lint_delegate
-from ..blueprint.pins import canonical_pin, class_pin_aliases, macro_pins, node_pins
+from ..blueprint.pins import candidate_function, canonical_pin, class_pin_aliases, macro_pins, node_pins
 from ..blueprint.types import join_type_text, parse_type_text
 from .lookup import AMBIGUOUS, lookup
 from ..errors import DiagnosticSink
@@ -58,7 +58,7 @@ def lint_graph(section: Section, member_names: set[str], function_names: set[str
             continue
         infos[decl.id], records[decl.id] = _lint_node(decl, member_names, function_names, schema, sink, parent, document)
     declared = dict((decl.id, pins) for decl in decls.values()
-                    if (pins := _declared_pins(decl, schema)))
+                    if (pins := _declared_pins(decl, schema, document, section)))
     for link in section.links():
         for endpoint, pin, direction in ((link.src, link.src_pin, "out"), (link.dst, link.dst_pin, "in")):
             decl = decls.get(endpoint)
@@ -114,7 +114,11 @@ def _lint_node(decl: Decl, member_names: set[str], function_names: set[str], sch
             event_signature(decl)
         except LexError as exc:
             sink.error("invalid_signature", str(exc), line=decl.line)
-    record = _function_record(decl, spelled, schema, sink)
+    record = candidate_function(decl, document, schema)
+    if record is None:
+        record = _function_record(decl, spelled, schema, sink)
+    elif record.get("missing"):
+        sink.error("unknown_function", f"{decl.id}: candidate Blueprint has no function {record['path']}", line=decl.line)
     _lint_reference_defaults(decl, spelled, record, sink)
     if spelled in DELEGATE_NODES:
         record = lint_delegate(decl, document, schema, sink)
@@ -233,7 +237,7 @@ def _lint_call_host(decl: Decl, record, sink: DiagnosticSink) -> None:
         sink.error("node_class_mismatch", f"{decl.id}: {owner}.{name} is called by {required}, not {spelled}; write CallFunction and the bridge picks it", line=decl.line)
 
 
-def _declared_pins(decl: Decl, schema: SchemaLock | None) -> list | None:
+def _declared_pins(decl: Decl, schema: SchemaLock | None, document=None, section=None) -> list | None:
     """The pins the mirror or the schema states for a node, when either can.
 
     An exported node carries the pins the editor actually allocated; a macro
@@ -242,6 +246,8 @@ def _declared_pins(decl: Decl, schema: SchemaLock | None) -> list | None:
     """
     if decl.opaque or decl.modifier == "local":
         return None
+    if candidate_function(decl, document, schema) is not None:
+        return node_pins(decl, document, section, schema)
     if decl.meta.get("pins"):
         return decl.meta["pins"]
     if node_name(decl.type_name) == "MacroInstance":

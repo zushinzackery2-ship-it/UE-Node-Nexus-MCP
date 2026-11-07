@@ -1,6 +1,7 @@
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/Niagara/Fixtures/NexusNiagaraVectorFieldFixture.h"
 #include "Niagara/Modules/Binding/NexusNiagaraInputBinding.h"
 #include "Niagara/Modules/UeNodeNexusBridgeNiagaraModuleStack.h"
 #include "Niagara/Transcode/UeNodeNexusVfxTranscode.h"
@@ -20,57 +21,7 @@ namespace
 using namespace UeNodeNexusBridge;
 using namespace VfxTranscode;
 
-struct FNamespaceLinkFixture
-{
-    UNiagaraSystem* System = nullptr;
-    FNiagaraEmitterHandle* Emitter = nullptr;
-    UNiagaraNodeFunctionCall* Sample = nullptr;
-    UNiagaraNodeFunctionCall* Force = nullptr;
-    UNiagaraNodeOutput* Output = nullptr;
-    FInputBindingContext Bindings;
-
-    bool Initialize(FAutomationTestBase& Test, bool bWriterFirst)
-    {
-        auto* Template = LoadObject<UNiagaraEmitter>(nullptr,
-            TEXT("/Niagara/DefaultAssets/Templates/Emitters/Minimal.Minimal"));
-        auto* SampleScript = LoadObject<UNiagaraScript>(nullptr,
-            TEXT("/Niagara/VectorFields/SampleVectorField.SampleVectorField"));
-        auto* ForceScript = LoadObject<UNiagaraScript>(nullptr,
-            TEXT("/Niagara/VectorFields/ApplyVectorField.ApplyVectorField"));
-        if (!Test.TestNotNull(TEXT("native emitter template"), Template)
-            || !Test.TestNotNull(TEXT("native vector-field sampler"), SampleScript)
-            || !Test.TestNotNull(TEXT("native vector-field force"), ForceScript))
-        {
-            return false;
-        }
-        System = NewObject<UNiagaraSystem>();
-        UNiagaraSystemFactoryNew::InitializeSystem(System, true);
-        FNiagaraEditorUtilities::AddEmitterToSystem(*System, *Template, Template->GetExposedVersion().VersionGuid);
-        Emitter = &System->GetEmitterHandles()[0];
-        Output = NiagaraModuleStack::ResolveOutputNode(Emitter, TEXT("ParticleUpdateScript"));
-        if (!Test.TestNotNull(TEXT("native particle-update stack"), Output))
-        {
-            return false;
-        }
-        if (bWriterFirst)
-        {
-            Sample = FNiagaraStackGraphUtilities::AddScriptModuleToStack(SampleScript, *Output);
-            Force = FNiagaraStackGraphUtilities::AddScriptModuleToStack(ForceScript, *Output);
-        }
-        else
-        {
-            Force = FNiagaraStackGraphUtilities::AddScriptModuleToStack(ForceScript, *Output);
-            Sample = FNiagaraStackGraphUtilities::AddScriptModuleToStack(SampleScript, *Output);
-        }
-        return Test.TestNotNull(TEXT("native sample module"), Sample)
-            && Test.TestNotNull(TEXT("native force module"), Force);
-    }
-
-    FString OutputHandle() const
-    {
-        return TEXT("Output.") + Sample->GetFunctionName() + TEXT(".SampledVector");
-    }
-};
+using Tests::FNiagaraVectorFieldFixture;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusNiagaraNamespaceRoundTrip,
@@ -79,7 +30,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusNiagaraNamespaceRoundTrip,
 
 bool FNexusNiagaraNamespaceRoundTrip::RunTest(const FString& Parameters)
 {
-    FNamespaceLinkFixture Fixture;
+    FNiagaraVectorFieldFixture Fixture;
     if (!Fixture.Initialize(*this, true))
     {
         return false;
@@ -171,7 +122,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNexusNiagaraNamespaceRejections,
 
 bool FNexusNiagaraNamespaceRejections::RunTest(const FString& Parameters)
 {
-    FNamespaceLinkFixture Fixture;
+    FNiagaraVectorFieldFixture Fixture;
     if (!Fixture.Initialize(*this, true))
     {
         return false;
@@ -208,7 +159,7 @@ bool FNexusNiagaraNamespaceRejections::RunTest(const FString& Parameters)
             TEXT("ns_module_input_convert"), bDryRun, Fixture.Bindings, bChanged, Error));
         TestEqual(TEXT("missing conversion source rejected"), Error.Code, FString(TEXT("native_conversion_unavailable")));
     }
-    FNamespaceLinkFixture Forward;
+    FNiagaraVectorFieldFixture Forward;
     if (!Forward.Initialize(*this, false))
     {
         return false;

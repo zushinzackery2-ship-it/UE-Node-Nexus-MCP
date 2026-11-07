@@ -40,13 +40,21 @@ CALLABLE_INDEX = "registered_callable_index"
 
 
 def resolve(lock, owner: str, name: str) -> dict | None:
-    return resolve_member(lock, owner, name, lock.direct_function)
+    return resolve_member(lock, owner, name, lock.direct_function, candidate_owners=True)
 
 
-def resolve_member(lock, owner: str, name: str, direct) -> dict | None:
+def resolve_member(lock, owner: str, name: str, direct, *, candidate_owners=False) -> dict | None:
+    from ..blueprint.interfaces import owner_record
+
     seen = set()
     while owner and owner not in seen:
         seen.add(owner)
+        candidate = owner_record(owner) if candidate_owners else None
+        if candidate is not None:
+            if name in candidate["functions"]:
+                return candidate["functions"][name]
+            owner = candidate["parent"]
+            continue
         record = direct(owner, name)
         if record is not None:
             return record

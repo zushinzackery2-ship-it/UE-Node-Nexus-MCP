@@ -2,6 +2,9 @@
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "Engine/Blueprint.h"
+#include "Engine/BlueprintGeneratedClass.h"
+#include "Engine/DynamicBlueprintBinding.h"
 #include "Misc/PackageName.h"
 #include "UObject/LinkerLoad.h"
 #include "UObject/Package.h"
@@ -24,7 +27,40 @@ TSharedPtr<FJsonObject> FPackageLoadAudit::ToJson() const
         Failed.Add(MakeShared<FJsonValueString>(Name));
     }
     Row->SetArrayField(TEXT("failed_exports"), Failed);
+    TArray<TSharedPtr<FJsonValue>> FailedPaths;
+    for (const FString& Path : FailedExportPaths)
+    {
+        FailedPaths.Add(MakeShared<FJsonValueString>(Path));
+    }
+    Row->SetArrayField(TEXT("failed_export_paths"), FailedPaths);
+    TArray<TSharedPtr<FJsonValue>> Regenerated;
+    for (const FString& Name : RegeneratedExports)
+    {
+        Regenerated.Add(MakeShared<FJsonValueString>(Name));
+    }
+    Row->SetArrayField(TEXT("regenerated_exports"), Regenerated);
     return Row;
+}
+
+static bool HasRegeneratedReplacement(FLinkerLoad& Linker, int32 Index, UPackage* Package)
+{
+    const FString Path = Linker.GetExportPathName(Index);
+    UObject* Replacement = StaticFindObject(UObject::StaticClass(), nullptr, *Path);
+    if (!IsValid(Replacement) || Replacement->GetOutermost() != Package
+        || (!Replacement->IsA<UFunction>() && !Replacement->IsA<UDynamicBlueprintBinding>()))
+    {
+        return false;
+    }
+    auto* Generated = Replacement->GetTypedOuter<UBlueprintGeneratedClass>();
+    const auto* Blueprint = Generated ? Cast<UBlueprint>(Generated->ClassGeneratedBy) : nullptr;
+    if (!Blueprint || Blueprint->GeneratedClass != Generated || Blueprint->Status == BS_Error)
+    {
+        return false;
+    }
+    const FPackageIndex Class = Linker.ExportMap[Index].ClassIndex;
+    const FString ClassPath = Class.IsImport() ? Linker.GetImportPathName(Class.ToImport())
+        : Class.IsExport() ? Linker.GetExportPathName(Class.ToExport()) : FString();
+    return Replacement->GetClass()->GetPathName() == ClassPath;
 }
 
 TArray<FPackageLoadAudit> LoadPackagesAudited(const TArray<FString>& PackageNames)
@@ -48,7 +84,7 @@ TArray<FPackageLoadAudit> LoadPackagesAudited(const TArray<FString>& PackageName
         }
         Audit.Package = LoadPackage(nullptr, *Audit.PackageName, LOAD_None);
         KeepPackages.Emplace(Audit.Package);
-        const FLinkerLoad* Linker = Audit.Package ? FLinkerLoad::FindExistingLinkerForPackage(Audit.Package) : nullptr;
+        FLinkerLoad* Linker = Audit.Package ? FLinkerLoad::FindExistingLinkerForPackage(Audit.Package) : nullptr;
         if (Linker == nullptr)
         {
             Audit.Error = Audit.Package ? TEXT("export_table_unavailable") : TEXT("package_load_failed");
@@ -56,11 +92,19 @@ TArray<FPackageLoadAudit> LoadPackagesAudited(const TArray<FString>& PackageName
         }
         Audit.bAudited = true;
         Audit.Exports = Linker->ExportMap.Num();
-        for (const FObjectExport& Export : Linker->ExportMap)
+        for (int32 Index = 0; Index < Linker->ExportMap.Num(); ++Index)
         {
+            const FObjectExport& Export = Linker->ExportMap[Index];
             if (Export.bExportLoadFailed || (Export.Object == nullptr && !Export.bWasFiltered))
             {
+                if (HasRegeneratedReplacement(*Linker, Index, Audit.Package))
+                {
+                    Audit.RegeneratedExports.Add(Linker->GetExportPathName(Index));
+                    continue;
+                }
                 Audit.FailedExports.Add(Export.ObjectName.ToString());
+                Audit.FailedExportPaths.Add(Linker->GetExportPathName(Index));
+                Audit.Error = TEXT("export_load_incomplete");
             }
         }
     }

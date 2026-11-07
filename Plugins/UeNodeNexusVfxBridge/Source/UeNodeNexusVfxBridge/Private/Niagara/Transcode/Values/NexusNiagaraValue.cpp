@@ -65,8 +65,9 @@ static bool Components(const FString& Text, int32 Count, bool bColor, double* Ou
     return true;
 }
 
-bool ParseParameterValue(const FNiagaraTypeDefinition& Type, const FString& Text, FParsedValue& Out, FString& Error)
+bool ParseParameterValue(const FNiagaraTypeDefinition& InputType, const FString& Text, FParsedValue& Out, FString& Error)
 {
+    const FNiagaraTypeDefinition Type = InputType.RemoveStaticDef();
     const FString Trimmed = Text.TrimStartAndEnd();
     bool bOk = false;
     if (Type.IsEnum())

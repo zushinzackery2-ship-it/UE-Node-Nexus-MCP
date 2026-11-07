@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...lint.service import lint_document
-from ...material.interfaces import documents
+from ...diff.service import build_plan
+from ...interfaces import documents
 from ...text.parser import parse
 from ...storage.paths import display_path, iter_text_files, parse_text_path
 from ...sync.files import read_text
@@ -47,12 +48,23 @@ def lint(workspace, paths, delete=False) -> dict:
 
 def lint_candidates(workspace, selected, files, candidates):
     diagnostics, rows = [], []
+    baseline = workspace.history.entries(workspace.state["base"])
+    required = {}
     for asset, snapshot in zip(selected, candidates):
         sink = lint_document(to_document(snapshot), snapshot["semantic"]["kind"], workspace.schema,
                              file=files[asset], current_key=workspace.schema.key if workspace.schema else None)
         diagnostics.extend(sink.items)
-        rows.append(dict(asset=asset, file=files[asset], errors=len(sink.errors()), warnings=len(sink.items) - len(sink.errors())))
-    return report(rows, diagnostics)
+        row = dict(asset=asset, file=files[asset], errors=len(sink.errors()), warnings=len(sink.items) - len(sink.errors()))
+        if not sink.has_errors and snapshot["semantic"]["kind"] != "scene":
+            previous = workspace.store.objects.data(baseline[asset], "snapshot") if asset in baseline else None
+            plan = build_plan(to_document(snapshot), to_document(previous) if previous else None,
+                              snapshot["semantic"]["kind"], schema=workspace.schema)
+            removals = plan.risky()
+            if removals:
+                required["allow_delete"] = True
+                row.update(required_options=dict(allow_delete=True), removals=[verb.to_payload() for verb in removals])
+        rows.append(row)
+    return report(rows, diagnostics, required_options=required)
 
 
 def lint_root(context, files_root: str, paths: list[str] | None = None) -> dict:

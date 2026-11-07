@@ -82,6 +82,23 @@ tests\compile_check\compile_scene_tests.bat
 
 测试按领域及单元、集成、实机层次组织，覆盖操作契约、导入无环、文本往返、失败恢复、并发与 300 行源码预算；共享夹具集中在 support。pytest 临时目录默认为项目内 `build/pytest-temp`，可用 `--basetemp` 指定。真实 UE 构建验证引擎 API 和链接，并生成与引擎 BuildId 匹配的模块清单。
 
+主动发现组合缺陷的入口是 `tests/stress/`。源码模式设置 `PYTHONPATH=src` 后运行
+`.venv\Scripts\python.exe -m tests.stress --seeds 2711,2712,2713 --steps 16`；
+安装模式清除 `PYTHONPATH`，使用已安装环境执行同一命令并加 `--installed`。
+入口检查真实 Python 导入路径，运行可见 D3D12 原生 Automation、连续材质与 Blueprint 编辑、
+重复发布、进程冷重开和原生值/函数执行 oracle。Niagara 当前由真实原生固定案例覆盖。
+`build/stress/<run>/report.json` 保存覆盖结果，`<seed>/trace.json` 保存物化动作。
+`--replay <trace.json>` 重放同一组动作；失败缩减使用
+`python -m tests.stress.shrink <trace.json> <report.json> --attempts 12`，只接受相同结构化错误。
+`--native-only` 运行原生序列；`--skip-native` 用于重放已定位的跨层故障。
+NullRHI 的原生计数不证明 GPU/RHI 正确；压力入口明确使用 D3D12/D3D11。
+协议模拟器对未实现动词显式失败，不承担引擎语义正确性的证明。
+
+安装更新通过 `scripts/local_update` 完成身份生成、构建、安装和载入核对。避免直接修改
+Marketplace 后只重编 DLL：BuildIdentity 记录也必须来自同一真实输入。
+安装回执的 `client_reconnect` 明确标记被替换的 stdio 服务；既有客户端应新建连接。
+源码变更使用 `NEXUS_NON_UNITY=1` 执行构建脚本可逐源文件检查 include 完备性。
+
 `automation` 运行全部 `Nexus.` 原生自动化；`issues4.runner` 验证四种启动状态及 sparse/MF 发布。启动提示由独立测试插件在隔离工程中通过真实模态对话框触发；`--engine-plugins` 验证正式安装路径。
 
 原生测试在 `build/scene-tests/` 内编译和运行实例身份及 Undo/Redo 回归；生产插件在 `build/validation/` 内构建。同步 smoke 使用 DX12 验证 shader/RHI 就绪、保存失败恢复与回读，runner 绑定自建编辑器并正常退出。场景与捕获批次的重放入口位于 `tests/live/`，每次运行记录构建身份、请求响应和验收结果。

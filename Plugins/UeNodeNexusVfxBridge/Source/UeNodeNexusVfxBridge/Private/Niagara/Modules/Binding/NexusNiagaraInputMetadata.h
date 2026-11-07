@@ -13,4 +13,6 @@ bool IsAuthoredModuleInput(const FNiagaraVariable& Variable, const UNiagaraScrip
 TArray<const UEdGraphPin*> FindModuleInputDefaultPins(const UNiagaraGraph& Graph, FName VariableName);
 FString ModuleInputDefaultText(const FNiagaraVariable& Variable, const UNiagaraScriptVariable* Metadata,
     const UNiagaraGraph* Graph = nullptr);
+bool CanUseRapidIterationValue(const FNiagaraTypeDefinition& Type, bool bStatic, const FString& DefaultText);
+FString ModuleInputPinValueText(const UEdGraphPin& Pin);
 }

@@ -5,6 +5,7 @@ public class UeNodeNexusVfxBridge : ModuleRules
     public UeNodeNexusVfxBridge(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        bUsePrecompiled = false;
         IWYUSupport = IWYUSupport.Full;
         ConfigureBuildIdentity();
 
@@ -38,6 +39,8 @@ public class UeNodeNexusVfxBridge : ModuleRules
             "Projects",
             "RenderCore",
             "Sequencer",
+            "Slate",
+            "SlateCore",
             "UnrealEd"
         });
     }

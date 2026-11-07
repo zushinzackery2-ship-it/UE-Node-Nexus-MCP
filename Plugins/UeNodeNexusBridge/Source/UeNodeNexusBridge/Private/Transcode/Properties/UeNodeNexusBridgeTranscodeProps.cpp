@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeTranscode.h"
+#include "NexusEnumSchema.h"
 #include "Schema/NexusSchema.h"
 #include "Properties/NexusPropertyText.h"
 #include "Properties/NexusValueSchema.h"
@@ -250,6 +251,7 @@ TSharedPtr<FJsonObject> PropertySchemaJson(FProperty* Property, UObject* Cdo)
             }
         }
         Json->SetArrayField(TEXT("enum_values"), Values);
+        Json->SetArrayField(TEXT("enum_choices"), EnumChoices(Enum));
         Json->SetStringField(TEXT("enum_type"), Enum->GetPathName());
     }
     if (Property->HasMetaData(TEXT("ClampMin")))

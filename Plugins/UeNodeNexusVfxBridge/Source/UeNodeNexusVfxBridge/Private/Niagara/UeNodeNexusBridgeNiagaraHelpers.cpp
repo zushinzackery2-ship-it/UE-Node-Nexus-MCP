@@ -1,4 +1,5 @@
 #include "UeNodeNexusBridgeNiagaraHelpers.h"
+#include "Niagara/Compilation/NexusNiagaraCompilation.h"
 
 #include "NiagaraEmitter.h"
 #include "NiagaraEmitterHandle.h"
@@ -120,7 +121,7 @@ int32 CountEnabledNiagaraRenderers(UNiagaraSystem* System)
 int32 CountNiagaraReadinessIssues(UNiagaraSystem* System)
 {
     int32 IssueCount = 0;
-    if (System == nullptr || !System->IsReadyToRun())
+    if (!NiagaraCompilation::Runnable(System))
     {
         ++IssueCount;
     }
@@ -166,6 +167,9 @@ TSharedPtr<FJsonObject> MakeNiagaraEmitterJson(UNiagaraSystem* System, int32 Emi
     Json->SetNumberField(TEXT("index"), EmitterIndex);
     Json->SetStringField(TEXT("name"), Handle.GetName().ToString());
     Json->SetBoolField(TEXT("enabled"), Handle.GetIsEnabled());
+    Json->SetBoolField(TEXT("asset_valid"), EmitterData && EmitterData->IsValid());
+    Json->SetBoolField(TEXT("compilation_finished"), EmitterData && EmitterData->IsReadyToRun());
+    Json->SetStringField(TEXT("sim_target"), EmitterData && EmitterData->SimTarget == ENiagaraSimTarget::GPUComputeSim ? TEXT("gpu") : TEXT("cpu"));
     Json->SetNumberField(TEXT("renderer_count"), RendererCount);
     return Json;
 }

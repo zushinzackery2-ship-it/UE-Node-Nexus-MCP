@@ -1,4 +1,5 @@
 #include "NexusSchema.h"
+#include "Transcode/Properties/NexusEnumSchema.h"
 
 #include "Blueprint/CallHost/NexusCallHostClass.h"
 #include "UeNodeNexusBridgeTranscode.h"
@@ -92,6 +93,7 @@ TSharedPtr<FJsonObject> CommonTypes()
             }
         }
         Record->SetArrayField(TEXT("enum_values"), Values);
+        Record->SetArrayField(TEXT("enum_choices"), EnumChoices(*Enum));
         Result->SetObjectField(Enum->GetPathName(), Record);
     }
     for (TObjectIterator<UScriptStruct> Struct; Struct; ++Struct)

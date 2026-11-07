@@ -62,7 +62,11 @@ def asset_move_batch(
     fix_redirectors: bool = True,
     continue_on_error: bool = False,
 ) -> dict[str, Any]:
-    """Move or rename multiple Unreal assets with one bridge request."""
+    """Move a complete dependency batch; continue_on_error must be false.
+
+    Native rename saves packages, including affected referencers, even when
+    save=False. The receipt names moved assets and the actual saved packages.
+    """
     require_list(items, "items")
     return _call(
         "asset_move_batch",
@@ -84,7 +88,10 @@ def asset_rename_batch(
     fix_redirectors: bool = True,
     continue_on_error: bool = False,
 ) -> dict[str, Any]:
-    """Rename multiple Unreal assets with one bridge request."""
+    """Rename a complete dependency batch; native rename saves affected packages.
+
+    continue_on_error must be false so preflight covers the whole dependency set.
+    """
     require_list(items, "items")
     return _call(
         "asset_rename_batch",

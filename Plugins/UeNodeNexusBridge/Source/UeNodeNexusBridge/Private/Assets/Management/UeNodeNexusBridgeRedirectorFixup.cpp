@@ -94,14 +94,12 @@ bool FixReferencers(const TArray<RedirectorFixup::FRedirectorPackage>& Packages,
 }
 }
 
-FRedirectorFixupProgress FixRedirectorsUnderFolder(const FString& FolderPath, bool bDryRun)
+static FRedirectorFixupProgress FixCollectedRedirectors(TArray<RedirectorFixup::FRedirectorPackage> Packages,
+    FRedirectorFixupProgress Progress, bool bDryRun)
 {
-    FRedirectorFixupProgress Progress;
-    TArray<RedirectorFixup::FRedirectorPackage> Packages;
     TMap<FSoftObjectPath, FSoftObjectPath> Redirects;
     TArray<FString> ReferencerNames;
-    if (!RedirectorFixup::CollectRedirectorPackages(FolderPath, Progress, Packages)
-        || !RedirectorFixup::CollectReferencers(Packages, ReferencerNames, Progress.Error))
+    if (!RedirectorFixup::CollectReferencers(Packages, ReferencerNames, Progress.Error))
     {
         return Progress;
     }
@@ -167,5 +165,35 @@ FRedirectorFixupProgress FixRedirectorsUnderFolder(const FString& FolderPath, bo
             Deleted, Objects.Num(), *FString::Join(Leftover, TEXT(", ")));
     }
     return Progress;
+}
+
+FRedirectorFixupProgress FixRedirectorsUnderFolder(const FString& FolderPath, bool bDryRun)
+{
+    FRedirectorFixupProgress Progress;
+    TArray<RedirectorFixup::FRedirectorPackage> Packages;
+    if (!RedirectorFixup::CollectRedirectorPackages(FolderPath, Progress, Packages))
+    {
+        return Progress;
+    }
+    return FixCollectedRedirectors(MoveTemp(Packages), MoveTemp(Progress), bDryRun);
+}
+
+FRedirectorFixupProgress FixRedirectorPackages(const TArray<FString>& PackageNames, bool bDryRun)
+{
+    FRedirectorFixupProgress Progress;
+    TArray<RedirectorFixup::FRedirectorPackage> Packages;
+    for (const FString& Name : PackageNames)
+    {
+        TArray<FAssetData> Assets;
+        FAssetRegistryModule::GetRegistry().GetAssetsByPackageName(FName(*Name), Assets);
+        if (!Assets.ContainsByPredicate([](const FAssetData& Asset)
+            { return Asset.AssetClassPath == UObjectRedirector::StaticClass()->GetClassPathName(); }))
+        {
+            continue;
+        }
+        Packages.AddDefaulted_GetRef().PackageName = FName(*Name);
+        Progress.RedirectorPackages.Add(MakeShared<FJsonValueString>(Name));
+    }
+    return FixCollectedRedirectors(MoveTemp(Packages), MoveTemp(Progress), bDryRun);
 }
 }

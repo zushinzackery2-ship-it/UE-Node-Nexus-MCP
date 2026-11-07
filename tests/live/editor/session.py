@@ -55,6 +55,17 @@ class EditorSession:
         """Ensure returns once the start ended; a managed editor answers its own advisories."""
         self.startup = startup
         self.report("startup", startup)
+        if startup["outcome"] == "waiting_for_user":
+            # Startup helpers can display a transient OS notice and then finish
+            # independently. Record it and observe; never answer its buttons.
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                state = self.session.status(dict(fresh=True))
+                if state.get("ready") and not state.get("waiting_for_user"):
+                    startup = dict(outcome="ready", state=state["state"], prior_notice=self.startup)
+                    self.report("startup-resolved", startup)
+                    break
+                time.sleep(0.5)
         if startup["outcome"] != "ready":
             raise RuntimeError(f"validation editor did not become ready: {startup}")
         response = self.call("project_context_get", dict())

@@ -96,10 +96,11 @@ static TArray<TSharedPtr<FJsonValue>> ModuleInputs(FNiagaraEmitterHandle* Handle
         const FNiagaraParameterHandle Aliased = FNiagaraParameterHandle::CreateAliasedModuleParameterHandle(FNiagaraParameterHandle(Variable.GetName()), Module);
         UEdGraphPin* Override = FindModuleOverridePin(*Module, Aliased.GetParameterHandleString());
         bool bHasOverride = Override != nullptr;
-        FString ValueText = Override ? Override->DefaultValue : DefaultText;
+        FString ValueText = Override ? ModuleInputPinValueText(*Override) : DefaultText;
         FNiagaraVariable RapidVariable;
         UNiagaraScript* Script = nullptr;
-        if (!bStatic && Override == nullptr && Handle != nullptr && Output != nullptr
+        if (CanUseRapidIterationValue(Variable.GetType(), bStatic, DefaultText)
+            && Override == nullptr && Handle != nullptr && Output != nullptr
             && ResolveRapidIterationInput(*Handle, Output->GetUsage(), Output->GetUsageId(), Module, Name, RapidVariable, Script)
             && Script->RapidIterationParameters.IndexOf(RapidVariable) != INDEX_NONE)
         {
